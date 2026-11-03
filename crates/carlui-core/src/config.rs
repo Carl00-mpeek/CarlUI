@@ -31,6 +31,26 @@ pub struct Config {
     pub game: GameConfig,
     pub stats: StatsConfig,
     pub cursor: CursorConfig,
+    pub download: DownloadConfig,
+}
+
+/// Adanın indirme hapında hangi bilgiler görünsün.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct DownloadConfig {
+    pub name: bool,
+    pub percent: bool,
+    /// İnen / toplam ("1,2 GB / 3,5 GB").
+    pub size: bool,
+    pub speed: bool,
+    /// Kalan süre ("2 dk kaldı").
+    pub eta: bool,
+}
+
+impl Default for DownloadConfig {
+    fn default() -> Self {
+        Self { name: true, percent: true, size: true, speed: true, eta: true }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]

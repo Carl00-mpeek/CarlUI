@@ -81,14 +81,14 @@ fn approved(hive: HKEY, key: &str, name: &str) -> bool {
 
 fn run_keys(out: &mut Vec<Item>) {
     let list: [(HKEY, &str, &'static str, Option<&'static str>); 8] = [
-        (HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Kayıt · Kullanıcı Run", Some("Run")),
-        (HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce", "Kayıt · Kullanıcı RunOnce", None),
-        (HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run", "Kayıt · Kullanıcı ilkesi", None),
-        (HKEY_LOCAL_MACHINE, "Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Kayıt · Sistem Run", Some("Run")),
-        (HKEY_LOCAL_MACHINE, "Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce", "Kayıt · Sistem RunOnce", None),
-        (HKEY_LOCAL_MACHINE, "Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run", "Kayıt · Sistem Run (32 bit)", Some("Run32")),
-        (HKEY_LOCAL_MACHINE, "Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run", "Kayıt · Sistem ilkesi", None),
-        (HKEY_LOCAL_MACHINE, "Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\RunOnce", "Kayıt · Sistem RunOnce (32 bit)", None),
+        (HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Run", t!("Kayıt · Kullanıcı Run", "Registry · User Run"), Some("Run")),
+        (HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce", t!("Kayıt · Kullanıcı RunOnce", "Registry · User RunOnce"), None),
+        (HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run", t!("Kayıt · Kullanıcı ilkesi", "Registry · User policy"), None),
+        (HKEY_LOCAL_MACHINE, "Software\\Microsoft\\Windows\\CurrentVersion\\Run", t!("Kayıt · Sistem Run", "Registry · System Run"), Some("Run")),
+        (HKEY_LOCAL_MACHINE, "Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce", t!("Kayıt · Sistem RunOnce", "Registry · System RunOnce"), None),
+        (HKEY_LOCAL_MACHINE, "Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run", t!("Kayıt · Sistem Run (32 bit)", "Registry · System Run (32-bit)"), Some("Run32")),
+        (HKEY_LOCAL_MACHINE, "Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run", t!("Kayıt · Sistem ilkesi", "Registry · System policy"), None),
+        (HKEY_LOCAL_MACHINE, "Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\RunOnce", t!("Kayıt · Sistem RunOnce (32 bit)", "Registry · System RunOnce (32-bit)"), None),
     ];
     for (hive, key, source, appr) in list {
         for (name, data, ty) in values(hive, key) {

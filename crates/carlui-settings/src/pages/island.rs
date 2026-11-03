@@ -36,6 +36,13 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.toggle(p, t!("RAM kullanımı", "RAM usage"), "", cfg.stats.ram, |c| c.stats.ram ^= true);
     f.slider(p, t!("Açılma gecikmesi", "Open delay"), t!("Fare adanın üstünde bu kadar kalınca genişler.", "Expands after the mouse rests on the island this long."), cfg.stats.hover_ms as f32, 100.0, 1500.0, 50.0, |v| format!("{v:.0} ms"), |c, v| c.stats.hover_ms = v as u32);
 
+    f.section(p, t!("İndirme göstergesi", "Download indicator"));
+    f.toggle(p, t!("Dosya adı", "File name"), "", cfg.download.name, |c| c.download.name ^= true);
+    f.toggle(p, t!("Yüzde", "Percentage"), "", cfg.download.percent, |c| c.download.percent ^= true);
+    f.toggle(p, t!("İnen / toplam boyut", "Downloaded / total size"), "", cfg.download.size, |c| c.download.size ^= true);
+    f.toggle(p, t!("Hız", "Speed"), "", cfg.download.speed, |c| c.download.speed ^= true);
+    f.toggle(p, t!("Kalan süre", "Time left"), "", cfg.download.eta, |c| c.download.eta ^= true);
+
     f.section(p, t!("Bildirimler", "Notifications"));
     f.toggle(p, t!("Bildirimleri adada göster", "Show notifications on the island"), "", cfg.notify.enabled, |c| c.notify.enabled ^= true);
     f.toggle(p, t!("Medya çubuğu", "Media bar"), t!("Çalan şarkı ve oynatma düğmeleri.", "Now playing and playback buttons."), cfg.notify.media_bar, |c| c.notify.media_bar ^= true);

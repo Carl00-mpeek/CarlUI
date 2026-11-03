@@ -186,7 +186,7 @@ impl Island {
         }
         if !hv.full {
             // Henüz açılmadı: kaç bildirim beklediğini söyle.
-            let (t, tw, th) = self.label(gfx, &t!(format!("{} bildirim", notes.len()), format!("{} notifications", notes.len())), 11.5, false, w, 0.55)?;
+            let (t, tw, th) = self.label(gfx, &t!(format!("{} bildirim", notes.len()), if notes.len() == 1 { "1 notification".to_string() } else { format!("{} notifications", notes.len()) }), 11.5, false, w, 0.55)?;
             let rh = (24.0 * s).round();
             Self::place(&t, (w - tw) / 2.0, y + (rh - th) / 2.0 - 2.0 * s)?;
             kids.InsertAtTop(&t)?;
@@ -238,7 +238,7 @@ impl Island {
             hidden += idx.len().saturating_sub(GROUP_MAX);
         }
         if hidden > 0 {
-            let (t, tw, th) = self.label(gfx, &t!(format!("+{hidden} bildirim daha"), format!("+{hidden} more notifications")), 11.0, false, w, 0.45)?;
+            let (t, tw, th) = self.label(gfx, &t!(format!("+{hidden} bildirim daha"), if hidden == 1 { "+1 more notification".to_string() } else { format!("+{hidden} more notifications") }), 11.0, false, w, 0.45)?;
             let rh = (22.0 * s).round();
             Self::place(&t, (w - tw) / 2.0, y + (rh - th) / 2.0)?;
             kids.InsertAtTop(&t)?;

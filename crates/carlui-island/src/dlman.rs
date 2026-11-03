@@ -64,8 +64,33 @@ pub fn active() -> Vec<(String, u64, u64, f64)> {
         .collect()
 }
 
-/// Haptaki kısa metin.
-pub fn pill() -> Option<String> {
+/// Uzun dosya adını ortadan kısaltır, uzantıyı korur: "ubuntu-24.04…iso".
+fn short_name(name: &str, max: usize) -> String {
+    let n: Vec<char> = name.chars().collect();
+    if n.len() <= max {
+        return name.to_string();
+    }
+    let ext = name.rfind('.').map(|i| name[i + 1..].chars().count()).filter(|&e| e > 0 && e <= 5).unwrap_or(0);
+    let head = max.saturating_sub(ext + 1).max(1);
+    let tail: String = n[n.len() - ext..].iter().collect();
+    format!("{}…{tail}", n[..head].iter().collect::<String>())
+}
+
+/// Kalan süre: "45 sn kaldı", "3 dk kaldı", "1 sa 5 dk kaldı".
+fn eta(secs: u64) -> String {
+    let (h, m) = (secs / 3600, (secs % 3600) / 60);
+    if secs < 60 {
+        t!(format!("{secs} sn kaldı"), format!("{secs}s left"))
+    } else if h == 0 {
+        t!(format!("{m} dk kaldı"), format!("{m} min left"))
+    } else {
+        t!(format!("{h} sa {m} dk kaldı"), format!("{h} h {m} min left"))
+    }
+}
+
+/// Haptaki metin; hangi parçaların görüneceği ayarlardan seçilir
+/// ("↓ ubuntu…iso · %12 · 420 MB / 3,5 GB · 48 MB/sn · 1 dk kaldı").
+pub fn pill(c: &carlui_core::config::DownloadConfig) -> Option<String> {
     // Kendi indirmelerimiz + eklentinin bildirdiği tarayıcı indirmeleri.
     let mut a = active();
     a.extend(crate::bridge::browser());
@@ -75,10 +100,28 @@ pub fn pill() -> Option<String> {
     let got: u64 = a.iter().map(|d| d.1).sum();
     let total: u64 = a.iter().map(|d| d.2).sum();
     let speed: f64 = a.iter().map(|d| d.3).sum();
-    let known = a.iter().all(|d| d.2 > 0);
-    let amount = if known && total > 0 { t!(format!("%{}", (got * 100 / total).min(99)), format!("{}%", (got * 100 / total).min(99))) } else { carlui_sys::bytes(got as f64) };
-    let more = if a.len() > 1 { t!(format!(" · {} dosya", a.len()), format!(" · {} files", a.len())) } else { String::new() };
-    Some(if speed > 1.0 { format!("↓ {amount} · {}{}{more}", carlui_sys::bytes(speed), t!("/sn", "/s")) } else { format!("↓ {amount}{more}") })
+    let known = a.iter().all(|d| d.2 > 0) && total > 0;
+    let mut parts = Vec::new();
+    match a.as_slice() {
+        [one] if c.name && !one.0.is_empty() => parts.push(short_name(&one.0, 26)),
+        [_] => {}
+        _ => parts.push(t!(format!("{} dosya", a.len()), format!("{} files", a.len()))),
+    }
+    if known && c.percent {
+        parts.push(carlui_core::lang::pct((got * 100 / total).min(99) as f32));
+    }
+    if known && c.size {
+        parts.push(format!("{} / {}", carlui_sys::bytes(got as f64), carlui_sys::bytes(total as f64)));
+    } else if !known || !c.percent {
+        parts.push(carlui_sys::bytes(got as f64));
+    }
+    if speed > 1.0 && c.speed {
+        parts.push(format!("{}{}", carlui_sys::bytes(speed), t!("/sn", "/s")));
+    }
+    if speed > 1.0 && known && c.eta {
+        parts.push(eta(((total.saturating_sub(got)) as f64 / speed).ceil() as u64));
+    }
+    Some(format!("↓ {}", parts.join(" · ")))
 }
 
 /// "%20" gibi kodları çözer.
@@ -415,6 +458,21 @@ pub fn open(path: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn short_names() {
+        assert_eq!(short_name("rapor.pdf", 26), "rapor.pdf");
+        assert_eq!(short_name("ubuntu-24.04.3-desktop-amd64.iso", 20), "ubuntu-24.04.3-d…iso");
+        assert_eq!(short_name("çok-uzun-bir-dosya-adı-uzantısız", 10), "çok-uzun-…");
+    }
+
+    #[test]
+    fn etas() {
+        carlui_core::lang::apply("tr");
+        assert_eq!(eta(45), "45 sn kaldı");
+        assert_eq!(eta(185), "3 dk kaldı");
+        assert_eq!(eta(3900), "1 sa 5 dk kaldı");
+    }
 
     #[test]
     fn names() {

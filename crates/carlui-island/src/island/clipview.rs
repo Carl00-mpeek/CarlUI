@@ -251,7 +251,7 @@ impl Island {
         let g = self.text.glyph(gfx, '\u{E77F}', (16.0 * s).round(), 0.6)?;
         kids.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, pad + 14.0 * s, fy + (fh - g.height) / 2.0)?)?;
         let total = v.store.items.len();
-        let count = if v.filter.is_empty() { format!("{total} kayıt") } else { format!("{} / {total}", v.items.len()) };
+        let count = if v.filter.is_empty() { t!(format!("{total} kayıt"), format!("{total} items")) } else { format!("{} / {total}", v.items.len()) };
         let (cl, cw, ch) = self.label(gfx, &count, 11.5, false, 120.0 * s, 0.45)?;
         Self::place(&cl, pad + fw - 14.0 * s - cw, fy + (fh - ch) / 2.0)?;
         kids.InsertAtTop(&cl)?;

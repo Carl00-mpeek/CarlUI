@@ -1,138 +1,165 @@
-# CarlUI
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/English-3E8BFF?style=for-the-badge" alt="English"></a>
+  <a href="README.tr.md"><img src="https://img.shields.io/badge/T%C3%BCrk%C3%A7e-1f2128?style=for-the-badge" alt="Türkçe"></a>
+</p>
 
-Windows 11 için Rust ile yazılmış, hafif ve hızlı bir masaüstü kabuğu. Görev
-çubuğunun yerine yüzen bir dock, ekranın üstünde saat/bildirim/medya adası,
-Win menüsü, arama, pano geçmişi ve kontrol merkezi getirir.
+<h1 align="center">CarlUI</h1>
 
-Ücretsiz ve açık kaynaktır (MIT lisansı).
+<p align="center">
+  A lightweight, fast desktop shell for Windows 11, written in Rust.<br>
+  Floating dock, a top island for the clock, notifications and media, search, clipboard history and a control center.
+</p>
 
-> **English:** CarlUI is a lightweight desktop shell for Windows 11, written in
-> Rust. It replaces the taskbar with a floating dock and adds a top "island"
-> (clock, notifications, media, downloads), a launcher with search and a
-> calculator, clipboard history (Win+V, also over fullscreen games), a control
-> center and a game mode. The interface is in English and Turkish (it follows
-> the Windows display language; change it in Settings → General). Download
-> `CarlUI-Setup.exe` from [Releases](https://github.com/Carl00-mpeek/CarlUI/releases);
-> no admin rights needed. Free and open source (MIT).
+<p align="center">
+  <a href="https://github.com/Carl00-mpeek/CarlUI/releases/latest"><img src="https://img.shields.io/github/v/release/Carl00-mpeek/CarlUI?style=flat-square&color=3E8BFF" alt="Release"></a>
+  <img src="https://img.shields.io/badge/Windows-11-3E8BFF?style=flat-square" alt="Windows 11">
+  <img src="https://img.shields.io/badge/Rust-orange?style=flat-square" alt="Rust">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT"></a>
+</p>
 
-![Dock](docs/screenshots/dock.png)
+<p align="center">
+  <a href="https://github.com/Carl00-mpeek/CarlUI/releases/latest"><b>⬇ Download CarlUI-Setup.exe</b></a>
+  &nbsp;·&nbsp; no admin rights needed &nbsp;·&nbsp; free and open source
+</p>
 
-| Ayarlar | Kurucu |
-|---|---|
-| ![Ayarlar](docs/screenshots/ayarlar.png) | ![Kurucu](docs/screenshots/kurucu.png) |
+![CarlUI desktop](docs/screenshots/desktop-en.png)
 
-## Neler var?
+<p align="center">
+  <img src="docs/screenshots/island-en.png" alt="Island: download progress and notifications"><br>
+  <sub><b>Island</b> · live download progress (name, size, speed, time left) and notifications</sub>
+</p>
 
-- **Dock:** Sabitlenmiş ve açık uygulamalar, canlı pencere önizlemeleri,
-  sürükle-bırak, otomatik gizleme, Win+1…9, Geri Dönüşüm Kutusu.
-- **Ada:** Üst ortada saat; bildirimler, çalan şarkı (kapak, ilerleme,
-  uygulamaya özel ses), indirme ilerlemesi.
-- **Arama:** Windows tuşu ya da Ctrl+Space. Uygulamalar, dosyalar, hesap
-  makinesi, birim/döviz çevirisi, web ve yapay zekâ kısayolları.
-- **Win menüsü:** Sabitlenmiş uygulamalar, klasörler, güç düğmeleri.
-- **Pano geçmişi (Win+V):** Metin ve resimler, arama, sabitleme, yerinde
-  düzenleme, şifreleri gizleme ve kendiliğinden silme. Tam ekran oyunda da
-  oyunu küçültmeden açılır.
-- **Kontrol merkezi:** Tepsi ikonları, ses (çıkış aygıtı ve uygulama başına
-  ses), Wi-Fi, Bluetooth, parlaklık.
-- **Oyun modu:** Tam ekranda arayüz çekilir, modüller uyku moduna geçer,
-  bildirimler oyundan sonra gösterilir.
-- **Görev yöneticisi, dosya dönüştürücü, ekran görüntüsü aracı** ve hepsini
-  yöneten **Ayarlar** penceresi.
-- **Türkçe ve İngilizce arayüz:** Windows'un görüntü diline uyar; **Ayarlar →
-  Genel → Dil** bölümünden değiştirilebilir.
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/calc-en.png" alt="Calculator"><br><sub><b>Search</b> · calculates as you type</sub></td>
+    <td width="50%"><img src="docs/screenshots/currency-en.png" alt="Currency"><br><sub><b>Currency and unit conversion</b> · daily rates</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/clip-en.png" alt="Clipboard history"><br><sub><b>Clipboard history (Win+V)</b> · text and images, search, editing</sub></td>
+    <td><img src="docs/screenshots/control-en.png" alt="Control center"><br><sub><b>Control center</b> · volume, brightness, Wi-Fi, tray icons</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/settings-en.png" alt="Settings"><br><sub><b>Settings</b> · everything in one window, applied instantly</sub></td>
+    <td><img src="docs/screenshots/taskmgr-en.png" alt="Task Manager"><br><sub><b>Task Manager</b> · unsigned programs first</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/setup-en.png" alt="Installer"><br><sub><b>Installer</b> · one file, two languages, no admin rights</sub></td>
+    <td></td>
+  </tr>
+</table>
 
-## Kurulum
+## Features
 
-1. [Releases](https://github.com/Carl00-mpeek/CarlUI/releases) sayfasından `CarlUI-Setup.exe` dosyasını indir.
-2. Çalıştır, **Kur**'a bas. Yönetici izni gerekmez; CarlUI
-   `%LOCALAPPDATA%\Programs\CarlUI` klasörüne kurulur, Başlat menüsüne eklenir
-   ve oturum açılınca kendiliğinden başlar.
+- **Dock:** Pinned and running apps, live window previews, drag and drop,
+  auto-hide, Win+1…9, Recycle Bin.
+- **Island:** Clock at the top center; notifications, now playing (cover,
+  progress, per-app volume), download progress with file name, size, speed
+  and time left (each can be turned off in Settings).
+- **Search:** Windows key or Ctrl+Space. Apps, files, calculator,
+  unit/currency conversion, web and AI shortcuts.
+- **Win menu:** Pinned apps, folders, power buttons.
+- **Clipboard history (Win+V):** Text and images, search, pinning, in-place
+  editing, hidden passwords that delete themselves. Opens over fullscreen
+  games without minimizing them.
+- **Control center:** Tray icons, volume (output device and per-app volume),
+  Wi-Fi, Bluetooth, brightness.
+- **Game mode:** In fullscreen the UI steps aside, modules go to sleep and
+  notifications wait until you're done.
+- **Task manager, file converter, screenshot tool** and a **Settings** window
+  that controls all of it.
+- **English and Turkish:** Follows the Windows display language; change it in
+  **Settings → General → Language**.
 
-**"Windows bilgisayarınızı korudu" uyarısı:** Kurucu imzasız olduğu için
-SmartScreen bu uyarıyı gösterir. **Ek bilgi → Yine de çalıştır** ile devam
-edebilirsin. Bazı antivirüsler de yanlış alarm verebilir: CarlUI görev
-çubuğunu gizler, klavye kısayollarını yakalamak için klavye kancası kullanır ve
-isteğe bağlı sıcaklık okuyucu yönetici olarak çalışır. Bunların hepsi yalnızca
-bu bilgisayarda olur. CarlUI veri toplamaz; yalnızca senin istediğin işlerde
-(döviz kuru, çeviri, web araması, indirmeler) internete bağlanır. Kaynak kodun
-tamamı bu depoda.
+## Install
 
-Kurucunun test sürümünün [VirusTotal taraması](https://www.virustotal.com/gui/file/2e72ef0b882a7e761bbcce33dc5afdc82c5c74d329a3ad7bb52aabe735b28d78)
-sonucunda 71 antivirüsten 69'u temiz buldu, Microsoft Defender da temiz
-buldu. Yalnızca ESET'in genel "Kryptik" tahmini ve Bkav işaretledi; ikisi de
-imzasız kurucularda sık görülen yanlış alarm türleri. İndirdiğin dosyanın
-SHA-256 değerini Releases sayfasındakiyle karşılaştırabilirsin.
+1. Download `CarlUI-Setup.exe` from [Releases](https://github.com/Carl00-mpeek/CarlUI/releases/latest).
+2. Run it and click **Install**. No admin rights needed: CarlUI installs to
+   `%LOCALAPPDATA%\Programs\CarlUI`, adds itself to the Start menu and starts
+   when you sign in.
 
-### İsteğe bağlı parçalar
+**"Windows protected your PC":** The installer isn't code-signed, so
+SmartScreen shows this warning. Click **More info → Run anyway**. Some
+antivirus tools may raise a false alarm too: CarlUI hides the taskbar, uses a
+keyboard hook for its shortcuts, and the optional temperature reader runs as
+admin. All of this stays on your PC. CarlUI collects no data; it only goes
+online for things you ask for (currency rates, translation, web search,
+downloads, the daily update check). All of the source code is in this repo.
 
-- **CPU sıcaklığı:** Intel işlemcilerde sıcaklık için
-  [PawnIO](https://pawnio.eu) sürücüsü gerekir. Kuruluysa kurucu "CPU
-  sıcaklığı" seçeneğini açar; bir kez yönetici izni ister.
-- **Tarayıcı eklentisi:** Tarayıcıda başlayan indirmeleri adaya taşır. Kurulum
-  klasöründeki `extension` klasöründe gelir; nasıl yükleneceği **Ayarlar →
-  Arama → Tarayıcı eklentisi** bölümünde anlatılır.
+A [VirusTotal scan](https://www.virustotal.com/gui/file/2e72ef0b882a7e761bbcce33dc5afdc82c5c74d329a3ad7bb52aabe735b28d78)
+of a test build of the installer: 69 of 71 engines, including Microsoft
+Defender, found it clean. Only ESET's generic "Kryptik" heuristic and Bkav
+flagged it, both common false positives for unsigned installers. You can
+compare the SHA-256 of your download with the one on the Releases page.
 
-### Güncelleme
+### Optional parts
 
-CarlUI günde bir kez GitHub'da yeni sürüm olup olmadığına bakar; varsa adada
-bildirim çıkar, tıklayınca sürüm sayfası açılır. Hiçbir şey kendiliğinden
-indirilip kurulmaz: yeni `CarlUI-Setup.exe`'yi çalıştırıp **Güncelle**'ye
-basarsın, ayarların korunur. Denetim **Ayarlar → Genel → Güncellemeler**
-bölümünden kapatılabilir.
+- **CPU temperature:** Intel CPUs need the [PawnIO](https://pawnio.eu) driver.
+  If it's installed, the installer turns on "CPU temperature"; it asks for
+  admin rights once.
+- **Browser extension:** Moves downloads started in the browser to the island.
+  It ships in `%LOCALAPPDATA%\Programs\CarlUI\extension\carlui-downloads`; turn
+  on developer mode on your browser's extensions page and use **Load unpacked**
+  on that folder. See **Settings → Search → Browser extension**.
+- **Wallpaper:** The installer's "CarlUI wallpaper" option. Files are in
+  [assets/wallpaper](assets/wallpaper) (1920×1080, 2560×1440, 3840×2160) and
+  can be regenerated with `tools\make-wallpaper.ps1`.
 
-### Kaldırma
+### Updates
 
-**Windows Ayarları → Uygulamalar → Yüklü uygulamalar** listesinden ya da Başlat menüsündeki **CarlUI'yi
-kaldır** kısayolundan. Görev çubuğu geri gelir, kurulan dosyalar Geri Dönüşüm
-Kutusu'na taşınır. Ayarların kalmasını ya da silinmesini sen seçersin.
+Once a day CarlUI checks GitHub for a new version and, if there is one, shows
+a notification on the island; click it to open the release page. Nothing is
+downloaded or installed automatically: run the new `CarlUI-Setup.exe` and
+click **Update**, your settings are kept. Turn the check off in **Settings →
+General → Updates**.
 
-**Acil durum:** Görev çubuğu bir şekilde geri gelmezse:
+### Uninstall
+
+From **Windows Settings → Apps → Installed apps**, or the **Uninstall CarlUI**
+shortcut in the Start menu. The taskbar comes back and installed files go to
+the Recycle Bin. You choose whether to keep your settings.
+
+**Emergency:** If the taskbar somehow doesn't come back:
 
 ```powershell
 & "$env:LOCALAPPDATA\Programs\CarlUI\carlui.exe" --restore-taskbar
 ```
 
-### Duvar kâğıdı
+## Settings and data
 
-CarlUI'nin kendi duvar kâğıdı [assets/wallpaper](assets/wallpaper) klasöründe
-(1920×1080, 2560×1440, 3840×2160). `tools\make-wallpaper.ps1` ile yeniden
-üretilebilir.
-
-## Ayarlar ve veriler
-
-| Ne | Nerede |
+| What | Where |
 |---|---|
-| Ayarlar | `%APPDATA%\CarlUI\config.toml` (Ayarlar penceresinden değiştirilir, anında uygulanır) |
-| Pano geçmişi, önbellek | `%LOCALAPPDATA%\CarlUI\` |
-| Loglar | `%LOCALAPPDATA%\CarlUI\logs\` (7 gün saklanır) |
+| Program | `%LOCALAPPDATA%\Programs\CarlUI\` |
+| Settings | `%APPDATA%\CarlUI\config.toml` (edited from the Settings window, applied instantly) |
+| Clipboard history, cache | `%LOCALAPPDATA%\CarlUI\` |
+| Logs | `%LOCALAPPDATA%\CarlUI\logs\` (kept for 7 days) |
 
-## Kaynaktan derleme
+## Building from source
 
-Gerekenler: [Rust](https://rustup.rs) ve Visual Studio Build Tools (C++).
+You need [Rust](https://rustup.rs) and Visual Studio Build Tools (C++).
 
 ```powershell
 cargo build --release
-.\target\release\carlui.exe          # çalıştır
-.\target\release\carlui.exe --quit   # kapat
+.\target\release\carlui.exe          # run
+.\target\release\carlui.exe --quit   # quit
 ```
 
-Tek dosyalık kurucuyu üretmek için:
+To build the single-file installer:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\build-setup.ps1   # → dist\CarlUI-Setup.exe
 ```
 
-Mimari: her modül (dock, tepsi, ada, Win menüsü…) ayrı bir süreçtir; biri
-çökerse ana süreç onu yeniden başlatır. Modüller adlandırılmış kanal üzerinden
-konuşur. Ayrıntılı geliştirme notları ve test adımları:
+Architecture: every module (dock, tray, island, Win menu…) is its own
+process; if one crashes, the main process restarts it. Modules talk over a
+named pipe. UI strings live side by side in both languages:
+`t!("Kapat", "Close")`. Development notes (in Turkish):
 [docs/GELISTIRME-NOTLARI.md](docs/GELISTIRME-NOTLARI.md).
 
-## Lisans
+## License
 
-MIT © 2026 Demhat Dayan. Ayrıntı: [LICENSE](LICENSE). Üçüncü taraf parçalar
-(PawnIO IntelMSR modülü — LGPL-2.1, Rust kütüphaneleri) için:
+MIT © 2026 Demhat Dayan. See [LICENSE](LICENSE). Third-party parts (PawnIO
+IntelMSR module, LGPL-2.1, and Rust crates):
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-Hata ve öneriler için [Issues](https://github.com/Carl00-mpeek/CarlUI/issues)
-sayfasını kullanabilirsin. İletişim: maildemhat@gmail.com
+Bugs and ideas: [Issues](https://github.com/Carl00-mpeek/CarlUI/issues).
+Contact: maildemhat@gmail.com

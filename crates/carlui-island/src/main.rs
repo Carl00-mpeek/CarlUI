@@ -249,7 +249,7 @@ impl App {
             return View::Media;
         }
         match self.cfg.clock.mode {
-            _ if self.timer.is_some() || dlman::pill().is_some() => View::Clock,
+            _ if self.timer.is_some() || dlman::pill(&self.cfg.download).is_some() => View::Clock,
             ClockMode::Always => View::Clock,
             // Masaüstünde gizliyken fare üst kenara gidince saat görünür.
             _ if self.peek => View::Clock,
@@ -288,7 +288,7 @@ impl App {
             clip: None,
             hub: if view == View::Hub { Some(self.hub.view(media_on)) } else { None },
             badge: self.hub.notes.len(),
-            timer: self.timer.as_ref().map(|t| t.text()).or_else(dlman::pill),
+            timer: self.timer.as_ref().map(|t| t.text()).or_else(|| dlman::pill(&self.cfg.download)),
             offer: self.offers.front().filter(|_| view == View::Offer).map(|o| island::OfferView {
                 name: &o.name,
                 size: o.size,
@@ -527,7 +527,7 @@ impl App {
             "desktop": self.desktop_fg,
             "clock_mode": format!("{:?}", self.cfg.clock.mode),
             "timer": self.timer.as_ref().map(|t| t.text()),
-            "download": dlman::pill(),
+            "download": dlman::pill(&self.cfg.download),
             "peek": self.peek,
             "fullscreen": self.fullscreen,
             "game": self.game,

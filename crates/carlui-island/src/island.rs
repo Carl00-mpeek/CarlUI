@@ -477,7 +477,8 @@ impl Island {
         let (w, h) = match view {
             View::Hidden => (80.0 * s, compact_h),
             View::Clock => {
-                let (t, tw, th) = self.label(gfx, &time, 13.5, true, 200.0 * s, 0.95)?;
+                // İndirme hapı uzun olabilir (ad, boyut, hız, kalan süre).
+                let (t, tw, th) = self.label(gfx, &time, 13.5, true, 560.0 * s, 0.95)?;
                 let extra = if m.badge > 0 { 26.0 * s } else { 0.0 };
                 let w = (tw + 40.0 * s + extra).max(84.0 * s).round();
                 Self::place(&t, (w - tw - extra) / 2.0, (compact_h - th) / 2.0)?;

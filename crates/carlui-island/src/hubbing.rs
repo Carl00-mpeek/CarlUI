@@ -71,7 +71,9 @@ impl Hub {
         // yer kalmazsa ayarlardan açılan CPU/GPU/RAM değil bunlar düşsün.
         let fixed = std::mem::take(&mut v);
         let dl = crate::downloads::active();
-        if let Some(p) = crate::dlman::pill() {
+        // Satır dar: yalnızca yüzde/boyut ve hız; ayrıntı haptadır.
+        let short = carlui_core::config::DownloadConfig { name: false, size: false, eta: false, ..Default::default() };
+        if let Some(p) = crate::dlman::pill(&short) {
             v.push((t!("İndirme", "Download"), p.trim_start_matches("↓ ").to_string(), 0));
         } else if !dl.is_empty() {
             let total: u64 = dl.iter().map(|d| d.1).sum();
@@ -113,7 +115,7 @@ impl App {
     /// Ada bir şey göstermeye uygun mu (hub açılabilir mi)?
     pub(crate) fn hub_possible(&self) -> bool {
         let c = &self.cfg.stats;
-        (c.cpu_temp || c.gpu_temp || c.ram) || !self.hub.notes.is_empty() || self.media_active() || !crate::downloads::active().is_empty() || crate::dlman::pill().is_some()
+        (c.cpu_temp || c.gpu_temp || c.ram) || !self.hub.notes.is_empty() || self.media_active() || !crate::downloads::active().is_empty() || crate::dlman::pill(&self.cfg.download).is_some()
     }
 
     fn hub_open(&mut self, level: u8) {
