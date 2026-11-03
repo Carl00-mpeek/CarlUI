@@ -74,7 +74,7 @@ pub fn list() -> Vec<Proc> {
         let name_ptr = rd::<usize>(b, 64) as *const u16;
         let pid = rd::<usize>(b, 80) as u32;
         let name = if name_ptr.is_null() {
-            if pid == 0 { "Sistem boşta".into() } else { "System".into() }
+            if pid == 0 { t!("Sistem boşta", "System Idle Process").into() } else { "System".into() }
         } else {
             String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(name_ptr, name_len) })
         };

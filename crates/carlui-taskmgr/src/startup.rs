@@ -107,7 +107,7 @@ fn run_keys(out: &mut Vec<Item>) {
 }
 
 fn startup_folders(out: &mut Vec<Item>) {
-    for (id, hive, source) in [(FOLDERID_Startup, HKEY_CURRENT_USER, "Başlangıç klasörü"), (FOLDERID_CommonStartup, HKEY_LOCAL_MACHINE, "Başlangıç klasörü (tümü)")] {
+    for (id, hive, source) in [(FOLDERID_Startup, HKEY_CURRENT_USER, t!("Başlangıç klasörü", "Startup folder")), (FOLDERID_CommonStartup, HKEY_LOCAL_MACHINE, t!("Başlangıç klasörü (tümü)", "Startup folder (all users)"))] {
         let Ok(dir) = (unsafe { SHGetKnownFolderPath(&id, KNOWN_FOLDER_FLAG(0), None) }) else { continue };
         let dir = unsafe {
             let s = dir.to_string().unwrap_or_default();
@@ -151,7 +151,7 @@ fn link_target(lnk: &str) -> String {
 
 fn winlogon(out: &mut Vec<Item>) {
     let key = "Software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon";
-    for (hive, label) in [(HKEY_LOCAL_MACHINE, "Winlogon · Sistem"), (HKEY_CURRENT_USER, "Winlogon · Kullanıcı")] {
+    for (hive, label) in [(HKEY_LOCAL_MACHINE, t!("Winlogon · Sistem", "Winlogon · System")), (HKEY_CURRENT_USER, t!("Winlogon · Kullanıcı", "Winlogon · User"))] {
         for (name, data, _) in values(hive, key) {
             if !(name.eq_ignore_ascii_case("Shell") || name.eq_ignore_ascii_case("Userinit")) {
                 continue;
@@ -187,7 +187,7 @@ fn services(out: &mut Vec<Item>) {
                     let path = exe_of(&command);
                     out.push(Item {
                         name: s.lpDisplayName.to_string().unwrap_or_default(),
-                        source: "Hizmet (otomatik)",
+                        source: t!("Hizmet (otomatik)", "Service (automatic)"),
                         windows: is_windows_path(&path),
                         command,
                         path,
@@ -229,9 +229,9 @@ unsafe fn walk(folder: &ITaskFolder, out: &mut Vec<Item>) {
                     let mut ty = TASK_TRIGGER_TYPE2::default();
                     if tr.Type(&mut ty).is_ok() {
                         if ty == TASK_TRIGGER_LOGON {
-                            kind = Some("Görev · Oturum açılışı");
+                            kind = Some(t!("Görev · Oturum açılışı", "Task · At sign-in"));
                         } else if ty == TASK_TRIGGER_BOOT && kind.is_none() {
-                            kind = Some("Görev · Sistem açılışı");
+                            kind = Some(t!("Görev · Sistem açılışı", "Task · At startup"));
                         }
                     }
                 }
@@ -298,7 +298,7 @@ pub fn set_enabled(item: &Item, on: bool) -> std::result::Result<(), String> {
             let mut k = HKEY::default();
             let path = HSTRING::from(format!("{APPROVED}{key}"));
             if RegCreateKeyExW(hkey(*hive), &path, 0, None, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, None, &mut k, None).is_err() {
-                return Err("Bu öğeyi değiştirmek için yönetici izni gerekiyor".into());
+                return Err(t!("Bu öğeyi değiştirmek için yönetici izni gerekiyor", "Changing this item needs admin rights").into());
             }
             // 02 = etkin, 03 = devre dışı; ardından devre dışı bırakılma zamanı (FILETIME).
             let mut data = [0u8; 12];
@@ -310,7 +310,7 @@ pub fn set_enabled(item: &Item, on: bool) -> std::result::Result<(), String> {
             }
             let r = RegSetValueExW(k, &HSTRING::from(name.as_str()), 0, REG_BINARY, Some(&data));
             let _ = RegCloseKey(k);
-            r.ok().map_err(|_| "Bu öğeyi değiştirmek için yönetici izni gerekiyor".to_string())
+            r.ok().map_err(|_| t!("Bu öğeyi değiştirmek için yönetici izni gerekiyor", "Changing this item needs admin rights").to_string())
         },
         Toggle::Task(path) => unsafe {
             let svc: ITaskService = CoCreateInstance(&TaskScheduler, None, CLSCTX_INPROC_SERVER).map_err(|e| e.message())?;
@@ -319,8 +319,8 @@ pub fn set_enabled(item: &Item, on: bool) -> std::result::Result<(), String> {
             let (dir, name) = path.rsplit_once('\\').unwrap_or(("", path));
             let folder = svc.GetFolder(&BSTR::from(if dir.is_empty() { "\\" } else { dir })).map_err(|e| e.message())?;
             let task = folder.GetTask(&BSTR::from(name)).map_err(|e| e.message())?;
-            task.SetEnabled(VARIANT_BOOL::from(on)).map_err(|_| "Bu görevi değiştirmek için yönetici izni gerekiyor".to_string())
+            task.SetEnabled(VARIANT_BOOL::from(on)).map_err(|_| t!("Bu görevi değiştirmek için yönetici izni gerekiyor", "Changing this task needs admin rights").to_string())
         },
-        Toggle::None => Err("Bu öğe buradan kapatılamaz (hizmet/Winlogon)".into()),
+        Toggle::None => Err(t!("Bu öğe buradan kapatılamaz (hizmet/Winlogon)", "This item can't be turned off here (service/Winlogon)").into()),
     }
 }

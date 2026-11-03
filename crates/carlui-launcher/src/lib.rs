@@ -1,10 +1,13 @@
-//! Başlatıcı / Spotlight arama motoru.
+//! Başlatıcı / arama motoru.
 //!
 //! Bu kütüphane "eski CarlSpotlight'ın yaptığı her şeyi kabuğun içinde, hafif
 //! şekilde yap" sorununu çözüyor: uygulama, ayar, konum ve dosya araması;
 //! hesap makinesi, birim ve döviz çevirisi; sistem komutları; yapay zekâ
 //! kısayolları; web araması ve kullanım sıklığına göre sıralama. Arayüzü üstteki
 //! ada çizer (`carlui-island`); burada yalnızca veri ve eylemler vardır.
+
+#[macro_use]
+extern crate carlui_core;
 
 pub mod actions;
 pub mod calc;

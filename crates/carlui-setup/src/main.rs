@@ -18,6 +18,9 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[macro_use]
+extern crate carlui_core;
+
 mod install;
 mod payload;
 mod shell;
@@ -336,10 +339,10 @@ fn snapshot(page: &str, out: &PathBuf, mode: Mode, dir: PathBuf) -> Result<()> {
         _ => Page::Welcome,
     };
     if let Ok(mut p) = app.progress.lock() {
-        p.step = "Kopyalanıyor · carlui-dock.exe".into();
+        p.step = t!("Kopyalanıyor · carlui-dock.exe", "Copying · carlui-dock.exe").into();
         p.frac = 0.42;
         if app.page == Page::Done {
-            p.done = Some(install::Outcome { ok: true, notes: vec!["Firefox bir sonraki açılışta eklentiyi etkinleştirmek için onay isteyecek".into()] });
+            p.done = Some(install::Outcome { ok: true, notes: vec![t!("Firefox bir sonraki açılışta eklentiyi etkinleştirmek için onay isteyecek", "Firefox will ask to enable the extension next time it starts").into()] });
         }
     }
     let wic = wic().ok_or_else(|| Error::from(E_FAIL))?;
@@ -482,6 +485,7 @@ fn relaunch_from_temp(dir: &PathBuf) -> bool {
 
 fn main() -> Result<()> {
     let args = parse_args();
+    carlui_core::lang::apply("auto");
     shell::sweep_temp_copies();
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -541,8 +545,8 @@ fn main() -> Result<()> {
         let _ = AdjustWindowRectExForDpi(&mut r, style, false, WINDOW_EX_STYLE(0), dpi);
         let (ww, wh) = (r.right - r.left, r.bottom - r.top);
         let (sw, sh) = (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
-        let title = if args.mode == Mode::Install { w!("CarlUI Kurulum") } else { w!("CarlUI'yi Kaldır") };
-        let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), CLASS, title, style, (sw - ww) / 2, (sh - wh) / 2, ww, wh, None, None, inst, None)?;
+        let title = HSTRING::from(if args.mode == Mode::Install { t!("CarlUI Kurulum", "CarlUI Setup") } else { t!("CarlUI'yi Kaldır", "Uninstall CarlUI") });
+        let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), CLASS, &title, style, (sw - ww) / 2, (sh - wh) / 2, ww, wh, None, None, inst, None)?;
         let on: i32 = 1;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let backdrop = DWMSBT_TRANSIENTWINDOW;

@@ -13,9 +13,9 @@ use carlui_sys::cpu::Kind;
 
 pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
     let sm = &app.sampler;
-    title(p, area, "CPU yönlendirme", "işlerin hangi çekirdeklerde çalışacağı");
+    title(p, area, t!("CPU yönlendirme", "CPU routing"), t!("işlerin hangi çekirdeklerde çalışacağı", "which cores work runs on"));
 
-    let modes = [("Pil tasarrufu", Act::Mode(Mode::Saver)), ("Dengeli", Act::Mode(Mode::Balanced)), ("Performans", Act::Mode(Mode::Performance))];
+    let modes = [(t!("Pil tasarrufu", "Battery saver"), Act::Mode(Mode::Saver)), (t!("Dengeli", "Balanced"), Act::Mode(Mode::Balanced)), (t!("Performans", "Performance"), Act::Mode(Mode::Performance))];
     let sel = match app.mode {
         Mode::Saver => 0,
         Mode::Balanced => 1,
@@ -24,9 +24,9 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
     let seg = R::new(area.x, area.y + 46.0, 420.0, 34.0);
     p.segments(seg, &modes, sel);
     let desc = match app.mode {
-        Mode::Saver => "İşler E çekirdeklerine, frekans düşük: en az ısı.",
-        Mode::Balanced => "Ön plan P çekirdeklerine, arka plan E çekirdeklerine.",
-        Mode::Performance => "P çekirdekleri öncelikli, yüksek frekans.",
+        Mode::Saver => t!("İşler E çekirdeklerine, frekans düşük: en az ısı.", "Work goes to E-cores, low clocks: least heat."),
+        Mode::Balanced => t!("Ön plan P çekirdeklerine, arka plan E çekirdeklerine.", "Foreground on P-cores, background on E-cores."),
+        Mode::Performance => t!("P çekirdekleri öncelikli, yüksek frekans.", "P-cores first, high clocks."),
     };
     p.text(desc, R::new(seg.right() + 16.0, seg.y, area.right() - seg.right() - 16.0, seg.h), 12.5, false, TEXT, 0.6, Align::Left);
 
@@ -38,11 +38,11 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
     let box_r = R::new(area.x, seg.bottom() + 16.0, area.w, 150.0);
     p.card(box_r);
     let mut y = box_r.y + 12.0;
-    for (k, label, color) in [(Kind::Performance, "P çekirdekleri", p.accent), (Kind::Efficient, "E çekirdekleri", GREEN)] {
+    for (k, label, color) in [(Kind::Performance, t!("P çekirdekleri", "P-cores"), p.accent), (Kind::Efficient, t!("E çekirdekleri", "E-cores"), GREEN)] {
         let Some(a) = avg(k) else { continue };
         p.text(label, R::new(box_r.x + 14.0, y, 130.0, 22.0), 12.5, true, color, 0.95, Align::Left);
         p.bar(R::new(box_r.x + 150.0, y + 7.0, 220.0, 8.0), a / 100.0, color);
-        p.text(&format!("%{a:.0}"), R::new(box_r.x + 380.0, y, 50.0, 22.0), 12.5, false, TEXT, 0.85, Align::Left);
+        p.text(&carlui_core::lang::pct(a), R::new(box_r.x + 380.0, y, 50.0, 22.0), 12.5, false, TEXT, 0.85, Align::Left);
         y += 26.0;
     }
     // Her mantıksal çekirdek dikey çubuk.
@@ -59,10 +59,10 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
         }
         p.text(&c.index.to_string(), R::new(r.x - 4.0, r.bottom() + 2.0, r.w + 8.0, 16.0), 10.5, false, TEXT, 0.5, Align::Center);
     }
-    p.text("mantıksal çekirdekler (anlık %)", R::new(bx, box_r.bottom() - 16.0, box_r.right() - bx - 14.0, 14.0), 10.5, false, TEXT, 0.4, Align::Center);
-    p.text("Toplam", R::new(box_r.x + 14.0, box_r.bottom() - 34.0, 130.0, 22.0), 12.5, true, TEXT, 0.8, Align::Left);
+    p.text(t!("mantıksal çekirdekler (anlık %)", "logical cores (live %)"), R::new(bx, box_r.bottom() - 16.0, box_r.right() - bx - 14.0, 14.0), 10.5, false, TEXT, 0.4, Align::Center);
+    p.text(t!("Toplam", "Total"), R::new(box_r.x + 14.0, box_r.bottom() - 34.0, 130.0, 22.0), 12.5, true, TEXT, 0.8, Align::Left);
     p.bar(R::new(box_r.x + 150.0, box_r.bottom() - 27.0, 220.0, 8.0), sm.now.usage / 100.0, TEXT);
-    p.text(&format!("%{:.0}", sm.now.usage), R::new(box_r.x + 380.0, box_r.bottom() - 34.0, 50.0, 22.0), 12.5, false, TEXT, 0.85, Align::Left);
+    p.text(&carlui_core::lang::pct(sm.now.usage), R::new(box_r.x + 380.0, box_r.bottom() - 34.0, 50.0, 22.0), 12.5, false, TEXT, 0.85, Align::Left);
 
     // Seçili süreç için atama düğmeleri.
     let selrow = app.selected.and_then(|pid| app.procs.rows.iter().find(|r| r.pid == pid));
@@ -70,7 +70,7 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
     let on = selrow.is_some();
     let cur = app.selected.and_then(|pid| app.routes.get(&pid)).copied();
     let mut x = area.x;
-    for (label, r, g) in [("Yalnızca P", Route::Performance, '\u{E945}'), ("Yalnızca E", Route::Efficient, '\u{EC0A}'), ("Tüm çekirdekler", Route::All, '\u{E950}')] {
+    for (label, r, g) in [(t!("Yalnızca P", "P only"), Route::Performance, '\u{E945}'), (t!("Yalnızca E", "E only"), Route::Efficient, '\u{EC0A}'), (t!("Tüm çekirdekler", "All cores"), Route::All, '\u{E950}')] {
         let w = if r == Route::All { 160.0 } else { 120.0 };
         let br = R::new(x, by, w, 30.0);
         if cur.map(|c| c.0) == Some(r) {
@@ -80,18 +80,18 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
         x += w + 10.0;
     }
     let eco = cur.and_then(|c| c.1).unwrap_or(false);
-    p.button(R::new(x, by, 170.0, 30.0), Some('\u{EC0A}'), if eco { "Verimlilik: açık" } else { "Verimlilik modu" }, Act::Eco, on, false);
+    p.button(R::new(x, by, 170.0, 30.0), Some('\u{EC0A}'), if eco { t!("Verimlilik: açık", "Efficiency: on") } else { t!("Verimlilik modu", "Efficiency mode") }, Act::Eco, on, false);
     x += 180.0;
     let info = match selrow {
-        Some(r) => format!("{} (PID {}) seçili", r.name, r.pid),
-        None => "Atama için listeden bir süreç seç".into(),
+        Some(r) => t!(format!("{} (PID {}) seçili", r.name, r.pid), format!("{} (PID {}) selected", r.name, r.pid)),
+        None => t!("Atama için listeden bir süreç seç", "Pick a process from the list to assign").into(),
     };
     p.text(&info, R::new(x, by, area.right() - x, 30.0), 12.0, false, TEXT, 0.55, Align::Left);
 
     // En çok CPU kullananlar.
     let mut rows: Vec<&crate::procs::Row> = app.procs.rows.iter().filter(|r| !r.windows && app.routes.contains_key(&r.pid)).collect();
     rows.sort_by(|a, b| b.cpu.total_cmp(&a.cpu));
-    let cols = [col("Ad", 0.0, Align::Left, None), col("PID", 70.0, Align::Right, None), col("CPU", 80.0, Align::Right, None), col("Çekirdekler", 150.0, Align::Left, None), col("Verimlilik", 110.0, Align::Left, None)];
+    let cols = [col(t!("Ad", "Name"), 0.0, Align::Left, None), col("PID", 70.0, Align::Right, None), col("CPU", 80.0, Align::Right, None), col(t!("Çekirdekler", "Cores"), 150.0, Align::Left, None), col(t!("Verimlilik", "Efficiency"), 110.0, Align::Left, None)];
     let selected = app.selected.and_then(|pid| rows.iter().position(|r| r.pid == pid));
     let ty = by + 44.0;
     let scroll = app.scroll.get(&Tab::Routing).copied().unwrap_or(0.0);
@@ -113,7 +113,7 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
                     if r.cpu < 0.05 {
                         dim("0")
                     } else {
-                        cell(format!("%{:.1}", r.cpu))
+                        cell(t!(format!("%{:.1}", r.cpu), format!("{:.1}%", r.cpu)))
                     }
                 }
                 3 => match route {
@@ -121,8 +121,8 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
                     _ => colored(route.label(), ORANGE),
                 },
                 _ => match eco {
-                    Some(true) => colored("Açık", GREEN),
-                    Some(false) => dim("Kapalı"),
+                    Some(true) => colored(t!("Açık", "On"), GREEN),
+                    Some(false) => dim(t!("Kapalı", "Off")),
                     None => dim("—"),
                 },
             }

@@ -57,22 +57,22 @@ pub fn browsers() -> &'static Browsers {
 
 pub fn paint(p: &mut P, f: &mut Flow) {
     let b = browsers();
-    f.section(p, "Tarayıcı eklentisi");
-    f.note(p, "İsteğe bağlı. Tarayıcıda başlayan indirmeleri adaya taşır; yüzde ve hız adada görünür.");
+    f.section(p, t!("Tarayıcı eklentisi", "Browser extension"));
+    f.note(p, t!("İsteğe bağlı. Tarayıcıda başlayan indirmeleri adaya taşır; yüzde ve hız adada görünür.", "Optional. Shows downloads started in the browser on the island, with progress and speed."));
 
-    let dir = b.dir.as_ref().map(|d| d.display().to_string()).unwrap_or_else(|| "Eklenti klasörü bulunamadı (CarlUI kurucuyla kurulmamış olabilir)".into());
-    let r = f.row(p, "Eklenti klasörü", &dir, 150.0);
-    p.button(R::new(r.right() - 16.0 - 134.0, r.y + (r.h - 32.0) / 2.0, 134.0, 32.0), Some('\u{E838}'), "Klasörü aç", Act::Ext(0), b.dir.is_some(), false);
+    let dir = b.dir.as_ref().map(|d| d.display().to_string()).unwrap_or_else(|| t!("Eklenti klasörü bulunamadı (CarlUI kurucuyla kurulmamış olabilir)", "Extension folder not found (CarlUI may not have been installed with the installer)").into());
+    let r = f.row(p, t!("Eklenti klasörü", "Extension folder"), &dir, 150.0);
+    p.button(R::new(r.right() - 16.0 - 134.0, r.y + (r.h - 32.0) / 2.0, 134.0, 32.0), Some('\u{E838}'), t!("Klasörü aç", "Open folder"), Act::Ext(0), b.dir.is_some(), false);
 
     let (name, label) = match &b.chromium {
-        Some((_, _, n)) => (format!("{n} (kalıcı)"), format!("{n}'de aç")),
-        None => ("Chrome / Edge (kalıcı)".to_string(), "Tarayıcı yok".to_string()),
+        Some((_, _, n)) => (t!(format!("{n} (kalıcı)"), format!("{n} (permanent)")), t!(format!("{n}'de aç"), format!("Open in {n}"))),
+        None => (t!("Chrome / Edge (kalıcı)", "Chrome / Edge (permanent)").to_string(), t!("Tarayıcı yok", "No browser").to_string()),
     };
-    let r = f.row(p, &name, "Geliştirici modu → Paketlenmemiş öğe yükle → eklenti klasörünü seçin.", 150.0);
+    let r = f.row(p, &name, t!("Geliştirici modu → Paketlenmemiş öğe yükle → eklenti klasörünü seçin.", "Developer mode → Load unpacked → choose the extension folder."), 150.0);
     p.button(R::new(r.right() - 16.0 - 134.0, r.y + (r.h - 32.0) / 2.0, 134.0, 32.0), None, &label, Act::Ext(2), b.chromium.is_some() && b.dir.is_some(), false);
 
-    let r = f.row(p, "Firefox (geçici)", "Geçici Eklenti Yükle → klasördeki manifest.json. Firefox kapanınca silinir.", 150.0);
-    let ff = if b.firefox.is_some() { "Firefox'ta aç" } else { "Firefox yok" };
+    let r = f.row(p, t!("Firefox (geçici)", "Firefox (temporary)"), t!("Geçici Eklenti Yükle → klasördeki manifest.json. Firefox kapanınca silinir.", "Load Temporary Add-on → manifest.json in the folder. Removed when Firefox closes."), 150.0);
+    let ff = if b.firefox.is_some() { t!("Firefox'ta aç", "Open in Firefox") } else { t!("Firefox yok", "No Firefox") };
     p.button(R::new(r.right() - 16.0 - 134.0, r.y + (r.h - 32.0) / 2.0, 134.0, 32.0), None, ff, Act::Ext(1), b.firefox.is_some() && b.dir.is_some(), false);
-    f.note(p, "Firefox'ta kalıcı kurulum Mozilla imzası ister; adımlar klasördeki KURULUM.md dosyasında.");
+    f.note(p, t!("Firefox'ta kalıcı kurulum Mozilla imzası ister; adımlar klasördeki KURULUM.md dosyasında.", "A permanent Firefox install needs Mozilla signing; steps are in KURULUM.md in the folder."));
 }

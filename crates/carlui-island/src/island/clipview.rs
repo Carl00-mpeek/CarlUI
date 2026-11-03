@@ -121,7 +121,7 @@ fn first_line(c: &Clip) -> String {
         return MASK.into();
     }
     match c.kind {
-        Kind::Image => "Resim".into(),
+        Kind::Image => t!("Resim", "Image").into(),
         Kind::Files => {
             let n = c.text.lines().count();
             let first = c.text.lines().next().unwrap_or_default();
@@ -134,15 +134,15 @@ fn first_line(c: &Clip) -> String {
 
 fn describe(c: &Clip) -> String {
     if c.secret {
-        return if c.pinned { "gizli · sabit".into() } else { "gizli · kısa süre sonra silinir".into() };
+        return if c.pinned { t!("gizli · sabit", "hidden · pinned").into() } else { t!("gizli · kısa süre sonra silinir", "hidden · deleted soon").into() };
     }
     match c.kind {
         Kind::Image => format!("{}×{}", c.w, c.h),
-        Kind::Files => format!("{} dosya", c.text.lines().count()),
+        Kind::Files => t!(format!("{} dosya", c.text.lines().count()), format!("{} files", c.text.lines().count())),
         Kind::Text => {
             let n = c.text.chars().count();
             let lines = c.text.lines().count();
-            if lines > 1 { format!("{n} karakter · {lines} satır") } else { format!("{n} karakter") }
+            if lines > 1 { t!(format!("{n} karakter · {lines} satır"), format!("{n} characters · {lines} lines")) } else { t!(format!("{n} karakter"), format!("{n} characters")) }
         }
     }
 }
@@ -210,8 +210,9 @@ impl Island {
             Kind::Image => std::fs::read(v.store.image_path(c)).ok().and_then(|b| picture(gfx, &b)),
             _ if c.secret => {
                 let note = format!(
-                    "{MASK}{MASK}\n\nŞifre ya da anahtar gibi göründüğü için gizli.\nEnter ile yine yapıştırabilirsin.\n{}",
-                    if c.pinned { "Sabitlendiği için silinmez." } else { "Sabitlemezsen kısa süre sonra geçmişten silinir." }
+                    "{MASK}{MASK}\n\n{}\n{}",
+                    t!("Şifre ya da anahtar gibi göründüğü için gizli.\nEnter ile yine yapıştırabilirsin.", "Hidden because it looks like a password or key.\nYou can still paste it with Enter."),
+                    if c.pinned { t!("Sabitlendiği için silinmez.", "Pinned, so it won't be deleted.") } else { t!("Sabitlemezsen kısa süre sonra geçmişten silinir.", "Unless pinned, it is removed from history soon.") }
                 );
                 self.text.render_block(gfx, &note, 13.0 * self.s, Some(wrap_w), 8192.0, 0.6).ok().map(|r| (r.surface, r.width, r.height))
             }
@@ -258,7 +259,7 @@ impl Island {
         let tmax = fw - 42.0 * s - cw - 30.0 * s;
         let size = 14.0;
         if v.filter.is_empty() {
-            let (p, _, ph) = self.label(gfx, "Panoda ara…", size, false, tmax, 0.4)?;
+            let (p, _, ph) = self.label(gfx, t!("Panoda ara…", "Search clipboard…"), size, false, tmax, 0.4)?;
             Self::place(&p, tx, fy + (fh - ph) / 2.0)?;
             kids.InsertAtTop(&p)?;
         } else {
@@ -318,7 +319,7 @@ impl Island {
                         let (l, lw2, lh) = self.label(gfx, a.key, 10.5, false, 90.0 * s, 0.4)?;
                         (Some(l), lw2, lh)
                     };
-                    let label = if confirm { "Onaylamak için tekrar Enter" } else { a.label.as_str() };
+                    let label = if confirm { t!("Onaylamak için tekrar Enter", "Press Enter again to confirm") } else { a.label.as_str() };
                     let (t, _, th) = self.label(gfx, label, 12.5, false, tmax - kw - 6.0 * s, if confirm { 1.0 } else { 0.92 })?;
                     Self::place(&t, x, ry + (rh - th) / 2.0)?;
                     kids.InsertAtTop(&t)?;
@@ -331,7 +332,7 @@ impl Island {
             self.hits.push((Hit::ClipRow(i), RECT { left: pad as i32, top: ry as i32, right: (pad + lw) as i32, bottom: (ry + rh) as i32 }));
         }
         if n == 0 {
-            let msg = if v.filter.is_empty() { "Pano geçmişi boş.\nBir şey kopyalayınca burada görünür." } else { "Eşleşen kayıt yok." };
+            let msg = if v.filter.is_empty() { t!("Pano geçmişi boş.\nBir şey kopyalayınca burada görünür.", "Clipboard history is empty.\nCopied items will appear here.") } else { t!("Eşleşen kayıt yok.", "No matching items.") };
             let r = self.text.render_block(gfx, msg, 12.5 * s, Some(lw - 20.0 * s), 400.0 * s, 0.5)?;
             kids.InsertAtTop(&self.sprite(&r.surface, r.width, r.height, pad + 10.0 * s, by + 14.0 * s)?)?;
         }
@@ -366,9 +367,9 @@ impl Island {
         if let Some(c) = current {
             // Başlık şeridi: tür + boyut solda, düğmeler sağda.
             let kind = match c.kind {
-                Kind::Text => "Metin",
-                Kind::Image => "Resim",
-                Kind::Files => "Dosyalar",
+                Kind::Text => t!("Metin", "Text"),
+                Kind::Image => t!("Resim", "Image"),
+                Kind::Files => t!("Dosyalar", "Files"),
             };
             let mut buttons: Vec<(u8, char, f32)> = Vec::new();
             if c.kind == Kind::Text {
@@ -451,7 +452,7 @@ impl Island {
                     self.pv_apply(false);
                 }
             } else {
-                let (l, lw2, lh) = self.label(gfx, "Önizleme yüklenemedi", 12.5, false, vw, 0.5)?;
+                let (l, lw2, lh) = self.label(gfx, t!("Önizleme yüklenemedi", "Preview could not be loaded"), 12.5, false, vw, 0.5)?;
                 Self::place(&l, vx + (vw - lw2) / 2.0, vy + (vh - lh) / 2.0)?;
                 kids.InsertAtTop(&l)?;
             }
@@ -474,7 +475,7 @@ impl Island {
             let (l, _, lh) = self.label(gfx, v.hint, 11.0, false, fw * 0.5, 0.75)?;
             Self::place(&l, pad + 14.0 * s + g.width, y + (hh - lh) / 2.0)?;
             kids.InsertAtTop(&l)?;
-            let (bl, blw, blh) = self.label(gfx, "Geri al", 11.0, true, 100.0 * s, 1.0)?;
+            let (bl, blw, blh) = self.label(gfx, t!("Geri al", "Undo"), 11.0, true, 100.0 * s, 1.0)?;
             let ug = self.text.glyph(gfx, '\u{E7A7}', (11.0 * s).round(), 1.0)?;
             let bh2 = (20.0 * s).round();
             let bw = (blw + ug.width + 22.0 * s).round();
@@ -624,7 +625,7 @@ impl Island {
         let s = self.s;
         let (bs, gap, padx) = ((26.0 * s).round(), (6.0 * s).round(), (10.0 * s).round());
         let bh = (36.0 * s).round();
-        let (l, lw, lh) = self.label(gfx, "Silinsin mi?", 12.0, true, 120.0 * s, 0.92)?;
+        let (l, lw, lh) = self.label(gfx, t!("Silinsin mi?", "Delete?"), 12.0, true, 120.0 * s, 0.92)?;
         let w = (padx + lw + 10.0 * s + bs * 2.0 + gap + 5.0 * s).round();
         let x = (right - w).round();
         let root = self.comp.CreateContainerVisual()?;
@@ -739,13 +740,13 @@ impl Island {
         let th = (ph + 24.0 * s).round();
         let (layer, body) = self.card_shell(pw, ph)?;
         let kids = body.Children()?;
-        let (l, _, lh) = self.label(gfx, "Düzenle", 12.0, true, 120.0 * s, 0.85)?;
+        let (l, _, lh) = self.label(gfx, t!("Düzenle", "Edit"), 12.0, true, 120.0 * s, 0.85)?;
         Self::place(&l, 14.0 * s, (head - lh) / 2.0)?;
         kids.InsertAtTop(&l)?;
         // Sağ üstte Kaydet ve X; kartın sağ kenarına bağlı (genişlerken kenarla gelir).
         let bh = (24.0 * s).round();
         let by = ((head - bh) / 2.0).round();
-        let (save_l, slw, slh) = self.label(gfx, "Kaydet", 11.5, true, 100.0 * s, 1.0)?;
+        let (save_l, slw, slh) = self.label(gfx, t!("Kaydet", "Save"), 11.5, true, 100.0 * s, 1.0)?;
         let sw = (slw + 22.0 * s).round();
         let xw = bh;
         let gap = 6.0 * s;

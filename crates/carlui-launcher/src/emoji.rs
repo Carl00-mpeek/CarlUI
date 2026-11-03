@@ -156,8 +156,9 @@ pub(crate) fn matches(rest: &str) -> Vec<Item> {
         .take(MAX)
         .map(|(_, i)| {
             let (e, names) = EMOJI[i];
-            let name = names.split(", ").next().unwrap_or("");
-            let mut it = Item::new(format!("{e}   {name}"), "Emoji · Enter ile kopyala", Icon::Glyph('\u{E76E}'), Act::Copy(e.to_string()), "Emoji");
+            // İngilizcede son ad (çoğunlukla İngilizce karşılık) gösterilir.
+            let name = if carlui_core::lang::is_tr() { names.split(", ").next() } else { names.rsplit(", ").next() }.unwrap_or("");
+            let mut it = Item::new(format!("{e}   {name}"), t!("Emoji · Enter ile kopyala", "Emoji · Enter to copy"), Icon::Glyph('\u{E76E}'), Act::Copy(e.to_string()), "Emoji");
             it.key = format!("emoji:{e}");
             it
         })

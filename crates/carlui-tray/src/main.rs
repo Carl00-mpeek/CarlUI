@@ -7,6 +7,9 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[macro_use]
+extern crate carlui_core;
+
 mod audio;
 mod host;
 mod panel;

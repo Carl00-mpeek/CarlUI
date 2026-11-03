@@ -56,7 +56,7 @@ fn with<R>(f: impl FnOnce(&[Entry]) -> R) -> R {
 
 fn item(e: &Entry, n: usize) -> Item {
     let lnk = e.lnk.display().to_string();
-    let sub = if n == 0 { "Son açılan dosya".to_string() } else { "Son kullanılanlar".to_string() };
+    let sub = if n == 0 { t!("Son açılan dosya", "Last opened file").to_string() } else { t!("Son kullanılanlar", "Recent").to_string() };
     let mut it = Item::new(&e.name, sub, Icon::Shell(lnk.clone()), Act::Open(lnk.clone()), "Son");
     it.key = format!("recent:{}", e.norm);
     it

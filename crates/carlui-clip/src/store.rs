@@ -356,11 +356,11 @@ fn parse_iso(s: &str) -> Option<i64> {
 pub fn ago(time: i64) -> String {
     let s = ((now_ms() - time) / 1000).max(0);
     match s {
-        0..=59 => "şimdi".into(),
-        60..=3599 => format!("{} dk", s / 60),
-        3600..=86399 => format!("{} sa", s / 3600),
-        86400..=172799 => "dün".into(),
-        _ => format!("{} gün", s / 86400),
+        0..=59 => t!("şimdi", "now").into(),
+        60..=3599 => format!("{} {}", s / 60, t!("dk", "min")),
+        3600..=86399 => format!("{} {}", s / 3600, t!("sa", "h")),
+        86400..=172799 => t!("dün", "yesterday").into(),
+        _ => format!("{} {}", s / 86400, t!("gün", "days")),
     }
 }
 

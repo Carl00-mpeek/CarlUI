@@ -1,5 +1,5 @@
 //! Bu modül "tarayıcı açmadan bir dosyayı indir ve ilerlemesini gör" sorununu
-//! şu yöntemle çözüyor: Spotlight'a bağlantı yapıştırıp "İndir" seçilince
+//! şu yöntemle çözüyor: Aramaya bağlantı yapıştırıp "İndir" seçilince
 //! (ya da "indir <adres>") Windows'un kendi HTTP katmanı (WinHTTP; sistem
 //! vekil sunucusu ve yönlendirmeler dahil) ile ayrı bir iş parçacığında
 //! İndirilenler'e yazılır. Toplam boyut sunucudan geldiği için adanın hapında
@@ -76,9 +76,9 @@ pub fn pill() -> Option<String> {
     let total: u64 = a.iter().map(|d| d.2).sum();
     let speed: f64 = a.iter().map(|d| d.3).sum();
     let known = a.iter().all(|d| d.2 > 0);
-    let amount = if known && total > 0 { format!("%{}", (got * 100 / total).min(99)) } else { carlui_sys::bytes(got as f64) };
-    let more = if a.len() > 1 { format!(" · {} dosya", a.len()) } else { String::new() };
-    Some(if speed > 1.0 { format!("↓ {amount} · {}/sn{more}", carlui_sys::bytes(speed)) } else { format!("↓ {amount}{more}") })
+    let amount = if known && total > 0 { t!(format!("%{}", (got * 100 / total).min(99)), format!("{}%", (got * 100 / total).min(99))) } else { carlui_sys::bytes(got as f64) };
+    let more = if a.len() > 1 { t!(format!(" · {} dosya", a.len()), format!(" · {} files", a.len())) } else { String::new() };
+    Some(if speed > 1.0 { format!("↓ {amount} · {}{}{more}", carlui_sys::bytes(speed), t!("/sn", "/s")) } else { format!("↓ {amount}{more}") })
 }
 
 /// "%20" gibi kodları çözer.
@@ -104,7 +104,7 @@ fn decode(s: &str) -> String {
 fn clean(name: &str) -> String {
     let s: String = name.chars().map(|c| if "<>:\"/\\|?*".contains(c) || c.is_control() { '_' } else { c }).collect();
     let s = s.trim().trim_end_matches('.').to_string();
-    if s.is_empty() { "indirilen".into() } else { s }
+    if s.is_empty() { t!("indirilen", "download").into() } else { s }
 }
 
 /// Adresten dosya adı tahmini ("…/setup.exe?x=1" → "setup.exe").
@@ -113,7 +113,7 @@ pub fn name_from_url(url: &str) -> String {
     let after = path.split_once("://").map(|p| p.1).unwrap_or(path);
     let last = after.split('/').skip(1).filter(|s| !s.is_empty()).last().unwrap_or("");
     let name = decode(last);
-    if name.is_empty() { clean(after.split('/').next().unwrap_or("indirilen")) + ".html" } else { clean(&name) }
+    if name.is_empty() { clean(after.split('/').next().unwrap_or(t!("indirilen", "download"))) + ".html" } else { clean(&name) }
 }
 
 /// `Content-Disposition: attachment; filename="x.zip"` (filename* önce).
@@ -180,7 +180,7 @@ fn request(url: &str, headers: &str) -> std::result::Result<Conn, String> {
     } else if let Some(r) = url.strip_prefix("http://") {
         (false, r)
     } else {
-        return Err("yalnızca http/https adresleri".into());
+        return Err(t!("yalnızca http/https adresleri", "only http/https addresses").into());
     };
     let (hostport, path) = match rest.find('/') {
         Some(i) => (&rest[..i], &rest[i..]),
@@ -194,24 +194,24 @@ fn request(url: &str, headers: &str) -> std::result::Result<Conn, String> {
     unsafe {
         let ses = H(WinHttpOpen(w!("CarlUI"), WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, PCWSTR::null(), PCWSTR::null(), 0));
         if ses.0.is_null() {
-            return Err("ağ açılamadı".into());
+            return Err(t!("ağ açılamadı", "could not open the network").into());
         }
         let host_w = wide(host);
         let con = H(WinHttpConnect(ses.0, PCWSTR(host_w.as_ptr()), port, 0));
         if con.0.is_null() {
-            return Err(format!("{host} bağlanılamadı"));
+            return Err(t!(format!("{host} bağlanılamadı"), format!("could not connect to {host}")));
         }
         let path_w = wide(path);
         let req = H(WinHttpOpenRequest(con.0, w!("GET"), PCWSTR(path_w.as_ptr()), PCWSTR::null(), PCWSTR::null(), std::ptr::null(), if secure { WINHTTP_FLAG_SECURE } else { WINHTTP_OPEN_REQUEST_FLAGS(0) }));
         if req.0.is_null() {
-            return Err("istek kurulamadı".into());
+            return Err(t!("istek kurulamadı", "could not create the request").into());
         }
         let hdr: Vec<u16> = headers.encode_utf16().collect();
-        WinHttpSendRequest(req.0, (!hdr.is_empty()).then_some(hdr.as_slice()), None, 0, 0, 0).map_err(|e| format!("gönderilemedi: {}", e.message()))?;
-        WinHttpReceiveResponse(req.0, std::ptr::null_mut()).map_err(|e| format!("yanıt yok: {}", e.message()))?;
+        WinHttpSendRequest(req.0, (!hdr.is_empty()).then_some(hdr.as_slice()), None, 0, 0, 0).map_err(|e| format!("{}: {}", t!("gönderilemedi", "send failed"), e.message()))?;
+        WinHttpReceiveResponse(req.0, std::ptr::null_mut()).map_err(|e| format!("{}: {}", t!("yanıt yok", "no response"), e.message()))?;
         let status: u32 = header(&req, WINHTTP_QUERY_STATUS_CODE).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
         if !(200..300).contains(&status) {
-            return Err(format!("sunucu {status} döndü"));
+            return Err(t!(format!("sunucu {status} döndü"), format!("server returned {status}")));
         }
         Ok(Conn { req, _con: con, _ses: ses })
     }
@@ -231,6 +231,9 @@ pub fn probe(url: &str, headers: &str) -> (Option<String>, u64) {
     }
 }
 
+/// İptal edilen işin iç hata işareti (kullanıcıya gösterilmez).
+const CANCEL: &str = "cancelled";
+
 fn run(job: &Job) -> std::result::Result<(), String> {
     let c = request(&job.url, &job.headers)?;
     let req = &c.req;
@@ -247,28 +250,28 @@ fn run(job: &Job) -> std::result::Result<(), String> {
         let name = job.name.lock().map(|n| n.clone()).unwrap_or_default();
         let dest = match &job.dest {
             Some(p) => p.clone(),
-            None => unique(&carlui_core::win::downloads_dir().ok_or("İndirilenler klasörü bulunamadı")?, &name),
+            None => unique(&carlui_core::win::downloads_dir().ok_or(t!("İndirilenler klasörü bulunamadı", "Downloads folder not found"))?, &name),
         };
         if let Ok(mut g) = job.name.lock() {
             *g = dest.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or(name);
         }
         let part = PathBuf::from(format!("{}{PART}", dest.display()));
-        let mut file = std::fs::File::create(&part).map_err(|e| format!("dosya açılamadı: {e}"))?;
+        let mut file = std::fs::File::create(&part).map_err(|e| format!("{}: {e}", t!("dosya açılamadı", "could not open the file")))?;
         let mut buf = vec![0u8; 256 * 1024];
         let (mut mark, mut mark_got) = (Instant::now(), 0u64);
         let result = loop {
             if job.cancel.load(Ordering::Relaxed) {
-                break Err("iptal".to_string());
+                break Err(CANCEL.to_string());
             }
             let mut n = 0u32;
             if let Err(e) = WinHttpReadData(req.0, buf.as_mut_ptr() as _, buf.len() as u32, &mut n) {
-                break Err(format!("bağlantı koptu: {}", e.message()));
+                break Err(format!("{}: {}", t!("bağlantı koptu", "connection lost"), e.message()));
             }
             if n == 0 {
                 break Ok(());
             }
             if let Err(e) = file.write_all(&buf[..n as usize]) {
-                break Err(format!("yazılamadı: {e}"));
+                break Err(format!("{}: {e}", t!("yazılamadı", "write failed")));
             }
             let got = job.got.fetch_add(n as u64, Ordering::Relaxed) + n as u64;
             let el = mark.elapsed().as_secs_f64();
@@ -281,7 +284,7 @@ fn run(job: &Job) -> std::result::Result<(), String> {
         let short = total > 0 && job.got.load(Ordering::Relaxed) < total;
         match result {
             Ok(()) if !short => {
-                std::fs::rename(&part, &dest).map_err(|e| format!("yeniden adlandırılamadı: {e}"))?;
+                std::fs::rename(&part, &dest).map_err(|e| format!("{}: {e}", t!("yeniden adlandırılamadı", "rename failed")))?;
                 if let Ok(mut g) = job.path.lock() {
                     *g = Some(dest);
                 }
@@ -290,7 +293,7 @@ fn run(job: &Job) -> std::result::Result<(), String> {
             r => {
                 // Yalnızca kendi yarım dosyamız silinir.
                 let _ = std::fs::remove_file(&part);
-                Err(r.err().unwrap_or_else(|| "eksik indi".into()))
+                Err(r.err().unwrap_or_else(|| t!("eksik indi", "incomplete download").into()))
             }
         }
     }
@@ -327,7 +330,7 @@ impl App {
                 let r = run(&job);
                 let state = match &r {
                     Ok(()) => DONE,
-                    Err(e) if e == "iptal" => CANCELLED,
+                    Err(e) if e == CANCEL => CANCELLED,
                     Err(e) => {
                         if let Ok(mut g) = job.error.lock() {
                             *g = e.clone();
@@ -347,7 +350,7 @@ impl App {
         self.refresh(true);
     }
 
-    /// Süren indirmeleri iptal eder (spotlight: "indirmeyi iptal et").
+    /// Süren indirmeleri iptal eder (arama: "indirmeyi iptal et").
     pub(crate) fn dl_cancel(&mut self) {
         for j in running() {
             j.cancel.store(true, Ordering::Relaxed);
@@ -368,8 +371,8 @@ impl App {
                     let path = j.path.lock().ok().and_then(|p| p.clone());
                     info!("indirme bitti: {name} ({} bayt)", j.got.load(Ordering::Relaxed));
                     Note {
-                        app: "İndirmeler".into(),
-                        title: "İndirme tamamlandı".into(),
+                        app: t!("İndirmeler", "Downloads").into(),
+                        title: t!("İndirme tamamlandı", "Download complete").into(),
                         body: format!("{name} · {}", carlui_sys::bytes(j.got.load(Ordering::Relaxed) as f64)),
                         file: path.map(|p| p.display().to_string()),
                         ..Default::default()
@@ -378,11 +381,11 @@ impl App {
                 FAILED => {
                     let e = j.error.lock().map(|e| e.clone()).unwrap_or_default();
                     carlui_core::warn!("indirme başarısız: {} — {e}", j.url);
-                    Note { app: "İndirmeler".into(), title: "İndirilemedi".into(), body: format!("{name} · {e}"), ..Default::default() }
+                    Note { app: t!("İndirmeler", "Downloads").into(), title: t!("İndirilemedi", "Download failed").into(), body: format!("{name} · {e}"), ..Default::default() }
                 }
                 _ => {
                     info!("indirme iptal edildi: {name}");
-                    Note { app: "İndirmeler".into(), title: "İndirme iptal edildi".into(), body: name, ..Default::default() }
+                    Note { app: t!("İndirmeler", "Downloads").into(), title: t!("İndirme iptal edildi", "Download cancelled").into(), body: name, ..Default::default() }
                 }
             };
             self.push_note(note);

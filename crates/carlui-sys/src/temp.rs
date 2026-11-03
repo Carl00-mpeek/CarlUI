@@ -128,7 +128,7 @@ impl Msr {
     /// `module`: PawnIO'nun imzalı IntelMSR modülü (IntelMSR.bin).
     pub fn open(module: &[u8]) -> std::result::Result<Self, String> {
         unsafe {
-            let lib = LoadLibraryW(w!("C:\\Program Files\\PawnIO\\PawnIOLib.dll")).map_err(|_| "PawnIO kurulu değil".to_string())?;
+            let lib = LoadLibraryW(w!("C:\\Program Files\\PawnIO\\PawnIOLib.dll")).map_err(|_| t!("PawnIO kurulu değil", "PawnIO is not installed").to_string())?;
             let get = |n: PCSTR| GetProcAddress(lib, n).ok_or_else(|| "PawnIOLib eksik".to_string());
             let open: PioOpen = std::mem::transmute(get(s!("pawnio_open"))?);
             let load: PioLoad = std::mem::transmute(get(s!("pawnio_load"))?);

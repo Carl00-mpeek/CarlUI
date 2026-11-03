@@ -1,4 +1,4 @@
-//! Bu modül adanın arama (Spotlight) görünümünü çiziyor. Ada aşağı doğru
+//! Bu modül adanın arama görünümünü çiziyor. Ada aşağı doğru
 //! büyür; en üst şeritte saat ve çalan şarkı kalır, altında arama kutusu,
 //! onun altında sonuçlar. Panel sonuç sayısına göre spring ile büyüyüp küçülür;
 //! en fazla 8 satır görünür, fazlası kaydırılır. Seçim vurgusu satırdan satıra
@@ -320,7 +320,7 @@ impl Island {
                 }
                 y += ch + (12.0 * s).round();
                 if v.confirm.is_some_and(|c| c == v.sel) {
-                    let (l, lw, lh) = self.label(gfx, "Onaylamak için tekrar Enter", 11.5, false, fw, 0.75)?;
+                    let (l, lw, lh) = self.label(gfx, t!("Onaylamak için tekrar Enter", "Press Enter again to confirm"), 11.5, false, fw, 0.75)?;
                     Self::place(&l, pad + fw - lw, y - 4.0 * s)?;
                     kids.InsertAtTop(&l)?;
                     y += lh + 4.0 * s;
@@ -342,13 +342,13 @@ impl Island {
                     kids.InsertAtTop(&icon)?;
                     let x = pad + 14.0 * s + ipx + 12.0 * s;
                     let (tag, tgw, tgh) = if it.tag.is_empty() { (None, 0.0, 0.0) } else {
-                        let (l, lw, lh) = self.label(gfx, it.tag, 11.0, false, 90.0 * s, 0.4)?;
+                        let (l, lw, lh) = self.label(gfx, it.tag_label(), 11.0, false, 90.0 * s, 0.4)?;
                         (Some(l), lw, lh)
                     };
                     let tmax = pad + fw - x - tgw - 26.0 * s;
                     let (t, _, th) = self.label(gfx, &it.title, 14.0, true, tmax, 0.96)?;
                     let confirm = v.confirm == Some(i);
-                    let sub = if confirm { "Onaylamak için tekrar Enter" } else { it.sub.as_str() };
+                    let sub = if confirm { t!("Onaylamak için tekrar Enter", "Press Enter again to confirm") } else { it.sub.as_str() };
                     if sub.is_empty() {
                         Self::place(&t, x, ry + (rh - th) / 2.0)?;
                         kids.InsertAtTop(&t)?;

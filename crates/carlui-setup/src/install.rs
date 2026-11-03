@@ -137,37 +137,37 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
     };
 
     if !o.dry {
-        tick(rep, "Çalışan CarlUI kapatılıyor");
+        tick(rep, t!("Çalışan CarlUI kapatılıyor", "Closing running CarlUI"));
         if shell::quit_carlui(Duration::from_secs(6)) {
             // Modüller (dock, tepsi, ada…) ana süreçten sonra kapanır.
             std::thread::sleep(Duration::from_millis(1200));
         }
     }
     if let Err(e) = std::fs::create_dir_all(&o.dir) {
-        return fail(vec![format!("Klasör oluşturulamadı: {} ({e})", o.dir.display())]);
+        return fail(vec![t!(format!("Klasör oluşturulamadı: {} ({e})", o.dir.display()), format!("Couldn't create folder: {} ({e})", o.dir.display()))]);
     }
     clean_old(&o.dir);
 
     let since = Instant::now();
     for (name, bytes) in payload::FILES {
-        tick(rep, &format!("Kopyalanıyor · {name}"));
+        tick(rep, &format!("{} · {name}", t!("Kopyalanıyor", "Copying")));
         if let Err(e) = place(&o.dir.join(name), bytes, since) {
             if *name == "carlui.exe" {
-                return fail(vec![format!("{name} yazılamadı: {e}")]);
+                return fail(vec![t!(format!("{name} yazılamadı: {e}"), format!("Couldn't write {name}: {e}"))]);
             }
-            notes.push(format!("{name} güncellenemedi: {e}"));
+            notes.push(t!(format!("{name} güncellenemedi: {e}"), format!("Couldn't update {name}: {e}")));
         }
     }
-    tick(rep, "Kaldırıcı ekleniyor");
+    tick(rep, t!("Kaldırıcı ekleniyor", "Adding uninstaller"));
     let uninstaller = o.dir.join(shell::UNINSTALLER);
     match std::env::current_exe() {
         Ok(me) if me != uninstaller => match std::fs::read(&me) {
             Ok(b) => {
                 if let Err(e) = place(&uninstaller, &b, since) {
-                    notes.push(format!("Kaldırıcı yazılamadı: {e}"));
+                    notes.push(t!(format!("Kaldırıcı yazılamadı: {e}"), format!("Couldn't write the uninstaller: {e}")));
                 }
             }
-            Err(e) => notes.push(format!("Kaldırıcı yazılamadı: {e}")),
+            Err(e) => notes.push(t!(format!("Kaldırıcı yazılamadı: {e}"), format!("Couldn't write the uninstaller: {e}"))),
         },
         _ => {}
     }
@@ -175,9 +175,9 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
     let ext = ext_dir(&o.dir);
     let _ = std::fs::create_dir_all(&ext);
     for (name, bytes) in payload::EXTENSION {
-        tick(rep, &format!("Eklenti · {name}"));
+        tick(rep, &format!("{} · {name}", t!("Eklenti", "Extension")));
         if let Err(e) = std::fs::write(ext.join(name), bytes) {
-            notes.push(format!("Eklenti dosyası yazılamadı ({name}): {e}"));
+            notes.push(t!(format!("Eklenti dosyası yazılamadı ({name}): {e}"), format!("Couldn't write extension file ({name}): {e}")));
         }
     }
     if let Some(x) = payload::XPI {
@@ -185,11 +185,11 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
     }
 
     if o.dry {
-        notes.push("Deneme kurulumu: kayıt defteri, kısayol ve görev adımları atlandı".into());
+        notes.push(t!("Deneme kurulumu: kayıt defteri, kısayol ve görev adımları atlandı", "Test install: registry, shortcut and task steps skipped").into());
         return Outcome { ok: true, notes };
     }
 
-    tick(rep, "Programlar listesine ekleniyor");
+    tick(rep, t!("Programlar listesine ekleniyor", "Adding to installed apps"));
     let dir = o.dir.display().to_string();
     let exe = o.dir.join("carlui.exe");
     let uninstall = format!("\"{}\" --uninstall", uninstaller.display());
@@ -209,54 +209,54 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
         ],
     );
     if !ok {
-        notes.push("Programlar listesine eklenemedi".into());
+        notes.push(t!("Programlar listesine eklenemedi", "Couldn't add to installed apps").into());
     }
 
-    tick(rep, "Kısayollar oluşturuluyor");
+    tick(rep, t!("Kısayollar oluşturuluyor", "Creating shortcuts"));
     match shell::menu_dir() {
         Some(m) => {
-            let a = shell::shortcut(&m.join("CarlUI.lnk"), &exe, "", "CarlUI kabuğunu başlatır");
-            let b = shell::shortcut(&m.join("CarlUI Ayarları.lnk"), &o.dir.join("carlui-settings.exe"), "", "CarlUI ayarları");
-            let c = shell::shortcut(&m.join("CarlUI'yi kaldır.lnk"), &uninstaller, "--uninstall", "CarlUI'yi kaldırır");
+            let a = shell::shortcut(&m.join("CarlUI.lnk"), &exe, "", t!("CarlUI kabuğunu başlatır", "Starts the CarlUI shell"));
+            let b = shell::shortcut(&m.join(t!("CarlUI Ayarları.lnk", "CarlUI Settings.lnk")), &o.dir.join("carlui-settings.exe"), "", t!("CarlUI ayarları", "CarlUI settings"));
+            let c = shell::shortcut(&m.join(t!("CarlUI'yi kaldır.lnk", "Uninstall CarlUI.lnk")), &uninstaller, "--uninstall", t!("CarlUI'yi kaldırır", "Uninstalls CarlUI"));
             if !(a && b && c) {
-                notes.push("Başlat menüsü kısayollarının bazıları oluşturulamadı".into());
+                notes.push(t!("Başlat menüsü kısayollarının bazıları oluşturulamadı", "Some Start menu shortcuts couldn't be created").into());
             }
         }
-        None => notes.push("Başlat menüsü klasörü bulunamadı".into()),
+        None => notes.push(t!("Başlat menüsü klasörü bulunamadı", "Start menu folder not found").into()),
     }
-    if o.desktop && !shell::desktop_link().is_some_and(|l| shell::shortcut(&l, &exe, "", "CarlUI kabuğunu başlatır")) {
-        notes.push("Masaüstü kısayolu oluşturulamadı".into());
+    if o.desktop && !shell::desktop_link().is_some_and(|l| shell::shortcut(&l, &exe, "", t!("CarlUI kabuğunu başlatır", "Starts the CarlUI shell"))) {
+        notes.push(t!("Masaüstü kısayolu oluşturulamadı", "Couldn't create the desktop shortcut").into());
     }
 
     if o.firefox && payload::XPI.is_some() {
         let xpi = xpi_path(&o.dir).display().to_string();
         if shell::reg_set(shell::FIREFOX_KEY, &[(shell::EXT_ID, shell::Val::Str(&xpi))]) {
-            notes.push("Firefox bir sonraki açılışta eklentiyi etkinleştirmek için onay isteyecek".into());
+            notes.push(t!("Firefox bir sonraki açılışta eklentiyi etkinleştirmek için onay isteyecek", "Firefox will ask to enable the extension next time it starts").into());
         } else {
-            notes.push("Firefox eklentisi tanıtılamadı".into());
+            notes.push(t!("Firefox eklentisi tanıtılamadı", "Couldn't register the Firefox extension").into());
         }
     }
 
     if o.wallpaper {
-        tick(rep, "Duvar kâğıdı uygulanıyor");
+        tick(rep, t!("Duvar kâğıdı uygulanıyor", "Applying wallpaper"));
         let path = o.dir.join(r"wallpaper\carlui.png");
         let ok = path.parent().is_some_and(|d| std::fs::create_dir_all(d).is_ok()) && std::fs::write(&path, payload::WALLPAPER).is_ok() && shell::set_wallpaper(&path);
         if !ok {
-            notes.push("Duvar kâğıdı uygulanamadı".into());
+            notes.push(t!("Duvar kâğıdı uygulanamadı", "Couldn't apply the wallpaper").into());
         }
     }
 
     if o.sensors {
-        tick(rep, "CPU sıcaklığı görevi kuruluyor (yönetici izni)");
+        tick(rep, t!("CPU sıcaklığı görevi kuruluyor (yönetici izni)", "Setting up the CPU temperature task (admin)"));
         match shell::run_elevated(HWND(rep.hwnd as _), &o.dir.join("carlui-sensors.exe"), "--install") {
             shell::Elevated::Done => {}
-            shell::Elevated::Declined => notes.push("CPU sıcaklığı: yönetici izni verilmedi, görev kurulmadı".into()),
-            shell::Elevated::Failed(e) => notes.push(format!("CPU sıcaklığı görevi kurulamadı: {e}")),
+            shell::Elevated::Declined => notes.push(t!("CPU sıcaklığı: yönetici izni verilmedi, görev kurulmadı", "CPU temperature: admin rights declined, task not set up").into()),
+            shell::Elevated::Failed(e) => notes.push(t!(format!("CPU sıcaklığı görevi kurulamadı: {e}"), format!("Couldn't set up the CPU temperature task: {e}"))),
         }
     }
 
     if o.launch {
-        tick(rep, "CarlUI başlatılıyor");
+        tick(rep, t!("CarlUI başlatılıyor", "Starting CarlUI"));
         shell::open(&exe.display().to_string(), "");
     }
     Outcome { ok: true, notes }

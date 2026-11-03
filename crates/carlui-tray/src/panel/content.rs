@@ -83,7 +83,7 @@ impl Panel {
         let hover_brush: CompositionBrush = self.comp.CreateColorBrushWithColor(color(self.theme.hover))?.cast()?;
         let tile_brush: CompositionBrush = self.comp.CreateColorBrushWithColor(color(carlui_core::theme::Rgba(255, 255, 255, 0x10)))?.cast()?;
         if visible.is_empty() {
-            let t = self.text.render(gfx, "Arka planda çalışan uygulama yok", 12.5 * s, false, w - pad * 2.0, 0.6)?;
+            let t = self.text.render(gfx, t!("Arka planda çalışan uygulama yok", "No apps running in the background"), 12.5 * s, false, w - pad * 2.0, 0.6)?;
             let v = self.sprite(&t.surface, t.width, t.height, (w - t.width) / 2.0, y + 8.0 * s)?;
             kids.InsertAtTop(&v)?;
             self.stagger.push(v.cast()?);

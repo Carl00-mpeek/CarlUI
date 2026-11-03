@@ -13,6 +13,9 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[macro_use]
+extern crate carlui_core;
+
 mod icons;
 mod outside;
 mod store;
@@ -497,7 +500,7 @@ impl App {
         self.finish_rename();
         match a {
             Some(Act::Tile(None, i)) if matches!(self.store.items.get(i), Some(Item::Folder { .. })) => {
-                let rows = vec![Self::item(0, "Aç", '\u{E8DA}'), Self::item(1, "Yeniden adlandır", '\u{E8AC}'), Row::Sep, Self::item(2, "Klasörü dağıt", '\u{E7A7}')];
+                let rows = vec![Self::item(0, t!("Aç", "Open"), '\u{E8DA}'), Self::item(1, t!("Yeniden adlandır", "Rename"), '\u{E8AC}'), Row::Sep, Self::item(2, t!("Klasörü dağıt", "Ungroup folder"), '\u{E7A7}')];
                 match self.menu(rows) {
                     Some(0) => self.go(View::Folder(i)),
                     Some(1) => {
@@ -512,15 +515,15 @@ impl App {
                 }
             }
             Some(Act::Tile(None, i)) => {
-                let rows = vec![Self::item(0, "Aç", '\u{E8A7}'), Self::item(1, "Yeni klasöre koy", '\u{E8F4}'), Row::Sep, Self::item(2, "Sabitlemeyi kaldır", '\u{E77A}')];
+                let rows = vec![Self::item(0, t!("Aç", "Open"), '\u{E8A7}'), Self::item(1, t!("Yeni klasöre koy", "Put in new folder"), '\u{E8F4}'), Row::Sep, Self::item(2, t!("Sabitlemeyi kaldır", "Unpin"), '\u{E77A}')];
                 match self.menu(rows) {
                     Some(0) => self.open_tile(None, i),
                     Some(1) => {
                         if let Some(Item::App(t)) = self.store.items.get(i).cloned() {
-                            self.store.items[i] = Item::Folder { name: "Yeni klasör".into(), apps: vec![t] };
+                            self.store.items[i] = Item::Folder { name: t!("Yeni klasör", "New folder").into(), apps: vec![t] };
                             self.save();
                             self.go(View::Folder(i));
-                            self.rename = Some("Yeni klasör".into());
+                            self.rename = Some(t!("Yeni klasör", "New folder").into());
                         }
                     }
                     Some(2) => {
@@ -531,7 +534,7 @@ impl App {
                 }
             }
             Some(Act::Tile(Some(f), i)) => {
-                let rows = vec![Self::item(0, "Aç", '\u{E8A7}'), Self::item(1, "Klasörden çıkar", '\u{E8DE}'), Row::Sep, Self::item(2, "Sabitlemeyi kaldır", '\u{E77A}')];
+                let rows = vec![Self::item(0, t!("Aç", "Open"), '\u{E8A7}'), Self::item(1, t!("Klasörden çıkar", "Remove from folder"), '\u{E8DE}'), Row::Sep, Self::item(2, t!("Sabitlemeyi kaldır", "Unpin"), '\u{E77A}')];
                 match self.menu(rows) {
                     Some(0) => self.open_tile(Some(f), i),
                     Some(1) => {
@@ -546,9 +549,9 @@ impl App {
                 }
             }
             Some(Act::Scroll) if !matches!(self.view, View::Add(_)) => {
-                let mut rows = vec![Self::item(0, "Uygulama ekle", '\u{E710}')];
+                let mut rows = vec![Self::item(0, t!("Uygulama ekle", "Add app"), '\u{E710}')];
                 if self.view == View::Home {
-                    rows.push(Self::item(1, "Yeni klasör", '\u{E8F4}'));
+                    rows.push(Self::item(1, t!("Yeni klasör", "New folder"), '\u{E8F4}'));
                 }
                 match self.menu(rows) {
                     Some(0) => self.act(Act::Add),
@@ -563,12 +566,12 @@ impl App {
 
     fn power_menu(&mut self) {
         let rows = vec![
-            Self::item(0, "Kilitle", '\u{E72E}'),
-            Self::item(1, "Oturumu kapat", '\u{F3B1}'),
+            Self::item(0, t!("Kilitle", "Lock"), '\u{E72E}'),
+            Self::item(1, t!("Oturumu kapat", "Sign out"), '\u{F3B1}'),
             Row::Sep,
-            Self::item(2, "Uyku", '\u{E708}'),
-            Self::item(3, "Yeniden başlat", '\u{E777}'),
-            Self::item(4, "Kapat", '\u{E7E8}'),
+            Self::item(2, t!("Uyku", "Sleep"), '\u{E708}'),
+            Self::item(3, t!("Yeniden başlat", "Restart"), '\u{E777}'),
+            Self::item(4, t!("Kapat", "Shut down"), '\u{E7E8}'),
         ];
         let p = match self.menu(rows) {
             Some(0) => Power::Lock,
@@ -879,7 +882,7 @@ fn main() -> Result<()> {
             ..Default::default()
         };
         RegisterClassExW(&wc);
-        let hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, START_CLASS, w!("CarlUI Menü"), WS_POPUP, 0, 0, 1, 1, None, None, inst, None)?;
+        let hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, START_CLASS, w!("CarlUI Menu"), WS_POPUP, 0, 0, 1, 1, None, None, inst, None)?;
         let on: i32 = 1;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let round = DWMWCP_ROUND;

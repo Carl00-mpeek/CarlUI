@@ -107,34 +107,34 @@ fn swatches(p: &mut P, f: &mut Flow, label: &str, desc: &str, colors: &[u32], va
 
 pub fn paint(cfg: &Config, p: &mut P, f: &mut Flow) {
     let c = &cfg.cursor;
-    f.section(p, "İmleç");
-    f.toggle(p, "CarlUI imleci", "Ok ve bağlantı eli. Kapatınca Windows'un imleci geri gelir.", c.enabled, |c| c.cursor.enabled = !c.cursor.enabled);
+    f.section(p, t!("İmleç", "Cursor"));
+    f.toggle(p, t!("CarlUI imleci", "CarlUI cursor"), t!("Ok ve bağlantı eli. Kapatınca Windows'un imleci geri gelir.", "Arrow and link hand. Turn off to bring back the Windows cursor."), c.enabled, |c| c.cursor.enabled = !c.cursor.enabled);
     if !c.enabled {
         return;
     }
     let styles = [CursorStyle::Neon, CursorStyle::Ink, CursorStyle::Soft, CursorStyle::Zen];
     f.choice(
         p,
-        "Stil",
-        "Neon: renkli degrade. Mürekkep: koyu, kenarlı. Yumuşak: sade, yuvarlak. Zen: gümüş, sakuralı.",
+        t!("Stil", "Style"),
+        t!("Neon: renkli degrade. Mürekkep: koyu, kenarlı. Yumuşak: sade, yuvarlak. Zen: gümüş, sakuralı.", "Neon: colorful gradient. Ink: dark with an outline. Soft: plain and round. Zen: silver with sakura."),
         &[
             ("Neon", edit(|c| c.cursor.style = CursorStyle::Neon)),
-            ("Mürekkep", edit(|c| c.cursor.style = CursorStyle::Ink)),
-            ("Yumuşak", edit(|c| c.cursor.style = CursorStyle::Soft)),
+            (t!("Mürekkep", "Ink"), edit(|c| c.cursor.style = CursorStyle::Ink)),
+            (t!("Yumuşak", "Soft"), edit(|c| c.cursor.style = CursorStyle::Soft)),
             ("Zen", edit(|c| c.cursor.style = CursorStyle::Zen)),
         ],
         styles.iter().position(|s| *s == c.style).unwrap_or(0),
         92.0,
     );
     match c.style {
-        CursorStyle::Ink => swatches(p, f, "Gövde rengi", "+ ile istediğin rengi seç.", &INK, &c.ink_color, false, |c, v| c.ink_color = v),
-        CursorStyle::Soft => swatches(p, f, "Gövde rengi", "+ ile istediğin rengi seç.", &SOFT, &c.soft_color, false, |c, v| c.soft_color = v),
-        CursorStyle::Zen => swatches(p, f, "Işıma rengi", "Gümüş gövdeye hafifçe de çalar.", &ZEN, &c.zen_color, false, |c, v| c.zen_color = v),
-        CursorStyle::Neon => swatches(p, f, "Renk", "+ ile istediğin rengi seç.", &NEON, &c.color, false, |c, v| c.color = v),
+        CursorStyle::Ink => swatches(p, f, t!("Gövde rengi", "Body color"), t!("+ ile istediğin rengi seç.", "Pick any color with +."), &INK, &c.ink_color, false, |c, v| c.ink_color = v),
+        CursorStyle::Soft => swatches(p, f, t!("Gövde rengi", "Body color"), t!("+ ile istediğin rengi seç.", "Pick any color with +."), &SOFT, &c.soft_color, false, |c, v| c.soft_color = v),
+        CursorStyle::Zen => swatches(p, f, t!("Işıma rengi", "Glow color"), t!("Gümüş gövdeye hafifçe de çalar.", "Also tints the silver body slightly."), &ZEN, &c.zen_color, false, |c, v| c.zen_color = v),
+        CursorStyle::Neon => swatches(p, f, t!("Renk", "Color"), t!("+ ile istediğin rengi seç.", "Pick any color with +."), &NEON, &c.color, false, |c, v| c.color = v),
     }
-    f.slider(p, "Boyut", "Windows'un imleç boyutuna göre; erişilebilirlik ayarındaki büyütme de hesaba katılır.", c.scale, 0.5, 1.6, 0.05, |v| format!("%{:.0}", v * 100.0), |c, v| c.cursor.scale = v);
-    swatches(p, f, "Dış kenar", "Otomatik: gövdeye göre beyaz ya da koyu.", &EDGE, &c.edge, true, |c, v| c.edge = v);
+    f.slider(p, t!("Boyut", "Size"), t!("Windows'un imleç boyutuna göre; erişilebilirlik ayarındaki büyütme de hesaba katılır.", "Relative to the Windows cursor size, including accessibility scaling."), c.scale, 0.5, 1.6, 0.05, |v| t!(format!("%{:.0}", v * 100.0), format!("{:.0}%", v * 100.0)), |c, v| c.cursor.scale = v);
+    swatches(p, f, t!("Dış kenar", "Outline"), t!("Otomatik: gövdeye göre beyaz ya da koyu.", "Auto: white or dark depending on the body."), &EDGE, &c.edge, true, |c, v| c.edge = v);
     if matches!(c.style, CursorStyle::Neon | CursorStyle::Zen) {
-        f.toggle(p, "Işıma", "İmlecin çevresinde renkli, yumuşak parıltı.", c.glow, |c| c.cursor.glow = !c.cursor.glow);
+        f.toggle(p, t!("Işıma", "Glow"), t!("İmlecin çevresinde renkli, yumuşak parıltı.", "A soft colored glow around the cursor."), c.glow, |c| c.cursor.glow = !c.cursor.glow);
     }
 }

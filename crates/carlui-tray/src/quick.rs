@@ -5,7 +5,7 @@
 //! - **Wi-Fi / Bluetooth:** Windows'un radyo API'si (ayarlar uygulamasındaki
 //!   anahtarlarla aynı).
 //!
-//! Asıl işlemler `carlui_core::quick` içinde (Spotlight da kullanır). DDC/CI ve
+//! Asıl işlemler `carlui_core::quick` içinde (arama da kullanır). DDC/CI ve
 //! radyo çağrıları yavaş olabildiği (50–300 ms) için burada arka plan iş
 //! parçacığında yapılır; sonuç panele mesajla döner.
 

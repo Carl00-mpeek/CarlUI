@@ -68,8 +68,8 @@ impl Store {
 
     fn seed() -> Self {
         let mut items = vec![
-            Item::App(tile("Dosya Gezgini", r"shell:AppsFolder\Microsoft.Windows.Explorer")),
-            Item::App(tile("Ayarlar", r"shell:AppsFolder\windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel")),
+            Item::App(tile(t!("Dosya Gezgini", "File Explorer"), r"shell:AppsFolder\Microsoft.Windows.Explorer")),
+            Item::App(tile(t!("Ayarlar", "Settings"), r"shell:AppsFolder\windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel")),
         ];
         for p in config::load().dock.pinned {
             if !p.path.to_lowercase().ends_with("explorer.exe") {
@@ -120,7 +120,8 @@ impl Store {
     /// Yeni boş klasör; konumu döner.
     pub fn new_folder(&mut self) -> usize {
         let n = self.items.iter().filter(|i| matches!(i, Item::Folder { .. })).count();
-        let name = if n == 0 { "Yeni klasör".to_string() } else { format!("Yeni klasör {}", n + 1) };
+        let base = t!("Yeni klasör", "New folder");
+        let name = if n == 0 { base.to_string() } else { format!("{base} {}", n + 1) };
         self.items.push(Item::Folder { name, apps: Vec::new() });
         self.items.len() - 1
     }
@@ -191,7 +192,7 @@ impl Store {
             }
             Item::App(dst) => {
                 let dst = dst.clone();
-                self.items[onto] = Item::Folder { name: "Klasör".into(), apps: vec![dst, src] };
+                self.items[onto] = Item::Folder { name: t!("Klasör", "Folder").into(), apps: vec![dst, src] };
                 true
             }
         };

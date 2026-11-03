@@ -78,7 +78,7 @@ pub fn start(hwnd: isize, msg: u32, notes: Arc<Mutex<VecDeque<Note>>>) {
                     let Some(done) = final_name(name) else { continue };
                     if dir.join(&done).exists() {
                         carlui_core::info!("indirme bitti: {done}");
-                        let note = Note { app: "İndirmeler".into(), title: "İndirme tamamlandı".into(), file: Some(dir.join(&done).display().to_string()), body: done, ..Default::default() };
+                        let note = Note { app: t!("İndirmeler", "Downloads").into(), title: t!("İndirme tamamlandı", "Download complete").into(), file: Some(dir.join(&done).display().to_string()), body: done, ..Default::default() };
                         if let Ok(mut q) = notes.lock() {
                             q.push_back(note);
                         }

@@ -29,13 +29,13 @@ pub fn human(secs: u32) -> String {
     let (h, m, s) = (secs / 3600, secs % 3600 / 60, secs % 60);
     let mut parts = Vec::new();
     if h > 0 {
-        parts.push(format!("{h} sa"));
+        parts.push(format!("{h} {}", t!("sa", "h")));
     }
     if m > 0 {
-        parts.push(format!("{m} dk"));
+        parts.push(format!("{m} {}", t!("dk", "min")));
     }
     if s > 0 {
-        parts.push(format!("{s} sn"));
+        parts.push(format!("{s} {}", t!("sn", "s")));
     }
     parts.join(" ")
 }
@@ -77,8 +77,14 @@ fn parse(raw: &str) -> Option<(u32, String)> {
 pub(crate) fn items(raw: &str) -> Vec<Item> {
     let q = norm(raw.trim());
     if let Some((secs, label)) = parse(raw) {
-        let title = if label.is_empty() { format!("{} zamanlayıcı başlat", human(secs)) } else { format!("{} zamanlayıcı: {label}", human(secs)) };
-        let mut it = Item::new(title, "Adada geri sayım · bitince bildirim", Icon::Glyph('\u{E916}'), Act::Timer { secs, label }, "Zaman");
+        let h = human(secs);
+        let title = match (label.is_empty(), carlui_core::lang::is_tr()) {
+            (true, true) => format!("{h} zamanlayıcı başlat"),
+            (false, true) => format!("{h} zamanlayıcı: {label}"),
+            (true, false) => format!("Start {h} timer"),
+            (false, false) => format!("{h} timer: {label}"),
+        };
+        let mut it = Item::new(title, t!("Adada geri sayım · bitince bildirim", "Countdown on the island · notifies when done"), Icon::Glyph('\u{E916}'), Act::Timer { secs, label }, "Zaman");
         it.key = "timer".into();
         return vec![it];
     }
@@ -86,10 +92,10 @@ pub(crate) fn items(raw: &str) -> Vec<Item> {
     let stop = ["zamanlayici durdur", "kronometre durdur", "sayaci durdur", "timer stop", "durdur zamanlayici"];
     let stopping = q.contains("durdur") || q.contains("stop") || q.contains("iptal");
     if stopping && stop.iter().any(|s| score(s, &q) >= 700) {
-        out.push(Item::new("Zamanlayıcıyı durdur", "Adadaki sayım kapanır", Icon::Glyph('\u{E71A}'), Act::TimerStop, "Zaman"));
+        out.push(Item::new(t!("Zamanlayıcıyı durdur", "Stop timer"), t!("Adadaki sayım kapanır", "Closes the countdown on the island"), Icon::Glyph('\u{E71A}'), Act::TimerStop, "Zaman"));
     }
     if q.chars().count() >= 4 && ["kronometre", "stopwatch"].iter().any(|s| score(s, &q) >= 700) && !stopping {
-        let mut it = Item::new("Kronometre başlat", "Adada ileri sayım", Icon::Glyph('\u{E916}'), Act::Stopwatch, "Zaman");
+        let mut it = Item::new(t!("Kronometre başlat", "Start stopwatch"), t!("Adada ileri sayım", "Counts up on the island"), Icon::Glyph('\u{E916}'), Act::Stopwatch, "Zaman");
         it.key = "stopwatch".into();
         out.push(it);
     }

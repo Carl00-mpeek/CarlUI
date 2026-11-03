@@ -86,12 +86,43 @@ impl Item {
         Self { title: title.into(), sub: sub.into(), icon, act, tag, key: String::new(), path: String::new(), run: None, complete: String::new() }
     }
 
+    /// Ekranda gösterilen etiket (iç anahtar Türkçe kalır, karşılaştırmalar bozulmasın).
+    pub fn tag_label(&self) -> &'static str {
+        tag_label(self.tag)
+    }
+
     /// Tab tamamlaması: kısayol/komut metni ya da adı olan sonuçların başlığı.
     pub fn completion(&self) -> Option<String> {
         if !self.complete.is_empty() {
             return Some(self.complete.clone());
         }
         matches!(self.tag, "Uygulama" | "Ayar" | "Konum" | "Dosya" | "Klasör").then(|| self.title.clone())
+    }
+}
+
+/// Etiketin seçili dildeki adı.
+pub fn tag_label(tag: &'static str) -> &'static str {
+    if carlui_core::lang::is_tr() {
+        return tag;
+    }
+    match tag {
+        "Uygulama" => "App",
+        "Ayar" => "Setting",
+        "Konum" => "Location",
+        "Dosya" => "File",
+        "Klasör" => "Folder",
+        "Kısayol" => "Shortcut",
+        "Komut" => "Command",
+        "YZ" => "AI",
+        "Hesap" => "Math",
+        "Çeviri" => "Convert",
+        "Döviz" => "Currency",
+        "Pencere" => "Window",
+        "İndir" => "Download",
+        "Son" => "Recent",
+        "Pano" => "Clipboard",
+        "Zaman" => "Timer",
+        t => t,
     }
 }
 
@@ -187,24 +218,25 @@ pub(crate) fn enc(s: &str) -> String {
 pub struct SysCmd {
     pub sys: Sys,
     pub name: &'static str,
+    pub en: &'static str,
     pub keywords: &'static str,
     pub glyph: char,
 }
 
 pub const SYSTEM: &[SysCmd] = &[
-    SysCmd { sys: Sys::Lock, name: "Kilitle", keywords: "/lock /kilitle lock kilit ekranı kilitle", glyph: '\u{E72E}' },
-    SysCmd { sys: Sys::Sleep, name: "Uyku", keywords: "/uyku sleep uyut", glyph: '\u{E708}' },
-    SysCmd { sys: Sys::SignOut, name: "Oturumu kapat", keywords: "/oturum sign out log off çıkış yap", glyph: '\u{E748}' },
-    SysCmd { sys: Sys::Restart, name: "Yeniden başlat", keywords: "/restart /yeniden restart reboot", glyph: '\u{E777}' },
-    SysCmd { sys: Sys::Shutdown, name: "Bilgisayarı kapat", keywords: "/shutdown /kapat shutdown power off", glyph: '\u{E7E8}' },
+    SysCmd { sys: Sys::Lock, name: "Kilitle", en: "Lock", keywords: "/lock /kilitle lock kilit ekranı kilitle", glyph: '\u{E72E}' },
+    SysCmd { sys: Sys::Sleep, name: "Uyku", en: "Sleep", keywords: "/uyku sleep uyut", glyph: '\u{E708}' },
+    SysCmd { sys: Sys::SignOut, name: "Oturumu kapat", en: "Sign out", keywords: "/oturum sign out log off çıkış yap", glyph: '\u{E748}' },
+    SysCmd { sys: Sys::Restart, name: "Yeniden başlat", en: "Restart", keywords: "/restart /yeniden restart reboot", glyph: '\u{E777}' },
+    SysCmd { sys: Sys::Shutdown, name: "Bilgisayarı kapat", en: "Shut down", keywords: "/shutdown /kapat shutdown power off", glyph: '\u{E7E8}' },
 ];
 
 pub fn sys_item(c: &SysCmd) -> Item {
     let sub = match c.sys {
-        Sys::Restart | Sys::Shutdown => "Onay için iki kez Enter",
-        _ => "Sistem komutu",
+        Sys::Restart | Sys::Shutdown => t!("Onay için iki kez Enter", "Press Enter twice to confirm"),
+        _ => t!("Sistem komutu", "System command"),
     };
-    let mut it = Item::new(c.name, sub, Icon::Glyph(c.glyph), Act::System(c.sys), "Komut");
+    let mut it = Item::new(t!(c.name, c.en), sub, Icon::Glyph(c.glyph), Act::System(c.sys), "Komut");
     it.key = format!("sys:{:?}", c.sys);
     it.complete = c.keywords.split(' ').next().unwrap_or("").to_string();
     it
@@ -213,9 +245,9 @@ pub fn sys_item(c: &SysCmd) -> Item {
 pub fn app_item(a: &App, run: &[Running]) -> Item {
     let w = index::window_of(a, run);
     let sub = match (&w, a.target.is_empty()) {
-        (Some(_), _) => "Açık · Enter ile öne getir".to_string(),
+        (Some(_), _) => t!("Açık · Enter ile öne getir", "Open · Enter to bring to front").to_string(),
         (None, false) => a.target.clone(),
-        (None, true) => "Uygulama".to_string(),
+        (None, true) => t!("Uygulama", "App").to_string(),
     };
     let mut it = Item::new(&a.name, sub, Icon::Shell(a.launch_path()), Act::App { launch: a.launch_path(), hwnd: w.as_ref().map(|w| w.hwnd) }, "Uygulama");
     it.key = format!("app:{}", a.parsing.to_lowercase());
@@ -255,13 +287,13 @@ pub fn home(apps: &[App], run: &[Running], usage: &HashMap<String, u32>) -> (Vec
         }
     }
     let mut chips = vec![
-        Item::new("Tüm uygulamalar", "", Icon::Glyph('\u{E71D}'), Act::AllApps, ""),
-        Item::new("Ayarlar", "", Icon::Glyph('\u{E713}'), Act::Open("ms-settings:".into()), ""),
-        Item::new("Dosya Gezgini", "", Icon::Glyph('\u{EC50}'), Act::Open("explorer.exe".into()), ""),
+        Item::new(t!("Tüm uygulamalar", "All apps"), "", Icon::Glyph('\u{E71D}'), Act::AllApps, ""),
+        Item::new(t!("Ayarlar", "Settings"), "", Icon::Glyph('\u{E713}'), Act::Open("ms-settings:".into()), ""),
+        Item::new(t!("Dosya Gezgini", "File Explorer"), "", Icon::Glyph('\u{EC50}'), Act::Open("explorer.exe".into()), ""),
     ];
     for c in SYSTEM.iter().filter(|c| matches!(c.sys, Sys::Lock | Sys::Restart | Sys::Shutdown)) {
         let mut it = sys_item(c);
-        it.title = c.name.into();
+        it.title = t!(c.name, c.en).into();
         chips.push(it);
     }
     (tiles, chips)
@@ -309,8 +341,8 @@ const KEYWORDS: &[(&[&str], &str, Kw)] = &[
 fn kw_item(kw: Kw, name: &str, rest: &str, cx: &Ctx) -> Item {
     let g = |c: char| Icon::Glyph(c);
     match kw {
-        Kw::YouTube if rest.is_empty() => Item::new("YouTube", "Varsayılan tarayıcıda aç", g('\u{E714}'), Act::Open("https://www.youtube.com".into()), "Kısayol"),
-        Kw::YouTube => Item::new(format!("YouTube'da ara: {rest}"), "Varsayılan tarayıcıda", g('\u{E714}'), Act::Open(format!("https://www.youtube.com/results?search_query={}", enc(rest))), "Kısayol"),
+        Kw::YouTube if rest.is_empty() => Item::new("YouTube", t!("Varsayılan tarayıcıda aç", "Open in default browser"), g('\u{E714}'), Act::Open("https://www.youtube.com".into()), "Kısayol"),
+        Kw::YouTube => Item::new(t!(format!("YouTube'da ara: {rest}"), format!("Search YouTube: {rest}")), t!("Varsayılan tarayıcıda", "In default browser"), g('\u{E714}'), Act::Open(format!("https://www.youtube.com/results?search_query={}", enc(rest))), "Kısayol"),
         Kw::Ai(hint, url) => {
             let prompt = rest.to_string();
             let act = if !url.is_empty() {
@@ -325,7 +357,7 @@ fn kw_item(kw: Kw, name: &str, rest: &str, cx: &Ctx) -> Item {
                 Act::Ai { url: Some("https://gemini.google.com/app".into()), launch: None, window_hint: "Gemini", prompt }
             };
             let title = if rest.is_empty() { name.to_string() } else { format!("{name}: {rest}") };
-            Item::new(title, if rest.is_empty() { "Yapay zekâ · aç" } else { "Yapay zekâya sor" }, g('\u{E99A}'), act, "YZ")
+            Item::new(title, if rest.is_empty() { t!("Yapay zekâ · aç", "AI · open") } else { t!("Yapay zekâya sor", "Ask AI") }, g('\u{E99A}'), act, "YZ")
         }
         Kw::WhatsApp(web) => crate::whatsapp::items("", "", web, cx).remove(0),
     }
@@ -400,9 +432,9 @@ pub fn build(raw: &str, cx: &Ctx) -> Vec<Item> {
 
     // Hesap / birim / döviz
     if let Some(v) = calc::eval(raw) {
-        top.push(Item::new(format!("= {}", calc::fmt(v)), format!("{} · Enter ile kopyala", raw.trim()), Icon::Glyph('\u{E8EF}'), Act::Copy(calc::plain(v)), "Hesap"));
+        top.push(Item::new(format!("= {}", calc::fmt(v)), format!("{} · {}", raw.trim(), t!("Enter ile kopyala", "Enter to copy")), Icon::Glyph('\u{E8EF}'), Act::Copy(calc::plain(v)), "Hesap"));
     } else if let Some((v, text)) = calc::convert_units(raw) {
-        top.push(Item::new(text, "Birim çevirisi · Enter ile kopyala", Icon::Glyph('\u{E8AB}'), Act::Copy(calc::plain(v)), "Çeviri"));
+        top.push(Item::new(text, t!("Birim çevirisi · Enter ile kopyala", "Unit conversion · Enter to copy"), Icon::Glyph('\u{E8AB}'), Act::Copy(calc::plain(v)), "Çeviri"));
     } else if let Some((amount, from, to)) = cx.currency_enabled().then(|| calc::currency_request(raw)).flatten() {
         let wake = cx.wake.clone();
         match cx.rates.get(from, to, move || wake()) {
@@ -410,14 +442,14 @@ pub fn build(raw: &str, cx: &Ctx) -> Vec<Item> {
                 let r = (amount * rate * 100.0).round() / 100.0;
                 top.push(Item::new(
                     format!("{} {from} = {} {to}", calc::fmt(amount), calc::fmt(r)),
-                    format!("1 {from} = {} {to} · {date} · Enter ile kopyala", calc::fmt((rate * 10000.0).round() / 10000.0)),
+                    format!("1 {from} = {} {to} · {date} · {}", calc::fmt((rate * 10000.0).round() / 10000.0), t!("Enter ile kopyala", "Enter to copy")),
                     Icon::Glyph('\u{E8C7}'),
                     Act::Copy(calc::plain(r)),
                     "Döviz",
                 ));
             }
-            Rate::Loading => top.push(Item::new(format!("{} {from} → {to}", calc::fmt(amount)), "Kur alınıyor…", Icon::Glyph('\u{E8C7}'), Act::Pending, "Döviz")),
-            Rate::Failed => top.push(Item::new(format!("{} {from} → {to}", calc::fmt(amount)), "Kur alınamadı, bağlantıyı kontrol et", Icon::Glyph('\u{E8C7}'), Act::Pending, "Döviz")),
+            Rate::Loading => top.push(Item::new(format!("{} {from} → {to}", calc::fmt(amount)), t!("Kur alınıyor…", "Fetching rate…"), Icon::Glyph('\u{E8C7}'), Act::Pending, "Döviz")),
+            Rate::Failed => top.push(Item::new(format!("{} {from} → {to}", calc::fmt(amount)), t!("Kur alınamadı, bağlantıyı kontrol et", "Couldn't get the rate, check your connection"), Icon::Glyph('\u{E8C7}'), Act::Pending, "Döviz")),
         }
     }
 
@@ -488,7 +520,7 @@ pub fn build(raw: &str, cx: &Ctx) -> Vec<Item> {
         }
     } else if let Some(url) = looks_like_url(trimmed) {
         let dl = cx.cfg.download_manager.then(|| crate::download::suggest(&url)).flatten();
-        top.push(Item::new(format!("{trimmed} adresine git"), url.clone(), Icon::Glyph('\u{E774}'), Act::Open(url), "Web"));
+        top.push(Item::new(t!(format!("{trimmed} adresine git"), format!("Go to {trimmed}")), url.clone(), Icon::Glyph('\u{E774}'), Act::Open(url), "Web"));
         top.extend(dl);
     }
 
@@ -502,9 +534,9 @@ pub fn build(raw: &str, cx: &Ctx) -> Vec<Item> {
         }
     }
     for st in index::SETTINGS {
-        let s = score(&norm(st.name), &q).max(norm(st.keywords).split(' ').map(|k| score(k, &q)).max().unwrap_or(0).min(700) - 60);
+        let s = score(&norm(st.name), &q).max(score(&norm(st.en), &q)).max(norm(st.keywords).split(' ').map(|k| score(k, &q)).max().unwrap_or(0).min(700) - 60);
         if s >= 400 {
-            let mut it = Item::new(st.name, "Windows ayarı", Icon::Glyph(st.glyph), Act::Open(st.uri.into()), "Ayar");
+            let mut it = Item::new(t!(st.name, st.en), t!("Windows ayarı", "Windows setting"), Icon::Glyph(st.glyph), Act::Open(st.uri.into()), "Ayar");
             it.key = format!("set:{}", st.uri);
             ranked.push((s + boost(cx.usage, &it.key), it));
         }
@@ -522,7 +554,7 @@ pub fn build(raw: &str, cx: &Ctx) -> Vec<Item> {
         }
     }
     for c in SYSTEM {
-        let s = score(&norm(c.name), &q).max(norm(c.keywords).split(' ').map(|k| score(k, &q)).max().unwrap_or(0).min(700) - 60);
+        let s = score(&norm(c.name), &q).max(score(&norm(c.en), &q)).max(norm(c.keywords).split(' ').map(|k| score(k, &q)).max().unwrap_or(0).min(700) - 60);
         if s >= 500 {
             let it = sys_item(c);
             ranked.push((s - 40 + boost(cx.usage, &it.key), it));
@@ -560,7 +592,7 @@ pub fn build(raw: &str, cx: &Ctx) -> Vec<Item> {
 
     // Web
     let url = cx.cfg.web_search.replace("{q}", &enc(trimmed));
-    out.push(Item::new(format!("“{trimmed}” için web'de ara"), "Varsayılan tarayıcıda", Icon::Glyph('\u{E721}'), Act::Open(url), "Web"));
+    out.push(Item::new(t!(format!("“{trimmed}” için web'de ara"), format!("Search the web for “{trimmed}”")), t!("Varsayılan tarayıcıda", "In default browser"), Icon::Glyph('\u{E721}'), Act::Open(url), "Web"));
     out
 }
 
@@ -577,27 +609,27 @@ pub fn actions(it: &Item) -> Vec<Item> {
     match &it.act {
         Act::App { launch, .. } => {
             if let Some((hwnd, pid)) = it.run {
-                v.push(Item::new("Öne getir", &it.title, g('\u{E8A7}'), it.act.clone(), ""));
-                v.push(Item::new("Yeni pencere", &it.title, g('\u{E710}'), Act::Open(launch.clone()), ""));
-                v.push(Item::new("Kapat", "Uygulamaya kapanmasını söyler (zorlamaz)", g('\u{E711}'), Act::Close(hwnd), ""));
-                v.push(Item::new("Yeniden başlat", "Kapatır ve yeniden açar", g('\u{E72C}'), Act::Restart { pid, hwnd, launch: launch.clone() }, ""));
+                v.push(Item::new(t!("Öne getir", "Bring to front"), &it.title, g('\u{E8A7}'), it.act.clone(), ""));
+                v.push(Item::new(t!("Yeni pencere", "New window"), &it.title, g('\u{E710}'), Act::Open(launch.clone()), ""));
+                v.push(Item::new(t!("Kapat", "Close"), t!("Uygulamaya kapanmasını söyler (zorlamaz)", "Asks the app to close (doesn't force)"), g('\u{E711}'), Act::Close(hwnd), ""));
+                v.push(Item::new(t!("Yeniden başlat", "Restart"), t!("Kapatır ve yeniden açar", "Closes and reopens it"), g('\u{E72C}'), Act::Restart { pid, hwnd, launch: launch.clone() }, ""));
             } else {
-                v.push(Item::new("Aç", &it.title, g('\u{E8A7}'), it.act.clone(), ""));
+                v.push(Item::new(t!("Aç", "Open"), &it.title, g('\u{E8A7}'), it.act.clone(), ""));
             }
         }
-        _ => v.push(Item::new("Aç", &it.title, g('\u{E8A7}'), it.act.clone(), "")),
+        _ => v.push(Item::new(t!("Aç", "Open"), &it.title, g('\u{E8A7}'), it.act.clone(), "")),
     }
     if !it.path.is_empty() {
         let p = &it.path;
         if p.to_lowercase().ends_with(".exe") {
-            v.push(Item::new("Yönetici olarak çalıştır", p, g('\u{E7EF}'), Act::Admin(p.clone()), ""));
+            v.push(Item::new(t!("Yönetici olarak çalıştır", "Run as administrator"), p, g('\u{E7EF}'), Act::Admin(p.clone()), ""));
         }
-        v.push(Item::new("Dosya konumunu aç", p, g('\u{E838}'), Act::Reveal(p.clone()), ""));
-        v.push(Item::new("Yolu kopyala", p, g('\u{E8C8}'), Act::Copy(p.clone()), ""));
+        v.push(Item::new(t!("Dosya konumunu aç", "Open file location"), p, g('\u{E838}'), Act::Reveal(p.clone()), ""));
+        v.push(Item::new(t!("Yolu kopyala", "Copy path"), p, g('\u{E8C8}'), Act::Copy(p.clone()), ""));
     }
     if let Act::Copy(s) = &it.act {
         if v.len() == 1 {
-            v[0] = Item::new("Sonucu kopyala", s, g('\u{E8C8}'), it.act.clone(), "");
+            v[0] = Item::new(t!("Sonucu kopyala", "Copy result"), s, g('\u{E8C8}'), it.act.clone(), "");
         }
     }
     // Eylemler de sayılsın diye anahtarı taşı.

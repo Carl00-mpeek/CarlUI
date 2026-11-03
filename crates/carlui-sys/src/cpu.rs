@@ -164,7 +164,7 @@ fn cpu_name() -> String {
             return s.replace("(R)", "").replace("(TM)", "").replace("13th Gen ", "").replace("  ", " ").trim().to_string();
         }
     }
-    "İşlemci".into()
+    t!("İşlemci", "Processor").into()
 }
 
 impl Cpu {

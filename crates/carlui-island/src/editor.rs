@@ -143,7 +143,7 @@ pub fn open_at(owner: HWND, notify: HWND, r: RECT, scale: f32, id: String, text:
         let Ok(hwnd) = CreateWindowExW(
             WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             class,
-            w!("CarlUI Pano düzenleyici"),
+            w!("CarlUI Clipboard editor"),
             WS_POPUP | WS_CLIPCHILDREN,
             r.left,
             r.top,

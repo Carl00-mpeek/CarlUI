@@ -49,7 +49,7 @@ impl Panel {
         y += (6.0 * s).round();
 
         // Çıkış aygıtları.
-        y += self.label(gfx, &kids, "Çıkış aygıtı", y)?;
+        y += self.label(gfx, &kids, t!("Çıkış aygıtı", "Output device"), y)?;
         self.devices = audio::devices();
         let row_w = w - pad * 2.0;
         let row_h = (34.0 * s).round();
@@ -79,15 +79,15 @@ impl Panel {
             y += row_h + (4.0 * s).round();
         }
         if self.devices.is_empty() {
-            y += self.label(gfx, &kids, "Etkin çıkış aygıtı bulunamadı", y)?;
+            y += self.label(gfx, &kids, t!("Etkin çıkış aygıtı bulunamadı", "No active output device"), y)?;
         }
         y += (8.0 * s).round();
 
         // Uygulamalar: simge, ad ve kendi kaydırıcısı.
-        y += self.label(gfx, &kids, "Uygulamalar", y)?;
+        y += self.label(gfx, &kids, t!("Uygulamalar", "Apps"), y)?;
         self.apps = audio::apps(8);
         if self.apps.is_empty() {
-            y += self.label(gfx, &kids, "Şu an ses çıkaran uygulama yok", y)?;
+            y += self.label(gfx, &kids, t!("Şu an ses çıkaran uygulama yok", "No apps are playing sound"), y)?;
         }
         let app_h = (44.0 * s).round();
         let px = (20.0 * s).round();

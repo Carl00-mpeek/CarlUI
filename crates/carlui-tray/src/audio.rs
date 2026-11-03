@@ -93,7 +93,7 @@ pub fn devices() -> Vec<Device> {
                 .and_then(|ps| ps.GetValue(&FRIENDLY_NAME).ok())
                 .and_then(|v| PropVariantToStringAlloc(&v).ok())
                 .map(take_pwstr)
-                .unwrap_or_else(|| "Ses aygıtı".into());
+                .unwrap_or_else(|| t!("Ses aygıtı", "Audio device").into());
             out.push(Device { default: id == def, id, name });
         }
         out
@@ -158,7 +158,7 @@ pub fn apps(max: usize) -> Vec<App> {
             let v = vol.GetMasterVolume().unwrap_or(1.0);
             let m = vol.GetMute().map(|b| b.as_bool()).unwrap_or(false);
             if ctl2.IsSystemSoundsSession() == S_OK {
-                let s = system.get_or_insert_with(|| App { exe: String::new(), name: "Sistem sesleri".into(), volume: v, muted: m, ctls: Vec::new() });
+                let s = system.get_or_insert_with(|| App { exe: String::new(), name: t!("Sistem sesleri", "System sounds").into(), volume: v, muted: m, ctls: Vec::new() });
                 s.ctls.push(vol);
                 continue;
             }

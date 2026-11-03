@@ -29,7 +29,7 @@ fn item(url: &str) -> Item {
         "" => url.to_string(),
         n => n.replace("%20", " "),
     };
-    let mut it = Item::new(format!("İndir: {name}"), "İndirilenler'e · ilerleme adada", Icon::Glyph('\u{E896}'), Act::Download(url.to_string()), "İndir");
+    let mut it = Item::new(t!(format!("İndir: {name}"), format!("Download: {name}")), t!("İndirilenler'e · ilerleme adada", "To Downloads · progress on the island"), Icon::Glyph('\u{E896}'), Act::Download(url.to_string()), "İndir");
     it.key = "download".into();
     it
 }
@@ -39,7 +39,7 @@ pub fn command(raw: &str) -> Option<Vec<Item>> {
     let t = raw.trim();
     let q = norm(t);
     if ["indirme iptal", "indirmeyi iptal", "indirmeyi durdur", "download cancel", "cancel download"].iter().any(|k| q.starts_with(k)) {
-        return Some(vec![Item::new("İndirmeyi iptal et", "Adadaki süren indirmeler durur", Icon::Glyph('\u{E711}'), Act::DownloadCancel, "İndir")]);
+        return Some(vec![Item::new(t!("İndirmeyi iptal et", "Cancel download"), t!("Adadaki süren indirmeler durur", "Stops running downloads on the island"), Icon::Glyph('\u{E711}'), Act::DownloadCancel, "İndir")]);
     }
     let rest = q.strip_prefix("indir ").or_else(|| q.strip_prefix("download "))?;
     // Büyük/küçük harf korunsun diye adres asıl metinden alınır.

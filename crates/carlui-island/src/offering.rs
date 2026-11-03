@@ -30,7 +30,7 @@ impl App {
         let Some(mut o) = self.offers.pop_front() else { return };
         if o.at.elapsed() > bridge::OFFER_TTL {
             // Köprü çoktan "tarayıcı" demiş; ikinci kez indirmeyelim.
-            self.push_note(Note { app: "İndirmeler".into(), title: "İndirme tarayıcıda sürdü".into(), body: o.name.clone(), ..Default::default() });
+            self.push_note(Note { app: t!("İndirmeler", "Downloads").into(), title: t!("İndirme tarayıcıda sürdü", "Download continued in the browser").into(), body: o.name.clone(), ..Default::default() });
             self.refresh(true);
             return;
         }
@@ -60,11 +60,12 @@ fn save_as(owner: HWND, name: &str) -> Option<PathBuf> {
     unsafe {
         let d: IFileSaveDialog = CoCreateInstance(&FileSaveDialog, None, CLSCTX_INPROC_SERVER).ok()?;
         let _ = d.SetFileName(&HSTRING::from(name));
-        let _ = d.SetTitle(w!("Farklı kaydet"));
+        let _ = d.SetTitle(&HSTRING::from(t!("Farklı kaydet", "Save as")));
         if let Some(ext) = name.rsplit_once('.').map(|p| p.1.to_string()).filter(|e| !e.is_empty() && e.len() <= 8) {
             let spec = HSTRING::from(format!("*.{ext}"));
-            let label = HSTRING::from(format!("{} dosyası", ext.to_uppercase()));
-            let all = [COMDLG_FILTERSPEC { pszName: PCWSTR(label.as_ptr()), pszSpec: PCWSTR(spec.as_ptr()) }, COMDLG_FILTERSPEC { pszName: w!("Tüm dosyalar"), pszSpec: w!("*.*") }];
+            let label = HSTRING::from(t!(format!("{} dosyası", ext.to_uppercase()), format!("{} file", ext.to_uppercase())));
+            let any = HSTRING::from(t!("Tüm dosyalar", "All files"));
+            let all = [COMDLG_FILTERSPEC { pszName: PCWSTR(label.as_ptr()), pszSpec: PCWSTR(spec.as_ptr()) }, COMDLG_FILTERSPEC { pszName: PCWSTR(any.as_ptr()), pszSpec: w!("*.*") }];
             let _ = d.SetFileTypes(&all);
         }
         if let Some(dir) = carlui_core::win::downloads_dir() {

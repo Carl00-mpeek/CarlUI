@@ -12,7 +12,7 @@ const SECTION: f32 = 230.0;
 
 pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
     let sm = &app.sampler;
-    title(p, area, "Disk", &format!("{} disk", sm.disks.len()));
+    title(p, area, "Disk", &t!(format!("{} disk", sm.disks.len()), format!("{} disks", sm.disks.len())));
     let body = R::new(area.x, area.y + 46.0, area.w, area.h - 46.0);
     let total = sm.disks.len() as f32 * (SECTION + 12.0);
     let max = (total - body.h).max(0.0);
@@ -31,8 +31,8 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
         // Sol: grafik.
         let gw = r.w * 0.55;
         let g = R::new(r.x + 16.0, r.y + 58.0, gw, r.h - 74.0);
-        p.text(&format!("Etkinlik %{:.0}", d.active), R::new(g.x, g.y - 22.0, 200.0, 20.0), 12.0, false, TEXT, 0.6, Align::Left);
-        p.text(&format!("Okuma {} · Yazma {}", speed(d.read_bps), speed(d.write_bps)), R::new(g.right() - 300.0, g.y - 22.0, 300.0, 20.0), 12.0, false, TEXT, 0.7, Align::Right);
+        p.text(&format!("{} {}", t!("Etkinlik", "Activity"), carlui_core::lang::pct(d.active)), R::new(g.x, g.y - 22.0, 200.0, 20.0), 12.0, false, TEXT, 0.6, Align::Left);
+        p.text(&t!(format!("Okuma {} · Yazma {}", speed(d.read_bps), speed(d.write_bps)), format!("Read {} · Write {}", speed(d.read_bps), speed(d.write_bps))), R::new(g.right() - 300.0, g.y - 22.0, 300.0, 20.0), 12.0, false, TEXT, 0.7, Align::Right);
         if let Some(h) = sm.disk_hist.get(i) {
             p.graph(crate::sample::LEN, g, &h.0, 0x5FD3C6);
         }
@@ -50,27 +50,33 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
             "Dikkat" => ORANGE,
             _ => GREEN,
         };
-        line(p, y, "Sağlık", verdict, vc);
+        let shown = match (verdict, carlui_core::lang::is_tr()) {
+            (v, true) => v,
+            ("Kötü", false) => "Bad",
+            ("Dikkat", false) => "Caution",
+            _ => "Good",
+        };
+        line(p, y, t!("Sağlık", "Health"), shown, vc);
         y += 20.0;
         p.text(&why, R::new(x, y, w, 18.0), 11.5, false, TEXT, 0.5, Align::Right);
         y += 26.0;
         match d.temp {
-            Some(t) => line(p, y, "Sıcaklık", &format!("{t:.0} °C"), temp_color(t - 15.0)),
-            None => line(p, y, "Sıcaklık", "—", TEXT),
+            Some(t) => line(p, y, t!("Sıcaklık", "Temperature"), &format!("{t:.0} °C"), temp_color(t - 15.0)),
+            None => line(p, y, t!("Sıcaklık", "Temperature"), "—", TEXT),
         }
         y += 26.0;
         if let Some(h) = &d.health {
             if h.hours > 0 {
-                line(p, y, "Çalışma süresi", &format!("{} saat", h.hours), TEXT);
+                line(p, y, t!("Çalışma süresi", "Power-on time"), &t!(format!("{} saat", h.hours), format!("{} hours", h.hours)), TEXT);
                 y += 26.0;
             }
             if h.written_bytes > 0.0 {
-                line(p, y, "Toplam yazılan", &bytes(h.written_bytes), TEXT);
+                line(p, y, t!("Toplam yazılan", "Total written"), &bytes(h.written_bytes), TEXT);
                 y += 26.0;
             }
         }
         let used = d.used_pct();
-        line(p, y, "Doluluk", &format!("{} / {} · %{used:.0}", bytes(d.total - d.free), bytes(d.total)), TEXT);
+        line(p, y, t!("Doluluk", "Used"), &format!("{} / {} · {}", bytes(d.total - d.free), bytes(d.total), carlui_core::lang::pct(used)), TEXT);
         y += 26.0;
         let uc = if used >= 90.0 { RED } else if used >= 75.0 { ORANGE } else { p.accent };
         p.bar(R::new(x, y + 2.0, w, 8.0), used / 100.0, uc);

@@ -11,6 +11,9 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[macro_use]
+extern crate carlui_core;
+
 mod ffmpeg;
 mod image;
 mod kinds;
@@ -53,7 +56,7 @@ fn glyph(k: Kind) -> char {
 /// Seçim menüsü; seçilen (tür, hedef) döner.
 fn choose(owner: HWND, groups: &[(Kind, Vec<String>)], skipped: usize, accent: Option<u32>) -> Option<(Kind, Target)> {
     let total: usize = groups.iter().map(|g| g.1.len()).sum();
-    let mut rows = vec![Row::Label(if total == 1 { format!("Dönüştür · {}", file_name(&groups[0].1[0])) } else { format!("Dönüştür · {total} dosya") }, Icon::Glyph('\u{E895}', None))];
+    let mut rows = vec![Row::Label(if total == 1 { format!("{} · {}", t!("Dönüştür", "Convert"), file_name(&groups[0].1[0])) } else { t!(format!("Dönüştür · {total} dosya"), format!("Convert · {total} files")) }, Icon::Glyph('\u{E895}', None))];
     for (ki, (k, files)) in groups.iter().enumerate() {
         let k_index = KINDS.iter().position(|x| x == k).unwrap_or(ki);
         rows.push(Row::Header(if groups.len() > 1 || files.len() > 1 { format!("{} ({})", k.title(), files.len()) } else { k.title().to_string() }));
@@ -62,12 +65,12 @@ fn choose(owner: HWND, groups: &[(Kind, Vec<String>)], skipped: usize, accent: O
             if files.iter().all(|f| kinds::same(&kinds::ext(f), t.ext)) {
                 continue;
             }
-            rows.push(Row::Item { id: k_index * 100 + ti, text: t.label.to_string(), icon: Icon::Glyph(glyph(*k), None) });
+            rows.push(Row::Item { id: k_index * 100 + ti, text: t.name().to_string(), icon: Icon::Glyph(glyph(*k), None) });
         }
     }
     if skipped > 0 {
         rows.push(Row::Sep);
-        rows.push(Row::Label(format!("{skipped} dosya desteklenmiyor"), Icon::Glyph('\u{E7BA}', None)));
+        rows.push(Row::Label(t!(format!("{skipped} dosya desteklenmiyor"), format!("{skipped} files not supported")), Icon::Glyph('\u{E7BA}', None)));
     }
     let mut pt = POINT::default();
     unsafe {
@@ -117,7 +120,7 @@ fn main() -> Result<()> {
     }
     groups.sort_by_key(|g| KINDS.iter().position(|k| *k == g.0));
     if groups.is_empty() {
-        let text = if files.is_empty() { "Dönüştürmek için Gezgin'de dosya seç" } else { "Seçili dosyalar dönüştürülemiyor" };
+        let text = if files.is_empty() { t!("Dönüştürmek için Gezgin'de dosya seç", "Select files in Explorer to convert") } else { t!("Seçili dosyalar dönüştürülemiyor", "The selected files can't be converted") };
         glassmenu::run(owner, vec![Row::Label(text.into(), Icon::Glyph('\u{E946}', None))], accent, cursor());
         return Ok(());
     }
@@ -134,9 +137,9 @@ fn main() -> Result<()> {
     let mut download = false;
     if ff.is_none() && needs_ffmpeg(kind, &target, &list) {
         let rows = vec![
-            Row::Label("Bu dönüşüm için FFmpeg gerekli".into(), Icon::Glyph('\u{E946}', None)),
-            Row::Item { id: 1, text: "FFmpeg'i indir (~110 MB, bir kez)".into(), icon: Icon::Glyph('\u{E896}', None) },
-            Row::Item { id: 2, text: "Vazgeç".into(), icon: Icon::Glyph('\u{E711}', None) },
+            Row::Label(t!("Bu dönüşüm için FFmpeg gerekli", "This conversion needs FFmpeg").into(), Icon::Glyph('\u{E946}', None)),
+            Row::Item { id: 1, text: t!("FFmpeg'i indir (~110 MB, bir kez)", "Download FFmpeg (~110 MB, once)").into(), icon: Icon::Glyph('\u{E896}', None) },
+            Row::Item { id: 2, text: t!("Vazgeç", "Cancel").into(), icon: Icon::Glyph('\u{E711}', None) },
         ];
         if glassmenu::run(owner, rows, accent, cursor()) != Some(1) {
             return Ok(());
@@ -144,7 +147,7 @@ fn main() -> Result<()> {
         download = true;
     }
     let shared = progress::Shared::new();
-    shared.update(|s| s.title = "Hazırlanıyor".into());
+    shared.update(|s| s.title = t!("Hazırlanıyor", "Preparing").into());
     let worker = shared.clone();
     let color = accent.unwrap_or(0x4CC2FF);
     progress::run(shared, color, move || {
@@ -156,7 +159,7 @@ fn main() -> Result<()> {
             let cancel = worker.cancel.clone();
             if download {
                 worker.update(|s| {
-                    s.title = "FFmpeg indiriliyor".into();
+                    s.title = t!("FFmpeg indiriliyor", "Downloading FFmpeg").into();
                     s.file = "github.com/BtbN/FFmpeg-Builds".into();
                 });
                 match ffmpeg::download(&cancel) {
@@ -195,8 +198,8 @@ fn convert_all(w: &progress::Shared, kind: Kind, t: Target, files: &[String], ff
         }
         let name = file_name(src);
         w.update(|s| {
-            s.title = if n > 1 { format!("Dönüştürülüyor · {}/{n}", i + 1) } else { "Dönüştürülüyor".into() };
-            s.file = format!("{name} → {}", t.label);
+            s.title = if n > 1 { format!("{} · {}/{n}", t!("Dönüştürülüyor", "Converting"), i + 1) } else { t!("Dönüştürülüyor", "Converting").into() };
+            s.file = format!("{name} → {}", t.name());
             s.frac = i as f32 / n as f32;
         });
         if kinds::same(&kinds::ext(src), t.ext) {
@@ -208,7 +211,7 @@ fn convert_all(w: &progress::Shared, kind: Kind, t: Target, files: &[String], ff
             Kind::Image => image::convert(src, &dst, t.ext, ff),
             _ => match ff {
                 Some(ff) => ffmpeg::run(ff, src, &ffmpeg::args_for(kind, t.ext), &dst, &w.cancel, &|f| w.update(|s| s.frac = (i as f32 + f) / n as f32)),
-                None => Err("FFmpeg bulunamadı".into()),
+                None => Err(t!("FFmpeg bulunamadı", "FFmpeg not found").into()),
             },
         };
         match r {
@@ -230,19 +233,25 @@ fn convert_all(w: &progress::Shared, kind: Kind, t: Target, files: &[String], ff
         s.frac = 1.0;
         s.failed = ok == 0 && (!errors.is_empty() || stopped);
         s.title = if stopped && ok == 0 {
-            "Durduruldu".into()
+            t!("Durduruldu", "Stopped").into()
         } else if stopped {
-            format!("Durduruldu · {ok} dosya dönüştürüldü")
+            t!(format!("Durduruldu · {ok} dosya dönüştürüldü"), format!("Stopped · {ok} files converted"))
         } else if errors.is_empty() {
-            if ok == 1 { "Dönüştürüldü".into() } else if ok == 0 && same > 0 { "Zaten bu biçimde".into() } else { format!("{ok} dosya dönüştürüldü") }
+            if ok == 1 {
+                t!("Dönüştürüldü", "Converted").into()
+            } else if ok == 0 && same > 0 {
+                t!("Zaten bu biçimde", "Already in this format").into()
+            } else {
+                t!(format!("{ok} dosya dönüştürüldü"), format!("{ok} files converted"))
+            }
         } else if ok > 0 {
-            format!("{ok} dosya dönüştürüldü · {} hata", errors.len())
+            t!(format!("{ok} dosya dönüştürüldü · {} hata", errors.len()), format!("{ok} files converted · {} errors", errors.len()))
         } else {
-            "Dönüştürülemedi".into()
+            t!("Dönüştürülemedi", "Conversion failed").into()
         };
         s.file = match (&errors.first(), &last) {
             (Some(e), _) => e.to_string(),
-            (None, Some(l)) => format!("{} · göstermek için tıkla", file_name(l)),
+            (None, Some(l)) => format!("{} · {}", file_name(l), t!("göstermek için tıkla", "click to show")),
             _ => String::new(),
         };
         s.reveal = last.clone();

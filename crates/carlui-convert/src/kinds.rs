@@ -25,9 +25,9 @@ impl Kind {
 
     pub fn title(self) -> &'static str {
         match self {
-            Kind::Image => "Resim",
+            Kind::Image => t!("Resim", "Image"),
             Kind::Video => "Video",
-            Kind::Audio => "Ses",
+            Kind::Audio => t!("Ses", "Audio"),
         }
     }
 
@@ -46,6 +46,24 @@ impl Kind {
 pub struct Target {
     pub ext: &'static str,
     pub label: &'static str,
+}
+
+impl Target {
+    /// Menüde görünen ad (seçili dilde).
+    pub fn name(&self) -> &'static str {
+        if carlui_core::lang::is_tr() {
+            return self.label;
+        }
+        match self.label {
+            "ICO (simge)" => "ICO (icon)",
+            "DDS (doku)" => "DDS (texture)",
+            "GIF (hareketli)" => "GIF (animated)",
+            "MP3 (yalnızca ses)" => "MP3 (audio only)",
+            "M4A (yalnızca ses)" => "M4A (audio only)",
+            "WAV (yalnızca ses)" => "WAV (audio only)",
+            l => l,
+        }
+    }
 }
 
 const fn t(ext: &'static str, label: &'static str) -> Target {

@@ -484,7 +484,7 @@ impl Overlay {
                     for m in self.mon_rects() {
                         let (l, t) = self.to_win(m.left, m.top);
                         let (r, _) = self.to_win(m.right, m.bottom);
-                        self.label(&rt, "Alanı sürükleyerek seç · tıkla: bu ekran · Esc: iptal", (l + r) / 2.0, t + 54.0 * s, true)?;
+                        self.label(&rt, t!("Alanı sürükleyerek seç · tıkla: bu ekran · Esc: iptal", "Drag to select an area · click: this screen · Esc: cancel"), (l + r) / 2.0, t + 54.0 * s, true)?;
                     }
                 }
                 Some((a, b, c, d)) => {
@@ -625,15 +625,15 @@ impl Overlay {
         // Üstüne gelinen düğmenin adı.
         if let Some((b, r)) = self.hover.and_then(|h| self.buttons.iter().find(|x| x.0 == h)).copied() {
             let name = match b {
-                Btn::Tool(Tool::Pen) => "Kalem (P)",
-                Btn::Tool(Tool::Text) => "Yazı (T)",
-                Btn::Tool(Tool::Eraser) => "Silgi (E)",
-                Btn::Tool(Tool::Select) => "Alan seç / kırp (C)",
-                Btn::Undo => "Geri al (Ctrl+Z)",
-                Btn::Color(_) => "Renk",
-                Btn::Copy => "Kopyala (Enter)",
-                Btn::Save => if self.editing.is_some() { "Kaydet (Ctrl+S)" } else { "Masaüstüne kaydet (Ctrl+S)" },
-                Btn::Close => "Kapat (Esc)",
+                Btn::Tool(Tool::Pen) => t!("Kalem (P)", "Pen (P)"),
+                Btn::Tool(Tool::Text) => t!("Yazı (T)", "Text (T)"),
+                Btn::Tool(Tool::Eraser) => t!("Silgi (E)", "Eraser (E)"),
+                Btn::Tool(Tool::Select) => t!("Alan seç / kırp (C)", "Select / crop (C)"),
+                Btn::Undo => t!("Geri al (Ctrl+Z)", "Undo (Ctrl+Z)"),
+                Btn::Color(_) => t!("Renk", "Color"),
+                Btn::Copy => t!("Kopyala (Enter)", "Copy (Enter)"),
+                Btn::Save => if self.editing.is_some() { t!("Kaydet (Ctrl+S)", "Save (Ctrl+S)") } else { t!("Masaüstüne kaydet (Ctrl+S)", "Save to desktop (Ctrl+S)") },
+                Btn::Close => t!("Kapat (Esc)", "Close (Esc)"),
             };
             let above = r.top - 22.0 * s;
             self.label(rt, name, (r.left + r.right) / 2.0, if above > 10.0 { above } else { r.bottom + 22.0 * s }, false)?;

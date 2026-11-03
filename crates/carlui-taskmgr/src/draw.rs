@@ -12,5 +12,5 @@ pub fn bytes(b: f64) -> String {
 
 /// Bayt/sn → "3,4 MB/sn" (0 ise "0").
 pub fn speed(b: f64) -> String {
-    if b < 1024.0 { "0".into() } else { format!("{}/sn", carlui_sys::bytes(b)) }
+    if b < 1024.0 { "0".into() } else { format!("{}{}", carlui_sys::bytes(b), t!("/sn", "/s")) }
 }

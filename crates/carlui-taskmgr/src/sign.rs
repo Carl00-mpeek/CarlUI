@@ -34,9 +34,9 @@ impl Sign {
     pub fn label(self) -> &'static str {
         match self {
             Sign::Pending => "…",
-            Sign::Signed => "İmzalı",
+            Sign::Signed => t!("İmzalı", "Signed"),
             Sign::Catalog => "Windows",
-            Sign::Unsigned => "İmzasız",
+            Sign::Unsigned => t!("İmzasız", "Unsigned"),
             Sign::Unknown => "—",
         }
     }

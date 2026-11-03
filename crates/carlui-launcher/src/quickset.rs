@@ -19,20 +19,20 @@ pub enum Quick {
     Brightness(u8),
 }
 
-/// (başlık, aranacak ifadeler, simge, komut)
-const CMDS: &[(&str, &[&str], char, Quick)] = &[
-    ("Karanlık moda geç", &["karanlik mod", "dark mode", "koyu tema", "gece modu"], '\u{E708}', Quick::Dark(true)),
-    ("Açık moda geç", &["acik mod", "light mode", "aydinlik mod", "acik tema"], '\u{E706}', Quick::Dark(false)),
-    ("Wi-Fi'yi aç", &["wifi ac", "wi-fi ac", "kablosuz ac", "wifi on"], '\u{E701}', Quick::Wifi(true)),
-    ("Wi-Fi'yi kapat", &["wifi kapat", "wi-fi kapat", "kablosuz kapat", "wifi off"], '\u{EB5E}', Quick::Wifi(false)),
-    ("Bluetooth'u aç", &["bluetooth ac", "bt ac", "bluetooth on"], '\u{E702}', Quick::Bluetooth(true)),
-    ("Bluetooth'u kapat", &["bluetooth kapat", "bt kapat", "bluetooth off"], '\u{E702}', Quick::Bluetooth(false)),
-    ("Sesi kapat", &["sessiz", "sesi kapat", "mute"], '\u{E74F}', Quick::Mute(true)),
-    ("Sesi aç", &["sesi ac", "unmute"], '\u{E767}', Quick::Mute(false)),
+/// (başlık, İngilizce başlık, aranacak ifadeler, simge, komut)
+const CMDS: &[(&str, &str, &[&str], char, Quick)] = &[
+    ("Karanlık moda geç", "Switch to dark mode", &["karanlik mod", "dark mode", "koyu tema", "gece modu"], '\u{E708}', Quick::Dark(true)),
+    ("Açık moda geç", "Switch to light mode", &["acik mod", "light mode", "aydinlik mod", "acik tema"], '\u{E706}', Quick::Dark(false)),
+    ("Wi-Fi'yi aç", "Turn on Wi-Fi", &["wifi ac", "wi-fi ac", "kablosuz ac", "wifi on", "turn on wifi"], '\u{E701}', Quick::Wifi(true)),
+    ("Wi-Fi'yi kapat", "Turn off Wi-Fi", &["wifi kapat", "wi-fi kapat", "kablosuz kapat", "wifi off", "turn off wifi"], '\u{EB5E}', Quick::Wifi(false)),
+    ("Bluetooth'u aç", "Turn on Bluetooth", &["bluetooth ac", "bt ac", "bluetooth on"], '\u{E702}', Quick::Bluetooth(true)),
+    ("Bluetooth'u kapat", "Turn off Bluetooth", &["bluetooth kapat", "bt kapat", "bluetooth off"], '\u{E702}', Quick::Bluetooth(false)),
+    ("Sesi kapat", "Mute sound", &["sessiz", "sesi kapat", "mute"], '\u{E74F}', Quick::Mute(true)),
+    ("Sesi aç", "Unmute sound", &["sesi ac", "unmute"], '\u{E767}', Quick::Mute(false)),
 ];
 
 fn item(title: String, glyph: char, q: Quick) -> Item {
-    let mut it = Item::new(title, "Hızlı ayar · Enter ile uygula", Icon::Glyph(glyph), Act::Quick(q), "Ayar");
+    let mut it = Item::new(title, t!("Hızlı ayar · Enter ile uygula", "Quick setting · Enter to apply"), Icon::Glyph(glyph), Act::Quick(q), "Ayar");
     it.key = format!("quick:{q:?}");
     it
 }
@@ -43,8 +43,8 @@ fn numeric(q: &str) -> Option<Item> {
     let n: u8 = rest.trim().trim_start_matches('%').trim_end_matches('%').trim().parse().ok()?;
     let n = n.min(100);
     match word {
-        "ses" | "volume" | "vol" => Some(item(format!("Sesi %{n} yap"), '\u{E767}', Quick::Volume(n))),
-        "parlaklik" | "brightness" | "isik" => Some(item(format!("Parlaklığı %{n} yap"), '\u{E706}', Quick::Brightness(n))),
+        "ses" | "volume" | "vol" => Some(item(t!(format!("Sesi %{n} yap"), format!("Set volume to {n}%")), '\u{E767}', Quick::Volume(n))),
+        "parlaklik" | "brightness" | "isik" => Some(item(t!(format!("Parlaklığı %{n} yap"), format!("Set brightness to {n}%")), '\u{E706}', Quick::Brightness(n))),
         _ => None,
     }
 }
@@ -58,9 +58,9 @@ pub(crate) fn matches(q: &str) -> Vec<(i32, Item)> {
         return Vec::new();
     }
     CMDS.iter()
-        .filter_map(|(title, phrases, glyph, cmd)| {
-            let s = phrases.iter().map(|p| score(p, q)).max().unwrap_or(0).max(score(&norm(title), q));
-            (s >= 650).then(|| (s, item(title.to_string(), *glyph, *cmd)))
+        .filter_map(|(title, en, phrases, glyph, cmd)| {
+            let s = phrases.iter().map(|p| score(p, q)).max().unwrap_or(0).max(score(&norm(title), q)).max(score(&norm(en), q));
+            (s >= 650).then(|| (s, item(t!(title, en).to_string(), *glyph, *cmd)))
         })
         .collect()
 }

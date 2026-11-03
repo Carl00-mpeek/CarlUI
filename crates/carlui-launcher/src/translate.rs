@@ -14,25 +14,25 @@ use std::{
 };
 use windows::{core::HSTRING, Foundation::Uri, Web::Http::HttpClient};
 
-const LANGS: &[(&str, &str)] = &[
-    ("tr", "Türkçe"),
-    ("en", "İngilizce"),
-    ("de", "Almanca"),
-    ("fr", "Fransızca"),
-    ("es", "İspanyolca"),
-    ("it", "İtalyanca"),
-    ("ru", "Rusça"),
-    ("ar", "Arapça"),
-    ("ja", "Japonca"),
-    ("ko", "Korece"),
-    ("zh", "Çince"),
-    ("nl", "Felemenkçe"),
-    ("pt", "Portekizce"),
+const LANGS: &[(&str, &str, &str)] = &[
+    ("tr", "Türkçe", "Turkish"),
+    ("en", "İngilizce", "English"),
+    ("de", "Almanca", "German"),
+    ("fr", "Fransızca", "French"),
+    ("es", "İspanyolca", "Spanish"),
+    ("it", "İtalyanca", "Italian"),
+    ("ru", "Rusça", "Russian"),
+    ("ar", "Arapça", "Arabic"),
+    ("ja", "Japonca", "Japanese"),
+    ("ko", "Korece", "Korean"),
+    ("zh", "Çince", "Chinese"),
+    ("nl", "Felemenkçe", "Dutch"),
+    ("pt", "Portekizce", "Portuguese"),
 ];
 
 fn lang_name(code: &str) -> &str {
     let base = code.split('-').next().unwrap_or(code);
-    LANGS.iter().find(|(c, _)| *c == base).map(|(_, n)| *n).unwrap_or(code)
+    LANGS.iter().find(|(c, ..)| *c == base).map(|(_, tr, en)| t!(*tr, *en)).unwrap_or(code)
 }
 
 #[derive(Clone)]
@@ -123,7 +123,7 @@ fn parse(raw: &str) -> Option<(String, String)> {
     let t = raw.trim_start();
     if let Some((code, rest)) = t.split_once(':') {
         let code = code.trim().to_lowercase();
-        if code.len() == 2 && LANGS.iter().any(|(c, _)| *c == code) && !rest.trim().is_empty() {
+        if code.len() == 2 && LANGS.iter().any(|(c, ..)| *c == code) && !rest.trim().is_empty() {
             return Some((code, rest.trim().to_string()));
         }
     }
@@ -141,11 +141,11 @@ pub(crate) fn items(raw: &str, wake: Arc<dyn Fn() + Send + Sync>) -> Option<Item
     let g = Icon::Glyph('\u{F2B7}');
     let it = match get(&to, &text, wake) {
         State::Ready { text: out, from } => {
-            let sub = format!("{} → {} · Enter ile kopyala", lang_name(&from), lang_name(&to));
+            let sub = format!("{} → {} · {}", lang_name(&from), lang_name(&to), t!("Enter ile kopyala", "Enter to copy"));
             Item::new(out.clone(), sub, g, Act::Copy(out), "Çeviri")
         }
-        State::Loading => Item::new(format!("{text} → {}", lang_name(&to)), "Çevriliyor…", g, Act::Pending, "Çeviri"),
-        State::Failed => Item::new(format!("{text} → {}", lang_name(&to)), "Çeviri alınamadı, bağlantıyı kontrol et", g, Act::Pending, "Çeviri"),
+        State::Loading => Item::new(format!("{text} → {}", lang_name(&to)), t!("Çevriliyor…", "Translating…"), g, Act::Pending, "Çeviri"),
+        State::Failed => Item::new(format!("{text} → {}", lang_name(&to)), t!("Çeviri alınamadı, bağlantıyı kontrol et", "Translation failed, check your connection"), g, Act::Pending, "Çeviri"),
     };
     Some(it)
 }

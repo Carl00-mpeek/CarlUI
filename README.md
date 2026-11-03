@@ -10,7 +10,8 @@ Win menüsü, arama, pano geçmişi ve kontrol merkezi getirir.
 > Rust. It replaces the taskbar with a floating dock and adds a top "island"
 > (clock, notifications, media, downloads), a launcher with search and a
 > calculator, clipboard history (Win+V, also over fullscreen games), a control
-> center and a game mode. The interface is in Turkish for now. Download
+> center and a game mode. The interface is in English and Turkish (it follows
+> the Windows display language; change it in Settings → General). Download
 > `CarlUI-Setup.exe` from [Releases](https://github.com/Carl00-mpeek/CarlUI/releases);
 > no admin rights needed. Free and open source (MIT).
 
@@ -38,6 +39,8 @@ Win menüsü, arama, pano geçmişi ve kontrol merkezi getirir.
   bildirimler oyundan sonra gösterilir.
 - **Görev yöneticisi, dosya dönüştürücü, ekran görüntüsü aracı** ve hepsini
   yöneten **Ayarlar** penceresi.
+- **Türkçe ve İngilizce arayüz:** Windows'un görüntü diline uyar; **Ayarlar →
+  Genel → Dil** bölümünden değiştirilebilir.
 
 ## Kurulum
 
@@ -55,8 +58,8 @@ bu bilgisayarda olur. CarlUI veri toplamaz; yalnızca senin istediğin işlerde
 (döviz kuru, çeviri, web araması, indirmeler) internete bağlanır. Kaynak kodun
 tamamı bu depoda.
 
-v0.1.0 kurucusunun [VirusTotal taraması](https://www.virustotal.com/gui/file/2e72ef0b882a7e761bbcce33dc5afdc82c5c74d329a3ad7bb52aabe735b28d78):
-Test sürümünde 71 antivirüsten 69'u temiz buldu, Microsoft Defender da temiz
+Kurucunun test sürümünün [VirusTotal taraması](https://www.virustotal.com/gui/file/2e72ef0b882a7e761bbcce33dc5afdc82c5c74d329a3ad7bb52aabe735b28d78)
+sonucunda 71 antivirüsten 69'u temiz buldu, Microsoft Defender da temiz
 buldu. Yalnızca ESET'in genel "Kryptik" tahmini ve Bkav işaretledi; ikisi de
 imzasız kurucularda sık görülen yanlış alarm türleri. İndirdiğin dosyanın
 SHA-256 değerini Releases sayfasındakiyle karşılaştırabilirsin.

@@ -10,6 +10,9 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[macro_use]
+extern crate carlui_core;
+
 mod draw;
 mod groups;
 mod pages;
@@ -166,7 +169,7 @@ impl App {
         if let Some(k) = &self.selected_group {
             let rows: Vec<procs::Row> = self.procs.rows.iter().filter(|r| groups::key_of(r) == *k).cloned().collect();
             let name = rows.first().map(|r| r.name.clone()).unwrap_or_default();
-            return (if rows.len() > 1 { format!("{name} ({} süreç)", rows.len()) } else { name }, rows);
+            return (if rows.len() > 1 { t!(format!("{name} ({} süreç)", rows.len()), format!("{name} ({} processes)", rows.len())) } else { name }, rows);
         }
         match self.selected_row() {
             Some(r) => (r.name.clone(), vec![r.clone()]),
@@ -250,7 +253,13 @@ impl App {
                 let (name, rows) = self.targets();
                 if !rows.is_empty() {
                     let ok = rows.iter().filter(|r| carlui_sys::process::terminate(r.pid)).count();
-                    self.say(if ok == rows.len() { format!("{name} kapatıldı") } else if ok > 0 { format!("{name}: {ok}/{} süreç kapatıldı (kalanlar için yönetici izni gerekebilir)", rows.len()) } else { format!("{name} kapatılamadı (yönetici izni gerekebilir)") });
+                    self.say(if ok == rows.len() {
+            t!(format!("{name} kapatıldı"), format!("{name} ended"))
+        } else if ok > 0 {
+            t!(format!("{name}: {ok}/{} süreç kapatıldı (kalanlar için yönetici izni gerekebilir)", rows.len()), format!("{name}: {ok}/{} processes ended (the rest may need admin rights)", rows.len()))
+        } else {
+            t!(format!("{name} kapatılamadı (yönetici izni gerekebilir)"), format!("Couldn't end {name} (may need admin rights)"))
+        });
                     self.procs.tick();
                 }
             }
@@ -258,8 +267,8 @@ impl App {
                 let (name, rows) = self.targets();
                 if !rows.is_empty() {
                     let ok = rows.iter().filter(|r| if a == Act::Suspend { carlui_sys::process::suspend(r.pid) } else { carlui_sys::process::resume(r.pid) }).count();
-                    let verb = if a == Act::Suspend { "durduruldu" } else { "sürdürüldü" };
-                    self.say(if ok > 0 { format!("{name} {verb}") } else { format!("{name}: işlem yapılamadı (yönetici izni gerekebilir)") });
+                    let verb = if a == Act::Suspend { t!("durduruldu", "suspended") } else { t!("sürdürüldü", "resumed") };
+                    self.say(if ok > 0 { format!("{name} {verb}") } else { t!(format!("{name}: işlem yapılamadı (yönetici izni gerekebilir)"), format!("{name}: action failed (may need admin rights)")) });
                     self.procs.tick();
                 }
             }
@@ -285,7 +294,7 @@ impl App {
                             if let Some(s) = self.startup.as_mut().and_then(|s| s.get_mut(i)) {
                                 s.enabled = !item.enabled;
                             }
-                            self.say(format!("{} {}", item.name, if item.enabled { "devre dışı bırakıldı" } else { "etkinleştirildi" }));
+                            self.say(format!("{} {}", item.name, if item.enabled { t!("devre dışı bırakıldı", "disabled") } else { t!("etkinleştirildi", "enabled") }));
                         }
                         Err(e) => self.say(e),
                     }
@@ -302,14 +311,14 @@ impl App {
                 if power::set_mode(m) {
                     self.mode = power::mode();
                 } else {
-                    self.say("Güç modu değiştirilemedi");
+                    self.say(t!("Güç modu değiştirilemedi", "Couldn't change the power mode"));
                 }
             }
             Act::Route(r) => {
                 let (name, rows) = self.targets();
                 if !rows.is_empty() {
                     let ok = rows.iter().filter(|row| power::set_route(row.pid, r)).count();
-                    self.say(if ok > 0 { format!("{name} → {}", r.label()) } else { format!("{name}: çekirdek ataması yapılamadı (yönetici izni gerekebilir)") });
+                    self.say(if ok > 0 { format!("{name} → {}", r.label()) } else { t!(format!("{name}: çekirdek ataması yapılamadı (yönetici izni gerekebilir)"), format!("{name}: couldn't set core affinity (may need admin rights)")) });
                     for row in &rows {
                         self.routes.insert(row.pid, (power::route(row.pid), power::eco(row.pid)));
                     }
@@ -320,7 +329,11 @@ impl App {
                 if let Some(first) = rows.first() {
                     let on = !power::eco(first.pid).unwrap_or(false);
                     let ok = rows.iter().filter(|row| power::set_eco(row.pid, on)).count();
-                    self.say(if ok > 0 { format!("{name}: verimlilik modu {}", if on { "açık" } else { "kapalı" }) } else { format!("{name}: verimlilik modu değiştirilemedi") });
+                    self.say(if ok > 0 {
+            t!(format!("{name}: verimlilik modu {}", if on { "açık" } else { "kapalı" }), format!("{name}: efficiency mode {}", if on { "on" } else { "off" }))
+        } else {
+            t!(format!("{name}: verimlilik modu değiştirilemedi"), format!("{name}: couldn't change efficiency mode"))
+        });
                     for row in &rows {
                         self.routes.insert(row.pid, (power::route(row.pid), power::eco(row.pid)));
                     }
@@ -401,19 +414,19 @@ impl App {
     }
 
     fn sidebar(&self, p: &mut Painter, h: f32) {
-        p.text("Görev Yöneticisi", R::new(20.0, 14.0, SIDEBAR - 30.0, 30.0), 15.0, true, TEXT, 0.95, Align::Left);
+        p.text(t!("Görev Yöneticisi", "Task Manager"), R::new(20.0, 14.0, SIDEBAR - 30.0, 30.0), 15.0, true, TEXT, 0.95, Align::Left);
         let sm = &self.sampler;
-        let gpu = sm.gpu.as_ref().map(|g| format!("%{:.0} · {:.0}°", g.load, g.temp)).unwrap_or_default();
+        let gpu = sm.gpu.as_ref().map(|g| format!("{} · {:.0}°", carlui_core::lang::pct(g.load), g.temp)).unwrap_or_default();
         let disk = sm.disks.iter().map(|d| d.active).fold(0.0f32, f32::max);
         let cpu_t = sm.temps.as_ref().map(|t| format!(" · {:.0}°", t.package)).unwrap_or_default();
         let tabs: [(Tab, char, &str, String); 7] = [
-            (Tab::Processes, '\u{E9F5}', "İşlemler", format!("{}", self.procs.rows.len())),
-            (Tab::Startup, '\u{E7E8}', "Başlangıç", String::new()),
-            (Tab::Cpu, '\u{E950}', "CPU", format!("%{:.0}{cpu_t}", sm.now.usage)),
-            (Tab::Routing, '\u{E8AB}', "CPU yönlendirme", String::new()),
+            (Tab::Processes, '\u{E9F5}', t!("İşlemler", "Processes"), format!("{}", self.procs.rows.len())),
+            (Tab::Startup, '\u{E7E8}', t!("Başlangıç", "Startup"), String::new()),
+            (Tab::Cpu, '\u{E950}', "CPU", format!("{}{cpu_t}", carlui_core::lang::pct(sm.now.usage))),
+            (Tab::Routing, '\u{E8AB}', t!("CPU yönlendirme", "CPU routing"), String::new()),
             (Tab::Gpu, '\u{E7F4}', "GPU", gpu),
-            (Tab::Ram, '\u{EEA0}', "RAM", format!("%{:.0}", sm.ram.percent())),
-            (Tab::Disk, '\u{EDA2}', "Disk", format!("%{disk:.0}")),
+            (Tab::Ram, '\u{EEA0}', "RAM", carlui_core::lang::pct(sm.ram.percent())),
+            (Tab::Disk, '\u{EDA2}', "Disk", carlui_core::lang::pct(disk)),
         ];
         for (i, (t, g, label, value)) in tabs.iter().enumerate() {
             let r = R::new(10.0, 56.0 + i as f32 * 42.0, SIDEBAR - 20.0, 38.0);
@@ -444,16 +457,16 @@ impl App {
         let eco = power::eco(pid).unwrap_or(false);
         let rows = vec![
             Row::Label(name, Icon::None),
-            item(1, "Dosya konumunu aç", g('\u{E838}')),
+            item(1, t!("Dosya konumunu aç", "Open file location"), g('\u{E838}')),
             Row::Sep,
-            Row::Header("Çekirdekler".into()),
-            item(4, "Yalnızca P çekirdekleri", g('\u{E945}')),
-            item(5, "Yalnızca E çekirdekleri", g('\u{EC0A}')),
-            item(6, "Tüm çekirdekler", g('\u{E950}')),
-            item(7, if eco { "Verimlilik modunu kapat" } else { "Verimlilik modu" }, g('\u{EC0A}')),
+            Row::Header(t!("Çekirdekler", "Cores").into()),
+            item(4, t!("Yalnızca P çekirdekleri", "P-cores only"), g('\u{E945}')),
+            item(5, t!("Yalnızca E çekirdekleri", "E-cores only"), g('\u{EC0A}')),
+            item(6, t!("Tüm çekirdekler", "All cores"), g('\u{E950}')),
+            item(7, if eco { t!("Verimlilik modunu kapat", "Turn off efficiency mode") } else { t!("Verimlilik modu", "Efficiency mode") }, g('\u{EC0A}')),
             Row::Sep,
-            if suspended { item(3, "Sürdür", g('\u{E768}')) } else { item(2, "Durdur", Icon::Glyph('\u{E733}', Some(draw::RED))) },
-            item(8, "Görevi sonlandır", Icon::Glyph('\u{E711}', Some(draw::RED))),
+            if suspended { item(3, t!("Sürdür", "Resume"), g('\u{E768}')) } else { item(2, t!("Durdur", "Suspend"), Icon::Glyph('\u{E733}', Some(draw::RED))) },
+            item(8, t!("Görevi sonlandır", "End task"), Icon::Glyph('\u{E711}', Some(draw::RED))),
         ];
         let mut pt = POINT::default();
         unsafe {
@@ -621,6 +634,8 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
 
 fn main() -> Result<()> {
     log::init("taskmgr");
+    // Ayarı okumak arayüz dilini de uygular.
+    let _ = carlui_core::config::load();
     let pid_arg = std::env::args().skip_while(|a| a != "--pid").nth(1).and_then(|s| s.parse::<u32>().ok());
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -648,7 +663,7 @@ fn main() -> Result<()> {
         let (ww, wh) = ((1180.0 * dpi) as i32, (760.0 * dpi) as i32);
         let sw = GetSystemMetrics(SM_CXSCREEN);
         let sh = GetSystemMetrics(SM_CYSCREEN);
-        let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), w!("CarlUI.TaskMgr"), w!("Görev Yöneticisi"), WS_OVERLAPPEDWINDOW, (sw - ww) / 2, (sh - wh) / 2, ww, wh, None, None, inst, None)?;
+        let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), w!("CarlUI.TaskMgr"), &HSTRING::from(t!("Görev Yöneticisi", "Task Manager")), WS_OVERLAPPEDWINDOW, (sw - ww) / 2, (sh - wh) / 2, ww, wh, None, None, inst, None)?;
         let on: i32 = 1;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let backdrop = DWMSBT_TRANSIENTWINDOW;

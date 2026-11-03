@@ -21,6 +21,18 @@ pub const ALL: &[(Op, &str, char)] = &[
     (Op::RemoveEmptyLines, "Boş satırları sil", '\u{E8C9}'),
 ];
 
+/// İşlemin seçili dildeki adı.
+pub fn name(op: Op) -> &'static str {
+    match op {
+        Op::Upper => t!("BÜYÜK HARF", "UPPERCASE"),
+        Op::Lower => t!("küçük harf", "lowercase"),
+        Op::Title => t!("Başlık Düzeni", "Title Case"),
+        Op::Tidy => t!("Fazla boşlukları temizle", "Remove extra spaces"),
+        Op::JoinLines => t!("Satırları birleştir", "Join lines"),
+        Op::RemoveEmptyLines => t!("Boş satırları sil", "Remove empty lines"),
+    }
+}
+
 fn upper_tr(c: char) -> String {
     match c {
         'i' => "İ".into(),

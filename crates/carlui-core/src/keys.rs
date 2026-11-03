@@ -81,17 +81,17 @@ pub fn parse_mods(s: &str) -> Result<Mods, String> {
     let mut m = Mods::default();
     for w in s.split('+').map(|p| p.trim().to_lowercase()).filter(|p| !p.is_empty()) {
         if is_mouse(&w) {
-            return Err("fare tuşları kısayol olamaz".into());
+            return Err(t!("fare tuşları kısayol olamaz", "mouse buttons can't be shortcuts").into());
         }
         if !word_to_mod(&w, &mut m) {
-            return Err(format!("'{w}' bir değiştirici tuş değil (Ctrl, Alt, Shift, Win)"));
+            return Err(t!(format!("'{w}' bir değiştirici tuş değil (Ctrl, Alt, Shift, Win)"), format!("'{w}' is not a modifier key (Ctrl, Alt, Shift, Win)")));
         }
     }
     if !m.any() {
-        return Err("en az bir değiştirici tuş gerekli".into());
+        return Err(t!("en az bir değiştirici tuş gerekli", "at least one modifier key needed").into());
     }
     if m == (Mods { shift: true, ..Default::default() }) {
-        return Err("yalnızca Shift olamaz (büyük harf/sembol yazarken tetiklenir)".into());
+        return Err(t!("yalnızca Shift olamaz (büyük harf/sembol yazarken tetiklenir)", "Shift alone isn't allowed (fires while typing capitals/symbols)").into());
     }
     Ok(m)
 }
@@ -102,25 +102,25 @@ pub fn parse_combo(s: &str) -> Result<Combo, String> {
     let mut vk = None;
     for w in s.split('+').map(|p| p.trim().to_lowercase()).filter(|p| !p.is_empty()) {
         if is_mouse(&w) {
-            return Err("fare tuşları kısayol olamaz".into());
+            return Err(t!("fare tuşları kısayol olamaz", "mouse buttons can't be shortcuts").into());
         }
         if word_to_mod(&w, &mut m) {
             continue;
         }
         if vk.is_some() {
-            return Err("kısayolda yalnızca bir ana tuş olabilir".into());
+            return Err(t!("kısayolda yalnızca bir ana tuş olabilir", "a shortcut can have only one main key").into());
         }
-        vk = Some(word_to_vk(&w).ok_or_else(|| format!("'{w}' tanınmayan bir tuş"))?);
+        vk = Some(word_to_vk(&w).ok_or_else(|| t!(format!("'{w}' tanınmayan bir tuş"), format!("'{w}' is an unknown key")))?);
     }
-    let vk = vk.ok_or("kısayolda bir ana tuş olmalı (ör. Ctrl+Space)")?;
+    let vk = vk.ok_or(t!("kısayolda bir ana tuş olmalı (ör. Ctrl+Space)", "a shortcut needs a main key (e.g. Ctrl+Space)"))?;
     let c = Combo { mods: m, vk };
     // F13–F24 ve PrintScreen yazı yazmaz; tek başına kullanılabilir.
     let free_alone = (0x7C..=0x87).contains(&vk) || vk == 0x2C;
     if !m.any() && !free_alone {
-        return Err("değiştiricisiz tek tuş olamaz (yazı yazarken tetiklenir)".into());
+        return Err(t!("değiştiricisiz tek tuş olamaz (yazı yazarken tetiklenir)", "a single key without modifiers isn't allowed (fires while typing)").into());
     }
     if m == (Mods { shift: true, ..Default::default() }) && !free_alone {
-        return Err("yalnızca Shift ile olamaz (yazı yazarken tetiklenir)".into());
+        return Err(t!("yalnızca Shift ile olamaz (yazı yazarken tetiklenir)", "Shift alone isn't allowed (fires while typing)").into());
     }
     let only = |ctrl, alt, shift, win| m == Mods { ctrl, alt, shift, win };
     let reserved = (only(true, true, false, false) && vk == 0x2E) // Ctrl+Alt+Del
@@ -129,7 +129,7 @@ pub fn parse_combo(s: &str) -> Result<Combo, String> {
         || (only(true, false, false, false) && matches!(vk, 0x41 | 0x43 | 0x56 | 0x58 | 0x59 | 0x5A | 0x53 | 0x1B)) // Ctrl+A/C/V/X/Y/Z/S, Ctrl+Esc
         || (only(false, false, false, true) && matches!(vk, 0x4C | 0x44 | 0x09)); // Win+L, Win+D, Win+Tab
     if reserved {
-        return Err("bu kısayol Windows'un temel bir kısayolu; alınamaz".into());
+        return Err(t!("bu kısayol Windows'un temel bir kısayolu; alınamaz", "this is a core Windows shortcut; it can't be taken").into());
     }
     Ok(c)
 }

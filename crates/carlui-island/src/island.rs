@@ -122,11 +122,14 @@ struct Bar {
 
 const MONTHS: [&str; 12] = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 const DAYS: [&str; 7] = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
+const MONTHS_EN: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DAYS_EN: [&str; 7] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 pub fn now_hm() -> (u16, u16, String, String) {
     let t = unsafe { GetLocalTime() };
     let time = format!("{:02}:{:02}", t.wHour, t.wMinute);
-    let date = format!("{} {} {}", t.wDay, MONTHS[(t.wMonth as usize).clamp(1, 12) - 1], DAYS[t.wDayOfWeek as usize % 7]);
+    let (m, d) = ((t.wMonth as usize).clamp(1, 12) - 1, t.wDayOfWeek as usize % 7);
+    let date = t!(format!("{} {} {}", t.wDay, MONTHS[m], DAYS[d]), format!("{}, {} {}", DAYS_EN[d], MONTHS_EN[m], t.wDay));
     (t.wMinute, t.wSecond, time, date)
 }
 
@@ -525,7 +528,7 @@ impl Island {
                 let (t, _, th) = self.label(gfx, &snap.title, 14.5, true, tmax, 0.96)?;
                 Self::place(&t, tx, pad + 6.0 * s)?;
                 kids.InsertAtTop(&t)?;
-                let artist = if snap.artist.is_empty() { "Bilinmeyen sanatçı" } else { &snap.artist };
+                let artist = if snap.artist.is_empty() { t!("Bilinmeyen sanatçı", "Unknown artist") } else { &snap.artist };
                 let (ar, _, _) = self.label(gfx, artist, 12.5, false, tmax, 0.62)?;
                 Self::place(&ar, tx, pad + 6.0 * s + th + 2.0 * s)?;
                 kids.InsertAtTop(&ar)?;
@@ -615,7 +618,7 @@ impl Island {
                 let tx = pad + ipx + 12.0 * s;
                 let tmax = w - tx - pad;
                 let (an, _, ah) = self.label(gfx, &n.app, 11.0, false, tmax - 50.0 * s, 0.55)?;
-                let (nowl, nw, _) = self.label(gfx, "şimdi", 11.0, false, 60.0 * s, 0.45)?;
+                let (nowl, nw, _) = self.label(gfx, t!("şimdi", "now"), 11.0, false, 60.0 * s, 0.45)?;
                 let (t, _, th) = self.label(gfx, &n.title, 13.5, true, tmax, 0.96)?;
                 let mut y = if has_body { 10.0 * s } else { 12.0 * s };
                 Self::place(&an, tx, y)?;

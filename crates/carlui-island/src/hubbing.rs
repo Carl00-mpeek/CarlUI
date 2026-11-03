@@ -65,27 +65,27 @@ impl Hub {
         if cfg.ram {
             let r = carlui_sys::ram::read();
             let p = r.percent();
-            v.push(("RAM", format!("%{p:.0}"), level_of(p, 80.0, 92.0)));
+            v.push(("RAM", carlui_core::lang::pct(p), level_of(p, 80.0, 92.0)));
         }
         // Durum göstergeleri: yalnızca bir şey varken görünür. Başa eklenir ki
         // yer kalmazsa ayarlardan açılan CPU/GPU/RAM değil bunlar düşsün.
         let fixed = std::mem::take(&mut v);
         let dl = crate::downloads::active();
         if let Some(p) = crate::dlman::pill() {
-            v.push(("İndirme", p.trim_start_matches("↓ ").to_string(), 0));
+            v.push((t!("İndirme", "Download"), p.trim_start_matches("↓ ").to_string(), 0));
         } else if !dl.is_empty() {
             let total: u64 = dl.iter().map(|d| d.1).sum();
-            let label = if dl.len() > 1 { format!("{} dosya · {}", dl.len(), carlui_sys::bytes(total as f64)) } else { carlui_sys::bytes(total as f64) };
-            v.push(("İndirme", label, 0));
+            let label = if dl.len() > 1 { t!(format!("{} dosya · {}", dl.len(), carlui_sys::bytes(total as f64)), format!("{} files · {}", dl.len(), carlui_sys::bytes(total as f64))) } else { carlui_sys::bytes(total as f64) };
+            v.push((t!("İndirme", "Download"), label, 0));
         }
         if let Some(app) = carlui_sys::privacy::users("microphone").into_iter().next() {
-            v.push(("Mikrofon", app, 1));
+            v.push((t!("Mikrofon", "Microphone"), app, 1));
         }
         if let Some(app) = carlui_sys::privacy::users("webcam").into_iter().next() {
-            v.push(("Kamera", app, 1));
+            v.push((t!("Kamera", "Camera"), app, 1));
         }
         if let Some((_, p)) = carlui_sys::bt::batteries().into_iter().next() {
-            v.push(("Kulaklık", format!("%{p}"), if p <= 15 { 2 } else if p <= 30 { 1 } else { 0 }));
+            v.push((t!("Kulaklık", "Headphones"), t!(format!("%{p}"), format!("{p}%")), if p <= 15 { 2 } else if p <= 30 { 1 } else { 0 }));
         }
         v.extend(fixed);
         self.stats = v;

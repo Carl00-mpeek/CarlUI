@@ -56,8 +56,8 @@ fn footer_left(p: &P, s: &str) {
 impl App {
     pub fn draw(&self, p: &mut P, logo: Option<&ID2D1Bitmap>) {
         let sub = match self.mode {
-            Mode::Install => format!("Sürüm {} · Windows 11 için kabuk", env!("CARGO_PKG_VERSION")),
-            Mode::Uninstall => "Kaldırma".to_string(),
+            Mode::Install => t!(format!("Sürüm {} · Windows 11 için kabuk", env!("CARGO_PKG_VERSION")), format!("Version {} · a shell for Windows 11", env!("CARGO_PKG_VERSION"))),
+            Mode::Uninstall => t!("Kaldırma", "Uninstall").to_string(),
         };
         header(p, logo, &sub);
         let slide = tween::to(tween::key("page"), 0.0, 13.0);
@@ -72,25 +72,25 @@ impl App {
 
     fn welcome(&self, p: &mut P, y: f32) {
         let cw = W - PAD * 2.0;
-        p.text("Kurulum konumu", R::new(PAD + 2.0, y, cw, 20.0), 12.0, true, TEXT, 0.6, Align::Left);
+        p.text(t!("Kurulum konumu", "Install location"), R::new(PAD + 2.0, y, cw, 20.0), 12.0, true, TEXT, 0.6, Align::Left);
         let r = R::new(PAD, y + 24.0, cw, 46.0);
         p.card(r);
         p.glyph('\u{E8B7}', R::new(r.x + 10.0, r.y, 26.0, r.h), 15.0, TEXT, 0.75);
         p.text(&self.opts.dir.display().to_string(), R::new(r.x + 40.0, r.y, r.w - 160.0, r.h), 13.0, false, TEXT, 0.92, Align::Left);
-        p.button(R::new(r.right() - 108.0, r.y + 7.0, 100.0, 32.0), None, "Değiştir…", Act::Browse, true, false);
+        p.button(R::new(r.right() - 108.0, r.y + 7.0, 100.0, 32.0), None, t!("Değiştir…", "Change…"), Act::Browse, true, false);
 
         let y = y + 88.0;
-        p.text("Seçenekler", R::new(PAD + 2.0, y, cw, 20.0), 12.0, true, TEXT, 0.6, Align::Left);
+        p.text(t!("Seçenekler", "Options"), R::new(PAD + 2.0, y, cw, 20.0), 12.0, true, TEXT, 0.6, Align::Left);
         let card = R::new(PAD, y + 24.0, cw, 52.0 * 5.0);
         p.card(card);
         let pawn = self.pawnio;
         let xpi = payload::XPI.is_some();
         let rows: [(&str, &str, bool, bool, Opt); 5] = [
-            ("Masaüstü kısayolu", "Başlat menüsüne her durumda eklenir", self.opts.desktop, true, Opt::Desktop),
-            ("Kurulunca CarlUI'yi başlat", "Açılışta başlama kaydı bu konuma taşınır", self.opts.launch, true, Opt::Launch),
-            ("CPU sıcaklığı", if pawn { "Yönetici izni ister · açılışta çalışan küçük bir görev kurar" } else { "PawnIO sürücüsü kurulu değil" }, self.opts.sensors, pawn, Opt::Sensors),
-            ("Firefox eklentisi", if xpi { "İmzalı eklenti Firefox'a otomatik tanıtılır" } else { "İmzalı paket yok · kurulumdan sonra elle yüklenir" }, self.opts.firefox, xpi, Opt::Firefox),
-            ("CarlUI duvar kâğıdı", "Siyah zeminde CarlUI yazısı · masaüstü arka planı olur", self.opts.wallpaper, true, Opt::Wallpaper),
+            (t!("Masaüstü kısayolu", "Desktop shortcut"), t!("Başlat menüsüne her durumda eklenir", "Always added to the Start menu"), self.opts.desktop, true, Opt::Desktop),
+            (t!("Kurulunca CarlUI'yi başlat", "Start CarlUI after install"), t!("Açılışta başlama kaydı bu konuma taşınır", "The startup entry points to this location"), self.opts.launch, true, Opt::Launch),
+            (t!("CPU sıcaklığı", "CPU temperature"), if pawn { t!("Yönetici izni ister · açılışta çalışan küçük bir görev kurar", "Needs admin · sets up a small task that runs at sign-in") } else { t!("PawnIO sürücüsü kurulu değil", "PawnIO driver not installed") }, self.opts.sensors, pawn, Opt::Sensors),
+            (t!("Firefox eklentisi", "Firefox extension"), if xpi { t!("İmzalı eklenti Firefox'a otomatik tanıtılır", "The signed extension is registered with Firefox") } else { t!("İmzalı paket yok · kurulumdan sonra elle yüklenir", "No signed package · load it manually after install") }, self.opts.firefox, xpi, Opt::Firefox),
+            (t!("CarlUI duvar kâğıdı", "CarlUI wallpaper"), t!("Siyah zeminde CarlUI yazısı · masaüstü arka planı olur", "CarlUI lettering on black · set as desktop background"), self.opts.wallpaper, true, Opt::Wallpaper),
         ];
         for (i, (t, d, on, en, opt)) in rows.into_iter().enumerate() {
             let rr = R::new(card.x, card.y + 52.0 * i as f32, card.w, 52.0);
@@ -100,19 +100,19 @@ impl App {
             option(p, rr, t, d, on, en, opt);
         }
 
-        footer_left(p, &format!("{:.1} MB · yönetici izni gerekmez", payload::size_kb() as f32 / 1024.0));
-        p.button(R::new(W - PAD - 120.0 - 12.0 - 100.0, H - 58.0, 100.0, 34.0), None, "Vazgeç", Act::Close, true, false);
-        primary(p, R::new(W - PAD - 120.0, H - 58.0, 120.0, 34.0), if self.installed_before { "Güncelle" } else { "Kur" }, Act::Install, p.accent);
+        footer_left(p, &format!("{:.1} MB · {}", payload::size_kb() as f32 / 1024.0, t!("yönetici izni gerekmez", "no admin rights needed")));
+        p.button(R::new(W - PAD - 120.0 - 12.0 - 100.0, H - 58.0, 100.0, 34.0), None, t!("Vazgeç", "Cancel"), Act::Close, true, false);
+        primary(p, R::new(W - PAD - 120.0, H - 58.0, 120.0, 34.0), if self.installed_before { t!("Güncelle", "Update") } else { t!("Kur", "Install") }, Act::Install, p.accent);
     }
 
     fn confirm(&self, p: &mut P, y: f32) {
         let cw = W - PAD * 2.0;
-        p.text("CarlUI kaldırılsın mı?", R::new(PAD, y, cw, 32.0), 19.0, true, TEXT, 0.95, Align::Left);
-        p.text(&format!("Konum: {}", self.opts.dir.display()), R::new(PAD, y + 34.0, cw, 20.0), 12.5, false, TEXT, 0.6, Align::Left);
+        p.text(t!("CarlUI kaldırılsın mı?", "Uninstall CarlUI?"), R::new(PAD, y, cw, 32.0), 19.0, true, TEXT, 0.95, Align::Left);
+        p.text(&format!("{}: {}", t!("Konum", "Location"), self.opts.dir.display()), R::new(PAD, y + 34.0, cw, 20.0), 12.5, false, TEXT, 0.6, Align::Left);
         let lines = [
-            "Kabuk kapatılır, görev çubuğu geri gelir.",
-            "Başlangıç kaydı, kısayollar ve Programlar listesindeki giriş kaldırılır.",
-            "Kurulan dosyalar Geri Dönüşüm Kutusu'na taşınır.",
+            t!("Kabuk kapatılır, görev çubuğu geri gelir.", "The shell closes and the taskbar comes back."),
+            t!("Başlangıç kaydı, kısayollar ve Programlar listesindeki giriş kaldırılır.", "The startup entry, shortcuts and installed-apps entry are removed."),
+            t!("Kurulan dosyalar Geri Dönüşüm Kutusu'na taşınır.", "Installed files are moved to the Recycle Bin."),
         ];
         for (i, l) in lines.iter().enumerate() {
             let ry = y + 70.0 + i as f32 * 26.0;
@@ -121,31 +121,31 @@ impl App {
         }
         let card = R::new(PAD, y + 160.0, cw, 52.0);
         p.card(card);
-        option(p, card, "Ayarları ve verileri de kaldır", r"%APPDATA%\CarlUI ve %LOCALAPPDATA%\CarlUI · Geri Dönüşüm Kutusu'na", self.purge, true, Opt::Purge);
+        option(p, card, t!("Ayarları ve verileri de kaldır", "Also remove settings and data"), t!(r"%APPDATA%\CarlUI ve %LOCALAPPDATA%\CarlUI · Geri Dönüşüm Kutusu'na", r"%APPDATA%\CarlUI and %LOCALAPPDATA%\CarlUI · to the Recycle Bin"), self.purge, true, Opt::Purge);
 
-        p.button(R::new(W - PAD - 120.0 - 12.0 - 100.0, H - 58.0, 100.0, 34.0), None, "Vazgeç", Act::Close, true, false);
-        primary(p, R::new(W - PAD - 120.0, H - 58.0, 120.0, 34.0), "Kaldır", Act::Uninstall, RED);
+        p.button(R::new(W - PAD - 120.0 - 12.0 - 100.0, H - 58.0, 100.0, 34.0), None, t!("Vazgeç", "Cancel"), Act::Close, true, false);
+        primary(p, R::new(W - PAD - 120.0, H - 58.0, 120.0, 34.0), t!("Kaldır", "Uninstall"), Act::Uninstall, RED);
     }
 
     fn work(&self, p: &mut P, y: f32) {
         let (step, frac) = self.progress.lock().map(|g| (g.step.clone(), g.frac)).unwrap_or_default();
         let cw = W - PAD * 2.0;
-        let title = if self.mode == Mode::Install { "Kuruluyor…" } else { "Kaldırılıyor…" };
+        let title = if self.mode == Mode::Install { t!("Kuruluyor…", "Installing…") } else { t!("Kaldırılıyor…", "Uninstalling…") };
         p.text(title, R::new(PAD, y + 50.0, cw, 32.0), 19.0, true, TEXT, 0.95, Align::Left);
         p.text(&step, R::new(PAD, y + 88.0, cw, 22.0), 13.0, false, TEXT, 0.65, Align::Left);
         let f = tween::to(tween::key("bar"), frac, 10.0);
         p.bar(R::new(PAD, y + 128.0, cw, 6.0), f, p.accent);
-        p.text(&format!("%{}", (f * 100.0).round() as i32), R::new(PAD, y + 142.0, cw, 20.0), 12.0, false, TEXT, 0.5, Align::Right);
+        p.text(&carlui_core::lang::pct((f * 100.0).round()), R::new(PAD, y + 142.0, cw, 20.0), 12.0, false, TEXT, 0.5, Align::Right);
     }
 
     fn done(&self, p: &mut P, y: f32) {
         let out = self.progress.lock().ok().and_then(|g| g.done.clone()).unwrap_or(install::Outcome { ok: false, notes: vec![] });
         let cw = W - PAD * 2.0;
         let (glyph, color, title) = match (self.mode, out.ok) {
-            (Mode::Install, true) => ('\u{E73E}', GREEN, if self.installed_before { "CarlUI güncellendi" } else { "CarlUI kuruldu" }),
-            (Mode::Uninstall, true) => ('\u{E73E}', GREEN, "CarlUI kaldırıldı"),
-            (Mode::Install, false) => ('\u{E711}', RED, "Kurulum tamamlanamadı"),
-            (Mode::Uninstall, false) => ('\u{E711}', RED, "Kaldırma tamamlanamadı"),
+            (Mode::Install, true) => ('\u{E73E}', GREEN, if self.installed_before { t!("CarlUI güncellendi", "CarlUI updated") } else { t!("CarlUI kuruldu", "CarlUI installed") }),
+            (Mode::Uninstall, true) => ('\u{E73E}', GREEN, t!("CarlUI kaldırıldı", "CarlUI uninstalled")),
+            (Mode::Install, false) => ('\u{E711}', RED, t!("Kurulum tamamlanamadı", "Install didn't complete")),
+            (Mode::Uninstall, false) => ('\u{E711}', RED, t!("Kaldırma tamamlanamadı", "Uninstall didn't complete")),
         };
         let c = R::new(PAD, y, 34.0, 34.0);
         p.round(c, 17.0, color, 0.18);
@@ -166,14 +166,14 @@ impl App {
         if self.mode == Mode::Install && out.ok && !(self.opts.firefox && payload::XPI.is_some()) {
             let card = R::new(PAD, (ny + 12.0).max(y + 150.0), cw, 98.0);
             p.card(card);
-            p.text("Tarayıcı eklentisi (isteğe bağlı)", R::new(card.x + 16.0, card.y + 10.0, card.w - 32.0, 22.0), 13.5, false, TEXT, 0.95, Align::Left);
-            p.text("İndirmeleri adaya taşır. Klasörü seçip geliştirici modunda yükleyin.", R::new(card.x + 16.0, card.y + 31.0, card.w - 32.0, 18.0), 11.5, false, TEXT, 0.55, Align::Left);
+            p.text(t!("Tarayıcı eklentisi (isteğe bağlı)", "Browser extension (optional)"), R::new(card.x + 16.0, card.y + 10.0, card.w - 32.0, 22.0), 13.5, false, TEXT, 0.95, Align::Left);
+            p.text(t!("İndirmeleri adaya taşır. Klasörü seçip geliştirici modunda yükleyin.", "Moves downloads to the island. Load the folder in developer mode."), R::new(card.x + 16.0, card.y + 31.0, card.w - 32.0, 18.0), 11.5, false, TEXT, 0.55, Align::Left);
             let mut bx = card.x + 16.0;
             let by = card.y + 56.0;
-            p.button(R::new(bx, by, 120.0, 30.0), Some('\u{E838}'), "Klasörü aç", Act::OpenExt, true, false);
+            p.button(R::new(bx, by, 120.0, 30.0), Some('\u{E838}'), t!("Klasörü aç", "Open folder"), Act::OpenExt, true, false);
             bx += 128.0;
             if self.firefox.is_some() {
-                p.button(R::new(bx, by, 110.0, 30.0), None, "Firefox'ta", Act::Firefox, true, false);
+                p.button(R::new(bx, by, 110.0, 30.0), None, t!("Firefox'ta", "In Firefox"), Act::Firefox, true, false);
                 bx += 118.0;
             }
             if let Some((_, url)) = &self.chrome {
@@ -182,8 +182,8 @@ impl App {
             }
         }
         if self.mode == Mode::Uninstall && out.ok {
-            p.text("Silinenleri geri almak için Geri Dönüşüm Kutusu'nu açabilirsiniz.", R::new(PAD, ny + 6.0, cw, 20.0), 12.0, false, TEXT, 0.5, Align::Left);
+            p.text(t!("Silinenleri geri almak için Geri Dönüşüm Kutusu'nu açabilirsiniz.", "Open the Recycle Bin to restore removed files."), R::new(PAD, ny + 6.0, cw, 20.0), 12.0, false, TEXT, 0.5, Align::Left);
         }
-        primary(p, R::new(W - PAD - 120.0, H - 58.0, 120.0, 34.0), "Kapat", Act::Close, p.accent);
+        primary(p, R::new(W - PAD - 120.0, H - 58.0, 120.0, 34.0), t!("Kapat", "Close"), Act::Close, p.accent);
     }
 }

@@ -54,7 +54,7 @@ impl Island {
         let (w, pad, ipx) = ((W * s).round(), (PAD * s).round(), (ICON * s).round());
 
         // Başlık satırı
-        let head = if o.more > 0 { format!("İndirme bilgisi · +{} bekliyor", o.more) } else { "İndirme bilgisi".to_string() };
+        let head = if o.more > 0 { t!(format!("İndirme bilgisi · +{} bekliyor", o.more), format!("Download info · +{} waiting", o.more)) } else { t!("İndirme bilgisi", "Download info").to_string() };
         let (hd, _, hh) = self.label(gfx, &head, 11.0, false, w - 2.0 * pad, 0.5)?;
         let hy = (12.0 * s).round();
         Self::place(&hd, pad, hy)?;
@@ -82,7 +82,7 @@ impl Island {
         Self::place(&nm, tx, iy + 2.0 * s)?;
         kids.InsertAtTop(&nm)?;
         self.stagger(&nm, iy + 2.0 * s, 90)?;
-        let size = if o.size > 0 { carlui_sys::bytes(o.size as f64) } else { "Boyut bilinmiyor".into() };
+        let size = if o.size > 0 { carlui_sys::bytes(o.size as f64) } else { t!("Boyut bilinmiyor", "Unknown size").into() };
         let (meta, _, mh) = self.label(gfx, &format!("{size} · {}", o.host), 12.0, false, tmax, 0.66)?;
         let my = iy + 2.0 * s + nh + 2.0 * s;
         Self::place(&meta, tx, my)?;
@@ -98,7 +98,7 @@ impl Island {
         let by = (iy + ipx).max(fy + fh) + 14.0 * s;
         let bh = (BTN_H * s).round();
         let gap = 8.0 * s;
-        let labels = [("İndir", 1.15f32), ("Farklı kaydet…", 1.25), ("Tarayıcıya bırak", 1.35)];
+        let labels = [(t!("İndir", "Download"), 1.15f32), (t!("Farklı kaydet…", "Save as…"), 1.25), (t!("Tarayıcıya bırak", "Leave to browser"), 1.35)];
         let total: f32 = labels.iter().map(|l| l.1).sum();
         let avail = w - 2.0 * pad - gap * (labels.len() as f32 - 1.0);
         let mut x = pad;

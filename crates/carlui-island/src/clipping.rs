@@ -107,7 +107,7 @@ pub(crate) fn create_pop_window() -> Result<HWND> {
         let hwnd = CreateWindowExW(
             WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP,
             w!("CarlUI.ClipPop"),
-            w!("CarlUI Pano"),
+            w!("CarlUI Clipboard"),
             WS_POPUP,
             0,
             0,

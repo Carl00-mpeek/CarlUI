@@ -188,7 +188,7 @@ impl ShortcutsConfig {
         crate::keys::parse_mods(&self.converter)
             .and_then(|m| {
                 let n = [m.ctrl, m.alt, m.shift, m.win].iter().filter(|b| **b).count();
-                if n < 2 { Err("en az iki değiştirici gerekli (tek başına Win/Alt başka işlere ait)".to_string()) } else { Ok(m) }
+                if n < 2 { Err(t!("en az iki değiştirici gerekli (tek başına Win/Alt başka işlere ait)", "at least two modifiers needed (Win/Alt alone are taken)").to_string()) } else { Ok(m) }
             })
             .or_else(|e| {
                 crate::warn!("dönüştürücü kısayolu '{}' kullanılamaz: {e}; varsayılan (Win+Alt) kullanılıyor", self.converter);
@@ -275,11 +275,13 @@ pub struct GeneralConfig {
     pub top_monitor: u32,
     /// Windows oturumu açılınca CarlUI'yi hemen başlat.
     pub start_with_windows: bool,
+    /// Arayüz dili: "auto" (Windows'un diline göre), "tr" ya da "en".
+    pub language: String,
 }
 
 impl Default for GeneralConfig {
     fn default() -> Self {
-        Self { hide_taskbar: true, top_monitor: 0, start_with_windows: true }
+        Self { hide_taskbar: true, top_monitor: 0, start_with_windows: true, language: "auto".into() }
     }
 }
 
@@ -505,6 +507,12 @@ pub fn expand_env(s: &str) -> String {
 /// Ayarları okur. Dosya yoksa varsayılanları yazar; bozuksa varsayılanlarla
 /// devam eder ama dosyanın üzerine yazmaz (kullanıcının düzenlemesi kaybolmasın).
 pub fn load() -> Config {
+    let cfg = read();
+    crate::lang::apply(&cfg.general.language);
+    cfg
+}
+
+fn read() -> Config {
     let path = crate::paths::config_file();
     match std::fs::read_to_string(&path) {
         Ok(text) => toml::from_str(&text).unwrap_or_else(|e| {

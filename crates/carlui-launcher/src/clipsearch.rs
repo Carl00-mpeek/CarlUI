@@ -1,4 +1,4 @@
-//! Bu modül "geçen gün kopyaladığım o metin neydi?" sorununu Spotlight'tan
+//! Bu modül "geçen gün kopyaladığım o metin neydi?" sorununu aramadan
 //! şu yöntemle çözüyor: "pano" yazınca pano geçmişindeki son metinler, "pano
 //! adres" yazınca içinde "adres" geçenler listelenir; Enter metni yeniden
 //! panoya koyar. Geçmişin kendisi adada (pano modülünde) durur; ada
@@ -35,7 +35,7 @@ pub(crate) fn items(q: &str) -> Option<Vec<Item>> {
             .filter(|t| rest.is_empty() || norm(t).contains(rest))
             .take(MAX)
             .map(|t| {
-                let mut it = Item::new(preview(&t), "Pano geçmişi · Enter ile yeniden kopyala", Icon::Glyph('\u{E77F}'), Act::Copy(t), "Pano");
+                let mut it = Item::new(preview(&t), t!("Pano geçmişi · Enter ile yeniden kopyala", "Clipboard history · Enter to copy again"), Icon::Glyph('\u{E77F}'), Act::Copy(t), "Pano");
                 it.complete = String::new();
                 it
             })

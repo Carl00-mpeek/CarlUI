@@ -379,9 +379,9 @@ impl Dock {
             windows: Vec::new(),
             src: IconSrc::Glyph,
         };
-        want.push(glyph("start", Kind::Start, 0, "Başlat"));
+        want.push(glyph("start", Kind::Start, 0, t!("Başlat", "Start")));
         if self.cfg.dock.show_search {
-            want.push(glyph("search", Kind::Search, 0, "Ara"));
+            want.push(glyph("search", Kind::Search, 0, t!("Ara", "Search")));
         }
 
         let mut used = vec![false; tracker.windows.len()];
@@ -449,11 +449,11 @@ impl Dock {
         };
         if self.cfg.dock.downloads_stack {
             if let Some(d) = win::downloads_dir() {
-                want.push(place("downloads", Kind::Folder, "İndirilenler", d.display().to_string()));
+                want.push(place("downloads", Kind::Folder, t!("İndirilenler", "Downloads"), d.display().to_string()));
             }
         }
         if self.cfg.dock.recycle_bin {
-            want.push(place("trash", Kind::Trash, "Geri Dönüşüm Kutusu", places::RECYCLE_BIN.into()));
+            want.push(place("trash", Kind::Trash, t!("Geri Dönüşüm Kutusu", "Recycle Bin"), places::RECYCLE_BIN.into()));
         }
         want.push(glyph("tray", Kind::Tray, 3, "Tray"));
 

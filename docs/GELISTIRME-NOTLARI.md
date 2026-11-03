@@ -208,7 +208,7 @@ Notlar:
   `[island] top_margin = 6`, `[island] hide_over_maximized = false`,
   `[island] media_tint = true` (şarkı/video çalarken ada kapağın rengini alır).
 
-## Modül 5 — Arama (Spotlight adaya taşındı): test adımları
+## Modül 5 — Arama (adaya taşındı): test adımları
 
 Eski CarlSpotlight artık gerekmiyor: arama üstteki adanın parçası. Windows
 tuşuna (ya da Ctrl+Space'e) basınca ada aşağı doğru büyür; en üstte saat ve
@@ -348,7 +348,7 @@ hold_notes = true           # oyunda gelen bildirimleri sakla, çıkınca göste
 2. ✅ Dock: açık pencere takibi, noktalar, önizleme, sürükle-bırak, sabitlenmişleri içeri aktarma, otomatik gizleme, Win+1…9
 3. ✅ Tray + kontrol merkezi (5 adımlı balon animasyonu)
 4. ✅ Ada: saat + bildirimler + medya kontrolleri (uygulamaya özel ses)
-5. ✅ Arama (Spotlight adada) + hızlı başlangıç + ayarlanabilir kısayollar + kapak rengi
+5. ✅ Arama (adada) + hızlı başlangıç + ayarlanabilir kısayollar + kapak rengi
 6. ✅ Pano (Win+V, resim görüntüleyici, yerinde metin düzenleme, silme onayı + geri al, gizli kayıtlar, eski Pano'dan içeri aktarma)
 7. ✅ Oyun modu (uyku durumu: verimlilik modu + bellek boşaltma, oyunda gelen bildirimleri sonraya saklama)
 8. Ayarlar ekranı (Tauri + React)

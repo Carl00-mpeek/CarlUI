@@ -7,8 +7,18 @@
 /// Sayıyı Türkçe biçimde yazar (ondalık virgül, gereksiz sıfırlar atılır).
 pub fn fmt(v: f64) -> String {
     if !v.is_finite() {
-        return "tanımsız".into();
+        return t!("tanımsız", "undefined").into();
     }
+    let s = fmt_tr(v);
+    if carlui_core::lang::is_tr() { s } else { swap_marks(&s) }
+}
+
+/// İngilizce yazım: binlik virgül, ondalık nokta.
+fn swap_marks(s: &str) -> String {
+    s.chars().map(|c| match c { '.' => ',', ',' => '.', c => c }).collect()
+}
+
+fn fmt_tr(v: f64) -> String {
     if v.abs() >= 1e15 || (v != 0.0 && v.abs() < 1e-9) {
         return format!("{v:e}").replace('.', ",");
     }
@@ -41,7 +51,7 @@ pub fn fmt(v: f64) -> String {
 pub fn plain(v: f64) -> String {
     let s = format!("{:.10}", v);
     let s = if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s };
-    s.replace('.', ",")
+    if carlui_core::lang::is_tr() { s.replace('.', ",") } else { s }
 }
 
 /// "1,5" ve "1.5" ikisi de 1.5; "1.000,5" binlik ayırıcılı yazım da anlaşılır.
@@ -303,6 +313,31 @@ fn unit(name: &str) -> Option<(Cat, f64, &'static str)> {
     UNITS.iter().find(|u| u.0.contains(&n.as_str())).map(|u| (u.1, u.2, u.3))
 }
 
+/// Birimin seçili dildeki kısa adı.
+fn unit_label(n: &'static str) -> &'static str {
+    if carlui_core::lang::is_tr() {
+        return n;
+    }
+    match n {
+        "inç" => "in",
+        "mil" => "mi",
+        "deniz mili" => "nmi",
+        "galon" => "gal",
+        "bardak" => "cup",
+        "sn" => "s",
+        "dk" => "min",
+        "saat" => "h",
+        "gün" => "days",
+        "hafta" => "weeks",
+        "yıl" => "years",
+        "dönüm" => "dunam",
+        "hektar" => "ha",
+        "akre" => "acre",
+        "km/sa" => "km/h",
+        n => n,
+    }
+}
+
 fn temp(v: f64, from: f64, to: f64) -> f64 {
     let c = match from as i32 {
         0 => v,
@@ -346,7 +381,7 @@ pub fn convert_units(q: &str) -> Option<(f64, String)> {
     }
     let r = if ca == Cat::Temp { temp(v, fa, fb) } else { v * fa / fb };
     let r = (r * 1e6).round() / 1e6;
-    Some((r, format!("{} {na} = {} {nb}", fmt(v), fmt(r))))
+    Some((r, format!("{} {} = {} {}", fmt(v), unit_label(na), fmt(r), unit_label(nb))))
 }
 
 // ---- Döviz ----

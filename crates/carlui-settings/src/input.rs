@@ -70,7 +70,7 @@ impl Input {
         let name = self.name.trim().to_string();
         let mut url = self.url.trim().to_string();
         if name.is_empty() {
-            self.error = Some("Bir ad yazın (ör. YouTube, Wikipedia).".into());
+            self.error = Some(carlui_core::t!("Bir ad yazın (ör. YouTube, Wikipedia).", "Enter a name (e.g. YouTube, Wikipedia).").into());
             self.field = 0;
             return false;
         }
@@ -78,7 +78,7 @@ impl Input {
             if url.contains('.') && !url.contains(' ') {
                 url = format!("https://{url}");
             } else {
-                self.error = Some("Adres http:// ya da https:// ile başlamalı.".into());
+                self.error = Some(carlui_core::t!("Adres http:// ya da https:// ile başlamalı.", "The address must start with http:// or https://.").into());
                 self.field = 1;
                 return false;
             }
@@ -87,7 +87,7 @@ impl Input {
             if url.ends_with('=') {
                 url.push_str("{q}");
             } else {
-                self.error = Some("Aranan metnin yerine {q} yazın (ör. https://site.com/ara?q={q}).".into());
+                self.error = Some(carlui_core::t!("Aranan metnin yerine {q} yazın (ör. https://site.com/ara?q={q}).", "Put {q} where the search text goes (e.g. https://site.com/search?q={q}).").into());
                 self.field = 1;
                 return false;
             }

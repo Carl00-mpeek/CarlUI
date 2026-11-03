@@ -50,10 +50,10 @@ impl Disk {
     /// "İyi" / "Dikkat" / "Kötü" + kısa açıklama.
     pub fn verdict(&self) -> (&'static str, String) {
         match &self.health {
-            Some(h) if h.critical != 0 => ("Kötü", "Disk kritik uyarı veriyor".into()),
-            Some(h) if h.used_pct >= 90 || h.spare_pct < 10 => ("Dikkat", format!("Ömrün %{}'i kullanıldı", h.used_pct)),
-            Some(h) => ("İyi", format!("Kalan ömür %{}", 100u8.saturating_sub(h.used_pct))),
-            None => ("İyi", "Windows sorun bildirmiyor".into()),
+            Some(h) if h.critical != 0 => ("Kötü", t!("Disk kritik uyarı veriyor", "Disk reports a critical warning").into()),
+            Some(h) if h.used_pct >= 90 || h.spare_pct < 10 => ("Dikkat", t!(format!("Ömrün %{}'i kullanıldı", h.used_pct), format!("{}% of lifespan used", h.used_pct))),
+            Some(h) => ("İyi", t!(format!("Kalan ömür %{}", 100u8.saturating_sub(h.used_pct)), format!("{}% lifespan left", 100u8.saturating_sub(h.used_pct)))),
+            None => ("İyi", t!("Windows sorun bildirmiyor", "Windows reports no problems").into()),
         }
     }
 }

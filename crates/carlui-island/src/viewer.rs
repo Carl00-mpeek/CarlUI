@@ -74,7 +74,7 @@ impl Viewer {
             let hwnd = CreateWindowExW(
                 WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP,
                 w!("CarlUI.ClipView"),
-                w!("CarlUI Resim"),
+                w!("CarlUI Image"),
                 WS_POPUP,
                 0,
                 0,
@@ -173,7 +173,7 @@ impl Viewer {
         vp.Children()?.InsertAtTop(&inner)?;
         layer.Children()?.InsertAtTop(&vp)?;
         // Alt şerit: ipucu solda, X sağda.
-        let t = self.text.render(gfx, "Tekerlek ya da Ctrl +/- yakınlaştır · sürükle · Esc kapat", 11.5 * s, false, tw - 80.0 * s, 0.55)?;
+        let t = self.text.render(gfx, t!("Tekerlek ya da Ctrl +/- yakınlaştır · sürükle · Esc kapat", "Wheel or Ctrl +/- to zoom · drag · Esc to close"), 11.5 * s, false, tw - 80.0 * s, 0.55)?;
         let hint = self.sprite(&t.surface, t.width, t.height, pad + 6.0 * s, th - foot + (foot - t.height) / 2.0)?;
         layer.Children()?.InsertAtTop(&hint)?;
         frame.push(hint.cast()?);

@@ -1,7 +1,7 @@
 //! Bu modül "hızlı ayarları hem kontrol merkezinden hem aramadan değiştir"
 //! sorununu şu yöntemle çözüyor: ses (WASAPI), parlaklık (DDC/CI), Wi-Fi /
 //! Bluetooth (Windows radyo API'si) ve karanlık mod (kayıt defteri + yayın)
-//! burada tek yerde durur; tepsi paneli ve Spotlight aynı fonksiyonları çağırır.
+//! burada tek yerde durur; tepsi paneli ve arama aynı fonksiyonları çağırır.
 //! Radyo ve DDC/CI çağrıları yavaştır (50–300 ms): çağıran iş parçacığında yapar.
 
 use windows::{

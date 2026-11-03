@@ -10,5 +10,6 @@ name = "CarlUI-Setup"
 path = "src/main.rs"
 
 [dependencies]
+carlui-core.workspace = true
 carlui-ui.workspace = true
 windows.workspace = true

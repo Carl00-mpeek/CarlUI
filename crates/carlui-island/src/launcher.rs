@@ -297,9 +297,9 @@ impl Launcher {
 
     pub fn view(&self) -> SpotView<'_> {
         let hint = match self.mode {
-            SpotMode::Home => "Ok tuşları ile seç · Enter aç · yt, chatgpt, wp … kısayollar için @ · Esc kapat",
-            SpotMode::List => "Enter aç · Tab tamamla · Alt eylemler · Ctrl+Enter konumu aç · Shift+Enter yönetici · Esc temizle",
-            SpotMode::Actions => "Enter uygula · Esc ya da Alt geri",
+            SpotMode::Home => t!("Ok tuşları ile seç · Enter aç · yt, chatgpt, wp … kısayollar için @ · Esc kapat", "Arrows to select · Enter to open · @ for yt, chatgpt, wp … shortcuts · Esc to close"),
+            SpotMode::List => t!("Enter aç · Tab tamamla · Alt eylemler · Ctrl+Enter konumu aç · Shift+Enter yönetici · Esc temizle", "Enter open · Tab complete · Alt actions · Ctrl+Enter open location · Shift+Enter admin · Esc clear"),
+            SpotMode::Actions => t!("Enter uygula · Esc ya da Alt geri", "Enter apply · Esc or Alt back"),
         };
         SpotView {
             query: &self.text,
@@ -313,7 +313,7 @@ impl Launcher {
             scroll: self.scroll,
             confirm: self.confirm,
             hint,
-            placeholder: if self.all_apps { "Tüm uygulamalar içinde ara" } else { "Uygulama, dosya veya web'de ara" },
+            placeholder: if self.all_apps { t!("Tüm uygulamalar içinde ara", "Search all apps") } else { t!("Uygulama, dosya veya web'de ara", "Search apps, files or the web") },
         }
     }
 

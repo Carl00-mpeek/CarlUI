@@ -1,5 +1,5 @@
 //! Bu modül "yemek/çay/Pomodoro için hızlıca zamanlayıcı kur ve ekranda gör"
-//! sorununu şu yöntemle çözüyor: Spotlight'tan gelen komutla ("5dk", "25dk
+//! sorununu şu yöntemle çözüyor: aramadan gelen komutla ("5dk", "25dk
 //! çalış", "kronometre") adanın saatinin yerinde kalan ya da geçen süre
 //! görünür ("⏱ 04:32 · çalış"); saat gizli ayarlıysa bile ada sayım boyunca
 //! görünür kalır. Süre dolunca bildirim + sistem sesi gelir. Saniyede bir
@@ -87,9 +87,10 @@ impl App {
             unsafe {
                 let _ = PlaySoundW(w!("SystemNotification"), None, SND_ALIAS | SND_ASYNC);
             }
-            let title = if label.is_empty() { "Süre doldu".to_string() } else { format!("Süre doldu: {label}") };
-            let body = format!("{} zamanlayıcı bitti", carlui_launcher::timer::human(total));
-            self.push_note(Note { app: "Zamanlayıcı".into(), aumid: String::new(), title, body, ..Default::default() });
+            let title = if label.is_empty() { t!("Süre doldu", "Time's up").to_string() } else { t!(format!("Süre doldu: {label}"), format!("Time's up: {label}")) };
+            let human = carlui_launcher::timer::human(total);
+            let body = t!(format!("{human} zamanlayıcı bitti"), format!("{human} timer finished"));
+            self.push_note(Note { app: t!("Zamanlayıcı", "Timer").into(), aumid: String::new(), title, body, ..Default::default() });
             return;
         }
         // Arama/pano açıkken hap görünmüyor; boşuna yeniden kurma.

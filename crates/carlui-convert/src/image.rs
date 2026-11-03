@@ -67,13 +67,13 @@ pub fn decode(path: &str, ff: Option<&PathBuf>) -> std::result::Result<Pixels, S
     if let Ok(p) = wic_decode(path) {
         return Ok(p);
     }
-    let Some(ff) = ff else { return Err("Bu biçimi okumak için FFmpeg gerekli".into()) };
+    let Some(ff) = ff else { return Err(t!("Bu biçimi okumak için FFmpeg gerekli", "Reading this format needs FFmpeg").into()) };
     let tmp = temp_png("in");
     let never = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let r = ffmpeg::run(ff, path, &["-frames:v".into(), "1".into(), "-pix_fmt".into(), "rgba".into()], &tmp.to_string_lossy(), &never, &|_| {});
     let out = r.and_then(|_| wic_decode(&tmp.to_string_lossy()).map_err(|e| e.message().to_string()));
     let _ = std::fs::remove_file(&tmp);
-    out.map_err(|e| format!("Okunamadı: {e}"))
+    out.map_err(|e| format!("{}: {e}", t!("Okunamadı", "Couldn't read")))
 }
 
 fn bitmap(f: &IWICImagingFactory, p: &Pixels) -> Result<IWICBitmap> {
@@ -235,7 +235,7 @@ fn write_tga(path: &str, p: &Pixels) -> std::result::Result<(), String> {
 pub fn convert(src: &str, dst: &str, ext: &str, ff: Option<&PathBuf>) -> std::result::Result<(), String> {
     let p = decode(src, ff)?;
     if p.w > 65535 || p.h > 65535 {
-        return Err("Resim çok büyük".into());
+        return Err(t!("Resim çok büyük", "Image is too large").into());
     }
     let wic = |c: &GUID, p: &Pixels| wic_encode(dst, c, p).map_err(|e| e.message().to_string());
     let r = match ext {
@@ -249,7 +249,7 @@ pub fn convert(src: &str, dst: &str, ext: &str, ff: Option<&PathBuf>) -> std::re
         "dds" => write_dds(dst, &p),
         "tga" => write_tga(dst, &p),
         _ => {
-            let Some(ff) = ff else { return Err("Bu biçim için FFmpeg gerekli".into()) };
+            let Some(ff) = ff else { return Err(t!("Bu biçim için FFmpeg gerekli", "This format needs FFmpeg").into()) };
             let tmp = temp_png("out");
             let r = wic_encode(&tmp.to_string_lossy(), &GUID_ContainerFormatPng, &p).map_err(|e| e.message().to_string()).and_then(|_| {
                 let never = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));

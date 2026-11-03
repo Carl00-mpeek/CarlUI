@@ -47,16 +47,16 @@ fn run(dir: &Path, purge: bool, dry: bool, rep: &Reporter) -> Outcome {
     let mut notes = Vec::new();
     let files = installed_files(dir);
     if dry {
-        notes.push(format!("Deneme: {} öge Geri Dönüşüm Kutusu'na gidecekti", files.len()));
+        notes.push(t!(format!("Deneme: {} öge Geri Dönüşüm Kutusu'na gidecekti", files.len()), format!("Test: {} items would go to the Recycle Bin", files.len())));
         return Outcome { ok: true, notes };
     }
 
-    rep.step("Çalışan CarlUI kapatılıyor", 0.1);
+    rep.step(t!("Çalışan CarlUI kapatılıyor", "Closing running CarlUI"), 0.1);
     if shell::quit_carlui(Duration::from_secs(6)) {
         std::thread::sleep(Duration::from_millis(1200));
     }
 
-    rep.step("Başlangıç kaydı kaldırılıyor", 0.25);
+    rep.step(t!("Başlangıç kaydı kaldırılıyor", "Removing startup entry"), 0.25);
     // Görev başka bir kopyayı (ör. geliştirme klasörü) gösteriyorsa ona dokunulmaz.
     if shell::run_hidden("schtasks", &["/Query", "/TN", "CarlUI", "/XML"]).is_some_and(|x| points_into(&x, dir)) {
         let _ = shell::run_hidden("schtasks", &["/Delete", "/TN", "CarlUI", "/F"]);
@@ -66,19 +66,20 @@ fn run(dir: &Path, purge: bool, dry: bool, rep: &Reporter) -> Outcome {
         shell::reg_delete_value(run_key, "CarlUI");
     }
 
-    rep.step("CPU sıcaklığı görevi kaldırılıyor", 0.4);
+    rep.step(t!("CPU sıcaklığı görevi kaldırılıyor", "Removing the CPU temperature task"), 0.4);
     let sensors = dir.join("carlui-sensors.exe");
     if sensors.exists() && shell::run_hidden("schtasks", &["/Query", "/TN", "CarlUI Sensors", "/XML"]).is_some_and(|x| points_into(&x, dir)) {
         match shell::run_elevated(HWND(rep.hwnd as _), &sensors, "--uninstall") {
             shell::Elevated::Done => {}
-            shell::Elevated::Declined => notes.push("CPU sıcaklığı görevi kaldırılmadı (yönetici izni verilmedi)".into()),
-            shell::Elevated::Failed(e) => notes.push(format!("CPU sıcaklığı görevi kaldırılamadı: {e}")),
+            shell::Elevated::Declined => notes.push(t!("CPU sıcaklığı görevi kaldırılmadı (yönetici izni verilmedi)", "CPU temperature task not removed (admin rights declined)").into()),
+            shell::Elevated::Failed(e) => notes.push(t!(format!("CPU sıcaklığı görevi kaldırılamadı: {e}"), format!("Couldn't remove the CPU temperature task: {e}"))),
         }
     }
 
-    rep.step("Kısayollar ve kayıtlar kaldırılıyor", 0.55);
+    rep.step(t!("Kısayollar ve kayıtlar kaldırılıyor", "Removing shortcuts and registry entries"), 0.55);
     if let Some(m) = shell::menu_dir() {
-        for n in ["CarlUI.lnk", "CarlUI Ayarları.lnk", "CarlUI'yi kaldır.lnk"] {
+        // Kurulum hangi dilde yapıldıysa o adlar; ikisi de denenir.
+        for n in ["CarlUI.lnk", "CarlUI Ayarları.lnk", "CarlUI'yi kaldır.lnk", "CarlUI Settings.lnk", "Uninstall CarlUI.lnk"] {
             let _ = std::fs::remove_file(m.join(n));
         }
         let _ = std::fs::remove_dir(&m);
@@ -93,22 +94,22 @@ fn run(dir: &Path, purge: bool, dry: bool, rep: &Reporter) -> Outcome {
     }
     shell::reg_delete_key(shell::UNINSTALL_KEY);
 
-    rep.step("Dosyalar Geri Dönüşüm Kutusu'na taşınıyor", 0.75);
+    rep.step(t!("Dosyalar Geri Dönüşüm Kutusu'na taşınıyor", "Moving files to the Recycle Bin"), 0.75);
     if !shell::recycle(&files) {
-        notes.push("Bazı dosyalar taşınamadı (hâlâ açık olabilirler)".into());
+        notes.push(t!("Bazı dosyalar taşınamadı (hâlâ açık olabilirler)", "Some files couldn't be moved (they may still be open)").into());
     }
     let _ = std::fs::remove_dir(dir.join("extension"));
     if std::fs::remove_dir(dir).is_err() && dir.exists() {
-        notes.push(format!("Klasörde başka dosyalar olduğu için klasör yerinde bırakıldı: {}", dir.display()));
+        notes.push(t!(format!("Klasörde başka dosyalar olduğu için klasör yerinde bırakıldı: {}", dir.display()), format!("The folder was left in place because it has other files: {}", dir.display())));
     }
 
     if purge {
-        rep.step("Ayarlar ve veriler kaldırılıyor", 0.9);
+        rep.step(t!("Ayarlar ve veriler kaldırılıyor", "Removing settings and data"), 0.9);
         let data: Vec<PathBuf> = ["APPDATA", "LOCALAPPDATA"].iter().filter_map(|v| std::env::var_os(v)).map(|p| PathBuf::from(p).join("CarlUI")).collect();
         if !shell::recycle(&data) {
-            notes.push("Ayar/veri klasörlerinin bir kısmı taşınamadı".into());
+            notes.push(t!("Ayar/veri klasörlerinin bir kısmı taşınamadı", "Some settings/data folders couldn't be moved").into());
         }
     }
-    notes.insert(0, "Kaldırılan dosyalar Geri Dönüşüm Kutusu'nda".into());
+    notes.insert(0, t!("Kaldırılan dosyalar Geri Dönüşüm Kutusu'nda", "Removed files are in the Recycle Bin").into());
     Outcome { ok: true, notes }
 }

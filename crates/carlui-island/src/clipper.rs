@@ -128,9 +128,9 @@ fn matches(c: &Clip, q: &str) -> bool {
         return true;
     }
     let hay = match c.kind {
-        Kind::Image => format!("resim görsel image {}x{}", c.w, c.h),
+        Kind::Image => format!("resim görsel image picture {}x{}", c.w, c.h),
         // Gizli kaydın içeriği aramayla da açığa çıkmasın.
-        _ if c.secret => "gizli şifre anahtar".into(),
+        _ if c.secret => "gizli şifre anahtar secret password key".into(),
         _ => fold(&c.text),
     };
     q.split_whitespace().all(|w| hay.contains(w))
@@ -244,9 +244,9 @@ impl Clipper {
     pub fn view<'a>(&'a self, st: &'a Store) -> ClipView<'a> {
         let items: Vec<&Clip> = self.shown.iter().filter_map(|id| st.get(id)).collect();
         let hint = match self.mode {
-            ClipMode::Actions => "↑↓ seç   Enter uygula   Esc geri",
-            ClipMode::List if self.undo.is_some() => "Kayıt silindi",
-            ClipMode::List => "Enter yapıştır · Shift+Enter kopyala · Tab diğer",
+            ClipMode::Actions => t!("↑↓ seç   Enter uygula   Esc geri", "↑↓ select   Enter apply   Esc back"),
+            ClipMode::List if self.undo.is_some() => t!("Kayıt silindi", "Item deleted"),
+            ClipMode::List => t!("Enter yapıştır · Shift+Enter kopyala · Tab diğer", "Enter paste · Shift+Enter copy · Tab more"),
         };
         ClipView {
             store: st,
@@ -286,20 +286,21 @@ impl Clipper {
         let Ok(st) = self.store.lock() else { return ClipOut::Nothing };
         let Some(c) = st.get(&id) else { return ClipOut::Nothing };
         let mut a = vec![
-            Action { label: "Yapıştır".into(), key: "Enter", glyph: '\u{E77F}', act: Act::Paste },
-            Action { label: "Yalnızca panoya kopyala".into(), key: "Shift+Enter", glyph: '\u{E8C8}', act: Act::Copy },
+            Action { label: t!("Yapıştır", "Paste").into(), key: "Enter", glyph: '\u{E77F}', act: Act::Paste },
+            Action { label: t!("Yalnızca panoya kopyala", "Copy to clipboard only").into(), key: "Shift+Enter", glyph: '\u{E8C8}', act: Act::Copy },
         ];
         if c.kind == Kind::Text {
-            a.push(Action { label: "Metni düzenle".into(), key: "Ctrl+E", glyph: '\u{E70F}', act: Act::Edit });
-            for (op, label, glyph) in transform::ALL {
-                a.push(Action { label: format!("{label} (yeni kayıt)"), key: "", glyph: *glyph, act: Act::Transform(*op) });
+            a.push(Action { label: t!("Metni düzenle", "Edit text").into(), key: "Ctrl+E", glyph: '\u{E70F}', act: Act::Edit });
+            for (op, _, glyph) in transform::ALL {
+                let label = transform::name(*op);
+                a.push(Action { label: t!(format!("{label} (yeni kayıt)"), format!("{label} (new item)")), key: "", glyph: *glyph, act: Act::Transform(*op) });
             }
-            let w = if self.wrap { "Önizlemede satır kaydırmayı kapat" } else { "Önizlemede satır kaydırmayı aç" };
+            let w = if self.wrap { t!("Önizlemede satır kaydırmayı kapat", "Turn off line wrap in preview") } else { t!("Önizlemede satır kaydırmayı aç", "Turn on line wrap in preview") };
             a.push(Action { label: w.into(), key: "Alt+Z", glyph: '\u{E8C1}', act: Act::Wrap });
         }
-        a.push(Action { label: if c.pinned { "Sabitlemeyi kaldır".into() } else { "Sabitle".into() }, key: "Ctrl+P", glyph: '\u{E718}', act: Act::Pin });
-        a.push(Action { label: "Sil".into(), key: "Delete", glyph: '\u{E74D}', act: Act::Delete });
-        a.push(Action { label: "Sabitlenmemişlerin hepsini temizle".into(), key: "", glyph: '\u{E894}', act: Act::Clear });
+        a.push(Action { label: if c.pinned { t!("Sabitlemeyi kaldır", "Unpin").into() } else { t!("Sabitle", "Pin").into() }, key: "Ctrl+P", glyph: '\u{E718}', act: Act::Pin });
+        a.push(Action { label: t!("Sil", "Delete").into(), key: "Delete", glyph: '\u{E74D}', act: Act::Delete });
+        a.push(Action { label: t!("Sabitlenmemişlerin hepsini temizle", "Clear all unpinned").into(), key: "", glyph: '\u{E894}', act: Act::Clear });
         drop(st);
         self.actions = a;
         self.act_sel = 0;

@@ -51,16 +51,16 @@ pub fn download(cancel: &AtomicBool) -> Result<PathBuf, String> {
     let dir = own_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let zip = dir.join("ffmpeg.zip");
-    let mut child = Command::new("curl.exe").args(["-L", "--fail", "--silent", "-o"]).arg(&zip).arg(DOWNLOAD_URL).creation_flags(NO_WINDOW).spawn().map_err(|e| format!("curl başlatılamadı: {e}"))?;
+    let mut child = Command::new("curl.exe").args(["-L", "--fail", "--silent", "-o"]).arg(&zip).arg(DOWNLOAD_URL).creation_flags(NO_WINDOW).spawn().map_err(|e| format!("{}: {e}", t!("curl başlatılamadı", "couldn't start curl")))?;
     loop {
         if cancel.load(Ordering::Relaxed) {
             let _ = child.kill();
             let _ = std::fs::remove_file(&zip);
-            return Err("İndirme durduruldu".into());
+            return Err(t!("İndirme durduruldu", "Download stopped").into());
         }
         match child.try_wait() {
             Ok(Some(s)) if s.success() => break,
-            Ok(Some(_)) | Err(_) => return Err("FFmpeg indirilemedi".into()),
+            Ok(Some(_)) | Err(_) => return Err(t!("FFmpeg indirilemedi", "Couldn't download FFmpeg").into()),
             Ok(None) => std::thread::sleep(std::time::Duration::from_millis(200)),
         }
     }
@@ -69,16 +69,16 @@ pub fn download(cancel: &AtomicBool) -> Result<PathBuf, String> {
     let ok = Command::new("tar.exe").arg("-xf").arg(&zip).arg("-C").arg(&x).creation_flags(NO_WINDOW).status().map(|s| s.success()).unwrap_or(false);
     let _ = std::fs::remove_file(&zip);
     if !ok {
-        return Err("FFmpeg arşivi açılamadı".into());
+        return Err(t!("FFmpeg arşivi açılamadı", "Couldn't extract the FFmpeg archive").into());
     }
     // ffmpeg-master-latest-win64-gpl\bin\{ffmpeg,ffprobe}.exe → dir
-    let bin = std::fs::read_dir(&x).ok().into_iter().flatten().flatten().map(|e| e.path().join("bin")).find(|p| p.join("ffmpeg.exe").is_file()).ok_or("Arşivde ffmpeg.exe yok")?;
+    let bin = std::fs::read_dir(&x).ok().into_iter().flatten().flatten().map(|e| e.path().join("bin")).find(|p| p.join("ffmpeg.exe").is_file()).ok_or(t!("Arşivde ffmpeg.exe yok", "ffmpeg.exe not found in the archive"))?;
     for name in ["ffmpeg.exe", "ffprobe.exe"] {
         let _ = std::fs::rename(bin.join(name), dir.join(name));
     }
     let _ = std::fs::remove_dir_all(&x);
     let exe = dir.join("ffmpeg.exe");
-    exe.is_file().then_some(exe).ok_or_else(|| "ffmpeg.exe çıkarılamadı".into())
+    exe.is_file().then_some(exe).ok_or_else(|| t!("ffmpeg.exe çıkarılamadı", "couldn't extract ffmpeg.exe").into())
 }
 
 /// Hedef biçim için kodlayıcı ayarları (CarlHub'daki ayarlarla aynı).
@@ -124,7 +124,7 @@ pub fn run(exe: &PathBuf, src: &str, args: &[String], dst: &str, cancel: &Arc<At
         .stderr(Stdio::piped())
         .creation_flags(NO_WINDOW)
         .spawn()
-        .map_err(|e| format!("FFmpeg başlatılamadı: {e}"))?;
+        .map_err(|e| format!("{}: {e}", t!("FFmpeg başlatılamadı", "Couldn't start FFmpeg")))?;
     let mut err = child.stderr.take().unwrap();
     let mut duration = None;
     let mut buf = [0u8; 4096];
@@ -174,6 +174,6 @@ pub fn run(exe: &PathBuf, src: &str, args: &[String], dst: &str, cancel: &Arc<At
     } else {
         let _ = std::fs::remove_file(dst);
         let last = tail.iter().rev().find(|l| !l.starts_with("frame=") && !l.starts_with("size=")).cloned().unwrap_or_default();
-        Err(if last.is_empty() { "FFmpeg hata verdi".into() } else { last })
+        Err(if last.is_empty() { t!("FFmpeg hata verdi", "FFmpeg reported an error").into() } else { last })
     }
 }

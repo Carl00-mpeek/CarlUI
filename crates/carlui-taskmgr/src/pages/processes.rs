@@ -14,7 +14,7 @@ use crate::{
 };
 
 fn cpu_cell(v: f32) -> Cell {
-    let t = format!("%{v:.1}");
+    let t = t!(format!("%{v:.1}"), format!("{v:.1}%"));
     if v >= 50.0 {
         colored(t, RED)
     } else if v >= 10.0 {
@@ -34,19 +34,19 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
     let gs = groups::build(app);
     let lines = groups::lines(app, &gs);
     let total = app.procs.rows.len();
-    title(p, area, "İşlemler", &format!("{} uygulama · {} süreç", gs.len(), total));
+    title(p, area, t!("İşlemler", "Processes"), &t!(format!("{} uygulama · {} süreç", gs.len(), total), format!("{} apps · {} processes", gs.len(), total)));
 
     // Anahtarlar + filtre.
     let y = area.y + 46.0;
     let mut x = area.x;
-    x += p.toggle(x, y, "İmzasızlar önce", app.unsigned_first, Act::UnsignedFirst) + 24.0;
-    x += p.toggle(x, y, "Windows süreçlerini gizle", app.hide_windows, Act::HideWindows) + 24.0;
+    x += p.toggle(x, y, t!("İmzasızlar önce", "Unsigned first"), app.unsigned_first, Act::UnsignedFirst) + 24.0;
+    x += p.toggle(x, y, t!("Windows süreçlerini gizle", "Hide Windows processes"), app.hide_windows, Act::HideWindows) + 24.0;
     let fr = R::new(x, y, (area.right() - x).clamp(120.0, 260.0), 26.0);
     p.round(fr, 6.0, 0x000000, 0.2);
     p.outline(fr, 6.0, 0xFFFFFF, 0.1);
     p.glyph('\u{E721}', R::new(fr.x + 4.0, fr.y, 22.0, fr.h), 12.0, TEXT, 0.6);
     if app.filter.is_empty() {
-        p.text("Ara (yazmaya başla)", R::new(fr.x + 28.0, fr.y, fr.w - 34.0, fr.h), 12.5, false, TEXT, 0.4, Align::Left);
+        p.text(t!("Ara (yazmaya başla)", "Search (start typing)"), R::new(fr.x + 28.0, fr.y, fr.w - 34.0, fr.h), 12.5, false, TEXT, 0.4, Align::Left);
     } else {
         p.text(&app.filter, R::new(fr.x + 28.0, fr.y, fr.w - 56.0, fr.h), 12.5, false, TEXT, 0.95, Align::Left);
         let xr = R::new(fr.right() - 26.0, fr.y, 26.0, fr.h);
@@ -58,30 +58,30 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
     let (name, targets) = app.targets();
     let by = y + 40.0;
     let on = !targets.is_empty();
-    p.button(R::new(area.x, by, 150.0, 30.0), Some('\u{E711}'), "Görevi sonlandır", Act::Kill, on, true);
+    p.button(R::new(area.x, by, 150.0, 30.0), Some('\u{E711}'), t!("Görevi sonlandır", "End task"), Act::Kill, on, true);
     if on && targets.iter().all(|r| r.suspended) {
-        p.button(R::new(area.x + 160.0, by, 110.0, 30.0), Some('\u{E768}'), "Sürdür", Act::Resume, on, false);
+        p.button(R::new(area.x + 160.0, by, 110.0, 30.0), Some('\u{E768}'), t!("Sürdür", "Resume"), Act::Resume, on, false);
     } else {
-        p.button(R::new(area.x + 160.0, by, 110.0, 30.0), Some('\u{E733}'), "Durdur", Act::Suspend, on, false);
+        p.button(R::new(area.x + 160.0, by, 110.0, 30.0), Some('\u{E733}'), t!("Durdur", "Suspend"), Act::Suspend, on, false);
     }
     let path = targets.iter().find(|r| !r.path.is_empty()).map(|r| r.path.clone());
-    p.button(R::new(area.x + 280.0, by, 150.0, 30.0), Some('\u{E838}'), "Dosya konumu", Act::Reveal, path.is_some(), false);
+    p.button(R::new(area.x + 280.0, by, 150.0, 30.0), Some('\u{E838}'), t!("Dosya konumu", "File location"), Act::Reveal, path.is_some(), false);
     if on {
         let threads: u32 = targets.iter().map(|r| r.threads).sum();
-        let pid = if targets.len() == 1 { format!("PID {}", targets[0].pid) } else { format!("{} süreç", targets.len()) };
-        let info = format!("{name} · {pid} · {threads} iş parçacığı · {}", path.as_deref().unwrap_or("yol okunamadı"));
+        let pid = if targets.len() == 1 { format!("PID {}", targets[0].pid) } else { t!(format!("{} süreç", targets.len()), format!("{} processes", targets.len())) };
+        let info = format!("{name} · {pid} · {threads} {} · {}", t!("iş parçacığı", "threads"), path.as_deref().unwrap_or(t!("yol okunamadı", "path unavailable")));
         p.text(&info, R::new(area.x + 444.0, by, area.right() - area.x - 444.0, 30.0), 12.0, false, TEXT, 0.55, Align::Left);
     }
 
     let cols = [
-        col("Ad", 0.0, Align::Left, Some(Act::Sort(SortCol::Name))),
+        col(t!("Ad", "Name"), 0.0, Align::Left, Some(Act::Sort(SortCol::Name))),
         col("PID", 70.0, Align::Right, Some(Act::Sort(SortCol::Pid))),
-        col("Durum", 110.0, Align::Left, None),
+        col(t!("Durum", "Status"), 110.0, Align::Left, None),
         col("CPU", 70.0, Align::Right, Some(Act::Sort(SortCol::Cpu))),
         col("GPU", 70.0, Align::Right, Some(Act::Sort(SortCol::Gpu))),
-        col("Bellek", 100.0, Align::Right, Some(Act::Sort(SortCol::Mem))),
-        col("G/Ç", 100.0, Align::Right, Some(Act::Sort(SortCol::Io))),
-        col("İmza", 90.0, Align::Left, Some(Act::Sort(SortCol::Sign))),
+        col(t!("Bellek", "Memory"), 100.0, Align::Right, Some(Act::Sort(SortCol::Mem))),
+        col(t!("G/Ç", "I/O"), 100.0, Align::Right, Some(Act::Sort(SortCol::Io))),
+        col(t!("İmza", "Signature"), 90.0, Align::Left, Some(Act::Sort(SortCol::Sign))),
     ];
     let sorted = Some((
         match app.sort.0 {
@@ -136,11 +136,11 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
                     2 => {
                         let n = g.rows.iter().filter(|r| r.suspended).count();
                         if g.suspended {
-                            colored("Durduruldu", ORANGE)
+                            colored(t!("Durduruldu", "Suspended"), ORANGE)
                         } else if n > 0 {
-                            colored(format!("{n} durduruldu"), ORANGE)
+                            colored(t!(format!("{n} durduruldu"), format!("{n} suspended")), ORANGE)
                         } else {
-                            dim("Çalışıyor")
+                            dim(t!("Çalışıyor", "Running"))
                         }
                     }
                     3 => cpu_cell(g.cpu),
@@ -157,9 +157,9 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
                     1 => dim(r.pid.to_string()),
                     2 => {
                         if r.suspended {
-                            colored("Durduruldu", ORANGE)
+                            colored(t!("Durduruldu", "Suspended"), ORANGE)
                         } else {
-                            dim("Çalışıyor")
+                            dim(t!("Çalışıyor", "Running"))
                         }
                     }
                     3 => cpu_cell(r.cpu),

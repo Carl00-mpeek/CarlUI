@@ -41,7 +41,7 @@ const GROUP_MAX: usize = 3;
 pub fn groups(notes: &[Note]) -> Vec<(String, Vec<usize>)> {
     let mut out: Vec<(String, Vec<usize>)> = Vec::new();
     for (i, n) in notes.iter().rev().enumerate() {
-        let name = if n.app.trim().is_empty() { "Diğer".to_string() } else { n.app.trim().to_string() };
+        let name = if n.app.trim().is_empty() { t!("Diğer", "Other").to_string() } else { n.app.trim().to_string() };
         match out.iter_mut().find(|(a, _)| *a == name) {
             Some((_, v)) => v.push(i),
             None => out.push((name, vec![i])),
@@ -186,7 +186,7 @@ impl Island {
         }
         if !hv.full {
             // Henüz açılmadı: kaç bildirim beklediğini söyle.
-            let (t, tw, th) = self.label(gfx, &format!("{} bildirim", notes.len()), 11.5, false, w, 0.55)?;
+            let (t, tw, th) = self.label(gfx, &t!(format!("{} bildirim", notes.len()), format!("{} notifications", notes.len())), 11.5, false, w, 0.55)?;
             let rh = (24.0 * s).round();
             Self::place(&t, (w - tw) / 2.0, y + (rh - th) / 2.0 - 2.0 * s)?;
             kids.InsertAtTop(&t)?;
@@ -199,7 +199,7 @@ impl Island {
         line.SetOffset(v3(PAD * s, y))?;
         line.SetBrush(&self.comp.CreateColorBrushWithColor(color(Rgba(255, 255, 255, 0x1A)))?)?;
         kids.InsertAtTop(&line)?;
-        let (t, _, th) = self.label(gfx, "Bildirimler", 11.0, true, 200.0 * s, 0.55)?;
+        let (t, _, th) = self.label(gfx, t!("Bildirimler", "Notifications"), 11.0, true, 200.0 * s, 0.55)?;
         Self::place(&t, PAD * s, y + (hh - th) / 2.0 + 2.0 * s)?;
         kids.InsertAtTop(&t)?;
         let g = self.text.glyph(gfx, '\u{E711}', (11.0 * s).round(), 0.7)?;
@@ -238,7 +238,7 @@ impl Island {
             hidden += idx.len().saturating_sub(GROUP_MAX);
         }
         if hidden > 0 {
-            let (t, tw, th) = self.label(gfx, &format!("+{hidden} bildirim daha"), 11.0, false, w, 0.45)?;
+            let (t, tw, th) = self.label(gfx, &t!(format!("+{hidden} bildirim daha"), format!("+{hidden} more notifications")), 11.0, false, w, 0.45)?;
             let rh = (22.0 * s).round();
             Self::place(&t, (w - tw) / 2.0, y + (rh - th) / 2.0)?;
             kids.InsertAtTop(&t)?;
@@ -318,7 +318,7 @@ impl Island {
             if n.shot.is_some() {
                 let py = y + 46.0 * s;
                 let mut px = tx;
-                for (k, (label, danger)) in [("Aç", false), ("Düzenle", false), ("Sil", true)].into_iter().enumerate() {
+                for (k, (label, danger)) in [(t!("Aç", "Open"), false), (t!("Düzenle", "Edit"), false), (t!("Sil", "Delete"), true)].into_iter().enumerate() {
                     let pw = self.hub_pill(gfx, kids, label, px, py, danger)?;
                     self.hits.push((Hit::NoteAct(i, k as u8), Self::hub_rect(px, py, pw, 24.0 * s)));
                     px += pw + 6.0 * s;

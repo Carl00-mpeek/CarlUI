@@ -24,11 +24,11 @@ fn app_name(exe: &str) -> String {
 
 fn screen(hwnd: isize) -> String {
     let m = carlui_core::win::monitor_name(HWND(hwnd as _));
-    m.trim_start_matches("\\\\.\\DISPLAY").parse::<u32>().map(|n| format!(" · Ekran {n}")).unwrap_or_default()
+    m.trim_start_matches("\\\\.\\DISPLAY").parse::<u32>().map(|n| t!(format!(" · Ekran {n}"), format!(" · Display {n}"))).unwrap_or_default()
 }
 
 fn item(r: &Running, title: String) -> Item {
-    let sub = format!("Açık pencere · {}{}", app_name(&r.exe), screen(r.hwnd));
+    let sub = format!("{} · {}{}", t!("Açık pencere", "Open window"), app_name(&r.exe), screen(r.hwnd));
     let mut it = Item::new(title, sub, Icon::Shell(r.exe.clone()), Act::App { launch: String::new(), hwnd: Some(r.hwnd) }, "Pencere");
     it.run = Some((r.hwnd, r.pid));
     it

@@ -415,7 +415,7 @@ impl App {
         let passive = self.game || searching::game_in_front();
         unsafe {
             let ex = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | if passive { WS_EX_NOACTIVATE } else { WINDOW_EX_STYLE(0) };
-            let Ok(hwnd) = CreateWindowExW(ex, CLASS, w!("CarlUI Ekran görüntüsü"), WS_POPUP, r.left, r.top, r.right - r.left, r.bottom - r.top, None, None, GetModuleHandleW(None).unwrap_or_default(), None) else { return };
+            let Ok(hwnd) = CreateWindowExW(ex, CLASS, w!("CarlUI Screenshot"), WS_POPUP, r.left, r.top, r.right - r.left, r.bottom - r.top, None, None, GetModuleHandleW(None).unwrap_or_default(), None) else { return };
             let s = GetDpiForWindow(hwnd) as f32 / 96.0;
             match Overlay::new(hwnd, frame, editing, passive, s) {
                 Ok(o) => self.shots.overlay = Some(o),
@@ -484,12 +484,12 @@ impl App {
     fn shot_store(&mut self, png: Vec<u8>, w: u32, h: u32, out: Out, editing: Option<PathBuf>) {
         let path = match (&editing, out) {
             (Some(p), _) => p.clone(),
-            (None, Out::Save) => unique(&desktop(), &format!("Ekran görüntüsü {}", stamp())),
+            (None, Out::Save) => unique(&desktop(), &format!("{} {}", t!("Ekran görüntüsü", "Screenshot"), stamp())),
             // Yalnızca kopyalanan da bir yere yazılır ki "Aç / Düzenle" çalışsın.
             _ => {
                 let dir = carlui_core::paths::data_dir().join("shots");
                 let _ = std::fs::create_dir_all(&dir);
-                unique(&dir, &format!("Ekran görüntüsü {}", stamp()))
+                unique(&dir, &format!("{} {}", t!("Ekran görüntüsü", "Screenshot"), stamp()))
             }
         };
         if let Err(e) = std::fs::write(&path, &png) {
@@ -509,12 +509,12 @@ impl App {
         // Düzenlenen resmin eski bildirimi yenisiyle değişsin.
         self.hub.notes.retain(|n| n.shot.as_deref() != Some(p.as_str()));
         let body = match (out, editing.is_some()) {
-            (Out::Copy, false) if self.exclusive => format!("Oyun ekranı panoda · {w}×{h} · alan için Düzenle"),
-            (Out::Copy, _) => format!("Panoya kopyalandı · {w}×{h}"),
-            (_, true) => "Düzenleme kaydedildi".to_string(),
-            _ => format!("Masaüstüne kaydedildi · {w}×{h}"),
+            (Out::Copy, false) if self.exclusive => t!(format!("Oyun ekranı panoda · {w}×{h} · alan için Düzenle"), format!("Game screen on clipboard · {w}×{h} · Edit to crop")),
+            (Out::Copy, _) => t!(format!("Panoya kopyalandı · {w}×{h}"), format!("Copied to clipboard · {w}×{h}")),
+            (_, true) => t!("Düzenleme kaydedildi", "Edit saved").to_string(),
+            _ => t!(format!("Masaüstüne kaydedildi · {w}×{h}"), format!("Saved to desktop · {w}×{h}")),
         };
-        self.push_note(Note { app: "Ekran görüntüsü".into(), title: "Ekran görüntüsü".into(), body, logo: thumb, shot: Some(p), clip_id, ..Default::default() });
+        self.push_note(Note { app: t!("Ekran görüntüsü", "Screenshot").into(), title: t!("Ekran görüntüsü", "Screenshot").into(), body, logo: thumb, shot: Some(p), clip_id, ..Default::default() });
     }
 
     /// Test: `shot-start`, `shot-edit {path}`, `shot-key {vk, ctrl}`, `shot-down/move/up {x, y}`, `shot-char {c}`.

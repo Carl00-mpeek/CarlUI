@@ -9,6 +9,9 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[macro_use]
+extern crate carlui_core;
+
 mod input;
 mod pages;
 mod recorder;
@@ -307,7 +310,7 @@ impl App {
             let shown = self.saved.is_some_and(|at| at.elapsed().as_millis() < 1500);
             let t = tween::to(tween::key("toast"), if shown { 1.0 } else { 0.0 }, 14.0);
             if t > 0.01 {
-                let m = "Kaydedildi · hemen uygulandı";
+                let m = carlui_core::t!("Kaydedildi · hemen uygulandı", "Saved · applied right away");
                 let tw = p.fonts.width(m, 13.0, false) + 40.0;
                 let r = R::new(SIDEBAR + (w - SIDEBAR - tw) / 2.0, h - 52.0 + 24.0 * (1.0 - t), tw, 34.0);
                 p.round(r, 17.0, 0x202024, 0.96 * t);
@@ -333,7 +336,7 @@ impl App {
     }
 
     fn sidebar(&self, p: &mut P, h: f32) {
-        p.text("Ayarlar", R::new(20.0, 14.0, SIDEBAR - 30.0, 30.0), 15.0, true, TEXT, 0.95, Align::Left);
+        p.text(carlui_core::t!("Ayarlar", "Settings"), R::new(20.0, 14.0, SIDEBAR - 30.0, 30.0), 15.0, true, TEXT, 0.95, Align::Left);
         // Seçili sayfanın zemini ve vurgu çizgisi sayfalar arasında kayar.
         let sel = Page::ALL.iter().position(|pg| *pg == self.page).unwrap_or(0) as f32;
         let at = tween::to(tween::key("side"), sel, 16.0);
@@ -356,7 +359,7 @@ impl App {
             p.round(r, 7.0, 0xFFFFFF, 0.06);
         }
         p.glyph('\u{E8A5}', R::new(r.x + 10.0, r.y, 24.0, r.h), 14.0, TEXT, 0.6);
-        p.text("Ayar dosyasını aç", R::new(r.x + 42.0, r.y, r.w - 50.0, r.h), 12.5, false, TEXT, 0.6, Align::Left);
+        p.text(carlui_core::t!("Ayar dosyasını aç", "Open settings file"), R::new(r.x + 42.0, r.y, r.w - 50.0, r.h), 12.5, false, TEXT, 0.6, Align::Left);
         p.hit(r, Act::OpenFile);
     }
 }
@@ -498,6 +501,8 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
 
 fn main() -> Result<()> {
     log::init("settings");
+    // Pencere başlığı da doğru dilde çıksın diye ayar en başta okunur.
+    let cfg = config::load();
     let page = std::env::args().skip_while(|a| a != "--page").nth(1).and_then(|s| Page::from_arg(&s)).unwrap_or(Page::General);
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -526,7 +531,7 @@ fn main() -> Result<()> {
         let (ww, wh) = ((1040.0 * dpi) as i32, (740.0 * dpi) as i32);
         let sw = GetSystemMetrics(SM_CXSCREEN);
         let sh = GetSystemMetrics(SM_CYSCREEN);
-        let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), CLASS, w!("CarlUI Ayarları"), WS_OVERLAPPEDWINDOW, (sw - ww) / 2, (sh - wh) / 2, ww, wh, None, None, inst, None)?;
+        let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), CLASS, &HSTRING::from(carlui_core::t!("CarlUI Ayarları", "CarlUI Settings")), WS_OVERLAPPEDWINDOW, (sw - ww) / 2, (sh - wh) / 2, ww, wh, None, None, inst, None)?;
         let on: i32 = 1;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let backdrop = DWMSBT_TRANSIENTWINDOW;
@@ -553,7 +558,7 @@ fn main() -> Result<()> {
             mouse: (-1.0, -1.0),
             hits: Vec::new(),
             accent: glassmenu::accent(),
-            cfg: config::load(),
+            cfg,
             page,
             recording: None,
             error: None,

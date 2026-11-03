@@ -260,7 +260,7 @@ pub fn pick_folder(owner: HWND, start: &Path) -> Option<PathBuf> {
     unsafe {
         let dlg: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
         let _ = dlg.SetOptions(FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
-        let _ = dlg.SetTitle(w!("CarlUI kurulum konumu"));
+        let _ = dlg.SetTitle(&HSTRING::from(t!("CarlUI kurulum konumu", "CarlUI install location")));
         let mut existing = start.to_path_buf();
         while !existing.exists() {
             existing = existing.parent()?.to_path_buf();

@@ -9,6 +9,9 @@
 //! - `process`: süreç listesi, durdur/sürdür/sonlandır.
 //! - `temp`: CPU paket ve çekirdek sıcaklıkları (PawnIO sürücüsü kuruluysa).
 
+#[macro_use]
+extern crate carlui_core;
+
 pub mod bt;
 pub mod cpu;
 pub mod disk;
@@ -19,9 +22,10 @@ pub mod process;
 pub mod ram;
 pub mod temp;
 
-/// Sayıyı "12,3" gibi Türkçe ondalıkla yazar.
+/// Sayıyı seçili dilin ondalık işaretiyle yazar ("12,3" / "12.3").
 pub fn tr(v: f64, digits: usize) -> String {
-    format!("{v:.digits$}").replace('.', ",")
+    let s = format!("{v:.digits$}");
+    if carlui_core::lang::is_tr() { s.replace('.', ",") } else { s }
 }
 
 /// Bayt → "1,2 GB" / "340 MB".

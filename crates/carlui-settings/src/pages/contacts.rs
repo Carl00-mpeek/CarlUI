@@ -17,10 +17,10 @@ fn pick_vcf() -> Option<std::path::PathBuf> {
         let mut ofn = OPENFILENAMEW {
             lStructSize: std::mem::size_of::<OPENFILENAMEW>() as u32,
             hwndOwner: GetActiveWindow(),
-            lpstrFilter: w!("Rehber dosyası (*.vcf)\0*.vcf\0Tüm dosyalar\0*.*\0\0"),
+            lpstrFilter: if carlui_core::lang::is_tr() { w!("Rehber dosyası (*.vcf)\0*.vcf\0Tüm dosyalar\0*.*\0\0") } else { w!("Contacts file (*.vcf)\0*.vcf\0All files\0*.*\0\0") },
             lpstrFile: PWSTR(buf.as_mut_ptr()),
             nMaxFile: buf.len() as u32,
-            lpstrTitle: w!("WhatsApp kişileri için rehber dosyası"),
+            lpstrTitle: if carlui_core::lang::is_tr() { w!("WhatsApp kişileri için rehber dosyası") } else { w!("Contacts file for WhatsApp") },
             Flags: OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR,
             ..Default::default()
         };
@@ -54,8 +54,8 @@ pub fn paint(cfg: &Config, p: &mut P, f: &mut Flow) {
     let c = &cfg.launcher;
     f.toggle(
         p,
-        "WhatsApp kişileri",
-        "\"wp ad mesaj\" kişinin sohbetini mesaj hazır açar. Kapalıysa \"wp\" yalnızca WhatsApp'ı açar.",
+        t!("WhatsApp kişileri", "WhatsApp contacts"),
+        t!("\"wp ad mesaj\" kişinin sohbetini mesaj hazır açar. Kapalıysa \"wp\" yalnızca WhatsApp'ı açar.", "\"wp name message\" opens the chat with the message ready. When off, \"wp\" only opens WhatsApp."),
         c.whatsapp_contacts,
         |c| c.launcher.whatsapp_contacts ^= true,
     );
@@ -64,10 +64,10 @@ pub fn paint(cfg: &Config, p: &mut P, f: &mut Flow) {
     }
     let n = c.whatsapp.len();
     let desc = if n == 0 {
-        "Telefonda Kişiler › Dışa aktar ile .vcf dosyası al, buradan seç. Dosya yalnızca bu bilgisayarda okunur.".to_string()
+        t!("Telefonda Kişiler › Dışa aktar ile .vcf dosyası al, buradan seç. Dosya yalnızca bu bilgisayarda okunur.", "Export a .vcf file from Contacts on your phone and pick it here. The file is only read on this PC.").to_string()
     } else {
-        format!("{n} kişi kayıtlı. Yeni dosya eklenir; aynı adlar güncellenir.")
+        t!(format!("{n} kişi kayıtlı. Yeni dosya eklenir; aynı adlar güncellenir."), format!("{n} contacts saved. A new file adds to them; same names are updated."))
     };
-    let items = [("İçe aktar…", edit(import)), ("Temizle", edit(|c| c.launcher.whatsapp.clear()))];
-    f.choice(p, "Rehber", &desc, if n == 0 { &items[..1] } else { &items }, usize::MAX, 104.0);
+    let items = [(t!("İçe aktar…", "Import…"), edit(import)), (t!("Temizle", "Clear"), edit(|c| c.launcher.whatsapp.clear()))];
+    f.choice(p, t!("Rehber", "Contacts"), &desc, if n == 0 { &items[..1] } else { &items }, usize::MAX, 104.0);
 }

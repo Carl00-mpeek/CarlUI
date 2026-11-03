@@ -105,7 +105,7 @@ fn top_field(app: &App, p: &mut P) {
     let t = R::new(r.x + 44.0, r.y, r.w - 60.0, r.h);
     if typing {
         if app.filter.is_empty() {
-            p.text("Uygulama ara…", t, 14.0, false, TEXT, 0.45, Align::Left);
+            p.text(t!("Uygulama ara…", "Search apps…"), t, 14.0, false, TEXT, 0.45, Align::Left);
         } else {
             p.text(&app.filter, t, 14.0, false, TEXT, 0.95, Align::Left);
         }
@@ -115,7 +115,7 @@ fn top_field(app: &App, p: &mut P) {
         }
         p.hit(r, Act::Scroll);
     } else {
-        p.text("Uygulama, ayar ya da dosya ara", t, 14.0, false, TEXT, 0.5, Align::Left);
+        p.text(t!("Uygulama, ayar ya da dosya ara", "Search apps, settings or files"), t, 14.0, false, TEXT, 0.5, Align::Left);
         p.hit(r, Act::Search);
     }
 }
@@ -124,9 +124,9 @@ fn header(app: &App, p: &mut P) {
     let y = 80.0;
     match app.view {
         View::Home => {
-            p.text("Sabitlenmiş", R::new(GX + 6.0, y, 200.0, 30.0), 14.5, true, TEXT, 0.95, Align::Left);
-            let x = small_button(p, W - GX, '\u{E710}', "Ekle", Act::Add);
-            small_button(p, x, '\u{E8F4}', "Klasör", Act::NewFolder);
+            p.text(t!("Sabitlenmiş", "Pinned"), R::new(GX + 6.0, y, 200.0, 30.0), 14.5, true, TEXT, 0.95, Align::Left);
+            let x = small_button(p, W - GX, '\u{E710}', t!("Ekle", "Add"), Act::Add);
+            small_button(p, x, '\u{E8F4}', t!("Klasör", "Folder"), Act::NewFolder);
         }
         View::Folder(f) => {
             if app.dragging() {
@@ -135,7 +135,7 @@ fn header(app: &App, p: &mut P) {
                 let over = r.contains(p.mouse) || p.mouse.1 < r.y;
                 p.round(r, 9.0, p.accent, if over { 0.30 } else { 0.12 });
                 p.outline(r, 9.0, p.accent, 0.7);
-                p.text("Klasörden çıkarmak için buraya bırak", r, 13.0, false, TEXT, 0.92, Align::Center);
+                p.text(t!("Klasörden çıkarmak için buraya bırak", "Drop here to remove from the folder"), r, 13.0, false, TEXT, 0.92, Align::Center);
                 return;
             }
             icon_button(p, R::new(GX, y, 34.0, 30.0), '\u{E72B}', Act::Back);
@@ -158,17 +158,17 @@ fn header(app: &App, p: &mut P) {
                     p.hit(nr, Act::Rename);
                 }
             }
-            let x = small_button(p, W - GX, '\u{E710}', "Ekle", Act::Add);
-            small_button(p, x, '\u{E7A7}', "Dağıt", Act::Dissolve);
+            let x = small_button(p, W - GX, '\u{E710}', t!("Ekle", "Add"), Act::Add);
+            small_button(p, x, '\u{E7A7}', t!("Dağıt", "Ungroup"), Act::Dissolve);
         }
         View::Add(target) => {
             icon_button(p, R::new(GX, y, 34.0, 30.0), '\u{E72B}', Act::Back);
             let title = match target.and_then(|f| app.store.items.get(f)) {
-                Some(i) => format!("“{}” klasörüne ekle", i.name()),
-                None => "Uygulama ekle".to_string(),
+                Some(i) => t!(format!("“{}” klasörüne ekle", i.name()), format!("Add to “{}”", i.name())),
+                None => t!("Uygulama ekle", "Add app").to_string(),
             };
             p.text(&title, R::new(GX + 46.0, y, 360.0, 30.0), 14.5, true, TEXT, 0.95, Align::Left);
-            p.button(R::new(W - GX - 80.0, y, 80.0, 30.0), None, "Bitti", Act::Back, true, false);
+            p.button(R::new(W - GX - 80.0, y, 80.0, 30.0), None, t!("Bitti", "Done"), Act::Back, true, false);
         }
     }
 }
@@ -213,7 +213,7 @@ fn grid(app: &App, p: &mut P, items: &[Item], folder: Option<usize>) -> f32 {
                 p.round(ic, 12.0, 0xFFFFFF, if hot { 0.10 } else { 0.04 });
                 p.outline(ic, 12.0, 0xFFFFFF, 0.16);
                 p.glyph('\u{E710}', ic, 16.0, TEXT, 0.75);
-                p.text("Ekle", R::new(r.x + 4.0, r.y + 60.0, r.w - 8.0, 22.0), 12.0, false, TEXT, 0.6, Align::Center);
+                p.text(t!("Ekle", "Add"), R::new(r.x + 4.0, r.y + 60.0, r.w - 8.0, 22.0), 12.0, false, TEXT, 0.6, Align::Center);
                 p.hit(r, Act::Add);
             }
         }
@@ -224,7 +224,7 @@ fn grid(app: &App, p: &mut P, items: &[Item], folder: Option<usize>) -> f32 {
 fn list(app: &App, p: &mut P, target: Option<usize>) -> f32 {
     let clip = clip();
     if app.list.is_empty() {
-        let msg = if app.filter.is_empty() { "Uygulama listesi hazırlanıyor…" } else { "Eşleşen uygulama yok" };
+        let msg = if app.filter.is_empty() { t!("Uygulama listesi hazırlanıyor…", "Preparing the app list…") } else { t!("Eşleşen uygulama yok", "No matching apps") };
         p.text(msg, R::new(0.0, GY + 20.0, W, 30.0), 13.0, false, TEXT, 0.55, Align::Center);
         return 0.0;
     }

@@ -33,7 +33,7 @@ impl Palette {
 
     pub fn name(self) -> &'static str {
         match self {
-            Palette::BluePurple => "Mavi-Mor",
+            Palette::BluePurple => t!("Mavi-Mor", "Blue-Purple"),
             Palette::OceanBlue => "Ocean Blue",
             Palette::Violet => "Violet",
             Palette::IceBlue => "Ice Blue",

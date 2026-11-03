@@ -61,7 +61,7 @@ foreach ($W in $Sizes) {
 
     # --- "Carl": buzlu cam ---
     Glow $g $carl ([System.Drawing.Color]::FromArgb(255, 250, 246, 238)) ($size * 0.10) 30
-    $body = New-Object System.Drawing.Drawing2D.LinearGradientBrush $bc, ([System.Drawing.Color]::FromArgb(185, 246, 242, 234)), ([System.Drawing.Color]::FromArgb(45, 226, 220, 210)), 90
+    $body = New-Object System.Drawing.Drawing2D.LinearGradientBrush $bc, ([System.Drawing.Color]::FromArgb(240, 248, 245, 238)), ([System.Drawing.Color]::FromArgb(222, 242, 238, 230)), 90
     $g.FillPath($body, $carl)
     # Üstteki parlak yansıma: yalnızca harflerin üst %42'sinde.
     $g.SetClip($carl)

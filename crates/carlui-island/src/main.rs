@@ -13,6 +13,9 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[macro_use]
+extern crate carlui_core;
+
 mod activate;
 mod audio;
 mod banners;
@@ -160,7 +163,7 @@ struct App {
     /// Üstüne gelince açılan hâl ve saklanan bildirimler.
     hub: hubbing::Hub,
     shots: shots::Shots,
-    /// Spotlight'tan kurulan zamanlayıcı/kronometre (hapta saat yerine görünür).
+    /// Aramadan kurulan zamanlayıcı/kronometre (hapta saat yerine görünür).
     timer: Option<timing::Timer>,
     /// Tarayıcı eklentisinden gelen, karar bekleyen indirmeler (bkz. `offering`).
     offers: VecDeque<bridge::Offer>,
@@ -371,7 +374,7 @@ impl App {
                 }
             }
             let body = apps.iter().take(4).copied().collect::<Vec<_>>().join(", ");
-            let summary = Note { app: "CarlUI".into(), aumid: String::new(), title: format!("Oyundayken {} bildirim geldi", all.len()), body, ..Default::default() };
+            let summary = Note { app: "CarlUI".into(), aumid: String::new(), title: t!(format!("Oyundayken {} bildirim geldi", all.len()), format!("{} notifications arrived while gaming", all.len())), body, ..Default::default() };
             self.pending.push_back(summary);
         }
         let skip = all.len().saturating_sub(3);
@@ -1110,7 +1113,7 @@ fn main() -> Result<()> {
         if let Err(e) = windows::Win32::System::DataExchange::AddClipboardFormatListener(hwnd) {
             carlui_core::warn!("pano dinlenemiyor: {e}");
         }
-        // Spotlight'ta "pano …" araması: gizli olmayan metin kayıtları.
+        // Aramada "pano …" sorgusu: gizli olmayan metin kayıtları.
         let src = store.clone();
         carlui_launcher::clipsearch::set_source(move || {
             src.lock()
@@ -1173,7 +1176,7 @@ fn main() -> Result<()> {
                 shots: shots::Shots::new(hwnd),
                 timer: None,
                 offers: VecDeque::new(),
-                offer_folder: carlui_core::win::downloads_dir().map(|d| d.display().to_string()).unwrap_or_else(|| "İndirilenler".into()),
+                offer_folder: carlui_core::win::downloads_dir().map(|d| d.display().to_string()).unwrap_or_else(|| t!("İndirilenler", "Downloads").into()),
             })
         });
         bridge::start(hwnd.0 as isize);

@@ -74,10 +74,10 @@ pub enum Route {
 impl Route {
     pub fn label(self) -> &'static str {
         match self {
-            Route::All => "Tümü",
-            Route::Performance => "P çekirdekleri",
-            Route::Efficient => "E çekirdekleri",
-            Route::Custom => "Özel",
+            Route::All => t!("Tümü", "All"),
+            Route::Performance => t!("P çekirdekleri", "P-cores"),
+            Route::Efficient => t!("E çekirdekleri", "E-cores"),
+            Route::Custom => t!("Özel", "Custom"),
             Route::Unknown => "—",
         }
     }

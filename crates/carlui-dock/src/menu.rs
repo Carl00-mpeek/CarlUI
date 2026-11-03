@@ -138,17 +138,17 @@ pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Opti
     if app.is_none() {
         // Dock'un boş yeri: yalnızca CarlUI'nin kendi seçenekleri; çıkışlar
         // en üstte (fareden en uzak, yanlışlıkla tıklanmasın).
-        rows.push(item(11, "Görev çubuğunu geri getir ve çık", glyph(G_BACK)));
-        rows.push(item(12, "CarlUI'den çık", glyph(G_POWER)));
+        rows.push(item(11, t!("Görev çubuğunu geri getir ve çık", "Restore taskbar and quit"), glyph(G_BACK)));
+        rows.push(item(12, t!("CarlUI'den çık", "Quit CarlUI"), glyph(G_POWER)));
         rows.push(Row::Sep);
-        rows.push(item(5, "Görev yöneticisi", glyph(G_TASKMGR)));
-        rows.push(item(10, "Ayarlar", glyph(G_SETTINGS)));
+        rows.push(item(5, t!("Görev yöneticisi", "Task manager"), glyph(G_TASKMGR)));
+        rows.push(item(10, t!("Ayarlar", "Settings"), glyph(G_SETTINGS)));
     }
     if let Some(e) = app {
         let logo = |w: &Option<IWICImagingFactory>| w.as_ref().map(|w| app_icon(w, e)).unwrap_or(Icon::None);
         let mut n = 0;
         for g in jump {
-            rows.push(Row::Header(if g.title.is_empty() { "Görevler".into() } else { g.title.clone() }));
+            rows.push(Row::Header(if g.title.is_empty() { t!("Görevler", "Tasks").into() } else { g.title.clone() }));
             for it in &g.items {
                 let icon = wic.as_ref().and_then(|w| jump_icon(w, &it.icon, &it.target)).unwrap_or_else(|| logo(&wic));
                 rows.push(item(JUMP_BASE + n, &it.title, icon));
@@ -157,23 +157,23 @@ pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Opti
             rows.push(Row::Sep);
         }
         rows.push(Row::Label(e.name.clone(), logo(&wic)));
-        rows.push(item(1, "Yeni pencere", glyph(G_NEW_WINDOW)));
+        rows.push(item(1, t!("Yeni pencere", "New window"), glyph(G_NEW_WINDOW)));
         // Açık Explorer'a "sabitle" önerilmez; ama sabitlenmişse kaldırılabilmeli.
         if e.pin.is_some() {
-            rows.push(item(2, "Görev çubuğundan kaldır", glyph(G_UNPIN)));
+            rows.push(item(2, t!("Görev çubuğundan kaldır", "Unpin from dock"), glyph(G_UNPIN)));
         } else if !e.is_explorer() {
-            rows.push(item(2, "Görev çubuğuna sabitle", glyph(G_PIN)));
+            rows.push(item(2, t!("Görev çubuğuna sabitle", "Pin to dock"), glyph(G_PIN)));
         }
         match e.windows.len() {
             0 => {}
-            1 => rows.push(item(3, "Pencereyi kapat", glyph(G_CLOSE))),
-            n => rows.push(item(4, &format!("Tüm pencereleri kapat ({n})"), glyph(G_CLOSE))),
+            1 => rows.push(item(3, t!("Pencereyi kapat", "Close window"), glyph(G_CLOSE))),
+            n => rows.push(item(4, &t!(format!("Tüm pencereleri kapat ({n})"), format!("Close all windows ({n})")), glyph(G_CLOSE))),
         }
         // Durdur/kapat en altta, ikonun hemen üstünde.
         if let (Some(s), false) = (suspended, e.is_explorer()) {
             rows.push(Row::Sep);
-            rows.push(if s { item(7, "Programı sürdür", glyph(G_PLAY)) } else { item(6, "Programı durdur", Icon::Glyph(G_BLOCKED, Some(RED))) });
-            rows.push(item(8, "Programı kapat", Icon::Glyph(G_KILL, Some(RED))));
+            rows.push(if s { item(7, t!("Programı sürdür", "Resume program"), glyph(G_PLAY)) } else { item(6, t!("Programı durdur", "Suspend program"), Icon::Glyph(G_BLOCKED, Some(RED))) });
+            rows.push(item(8, t!("Programı kapat", "Kill program"), Icon::Glyph(G_KILL, Some(RED))));
         }
     }
 

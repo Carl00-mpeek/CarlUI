@@ -29,21 +29,21 @@ impl Key {
 
     pub fn label(self) -> &'static str {
         match self {
-            Key::Search => "Arama",
-            Key::Clipboard => "Pano geçmişi",
-            Key::Screenshot => "Ekran görüntüsü",
-            Key::Converter => "Dönüştürücü",
-            Key::AppNumbers => "Dock uygulamaları",
+            Key::Search => t!("Arama", "Search"),
+            Key::Clipboard => t!("Pano geçmişi", "Clipboard history"),
+            Key::Screenshot => t!("Ekran görüntüsü", "Screenshot"),
+            Key::Converter => t!("Dönüştürücü", "Converter"),
+            Key::AppNumbers => t!("Dock uygulamaları", "Dock apps"),
         }
     }
 
     fn desc(self) -> &'static str {
         match self {
-            Key::Search => "Adadaki aramayı açar/kapatır.",
-            Key::Clipboard => "Kopyalanan öğelerin listesi.",
-            Key::Screenshot => "Ekranın bir bölgesini seçip yakalar.",
-            Key::Converter => "Seçili dosyalar için; tuşlar birlikte basılıp bırakılır.",
-            Key::AppNumbers => "Bu tuşlar + 1…9 dock'taki uygulamayı açar.",
+            Key::Search => t!("Adadaki aramayı açar/kapatır.", "Opens or closes search on the island."),
+            Key::Clipboard => t!("Kopyalanan öğelerin listesi.", "List of copied items."),
+            Key::Screenshot => t!("Ekranın bir bölgesini seçip yakalar.", "Select and capture an area of the screen."),
+            Key::Converter => t!("Seçili dosyalar için; tuşlar birlikte basılıp bırakılır.", "For selected files; press the keys together and release."),
+            Key::AppNumbers => t!("Bu tuşlar + 1…9 dock'taki uygulamayı açar.", "These keys + 1…9 open the app on the dock."),
         }
     }
 
@@ -84,21 +84,21 @@ impl Key {
     pub fn accept(self, cfg: &Config, mods: Mods, vk: u32) -> Result<String, String> {
         if self.mods_only() {
             if vk != 0 {
-                return Err("Yalnızca değiştirici tuşlar olmalı (ör. Win+Alt).".into());
+                return Err(t!("Yalnızca değiştirici tuşlar olmalı (ör. Win+Alt).", "Use modifier keys only (e.g. Win+Alt).").into());
             }
             let s = recorder::mods_text(mods);
             let m = keys::parse_mods(&s)?;
             if self == Key::Converter && [m.ctrl, m.alt, m.shift, m.win].iter().filter(|b| **b).count() < 2 {
-                return Err("En az iki değiştirici gerekli (ör. Win+Alt).".into());
+                return Err(t!("En az iki değiştirici gerekli (ör. Win+Alt).", "At least two modifiers are needed (e.g. Win+Alt).").into());
             }
             return Ok(s);
         }
-        let name = recorder::vk_name(vk).ok_or("Bu tuş kısayolda kullanılamaz.")?;
+        let name = recorder::vk_name(vk).ok_or(t!("Bu tuş kısayolda kullanılamaz.", "This key can't be used in a shortcut."))?;
         let s = if mods.any() { format!("{}+{name}", recorder::mods_text(mods)) } else { name };
         let combo = keys::parse_combo(&s).map_err(|e| format!("{s}: {e}"))?;
         for other in Key::COMBOS.into_iter().filter(|k| *k != self) {
             if keys::parse_combo(&other.get(cfg)).is_ok_and(|o| o == combo) {
-                return Err(format!("{s} zaten \"{}\" için kullanılıyor.", other.label()));
+                return Err(t!(format!("{s} zaten \"{}\" için kullanılıyor.", other.label()), format!("{s} is already used for \"{}\".", other.label())));
             }
         }
         Ok(s)
@@ -110,12 +110,12 @@ fn keycaps(p: &mut P, r: R, value: &str, recording: bool) {
     if recording {
         p.round(r, 7.0, p.accent, 0.18);
         p.outline(r, 7.0, p.accent, 0.9);
-        p.text("Tuşlara bas…  Esc: iptal", r, 12.5, false, TEXT, 0.9, Align::Center);
+        p.text(t!("Tuşlara bas…  Esc: iptal", "Press keys…  Esc: cancel"), r, 12.5, false, TEXT, 0.9, Align::Center);
         return;
     }
     p.round(r, 7.0, 0xFFFFFF, if hot { 0.08 } else { 0.0 });
     if value.trim().is_empty() {
-        p.text("Kapalı", r, 13.0, false, TEXT, 0.45, Align::Center);
+        p.text(t!("Kapalı", "Off"), r, 13.0, false, TEXT, 0.45, Align::Center);
         return;
     }
     let parts: Vec<&str> = value.split('+').map(str::trim).filter(|s| !s.is_empty()).collect();
@@ -156,8 +156,8 @@ fn key_row(app: &App, p: &mut P, f: &mut Flow, key: Key) {
 }
 
 pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
-    f.note(p, "Değiştirmek için tuşlara tıkla ve yeni kısayola bas. ✕ kapatır, ↺ varsayılana döndürür.");
-    f.section(p, "Genel");
+    f.note(p, t!("Değiştirmek için tuşlara tıkla ve yeni kısayola bas. ✕ kapatır, ↺ varsayılana döndürür.", "Click the keys and press a new shortcut to change it. ✕ turns it off, ↺ restores the default."));
+    f.section(p, t!("Genel", "General"));
     key_row(app, p, f, Key::Search);
     let sel = match app.cfg.shortcuts.win_key {
         WinKey::Menu => 0,
@@ -166,11 +166,11 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     };
     f.choice(
         p,
-        "Windows tuşu",
-        "Win'e tek başına basınca ne açılsın.",
+        t!("Windows tuşu", "Windows key"),
+        t!("Win'e tek başına basınca ne açılsın.", "What opens when you press Win on its own."),
         &[
-            ("CarlUI menüsü", edit(|c| c.shortcuts.win_key = WinKey::Menu)),
-            ("Arama", edit(|c| c.shortcuts.win_key = WinKey::Search)),
+            (t!("CarlUI menüsü", "CarlUI menu"), edit(|c| c.shortcuts.win_key = WinKey::Menu)),
+            (t!("Arama", "Search"), edit(|c| c.shortcuts.win_key = WinKey::Search)),
             ("Windows", edit(|c| c.shortcuts.win_key = WinKey::Windows)),
         ],
         sel,
@@ -182,5 +182,5 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.section(p, "Dock");
     key_row(app, p, f, Key::AppNumbers);
     f.y += 6.0;
-    f.note(p, "Fare tuşları kısayol olamaz. Değiştiricisiz tek tuş ve Windows'un temel kısayolları (Ctrl+C, Alt+Tab, Win+L …) kabul edilmez.");
+    f.note(p, t!("Fare tuşları kısayol olamaz. Değiştiricisiz tek tuş ve Windows'un temel kısayolları (Ctrl+C, Alt+Tab, Win+L …) kabul edilmez.", "Mouse buttons can't be shortcuts. A single key without modifiers and core Windows shortcuts (Ctrl+C, Alt+Tab, Win+L …) are not accepted."));
 }

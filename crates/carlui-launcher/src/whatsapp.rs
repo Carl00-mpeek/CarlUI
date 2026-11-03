@@ -50,18 +50,18 @@ impl Links {
     }
 
     fn where_(&self) -> &'static str {
-        if self.app { "WhatsApp uygulamasında" } else { "WhatsApp Web'de" }
+        if self.app { t!("WhatsApp uygulamasında", "In the WhatsApp app") } else { t!("WhatsApp Web'de", "In WhatsApp Web") }
     }
 }
 
 fn open_item(l: &Links) -> Item {
-    let sub = if l.app { "Masaüstü uygulamasını aç" } else { "Varsayılan tarayıcıda aç" };
+    let sub = if l.app { t!("Masaüstü uygulamasını aç", "Open the desktop app") } else { t!("Varsayılan tarayıcıda aç", "Open in default browser") };
     Item::new(if l.app { "WhatsApp" } else { "WhatsApp Web" }, sub, Icon::Glyph(GLYPH), Act::Open(l.home()), "Kısayol")
 }
 
 fn chat_item(l: &Links, name: &str, phone: &str, msg: &str) -> Item {
     let title = if msg.is_empty() { format!("WhatsApp: {name}") } else { format!("WhatsApp → {name}: {msg}") };
-    let sub = format!("{} mesaj hazır açılır; göndermek için orada Enter", l.where_());
+    let sub = t!(format!("{} mesaj hazır açılır; göndermek için orada Enter", l.where_()), format!("{} the message opens ready; press Enter there to send", l.where_()));
     Item::new(title, sub, Icon::Glyph(GLYPH), Act::Open(l.send(phone, msg)), "Kısayol")
 }
 
@@ -127,8 +127,8 @@ fn build(l: &Links, prefix: &str, rest: &str, cx: &Ctx) -> Vec<Item> {
     }
 
     vec![Item::new(
-        format!("WhatsApp: “{first}” rehberde yok"),
-        format!("{} kişi seçerek gönder", l.where_()),
+        t!(format!("WhatsApp: “{first}” rehberde yok"), format!("WhatsApp: “{first}” is not in contacts")),
+        t!(format!("{} kişi seçerek gönder", l.where_()), format!("{}, pick a contact to send", l.where_())),
         Icon::Glyph(GLYPH),
         Act::Open(l.send("", &msg)),
         "Kısayol",

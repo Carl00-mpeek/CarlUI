@@ -32,14 +32,14 @@ impl Page {
 
     pub fn title(self) -> &'static str {
         match self {
-            Page::General => "Genel",
-            Page::Look => "Görünüm",
+            Page::General => carlui_core::t!("Genel", "General"),
+            Page::Look => carlui_core::t!("Görünüm", "Appearance"),
             Page::Dock => "Dock",
-            Page::Island => "Ada ve bildirimler",
-            Page::Search => "Arama",
-            Page::Clipboard => "Pano",
-            Page::Game => "Oyun modu",
-            Page::Shortcuts => "Kısayollar",
+            Page::Island => carlui_core::t!("Ada ve bildirimler", "Island and notifications"),
+            Page::Search => carlui_core::t!("Arama", "Search"),
+            Page::Clipboard => carlui_core::t!("Pano", "Clipboard"),
+            Page::Game => carlui_core::t!("Oyun modu", "Game mode"),
+            Page::Shortcuts => carlui_core::t!("Kısayollar", "Shortcuts"),
         }
     }
 

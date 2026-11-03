@@ -97,12 +97,12 @@ impl Dock {
         let files = recent_downloads(&dir);
         let wic: Option<IWICImagingFactory> = unsafe { CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER).ok() };
         let icon = |p: &str| wic.as_ref().and_then(|w| icons::shell_icon(w, p, 24).ok()).map(Icon::Image).unwrap_or(Icon::None);
-        let mut rows = vec![Row::Item { id: 1, text: "İndirilenler klasörünü aç".into(), icon: Icon::Glyph('\u{E838}', None) }];
+        let mut rows = vec![Row::Item { id: 1, text: t!("İndirilenler klasörünü aç", "Open Downloads folder").into(), icon: Icon::Glyph('\u{E838}', None) }];
         if files.is_empty() {
             rows.push(Row::Sep);
-            rows.push(Row::Label("Henüz indirilen dosya yok".into(), Icon::None));
+            rows.push(Row::Label(t!("Henüz indirilen dosya yok", "No downloads yet").into(), Icon::None));
         } else {
-            rows.push(Row::Header("Son indirilenler".into()));
+            rows.push(Row::Header(t!("Son indirilenler", "Recent downloads").into()));
             // En yeni en altta: ikona en yakın.
             for (n, p) in files.iter().enumerate().rev() {
                 let name = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
@@ -123,11 +123,11 @@ impl Dock {
     /// Çöp kutusu sağ tık menüsü: aç / boşalt.
     pub fn trash_menu(&mut self, i: usize) {
         let n = trash_count();
-        let mut rows = vec![Row::Item { id: 1, text: "Aç".into(), icon: Icon::Glyph('\u{E8E5}', None) }];
+        let mut rows = vec![Row::Item { id: 1, text: t!("Aç", "Open").into(), icon: Icon::Glyph('\u{E8E5}', None) }];
         if n > 0 {
-            rows.push(Row::Item { id: 2, text: format!("Boşalt ({n} öğe)"), icon: Icon::Glyph('\u{E74D}', Some(0xFF6B6B)) });
+            rows.push(Row::Item { id: 2, text: t!(format!("Boşalt ({n} öğe)"), format!("Empty ({n} items)")), icon: Icon::Glyph('\u{E74D}', Some(0xFF6B6B)) });
         } else {
-            rows.push(Row::Label("Geri Dönüşüm Kutusu boş".into(), Icon::None));
+            rows.push(Row::Label(t!("Geri Dönüşüm Kutusu boş", "Recycle Bin is empty").into(), Icon::None));
         }
         match self.menu(i, rows) {
             1 => open(RECYCLE_BIN),

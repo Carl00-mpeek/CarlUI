@@ -234,46 +234,47 @@ impl Index {
 
 pub struct Setting {
     pub name: &'static str,
+    pub en: &'static str,
     pub uri: &'static str,
     pub keywords: &'static str,
     pub glyph: char,
 }
 
 pub const SETTINGS: &[Setting] = &[
-    Setting { name: "Ayarlar", uri: "ms-settings:", keywords: "settings sistem ayar", glyph: '\u{E713}' },
-    Setting { name: "Ekran", uri: "ms-settings:display", keywords: "display çözünürlük ölçek parlaklık hdr monitör", glyph: '\u{E7F4}' },
-    Setting { name: "Ses", uri: "ms-settings:sound", keywords: "sound hoparlör mikrofon çıkış giriş", glyph: '\u{E767}' },
-    Setting { name: "Ses karıştırıcısı", uri: "ms-settings:apps-volume", keywords: "volume mixer uygulama sesi", glyph: '\u{E767}' },
-    Setting { name: "Bildirimler", uri: "ms-settings:notifications", keywords: "notifications rahatsız etmeyin odak", glyph: '\u{EA8F}' },
-    Setting { name: "Güç ve pil", uri: "ms-settings:powersleep", keywords: "power battery uyku enerji pil", glyph: '\u{E83F}' },
-    Setting { name: "Depolama", uri: "ms-settings:storagesense", keywords: "storage disk alan temizlik", glyph: '\u{EDA2}' },
-    Setting { name: "Bluetooth ve cihazlar", uri: "ms-settings:bluetooth", keywords: "bluetooth cihaz kulaklık eşleştir", glyph: '\u{E702}' },
-    Setting { name: "Fare", uri: "ms-settings:mousetouchpad", keywords: "mouse imleç touchpad dokunmatik", glyph: '\u{E962}' },
-    Setting { name: "Klavye", uri: "ms-settings:keyboard", keywords: "keyboard yazma dil", glyph: '\u{E765}' },
-    Setting { name: "Yazıcılar ve tarayıcılar", uri: "ms-settings:printers", keywords: "printer yazıcı", glyph: '\u{E749}' },
-    Setting { name: "Wi-Fi", uri: "ms-settings:network-wifi", keywords: "wifi kablosuz ağ internet", glyph: '\u{E701}' },
-    Setting { name: "Ağ ve internet", uri: "ms-settings:network", keywords: "network ethernet vpn proxy", glyph: '\u{E774}' },
-    Setting { name: "VPN", uri: "ms-settings:network-vpn", keywords: "vpn", glyph: '\u{E705}' },
-    Setting { name: "Kişiselleştirme", uri: "ms-settings:personalization", keywords: "personalization tema renk", glyph: '\u{E771}' },
-    Setting { name: "Arka plan", uri: "ms-settings:personalization-background", keywords: "wallpaper duvar kağıdı arka plan", glyph: '\u{E91B}' },
-    Setting { name: "Renkler", uri: "ms-settings:colors", keywords: "colors vurgu koyu açık mod", glyph: '\u{E790}' },
-    Setting { name: "Yüklü uygulamalar", uri: "ms-settings:appsfeatures", keywords: "apps kaldır program uygulamalar", glyph: '\u{E71D}' },
-    Setting { name: "Varsayılan uygulamalar", uri: "ms-settings:defaultapps", keywords: "default tarayıcı varsayılan", glyph: '\u{E71D}' },
-    Setting { name: "Başlangıç uygulamaları", uri: "ms-settings:startupapps", keywords: "startup açılış başlangıç", glyph: '\u{E7B5}' },
-    Setting { name: "Hesaplar", uri: "ms-settings:yourinfo", keywords: "account hesap profil", glyph: '\u{E77B}' },
-    Setting { name: "Oturum açma seçenekleri", uri: "ms-settings:signinoptions", keywords: "pin parola şifre hello", glyph: '\u{E72E}' },
-    Setting { name: "Tarih ve saat", uri: "ms-settings:dateandtime", keywords: "date time saat dilimi", glyph: '\u{E787}' },
-    Setting { name: "Dil ve bölge", uri: "ms-settings:regionlanguage", keywords: "language bölge dil", glyph: '\u{F2B7}' },
-    Setting { name: "Oyun modu", uri: "ms-settings:gaming-gamemode", keywords: "game oyun", glyph: '\u{E7FC}' },
-    Setting { name: "Erişilebilirlik", uri: "ms-settings:easeofaccess", keywords: "accessibility erişim", glyph: '\u{E776}' },
-    Setting { name: "Gizlilik ve güvenlik", uri: "ms-settings:privacy", keywords: "privacy izin güvenlik", glyph: '\u{E72E}' },
-    Setting { name: "Windows Güvenliği", uri: "windowsdefender:", keywords: "defender virüs antivirüs güvenlik duvarı", glyph: '\u{E83D}' },
-    Setting { name: "Windows Update", uri: "ms-settings:windowsupdate", keywords: "update güncelleme", glyph: '\u{E895}' },
-    Setting { name: "Hakkında", uri: "ms-settings:about", keywords: "about sistem bilgisi bilgisayar adı", glyph: '\u{E946}' },
-    Setting { name: "Kurtarma", uri: "ms-settings:recovery", keywords: "recovery sıfırla", glyph: '\u{E777}' },
-    Setting { name: "Gece ışığı", uri: "ms-settings:nightlight", keywords: "night light mavi ışık", glyph: '\u{E708}' },
-    Setting { name: "Denetim Masası", uri: "control", keywords: "control panel", glyph: '\u{E713}' },
-    Setting { name: "Görev Yöneticisi", uri: "taskmgr", keywords: "task manager işlem süreç", glyph: '\u{E9D9}' },
+    Setting { name: "Ayarlar", en: "Settings", uri: "ms-settings:", keywords: "settings sistem ayar", glyph: '\u{E713}' },
+    Setting { name: "Ekran", en: "Display", uri: "ms-settings:display", keywords: "display çözünürlük ölçek parlaklık hdr monitör", glyph: '\u{E7F4}' },
+    Setting { name: "Ses", en: "Sound", uri: "ms-settings:sound", keywords: "sound hoparlör mikrofon çıkış giriş", glyph: '\u{E767}' },
+    Setting { name: "Ses karıştırıcısı", en: "Volume mixer", uri: "ms-settings:apps-volume", keywords: "volume mixer uygulama sesi", glyph: '\u{E767}' },
+    Setting { name: "Bildirimler", en: "Notifications", uri: "ms-settings:notifications", keywords: "notifications rahatsız etmeyin odak", glyph: '\u{EA8F}' },
+    Setting { name: "Güç ve pil", en: "Power & battery", uri: "ms-settings:powersleep", keywords: "power battery uyku enerji pil", glyph: '\u{E83F}' },
+    Setting { name: "Depolama", en: "Storage", uri: "ms-settings:storagesense", keywords: "storage disk alan temizlik", glyph: '\u{EDA2}' },
+    Setting { name: "Bluetooth ve cihazlar", en: "Bluetooth & devices", uri: "ms-settings:bluetooth", keywords: "bluetooth cihaz kulaklık eşleştir", glyph: '\u{E702}' },
+    Setting { name: "Fare", en: "Mouse", uri: "ms-settings:mousetouchpad", keywords: "mouse imleç touchpad dokunmatik", glyph: '\u{E962}' },
+    Setting { name: "Klavye", en: "Keyboard", uri: "ms-settings:keyboard", keywords: "keyboard yazma dil", glyph: '\u{E765}' },
+    Setting { name: "Yazıcılar ve tarayıcılar", en: "Printers & scanners", uri: "ms-settings:printers", keywords: "printer yazıcı", glyph: '\u{E749}' },
+    Setting { name: "Wi-Fi", en: "Wi-Fi", uri: "ms-settings:network-wifi", keywords: "wifi kablosuz ağ internet", glyph: '\u{E701}' },
+    Setting { name: "Ağ ve internet", en: "Network & internet", uri: "ms-settings:network", keywords: "network ethernet vpn proxy", glyph: '\u{E774}' },
+    Setting { name: "VPN", en: "VPN", uri: "ms-settings:network-vpn", keywords: "vpn", glyph: '\u{E705}' },
+    Setting { name: "Kişiselleştirme", en: "Personalization", uri: "ms-settings:personalization", keywords: "personalization tema renk", glyph: '\u{E771}' },
+    Setting { name: "Arka plan", en: "Background", uri: "ms-settings:personalization-background", keywords: "wallpaper duvar kağıdı arka plan", glyph: '\u{E91B}' },
+    Setting { name: "Renkler", en: "Colors", uri: "ms-settings:colors", keywords: "colors vurgu koyu açık mod", glyph: '\u{E790}' },
+    Setting { name: "Yüklü uygulamalar", en: "Installed apps", uri: "ms-settings:appsfeatures", keywords: "apps kaldır program uygulamalar", glyph: '\u{E71D}' },
+    Setting { name: "Varsayılan uygulamalar", en: "Default apps", uri: "ms-settings:defaultapps", keywords: "default tarayıcı varsayılan", glyph: '\u{E71D}' },
+    Setting { name: "Başlangıç uygulamaları", en: "Startup apps", uri: "ms-settings:startupapps", keywords: "startup açılış başlangıç", glyph: '\u{E7B5}' },
+    Setting { name: "Hesaplar", en: "Accounts", uri: "ms-settings:yourinfo", keywords: "account hesap profil", glyph: '\u{E77B}' },
+    Setting { name: "Oturum açma seçenekleri", en: "Sign-in options", uri: "ms-settings:signinoptions", keywords: "pin parola şifre hello", glyph: '\u{E72E}' },
+    Setting { name: "Tarih ve saat", en: "Date & time", uri: "ms-settings:dateandtime", keywords: "date time saat dilimi", glyph: '\u{E787}' },
+    Setting { name: "Dil ve bölge", en: "Language & region", uri: "ms-settings:regionlanguage", keywords: "language bölge dil", glyph: '\u{F2B7}' },
+    Setting { name: "Oyun modu", en: "Game Mode", uri: "ms-settings:gaming-gamemode", keywords: "game oyun", glyph: '\u{E7FC}' },
+    Setting { name: "Erişilebilirlik", en: "Accessibility", uri: "ms-settings:easeofaccess", keywords: "accessibility erişim", glyph: '\u{E776}' },
+    Setting { name: "Gizlilik ve güvenlik", en: "Privacy & security", uri: "ms-settings:privacy", keywords: "privacy izin güvenlik", glyph: '\u{E72E}' },
+    Setting { name: "Windows Güvenliği", en: "Windows Security", uri: "windowsdefender:", keywords: "defender virüs antivirüs güvenlik duvarı", glyph: '\u{E83D}' },
+    Setting { name: "Windows Update", en: "Windows Update", uri: "ms-settings:windowsupdate", keywords: "update güncelleme", glyph: '\u{E895}' },
+    Setting { name: "Hakkında", en: "About", uri: "ms-settings:about", keywords: "about sistem bilgisi bilgisayar adı", glyph: '\u{E946}' },
+    Setting { name: "Kurtarma", en: "Recovery", uri: "ms-settings:recovery", keywords: "recovery sıfırla", glyph: '\u{E777}' },
+    Setting { name: "Gece ışığı", en: "Night light", uri: "ms-settings:nightlight", keywords: "night light mavi ışık", glyph: '\u{E708}' },
+    Setting { name: "Denetim Masası", en: "Control Panel", uri: "control", keywords: "control panel", glyph: '\u{E713}' },
+    Setting { name: "Görev Yöneticisi", en: "Task Manager", uri: "taskmgr", keywords: "task manager işlem süreç", glyph: '\u{E9D9}' },
 ];
 
 /// Sistem klasörleri: (ad, yol, anahtar kelimeler).
@@ -281,23 +282,23 @@ pub fn places() -> Vec<(String, String, &'static str)> {
     let home = std::env::var("USERPROFILE").unwrap_or_default();
     let known = |id: &GUID| unsafe { SHGetKnownFolderPath(id, KF_FLAG_DEFAULT, None).map(pwstr_take).unwrap_or_default() };
     let mut v = vec![
-        ("Masaüstü".to_string(), known(&FOLDERID_Desktop), "desktop"),
-        ("Belgeler".to_string(), known(&FOLDERID_Documents), "documents dökümanlar"),
-        ("İndirilenler".to_string(), known(&FOLDERID_Downloads), "downloads indirme"),
-        ("Resimler".to_string(), known(&FOLDERID_Pictures), "pictures fotoğraflar"),
-        ("Müzik".to_string(), known(&FOLDERID_Music), "music"),
-        ("Videolar".to_string(), known(&FOLDERID_Videos), "videos"),
-        ("Kullanıcı klasörü".to_string(), home, "home kişisel"),
-        ("Dosya Gezgini".to_string(), "explorer:".into(), "explorer file manager klasör"),
-        ("Bu bilgisayar".to_string(), "shell:MyComputerFolder".into(), "this pc bilgisayarım sürücüler"),
-        ("Geri Dönüşüm Kutusu".to_string(), "shell:RecycleBinFolder".into(), "recycle bin çöp"),
+        (t!("Masaüstü", "Desktop").to_string(), known(&FOLDERID_Desktop), "desktop"),
+        (t!("Belgeler", "Documents").to_string(), known(&FOLDERID_Documents), "documents dökümanlar"),
+        (t!("İndirilenler", "Downloads").to_string(), known(&FOLDERID_Downloads), "downloads indirme"),
+        (t!("Resimler", "Pictures").to_string(), known(&FOLDERID_Pictures), "pictures fotoğraflar"),
+        (t!("Müzik", "Music").to_string(), known(&FOLDERID_Music), "music"),
+        (t!("Videolar", "Videos").to_string(), known(&FOLDERID_Videos), "videos"),
+        (t!("Kullanıcı klasörü", "User folder").to_string(), home, "home kişisel"),
+        (t!("Dosya Gezgini", "File Explorer").to_string(), "explorer:".into(), "explorer file manager klasör"),
+        (t!("Bu bilgisayar", "This PC").to_string(), "shell:MyComputerFolder".into(), "this pc bilgisayarım sürücüler"),
+        (t!("Geri Dönüşüm Kutusu", "Recycle Bin").to_string(), "shell:RecycleBinFolder".into(), "recycle bin çöp"),
     ];
     unsafe {
         let mask = windows::Win32::Storage::FileSystem::GetLogicalDrives();
         for i in 0..26u32 {
             if mask & (1 << i) != 0 {
                 let letter = (b'A' + i as u8) as char;
-                v.push((format!("Yerel Disk ({letter}:)"), format!("{letter}:\\"), "drive sürücü disk"));
+                v.push((t!(format!("Yerel Disk ({letter}:)"), format!("Local Disk ({letter}:)")), format!("{letter}:\\"), "drive sürücü disk"));
             }
         }
     }

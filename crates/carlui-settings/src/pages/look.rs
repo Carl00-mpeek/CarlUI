@@ -14,11 +14,11 @@ fn hex(c: Rgba) -> u32 {
 
 pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     let c = &app.cfg.theme;
-    f.section(p, "Renk");
+    f.section(p, t!("Renk", "Color"));
     let sw = 30.0;
     let gap = 10.0;
     let n = Palette::ALL.len() as f32;
-    let r = f.row(p, "Vurgu rengi", c.palette.name(), n * (sw + gap));
+    let r = f.row(p, t!("Vurgu rengi", "Accent color"), c.palette.name(), n * (sw + gap));
     let mut x = r.right() - 16.0 - n * (sw + gap) + gap;
     for pal in Palette::ALL {
         let s = R::new(x, r.y + (r.h - sw) / 2.0, sw, sw);
@@ -35,10 +35,10 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         x += sw + gap;
     }
 
-    f.section(p, "Cam ve hareket");
-    f.slider(p, "Cam yoğunluğu", "Düşük: daha saydam, yüksek: daha koyu ve okunaklı.", c.glass_density, 0.0, 1.0, 0.05, |v| format!("%{:.0}", v * 100.0), |c, v| c.theme.glass_density = v);
-    f.slider(p, "Köşe yuvarlaklığı", "Dock, ada ve panellerin köşeleri.", c.corner_radius, 0.5, 2.0, 0.1, |v| format!("{v:.1}×").replace('.', ","), |c, v| c.theme.corner_radius = v);
-    f.slider(p, "Animasyon hızı", "2× iki kat hızlı; 0,5× yavaş ve yumuşak.", c.animation_speed, 0.5, 2.5, 0.1, |v| format!("{v:.1}×").replace('.', ","), |c, v| c.theme.animation_speed = v);
+    f.section(p, t!("Cam ve hareket", "Glass and motion"));
+    f.slider(p, t!("Cam yoğunluğu", "Glass density"), t!("Düşük: daha saydam, yüksek: daha koyu ve okunaklı.", "Low: more see-through. High: darker and easier to read."), c.glass_density, 0.0, 1.0, 0.05, |v| t!(format!("%{:.0}", v * 100.0), format!("{:.0}%", v * 100.0)), |c, v| c.theme.glass_density = v);
+    f.slider(p, t!("Köşe yuvarlaklığı", "Corner roundness"), t!("Dock, ada ve panellerin köşeleri.", "Corners of the dock, island and panels."), c.corner_radius, 0.5, 2.0, 0.1, |v| t!(format!("{v:.1}×").replace('.', ","), format!("{v:.1}×")), |c, v| c.theme.corner_radius = v);
+    f.slider(p, t!("Animasyon hızı", "Animation speed"), t!("2× iki kat hızlı; 0,5× yavaş ve yumuşak.", "2× is twice as fast; 0.5× is slow and smooth."), c.animation_speed, 0.5, 2.5, 0.1, |v| t!(format!("{v:.1}×").replace('.', ","), format!("{v:.1}×")), |c, v| c.theme.animation_speed = v);
 
     super::cursor::paint(&app.cfg, p, f);
 }

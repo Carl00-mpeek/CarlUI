@@ -143,7 +143,7 @@ impl Win {
         self.text(&rt, &g.to_string(), D2D_RECT_F { left: 14.0, top: 10.0, right: 40.0, bottom: 36.0 }, 16.0, false, gc, 1.0, false, true);
         self.text(&rt, &st.title, D2D_RECT_F { left: 46.0, top: 10.0, right: W - 96.0, bottom: 36.0 }, 13.5, true, 0xFFFFFF, 0.95, false, false);
         if !st.done {
-            self.text(&rt, &format!("%{:.0}", st.frac * 100.0), D2D_RECT_F { left: W - 100.0, top: 10.0, right: W - 46.0, bottom: 36.0 }, 13.0, false, 0xFFFFFF, 0.75, true, false);
+            self.text(&rt, &carlui_core::lang::pct(st.frac * 100.0), D2D_RECT_F { left: W - 100.0, top: 10.0, right: W - 46.0, bottom: 36.0 }, 13.0, false, 0xFFFFFF, 0.75, true, false);
         }
         if self.hover_x {
             self.round(&rt, close_rect(), 5.0, 0xFFFFFF, 0.10);
@@ -255,7 +255,7 @@ pub fn run(shared: Arc<Shared>, accent: u32, start: impl FnOnce()) -> Result<()>
         RegisterClassExW(&wc);
         let mut work = RECT::default();
         let _ = SystemParametersInfoW(SPI_GETWORKAREA, 0, Some(&mut work as *mut _ as _), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0));
-        let hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, w!("CarlUI.Convert"), w!("Dönüştürücü"), WS_POPUP, 0, 0, 10, 10, None, None, inst, None)?;
+        let hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, w!("CarlUI.Convert"), w!("CarlUI Converter"), WS_POPUP, 0, 0, 10, 10, None, None, inst, None)?;
         let scale = GetDpiForWindow(hwnd).max(96) as f32 / 96.0;
         let (pw, ph) = ((W * scale) as i32, (H * scale) as i32);
         // Dock ekranın altında, iş alanı çoğu zaman tam ekran: dock'un üstüne koy.
