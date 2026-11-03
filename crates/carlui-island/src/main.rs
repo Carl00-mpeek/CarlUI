@@ -27,6 +27,7 @@ mod dlman;
 mod offering;
 mod downloads;
 mod editor;
+mod epic;
 mod hubbing;
 mod island;
 mod launcher;
@@ -84,7 +85,7 @@ use windows::{
 const WM_MOUSELEAVE: u32 = 0x02A3;
 const WM_APP_BUS: u32 = WM_APP + 1;
 const WM_APP_MEDIA: u32 = WM_APP + 2;
-const WM_APP_NOTE: u32 = WM_APP + 3;
+pub(crate) const WM_APP_NOTE: u32 = WM_APP + 3;
 const WM_APP_CONFIG: u32 = WM_APP + 4;
 const WM_APP_FG: u32 = WM_APP + 5;
 const WM_APP_PEEK: u32 = WM_APP + 6;
@@ -690,7 +691,9 @@ impl App {
         match view {
             View::Note => {
                 if let Some(n) = self.note.take() {
-                    if let Some(f) = &n.file {
+                    if let Some(r) = &n.update {
+                        update::apply(self.island.hwnd.0 as isize, WM_APP_NOTE, self.notes_in.clone(), r.clone());
+                    } else if let Some(f) = &n.file {
                         dlman::open(f);
                     } else if !activate::open_app(&n.aumid) && !n.app.is_empty() {
                         activate::open_app(&n.app);

@@ -221,7 +221,9 @@ impl App {
             Hit::NoteRow(i) => {
                 if let Some(k) = self.hub.index(i) {
                     let n = self.hub.notes[k].clone();
-                    if let Some(p) = &n.shot {
+                    if let Some(r) = &n.update {
+                        crate::update::apply(self.island.hwnd.0 as isize, crate::WM_APP_NOTE, self.notes_in.clone(), r.clone());
+                    } else if let Some(p) = &n.shot {
                         crate::shots::open(p);
                     } else if let Some(f) = &n.file {
                         crate::dlman::open(f);

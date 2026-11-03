@@ -14,6 +14,9 @@
 //!   --headless             pencere açmadan çalış: --test ile deneme, tek başına
 //!                          varsayılan seçeneklerle sessiz kurulum
 //!   --wallpaper            sessiz kurulumda CarlUI duvar kâğıdını da uygula
+//!   --update               adadan güncelleme: mevcut kurulumun üstüne sessizce
+//!                          kurar, yalnızca var olan kısayolları yeniler, yönetici
+//!                          izni istemez, sonunda CarlUI'yi yeniden açar
 //!   --snapshot <sayfa> <png>  sayfayı pencere açmadan PNG'ye çiz (welcome, work, done, confirm)
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -130,6 +133,7 @@ struct Args {
     headless: bool,
     temp: bool,
     wallpaper: bool,
+    update: bool,
     snapshot: Option<(String, PathBuf)>,
 }
 
@@ -145,6 +149,7 @@ fn parse_args() -> Args {
         headless: has("--headless"),
         temp: has("--temp"),
         wallpaper: has("--wallpaper"),
+        update: has("--update"),
         snapshot: after("--snapshot", 1).zip(after("--snapshot", 2).map(PathBuf::from)),
     }
 }
@@ -506,6 +511,24 @@ fn main() -> Result<()> {
     if args.headless && args.dry {
         let opts = install::Options { dir, desktop: false, launch: false, sensors: false, firefox: false, wallpaper: false, dry: true };
         headless(args.mode, opts, false);
+        return Ok(());
+    }
+    if args.update {
+        // Kullanıcının önceki seçimleri korunur: silinmiş masaüstü kısayolu geri
+        // gelmez, sıcaklık görevi zaten kurulu (UAC sorulmaz), Firefox kaydı yalnızca
+        // önceden varsa yenilenir.
+        let firefox = payload::XPI.is_some() && shell::reg_get(windows::Win32::System::Registry::HKEY_CURRENT_USER, shell::FIREFOX_KEY, shell::EXT_ID).is_some();
+        let desktop = shell::desktop_link().is_some_and(|l| l.exists());
+        let exe = dir.join("carlui.exe");
+        let opts = install::Options { dir, desktop, launch: true, sensors: false, firefox, wallpaper: false, dry: false };
+        headless(Mode::Install, opts, false);
+        // Kurulum yarıda kaldıysa da kullanıcı CarlUI'siz kalmasın.
+        if !shell::carlui_running() && exe.exists() {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            if !shell::carlui_running() {
+                shell::open(&exe.display().to_string(), "");
+            }
+        }
         return Ok(());
     }
     if args.headless && args.mode == Mode::Install {

@@ -64,7 +64,19 @@ fn detail(app: &str, got: u64, rx: f64, dt: f64) -> (String, u64, u64, f64) {
             }
             None => (app.into(), got, 0, rx),
         },
+        // Epic: yalnızca oyunun adı bilinir; inen ve hız ağdan.
+        "Epic Games" => (crate::epic::downloading().unwrap_or_else(|| app.into()), got, 0, rx),
         _ => (app.into(), got, 0, rx),
+    }
+}
+
+/// Oyun mağazası indirmeyi bitirdi mi (kendi kaydına göre). `None`: bu
+/// program için kayıt okunmuyor, alımın kesilmesi yeterli.
+fn launcher_done(app: &str, game: &str) -> Option<bool> {
+    match app {
+        "Steam" => Some(crate::steam::complete(game)),
+        "Epic Games" if game != app => Some(crate::epic::complete(game)),
+        _ => None,
     }
 }
 
@@ -190,8 +202,8 @@ impl Watch {
 
 /// Bildirim için en az bu kadar inmiş olmalı (kısa güncelleme yoklamaları sayılmasın).
 const NOTE_MIN: u64 = 20 * 1024 * 1024;
-/// Steam indirme bitince bir süre dosyaları yerleştirir; manifest bu kadar beklenir.
-const STEAM_WAIT: Duration = Duration::from_secs(20 * 60);
+/// Steam/Epic indirme bitince bir süre dosyaları yerleştirir; kayıt bu kadar beklenir.
+const LAUNCHER_WAIT: Duration = Duration::from_secs(20 * 60);
 
 fn note(hwnd: isize, msg: u32, notes: &Mutex<VecDeque<Note>>, body: String) {
     if !carlui_core::config::load().download.others {
@@ -218,7 +230,8 @@ pub fn start(hwnd: isize, msg: u32, notes: Arc<Mutex<VecDeque<Note>>>) {
             let mut last = Instant::now();
             let mut was = false;
             let mut prev: Option<(String, (String, u64, u64, f64))> = None;
-            let mut steam_wait: Option<(String, u64, Instant)> = None;
+            // Oyun mağazası kaydının "tamamlandı" demesi beklenen indirme: (program, oyun, inen, başlangıç).
+            let mut wait: Option<(String, String, u64, Instant)> = None;
             loop {
                 std::thread::sleep(Duration::from_secs(1));
                 let dt = last.elapsed().as_secs_f64().max(0.1);
@@ -229,22 +242,23 @@ pub fn start(hwnd: isize, msg: u32, notes: Arc<Mutex<VecDeque<Note>>>) {
                 });
                 match (&prev, &cur) {
                     (Some((app, (name, got, total, _))), None) => {
-                        if app == "Steam" && *total > 0 {
-                            steam_wait = Some((name.clone(), *total, Instant::now()));
+                        let size = if *total > 0 { *total } else { *got };
+                        if launcher_done(app, name).is_some() {
+                            wait = Some((app.clone(), name.clone(), size, Instant::now()));
                         } else if *got >= NOTE_MIN {
                             note(hwnd, msg, &notes, format!("{name} · {}", carlui_sys::bytes(*got as f64)));
                         }
                     }
                     // Aynı oyun yeniden inmeye başladıysa bekleyen denetim gereksiz.
-                    (_, Some((_, (name, ..)))) if steam_wait.as_ref().is_some_and(|s| &s.0 == name) => steam_wait = None,
+                    (_, Some((_, (name, ..)))) if wait.as_ref().is_some_and(|w| &w.1 == name) => wait = None,
                     _ => {}
                 }
-                if let Some((game, total, since)) = &steam_wait {
-                    if crate::steam::complete(game) {
-                        note(hwnd, msg, &notes, format!("{game} · Steam · {}", carlui_sys::bytes(*total as f64)));
-                        steam_wait = None;
-                    } else if since.elapsed() > STEAM_WAIT {
-                        steam_wait = None;
+                if let Some((app, game, size, since)) = &wait {
+                    if launcher_done(app, game) == Some(true) {
+                        note(hwnd, msg, &notes, format!("{game} · {app} · {}", carlui_sys::bytes(*size as f64)));
+                        wait = None;
+                    } else if since.elapsed() > LAUNCHER_WAIT {
+                        wait = None;
                     }
                 }
                 let now = cur.as_ref().map(|c| c.1.clone());

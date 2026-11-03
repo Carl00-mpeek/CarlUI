@@ -13,6 +13,7 @@
 #[macro_use]
 extern crate carlui_core;
 
+mod admin;
 mod draw;
 mod groups;
 mod pages;
@@ -64,6 +65,9 @@ pub enum Tab {
     Disk,
 }
 
+/// Kenar çubuğu sırası; `--tab N` bu sıradaki sekmeyle açar.
+const TABS: [Tab; 7] = [Tab::Processes, Tab::Startup, Tab::Cpu, Tab::Routing, Tab::Gpu, Tab::Ram, Tab::Disk];
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SortCol {
     Name,
@@ -102,6 +106,8 @@ pub enum Act {
     Mode(power::Mode),
     Route(power::Route),
     Eco,
+    /// Kenar çubuğunun altındaki "Yönetici olarak çalıştır".
+    RunAsAdmin,
     /// Tablonun boş/gövde alanı (tekerlek kaydırma hedefi).
     Scroll,
 }
@@ -137,6 +143,8 @@ pub struct App {
     pub mode: power::Mode,
     pub routes: HashMap<u32, (power::Route, Option<bool>)>,
     message: Option<(String, Instant)>,
+    /// Yönetici yetkisiyle mi çalışıyoruz (düğme yerine rozet gösterilir).
+    admin: bool,
 }
 
 thread_local! {
@@ -339,6 +347,17 @@ impl App {
                     }
                 }
             }
+            Act::RunAsAdmin => {
+                let tab = TABS.iter().position(|t| *t == self.tab).unwrap_or(0);
+                if admin::relaunch(tab) {
+                    info!("yönetici olarak yeniden açılıyor");
+                    unsafe {
+                        let _ = DestroyWindow(self.hwnd);
+                    }
+                    return;
+                }
+                self.say(t!("Yönetici izni verilmedi", "Admin permission was not given"));
+            }
             Act::Scroll => {}
         }
         self.invalidate();
@@ -419,7 +438,7 @@ impl App {
         let gpu = sm.gpu.as_ref().map(|g| format!("{} · {:.0}°", carlui_core::lang::pct(g.load), g.temp)).unwrap_or_default();
         let disk = sm.disks.iter().map(|d| d.active).fold(0.0f32, f32::max);
         let cpu_t = sm.temps.as_ref().map(|t| format!(" · {:.0}°", t.package)).unwrap_or_default();
-        let tabs: [(Tab, char, &str, String); 7] = [
+        let tabs: [(Tab, char, &str, String); TABS.len()] = [
             (Tab::Processes, '\u{E9F5}', t!("İşlemler", "Processes"), format!("{}", self.procs.rows.len())),
             (Tab::Startup, '\u{E7E8}', t!("Başlangıç", "Startup"), String::new()),
             (Tab::Cpu, '\u{E950}', "CPU", format!("{}{cpu_t}", carlui_core::lang::pct(sm.now.usage))),
@@ -441,7 +460,18 @@ impl App {
             p.text(value, R::new(r.x + 42.0, r.y, r.w - 52.0, r.h), 12.0, false, TEXT, 0.5, Align::Right);
             p.hit(r, Act::Tab(*t));
         }
-        let _ = h;
+        // En altta: yönetici değilsek düğme, yöneticiysek yalnızca rozet.
+        let r = R::new(10.0, h - 52.0, SIDEBAR - 20.0, 38.0);
+        if self.admin {
+            p.glyph('\u{EA18}', R::new(r.x + 10.0, r.y, 24.0, r.h), 15.0, self.accent, 1.0);
+            p.text(t!("Yönetici olarak çalışıyor", "Running as admin"), R::new(r.x + 42.0, r.y, r.w - 50.0, r.h), 12.5, false, TEXT, 0.6, Align::Left);
+        } else {
+            p.round(r, 7.0, 0xFFFFFF, if p.hover(r) { 0.12 } else { 0.06 });
+            p.outline(r, 7.0, 0xFFFFFF, 0.10);
+            p.glyph('\u{EA18}', R::new(r.x + 10.0, r.y, 24.0, r.h), 15.0, TEXT, 0.9);
+            p.text(t!("Yönetici olarak çalıştır", "Run as administrator"), R::new(r.x + 42.0, r.y, r.w - 50.0, r.h), 13.0, false, TEXT, 0.92, Align::Left);
+            p.hit(r, Act::RunAsAdmin);
+        }
     }
 
     /// Sağ tık: tek süreç ya da bir uygulamanın tüm süreçleri için.
@@ -645,11 +675,20 @@ fn main() -> Result<()> {
         std::process::exit(startup::run_helper(&argv[i + 1..]));
     }
     let pid_arg = std::env::args().skip_while(|a| a != "--pid").nth(1).and_then(|s| s.parse::<u32>().ok());
+    let tab_arg = std::env::args().skip_while(|a| a != "--tab").nth(1).and_then(|s| s.parse::<usize>().ok()).and_then(|i| TABS.get(i).copied());
+    let replace = argv.iter().any(|a| a == "--replace");
+    let admin = admin::is_elevated();
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-        let _m = CreateMutexW(None, true, w!("Local\\CarlUI.TaskMgr"));
-        if GetLastError() == ERROR_ALREADY_EXISTS {
+        let m = CreateMutexW(None, true, w!("Local\\CarlUI.TaskMgr"));
+        // Yönetici olarak yeniden açılırken eski kopya kapanana kadar bekle.
+        let exists = GetLastError() == ERROR_ALREADY_EXISTS;
+        let taken = replace && exists && m.as_ref().is_ok_and(|m| {
+            let r = windows::Win32::System::Threading::WaitForSingleObject(*m, 5000);
+            r == WAIT_OBJECT_0 || r == WAIT_ABANDONED
+        });
+        if exists && !taken {
             if let Ok(h) = FindWindowW(w!("CarlUI.TaskMgr"), None) {
                 let _ = ShowWindow(h, SW_RESTORE);
                 let _ = SetForegroundWindow(h);
@@ -671,7 +710,7 @@ fn main() -> Result<()> {
         let (ww, wh) = ((1180.0 * dpi) as i32, (760.0 * dpi) as i32);
         let sw = GetSystemMetrics(SM_CXSCREEN);
         let sh = GetSystemMetrics(SM_CYSCREEN);
-        let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), w!("CarlUI.TaskMgr"), &HSTRING::from(t!("Görev Yöneticisi", "Task Manager")), WS_OVERLAPPEDWINDOW, (sw - ww) / 2, (sh - wh) / 2, ww, wh, None, None, inst, None)?;
+        let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), w!("CarlUI.TaskMgr"), &HSTRING::from(if admin { t!("Görev Yöneticisi (Yönetici)", "Task Manager (Administrator)") } else { t!("Görev Yöneticisi", "Task Manager") }), WS_OVERLAPPEDWINDOW, (sw - ww) / 2, (sh - wh) / 2, ww, wh, None, None, inst, None)?;
         let on: i32 = 1;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let backdrop = DWMSBT_TRANSIENTWINDOW;
@@ -693,7 +732,7 @@ fn main() -> Result<()> {
             mouse: (-1.0, -1.0),
             hits: Vec::new(),
             accent: glassmenu::accent(),
-            tab: Tab::Processes,
+            tab: tab_arg.unwrap_or(Tab::Processes),
             sampler: sample::Sampler::new(),
             procs: procs::Procs::new(),
             signs,
@@ -714,7 +753,11 @@ fn main() -> Result<()> {
             mode: power::mode(),
             routes: HashMap::new(),
             message: None,
+            admin,
         };
+        if app.tab == Tab::Startup {
+            app.start_scan();
+        }
         // --pid ile gelindiyse süreci listede bulunur yap (ada göre sırala, filtrele).
         if let Some(pid) = pid_arg {
             if let Some(r) = app.procs.rows.iter().find(|r| r.pid == pid) {

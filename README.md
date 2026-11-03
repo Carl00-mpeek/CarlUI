@@ -68,7 +68,8 @@
 - **Game mode:** In fullscreen the UI steps aside, modules go to sleep and
   notifications wait until you're done.
 - **Task manager, file converter, screenshot tool** and a **Settings** window
-  that controls all of it.
+  that controls all of it. The task manager has a **Run as administrator**
+  button for processes and startup items that need it.
 - **English and Turkish:** Follows the Windows display language; change it in
   **Settings → General → Language**.
 
@@ -109,10 +110,11 @@ compare the SHA-256 of your download with the one on the Releases page.
 ### Updates
 
 Once a day CarlUI checks GitHub for a new version and, if there is one, shows
-a notification on the island; click it to open the release page. Nothing is
-downloaded or installed automatically: run the new `CarlUI-Setup.exe` and
-click **Update**, your settings are kept. Turn the check off in **Settings →
-General → Updates**.
+a notification on the island. Nothing happens until you click it: then CarlUI
+downloads the new installer, checks its SHA-256 against the release, installs
+it silently and restarts. Your settings are kept. If something goes wrong, the
+notification links to the release page so you can update by hand. Turn the
+check off in **Settings → General → Updates**.
 
 ### Uninstall
 

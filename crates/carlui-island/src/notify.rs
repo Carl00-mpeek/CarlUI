@@ -64,6 +64,8 @@ pub struct Note {
     pub clip_id: Option<String>,
     /// İndirme bildirimi: tıklanınca açılacak dosya.
     pub file: Option<String>,
+    /// Yeni sürüm bildirimi: tıklanınca indirilip sessizce kurulur.
+    pub update: Option<crate::update::Release>,
 }
 
 fn build(n: &UserNotification) -> Option<Note> {

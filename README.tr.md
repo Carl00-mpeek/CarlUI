@@ -68,7 +68,8 @@
 - **Oyun modu:** Tam ekranda arayüz çekilir, modüller uyku moduna geçer,
   bildirimler oyundan sonra gösterilir.
 - **Görev yöneticisi, dosya dönüştürücü, ekran görüntüsü aracı** ve hepsini
-  yöneten **Ayarlar** penceresi.
+  yöneten **Ayarlar** penceresi. Yetki isteyen süreçler ve başlangıç öğeleri
+  için görev yöneticisinde **Yönetici olarak çalıştır** düğmesi var.
 - **Türkçe ve İngilizce arayüz:** Windows'un görüntü diline uyar; **Ayarlar →
   Genel → Dil** bölümünden değiştirilebilir.
 
@@ -110,10 +111,11 @@ SHA-256 değerini Releases sayfasındakiyle karşılaştırabilirsin.
 ### Güncelleme
 
 CarlUI günde bir kez GitHub'da yeni sürüm olup olmadığına bakar; varsa adada
-bildirim çıkar, tıklayınca sürüm sayfası açılır. Hiçbir şey kendiliğinden
-indirilip kurulmaz: yeni `CarlUI-Setup.exe`'yi çalıştırıp **Güncelle**'ye
-basarsın, ayarların korunur. Denetim **Ayarlar → Genel → Güncellemeler**
-bölümünden kapatılabilir.
+bildirim çıkar. Sen tıklamadıkça hiçbir şey olmaz. Tıklayınca CarlUI yeni
+kurucuyu indirir, SHA-256 değerini sürümdekiyle karşılaştırır, sessizce kurar
+ve yeniden başlar. Ayarların korunur. Bir sorun çıkarsa bildirim sürüm
+sayfasına yönlendirir, oradan elle güncelleyebilirsin. Denetim **Ayarlar →
+Genel → Güncellemeler** bölümünden kapatılabilir.
 
 ### Kaldırma
 

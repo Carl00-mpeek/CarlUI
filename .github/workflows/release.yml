@@ -1,0 +1,77 @@
+# Sürüm etiketi (v0.2.0 gibi) gönderilince kurucuyu derler ve GitHub
+# sürümüne ekler. CarlUI'deki güncelleme denetimi bu dosyayı indirir ve
+# SHA-256'sını (GitHub'ın verdiği özet ya da notlardaki satır) doğrular.
+#
+# Elle denemek için: Actions → Release → Run workflow (sürüm oluşturmaz,
+# yalnızca kurucuyu derleyip çıktı olarak bırakır).
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: '. -> target/dist'
+
+      - name: Etiket ile sürüm aynı mı
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $ver = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+          if ("v$ver" -ne $env:GITHUB_REF_NAME) { throw "Cargo.toml sürümü v$ver, etiket $env:GITHUB_REF_NAME" }
+
+      - name: Kurucuyu derle
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tools\build-setup.ps1
+
+      - name: SHA-256
+        id: sha
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash dist\CarlUI-Setup.exe -Algorithm SHA256).Hash.ToLower()
+          "sha=$h" >> $env:GITHUB_OUTPUT
+          Write-Host "SHA-256: $h"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CarlUI-Setup
+          path: dist/CarlUI-Setup.exe
+
+      - name: Sürüme yükle
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.sha.outputs.sha }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $line = "SHA-256: ``$env:SHA``"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag dist\CarlUI-Setup.exe --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'yükleme başarısız' }
+            # Notlardaki eski SHA satırını yenisiyle değiştir (yoksa sona ekle).
+            $body = gh release view $tag --json body --jq .body
+            $body = ($body -join "`n")
+            if ($body -match '[0-9a-f]{64}') { $body = $body -replace '[0-9a-f]{64}', $env:SHA } else { $body += "`n`n$line" }
+            $body | Set-Content notes.md -Encoding utf8
+            gh release edit $tag --notes-file notes.md
+          } else {
+            "Kurulum / Setup: **CarlUI-Setup.exe**`n`n$line" | Set-Content notes.md -Encoding utf8
+            gh release create $tag dist\CarlUI-Setup.exe --title "CarlUI $tag" --notes-file notes.md --generate-notes
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'sürüm güncellenemedi' }
