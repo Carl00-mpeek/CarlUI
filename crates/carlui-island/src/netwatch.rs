@@ -38,12 +38,29 @@ pub fn current() -> Option<(String, u64, u64, f64)> {
     CUR.lock().ok().and_then(|c| c.clone())
 }
 
+/// Steam'in son yazdığı (oyun, inen) ve o andan beri ölçülen alım.
+static STEAM: Mutex<Option<(String, u64, f64)>> = Mutex::new(None);
+
 /// Program kendi ilerlemesini bir dosyaya yazıyorsa oradan ayrıntı alınır
-/// (şimdilik Steam: oyunun adı, inen ve toplam bayt).
-fn detail(app: &str, got: u64, rx: f64) -> (String, u64, u64, f64) {
+/// (şimdilik Steam: oyunun adı, inen ve toplam bayt). Steam inen miktarı
+/// yalnızca başlarken/dururken yazar; aradaki ilerleme ağ alımından eklenir.
+fn detail(app: &str, got: u64, rx: f64, dt: f64) -> (String, u64, u64, f64) {
     match app {
         "Steam" => match crate::steam::downloading() {
-            Some((game, g, total)) => (game, g, total, rx),
+            Some((game, base, total)) => {
+                let Ok(mut s) = STEAM.lock() else { return (game, base, total, rx) };
+                let extra = match s.as_mut() {
+                    Some((g, b, e)) if *g == game && *b == base => {
+                        *e += rx * dt;
+                        *e
+                    }
+                    _ => {
+                        *s = Some((game.clone(), base, 0.0));
+                        0.0
+                    }
+                };
+                (game, (base + extra as u64).min(total.saturating_sub(1)), total, rx)
+            }
             None => (app.into(), got, 0, rx),
         },
         _ => (app.into(), got, 0, rx),
@@ -182,7 +199,7 @@ pub fn start(hwnd: isize) {
                 std::thread::sleep(Duration::from_secs(1));
                 let dt = last.elapsed().as_secs_f64().max(0.1);
                 last = Instant::now();
-                let now = w.step(dt).map(|(app, got, rx)| detail(&app, got, rx));
+                let now = w.step(dt).map(|(app, got, rx)| detail(&app, got, rx, dt));
                 let on = now.is_some();
                 if let Ok(mut c) = CUR.lock() {
                     *c = now;

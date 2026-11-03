@@ -26,7 +26,7 @@
 
 <p align="center">
   <img src="docs/screenshots/island-tr.png" alt="Ada: indirme ilerlemesi ve bildirimler"><br>
-  <sub><b>Ada</b> · canlı indirme ilerlemesi (ad, boyut, hız, kalan süre) ve bildirimler</sub>
+  <sub><b>Ada</b> · canlı indirme ilerlemesi (ad, boyut, hız, kalan süre), Steam oyunları dahil, ve bildirimler</sub>
 </p>
 
 <table>

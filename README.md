@@ -26,7 +26,7 @@
 
 <p align="center">
   <img src="docs/screenshots/island-en.png" alt="Island: download progress and notifications"><br>
-  <sub><b>Island</b> · live download progress (name, size, speed, time left) and notifications</sub>
+  <sub><b>Island</b> · live download progress (name, size, speed, time left), Steam games included, and notifications</sub>
 </p>
 
 <table>
