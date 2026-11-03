@@ -6,9 +6,10 @@
 //! aynı süreç çıkarsa hapta "↓ Steam · 1,2 GB · 48 MB/sn" görünür. Bu bir
 //! tahmindir: dosya adı ve yüzde bilinmez, hız tüm bilgisayarın alım hızıdır.
 
+use crate::notify::Note;
 use std::{
-    collections::HashMap,
-    sync::Mutex,
+    collections::{HashMap, VecDeque},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use windows::Win32::{
@@ -187,19 +188,67 @@ impl Watch {
     }
 }
 
-/// Saniyede bir ölçer; bir şey göründükçe adaya `TIMER_DL` gönderir ki hap tazelensin.
-pub fn start(hwnd: isize) {
+/// Bildirim için en az bu kadar inmiş olmalı (kısa güncelleme yoklamaları sayılmasın).
+const NOTE_MIN: u64 = 20 * 1024 * 1024;
+/// Steam indirme bitince bir süre dosyaları yerleştirir; manifest bu kadar beklenir.
+const STEAM_WAIT: Duration = Duration::from_secs(20 * 60);
+
+fn note(hwnd: isize, msg: u32, notes: &Mutex<VecDeque<Note>>, body: String) {
+    if !carlui_core::config::load().download.others {
+        return;
+    }
+    carlui_core::info!("indirme bitti (sezilen): {body}");
+    if let Ok(mut q) = notes.lock() {
+        q.push_back(Note { app: t!("İndirmeler", "Downloads").into(), title: t!("İndirme tamamlandı", "Download complete").into(), body, ..Default::default() });
+    }
+    unsafe {
+        let _ = PostMessageW(HWND(hwnd as _), msg, WPARAM(0), LPARAM(0));
+    }
+}
+
+/// Saniyede bir ölçer; bir şey göründükçe adaya `TIMER_DL` gönderir ki hap
+/// tazelensin. İndirme bitince `notes`'a bildirim eklenip `msg` gönderilir:
+/// Steam'de yalnızca manifest "tamamlandı" deyince (durdurmak bildirim
+/// getirmez), diğerlerinde alım kesilince.
+pub fn start(hwnd: isize, msg: u32, notes: Arc<Mutex<VecDeque<Note>>>) {
     std::thread::Builder::new()
         .name("netwatch".into())
         .spawn(move || {
             let mut w = Watch::default();
             let mut last = Instant::now();
             let mut was = false;
+            let mut prev: Option<(String, (String, u64, u64, f64))> = None;
+            let mut steam_wait: Option<(String, u64, Instant)> = None;
             loop {
                 std::thread::sleep(Duration::from_secs(1));
                 let dt = last.elapsed().as_secs_f64().max(0.1);
                 last = Instant::now();
-                let now = w.step(dt).map(|(app, got, rx)| detail(&app, got, rx, dt));
+                let cur = w.step(dt).map(|(app, got, rx)| {
+                    let d = detail(&app, got, rx, dt);
+                    (app, d)
+                });
+                match (&prev, &cur) {
+                    (Some((app, (name, got, total, _))), None) => {
+                        if app == "Steam" && *total > 0 {
+                            steam_wait = Some((name.clone(), *total, Instant::now()));
+                        } else if *got >= NOTE_MIN {
+                            note(hwnd, msg, &notes, format!("{name} · {}", carlui_sys::bytes(*got as f64)));
+                        }
+                    }
+                    // Aynı oyun yeniden inmeye başladıysa bekleyen denetim gereksiz.
+                    (_, Some((_, (name, ..)))) if steam_wait.as_ref().is_some_and(|s| &s.0 == name) => steam_wait = None,
+                    _ => {}
+                }
+                if let Some((game, total, since)) = &steam_wait {
+                    if crate::steam::complete(game) {
+                        note(hwnd, msg, &notes, format!("{game} · Steam · {}", carlui_sys::bytes(*total as f64)));
+                        steam_wait = None;
+                    } else if since.elapsed() > STEAM_WAIT {
+                        steam_wait = None;
+                    }
+                }
+                let now = cur.as_ref().map(|c| c.1.clone());
+                prev = cur;
                 let on = now.is_some();
                 if let Ok(mut c) = CUR.lock() {
                     *c = now;

@@ -1098,7 +1098,7 @@ fn main() -> Result<()> {
         notify::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
         downloads::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
         update::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
-        netwatch::start(hwnd_raw);
+        netwatch::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
 
         let icons_in: Arc<Mutex<Vec<IconPx>>> = Arc::default();
         let spot = Launcher::new(

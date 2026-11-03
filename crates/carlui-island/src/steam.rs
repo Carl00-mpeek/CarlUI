@@ -127,8 +127,10 @@ fn tail(p: &Path, max: u64) -> Option<String> {
     Some(String::from_utf8_lossy(&b).into_owned())
 }
 
-fn manifest(steam: &Path) -> Option<(String, u64, u64, u32)> {
-    let mut best: Option<(SystemTime, (String, u64, u64, u32))> = None;
+/// Son bir günde değişmiş manifestler (değişme zamanı, içerik). Bir gündür
+/// dokunulmamış yarım indirme şu an sürüyor olamaz.
+fn recent(steam: &Path) -> Vec<(SystemTime, String)> {
+    let mut out = Vec::new();
     for lib in libraries(steam) {
         let Ok(rd) = std::fs::read_dir(&lib) else { continue };
         for e in rd.flatten() {
@@ -137,18 +139,30 @@ fn manifest(steam: &Path) -> Option<(String, u64, u64, u32)> {
                 continue;
             }
             let Ok(m) = e.metadata().and_then(|m| m.modified()) else { continue };
-            // Bir gündür dokunulmamış yarım indirme şu an sürüyor olamaz.
             if m.elapsed().unwrap_or_default() > Duration::from_secs(24 * 3600) {
                 continue;
             }
-            if let Some(d) = std::fs::read_to_string(e.path()).ok().and_then(|t| parse(&t)) {
-                if best.as_ref().is_none_or(|b| m > b.0) {
-                    best = Some((m, d));
-                }
+            if let Ok(t) = std::fs::read_to_string(e.path()) {
+                out.push((m, t));
             }
         }
     }
-    best.map(|b| b.1)
+    out
+}
+
+fn manifest(steam: &Path) -> Option<(String, u64, u64, u32)> {
+    recent(steam).into_iter().filter_map(|(m, t)| parse(&t).map(|d| (m, d))).max_by_key(|(m, _)| *m).map(|(_, d)| d)
+}
+
+/// Manifeste göre oyunun indirmesi tamamlandı mı (inen = toplam).
+fn done(text: &str, game: &str) -> bool {
+    let num = |k| kv(text, k).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+    kv(text, "name") == Some(game) && num("BytesToDownload") > 0 && num("BytesDownloaded") >= num("BytesToDownload")
+}
+
+/// Steam bu oyunun indirmesini bitirdi mi (durdurulduysa hayır).
+pub fn complete(game: &str) -> bool {
+    steam_dir().is_some_and(|s| recent(&s).iter().any(|(_, t)| done(t, game)))
 }
 
 #[cfg(test)]
@@ -162,6 +176,10 @@ mod tests {
         assert_eq!(parse(ACF), Some(("Cyberpunk 2077".into(), 17179869184, 68719476736, 1091500)));
         assert_eq!(parse(&ACF.replace("17179869184", "68719476736")), None);
         assert_eq!(kv(ACF, "appid"), Some("1091500"));
+        assert!(!done(ACF, "Cyberpunk 2077"));
+        let full = ACF.replace("17179869184", "68719476736");
+        assert!(done(&full, "Cyberpunk 2077"));
+        assert!(!done(&full, "Squad"));
     }
 
     #[test]
