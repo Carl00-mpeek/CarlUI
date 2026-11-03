@@ -163,6 +163,25 @@ konuşur. Arayüz metinleri kodda iki dilde yan yana durur:
 `t!("Kapat", "Close")`. Ayrıntılı geliştirme notları ve test adımları:
 [docs/GELISTIRME-NOTLARI.md](docs/GELISTIRME-NOTLARI.md).
 
+## Kod imzalama
+
+Windows kurucusunun [SignPath.io](https://about.signpath.io) üzerinden,
+[SignPath Foundation](https://signpath.org) sertifikasıyla ücretsiz
+imzalanması için başvuru yapıldı.
+
+- Yalnızca bu depodaki koddan [Release iş akışıyla](.github/workflows/release.yml)
+  derlenen `CarlUI-Setup.exe` imzalanır; kişisel bilgisayarda derlenen hiçbir
+  şey imzalanmaz.
+- Kodu yazan, inceleyen ve onaylayan: [Carl00-mpeek](https://github.com/Carl00-mpeek)
+  (tek geliştirici). Her sürüm elle onaylanır.
+
+### Gizlilik
+
+CarlUI veri toplamaz, telemetri içermez. Yalnızca senin istediğin işlerde
+(döviz kuru, çeviri, web araması, indirmeler) ve günlük güncelleme denetiminde
+(GitHub API) internete bağlanır; denetim **Ayarlar → Genel → Güncellemeler**
+bölümünden kapatılabilir.
+
 ## Lisans
 
 MIT © 2026 Demhat Dayan. Ayrıntı: [LICENSE](LICENSE). Üçüncü taraf parçalar

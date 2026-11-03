@@ -162,6 +162,25 @@ named pipe. UI strings live side by side in both languages:
 `t!("Kapat", "Close")`. Development notes (in Turkish):
 [docs/GELISTIRME-NOTLARI.md](docs/GELISTIRME-NOTLARI.md).
 
+## Code signing policy
+
+Windows installers are to be signed for free through
+[SignPath.io](https://about.signpath.io), with a certificate from
+[SignPath Foundation](https://signpath.org) (application in progress).
+
+- Only `CarlUI-Setup.exe` built by the [Release workflow](.github/workflows/release.yml)
+  from this repository's source gets signed; nothing built on a personal
+  machine.
+- Committers, reviewers and approvers: [Carl00-mpeek](https://github.com/Carl00-mpeek)
+  (the only maintainer). Every release is approved by hand.
+
+### Privacy
+
+CarlUI collects no data and has no telemetry. It only connects to other
+systems when you ask it to (currency rates, translation, web search,
+downloads) and for the daily update check against the GitHub API, which can be
+turned off in **Settings → General → Updates**.
+
 ## License
 
 MIT © 2026 Demhat Dayan. See [LICENSE](LICENSE). Third-party parts (PawnIO
