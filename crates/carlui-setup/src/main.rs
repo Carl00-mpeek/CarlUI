@@ -13,6 +13,7 @@
 //!   --test <klasör>        deneme: yalnızca dosyalar yazılır (kayıt, kısayol, görev yok)
 //!   --headless             pencere açmadan çalış: --test ile deneme, tek başına
 //!                          varsayılan seçeneklerle sessiz kurulum
+//!   --wallpaper            sessiz kurulumda CarlUI duvar kâğıdını da uygula
 //!   --snapshot <sayfa> <png>  sayfayı pencere açmadan PNG'ye çiz (welcome, work, done, confirm)
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -71,6 +72,7 @@ pub enum Opt {
     Launch,
     Sensors,
     Firefox,
+    Wallpaper,
     Purge,
 }
 
@@ -124,6 +126,7 @@ struct Args {
     dry: bool,
     headless: bool,
     temp: bool,
+    wallpaper: bool,
     snapshot: Option<(String, PathBuf)>,
 }
 
@@ -138,6 +141,7 @@ fn parse_args() -> Args {
         dir: test.or_else(|| after("--dir", 1).map(PathBuf::from)),
         headless: has("--headless"),
         temp: has("--temp"),
+        wallpaper: has("--wallpaper"),
         snapshot: after("--snapshot", 1).zip(after("--snapshot", 2).map(PathBuf::from)),
     }
 }
@@ -167,7 +171,7 @@ impl App {
             accent: glassmenu::accent(),
             mode,
             page: if mode == Mode::Install { Page::Welcome } else { Page::Confirm },
-            opts: install::Options { dir, desktop: true, launch: true, sensors: pawnio, firefox: payload::XPI.is_some(), dry },
+            opts: install::Options { dir, desktop: true, launch: true, sensors: pawnio, firefox: payload::XPI.is_some(), wallpaper: false, dry },
             purge: false,
             pawnio,
             installed_before,
@@ -216,6 +220,7 @@ impl App {
                     Opt::Launch => &mut self.opts.launch,
                     Opt::Sensors => &mut self.opts.sensors,
                     Opt::Firefox => &mut self.opts.firefox,
+                    Opt::Wallpaper => &mut self.opts.wallpaper,
                     Opt::Purge => &mut self.purge,
                 };
                 *v = !*v;
@@ -495,13 +500,13 @@ fn main() -> Result<()> {
         return snapshot(page, out, args.mode, dir);
     }
     if args.headless && args.dry {
-        let opts = install::Options { dir, desktop: false, launch: false, sensors: false, firefox: false, dry: true };
+        let opts = install::Options { dir, desktop: false, launch: false, sensors: false, firefox: false, wallpaper: false, dry: true };
         headless(args.mode, opts, false);
         return Ok(());
     }
     if args.headless && args.mode == Mode::Install {
         // Sessiz gerçek kurulum: penceredeki varsayılan seçeneklerle.
-        let opts = install::Options { dir, desktop: true, launch: true, sensors: shell::pawnio_installed(), firefox: payload::XPI.is_some(), dry: false };
+        let opts = install::Options { dir, desktop: true, launch: true, sensors: shell::pawnio_installed(), firefox: payload::XPI.is_some(), wallpaper: args.wallpaper, dry: false };
         headless(args.mode, opts, false);
         return Ok(());
     }

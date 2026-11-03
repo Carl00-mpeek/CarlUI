@@ -3,7 +3,8 @@
 //! çalışan CarlUI kibarca kapatılır, gömülü exe'ler kullanıcı klasörüne yazılır
 //! (kilitli bir exe varsa yeniden adlandırılıp yenisi yanına konur), Programlar
 //! listesine kayıt ve Başlat menüsü kısayolları eklenir. İsteğe bağlı adımlar:
-//! masaüstü kısayolu, imzalı Firefox eklentisi, CPU sıcaklığı görevi (UAC).
+//! masaüstü kısayolu, imzalı Firefox eklentisi, CarlUI duvar kâğıdı, CPU
+//! sıcaklığı görevi (UAC).
 //! Başlangıç kaydını CarlUI'nin kendisi, açıldığında kendi konumuna göre kurar.
 
 use crate::{payload, shell, WM_APP_PROGRESS};
@@ -25,6 +26,8 @@ pub struct Options {
     pub launch: bool,
     pub sensors: bool,
     pub firefox: bool,
+    /// CarlUI duvar kâğıdını masaüstü arka planı yap.
+    pub wallpaper: bool,
     /// Deneme: yalnızca dosyalar yazılır; kayıt defteri, kısayol, görev yok.
     pub dry: bool,
 }
@@ -126,7 +129,7 @@ pub fn xpi_path(dir: &Path) -> PathBuf {
 fn run(o: &Options, rep: &Reporter) -> Outcome {
     let mut notes = Vec::new();
     let fail = |notes: Vec<String>| Outcome { ok: false, notes };
-    let total = (payload::FILES.len() + payload::EXTENSION.len() + 6) as f32;
+    let total = (payload::FILES.len() + payload::EXTENSION.len() + 7) as f32;
     let mut n = 0.0f32;
     let mut tick = |rep: &Reporter, s: &str| {
         n += 1.0;
@@ -231,6 +234,15 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
             notes.push("Firefox bir sonraki açılışta eklentiyi etkinleştirmek için onay isteyecek".into());
         } else {
             notes.push("Firefox eklentisi tanıtılamadı".into());
+        }
+    }
+
+    if o.wallpaper {
+        tick(rep, "Duvar kâğıdı uygulanıyor");
+        let path = o.dir.join(r"wallpaper\carlui.png");
+        let ok = path.parent().is_some_and(|d| std::fs::create_dir_all(d).is_ok()) && std::fs::write(&path, payload::WALLPAPER).is_ok() && shell::set_wallpaper(&path);
+        if !ok {
+            notes.push("Duvar kâğıdı uygulanamadı".into());
         }
     }
 

@@ -13,7 +13,7 @@ use windows::Win32::Graphics::Direct2D::{Common::D2D_RECT_F, ID2D1Bitmap, D2D1_B
 pub type P<'a> = Painter<'a, Act>;
 
 pub const W: f32 = 600.0;
-pub const H: f32 = 510.0;
+pub const H: f32 = 562.0;
 const PAD: f32 = 32.0;
 
 /// Vurgu renginde ana düğme (Kur / Kaldır / Kapat).
@@ -81,15 +81,16 @@ impl App {
 
         let y = y + 88.0;
         p.text("Seçenekler", R::new(PAD + 2.0, y, cw, 20.0), 12.0, true, TEXT, 0.6, Align::Left);
-        let card = R::new(PAD, y + 24.0, cw, 52.0 * 4.0);
+        let card = R::new(PAD, y + 24.0, cw, 52.0 * 5.0);
         p.card(card);
         let pawn = self.pawnio;
         let xpi = payload::XPI.is_some();
-        let rows: [(&str, &str, bool, bool, Opt); 4] = [
+        let rows: [(&str, &str, bool, bool, Opt); 5] = [
             ("Masaüstü kısayolu", "Başlat menüsüne her durumda eklenir", self.opts.desktop, true, Opt::Desktop),
             ("Kurulunca CarlUI'yi başlat", "Açılışta başlama kaydı bu konuma taşınır", self.opts.launch, true, Opt::Launch),
             ("CPU sıcaklığı", if pawn { "Yönetici izni ister · açılışta çalışan küçük bir görev kurar" } else { "PawnIO sürücüsü kurulu değil" }, self.opts.sensors, pawn, Opt::Sensors),
             ("Firefox eklentisi", if xpi { "İmzalı eklenti Firefox'a otomatik tanıtılır" } else { "İmzalı paket yok · kurulumdan sonra elle yüklenir" }, self.opts.firefox, xpi, Opt::Firefox),
+            ("CarlUI duvar kâğıdı", "Siyah zeminde CarlUI yazısı · masaüstü arka planı olur", self.opts.wallpaper, true, Opt::Wallpaper),
         ];
         for (i, (t, d, on, en, opt)) in rows.into_iter().enumerate() {
             let rr = R::new(card.x, card.y + 52.0 * i as f32, card.w, 52.0);

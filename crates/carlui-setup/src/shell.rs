@@ -282,6 +282,13 @@ pub fn pick_folder(owner: HWND, start: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Resmi masaüstü arka planı yapar ("Doldur" yerleşimiyle, tüm monitörlerde).
+pub fn set_wallpaper(path: &Path) -> bool {
+    let _ = reg_set(r"Control Panel\Desktop", &[("WallpaperStyle", Val::Str("10")), ("TileWallpaper", Val::Str("0"))]);
+    let p = wide(&path.display().to_string());
+    unsafe { SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, Some(p.as_ptr() as _), SPIF_UPDATEINIFILE | SPIF_SENDCHANGE).is_ok() }
+}
+
 /// Geçici kaldırıcı kopyasının adı: `%TEMP%\CarlUI-Uninstall-<pid>.exe`.
 pub fn temp_copy_name(pid: u32) -> String {
     format!("CarlUI-Uninstall-{pid}.exe")

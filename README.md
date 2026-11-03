@@ -55,11 +55,11 @@ bu bilgisayarda olur. CarlUI veri toplamaz; yalnızca senin istediğin işlerde
 (döviz kuru, çeviri, web araması, indirmeler) internete bağlanır. Kaynak kodun
 tamamı bu depoda.
 
-v0.1.0 kurucusunun [VirusTotal taraması](https://www.virustotal.com/gui/file/6b0871d010778b2a3e22caea1b336eeb24c2c30ed154ef837d0c4dcac6ccd1a7):
-71 antivirüsten 69'u temiz buluyor; Microsoft Defender dahil. Yalnızca ESET'in
-genel "Kryptik" tahmini ve Bkav işaretliyor; ikisi de imzasız kurucularda sık
-görülen yanlış alarm türleri. İndirdiğin dosyanın SHA-256 değerini Releases sayfasındakiyle
-karşılaştırabilirsin.
+v0.1.0 kurucusunun [VirusTotal taraması](https://www.virustotal.com/gui/file/2e72ef0b882a7e761bbcce33dc5afdc82c5c74d329a3ad7bb52aabe735b28d78):
+Test sürümünde 71 antivirüsten 69'u temiz buldu, Microsoft Defender da temiz
+buldu. Yalnızca ESET'in genel "Kryptik" tahmini ve Bkav işaretledi; ikisi de
+imzasız kurucularda sık görülen yanlış alarm türleri. İndirdiğin dosyanın
+SHA-256 değerini Releases sayfasındakiyle karşılaştırabilirsin.
 
 ### İsteğe bağlı parçalar
 

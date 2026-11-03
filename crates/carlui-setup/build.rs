@@ -57,6 +57,10 @@ fn payload(root: &Path, out: &Path) {
     }
     let logo = root.join(r"assets\icons\carlui.png");
     code += &format!("pub static LOGO: &[u8] = include_bytes!(r\"{}\");\n", plain(&logo));
+    // İsteğe bağlı CarlUI duvar kâğıdı (tools\make-wallpaper.ps1 üretir).
+    let wall = root.join(r"assets\wallpaper\carlui-3840x2160.png");
+    println!("cargo:rerun-if-changed={}", plain(&wall));
+    code += &format!("pub static WALLPAPER: &[u8] = include_bytes!(r\"{}\");\n", plain(&wall));
     std::fs::write(out.join("payload.rs"), code).unwrap();
 }
 
