@@ -1,0 +1,19 @@
+[package]
+name = "carlui-island"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "carlui-island"
+path = "src/main.rs"
+
+[dependencies]
+carlui-clip = { path = "../carlui-clip" }
+carlui-core.workspace = true
+carlui-launcher = { path = "../carlui-launcher" }
+carlui-sys = { path = "../carlui-sys" }
+carlui-ui.workspace = true
+serde_json.workspace = true
+windows.workspace = true

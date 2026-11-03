@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "CarlUI İndirmeler",
+  "short_name": "CarlUI",
+  "version": "1.0.0",
+  "description": "Tarayıcıda başlayan indirmeleri CarlUI adasına gönderir; ilerleme adada görünür. CarlUI kapalıysa hiçbir şeye karışmaz.",
+  "permissions": ["downloads", "cookies"],
+  "host_permissions": ["<all_urls>", "http://127.0.0.1:47321/*"],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "downloads@carlui.local",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": { "required": ["none"] }
+    }
+  }
+}

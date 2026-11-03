@@ -1,0 +1,47 @@
+name: Hata bildirimi
+description: Bir şey çalışmıyor ya da beklendiği gibi davranmıyor
+labels: [hata]
+body:
+  - type: dropdown
+    id: modul
+    attributes:
+      label: Hangi bölüm?
+      options:
+        - Dock
+        - Ada (saat, bildirim, medya)
+        - Arama / Win menüsü
+        - Pano geçmişi (Win+V)
+        - Kontrol merkezi / tepsi
+        - Oyun modu
+        - Görev yöneticisi
+        - Dosya dönüştürücü
+        - Ayarlar
+        - Kurucu / kaldırıcı
+        - Diğer
+    validations:
+      required: true
+  - type: textarea
+    id: ne
+    attributes:
+      label: Ne oldu?
+      description: Ne yaptın, ne bekliyordun, ne oldu? Ekran görüntüsü eklemek çok yardımcı olur.
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows sürümü
+      description: "Win+R → winver (ör. Windows 11 24H2, derleme 26100)"
+    validations:
+      required: true
+  - type: input
+    id: surum
+    attributes:
+      label: CarlUI sürümü
+      description: Ayarlar ya da Yüklü uygulamalar listesinde yazar (ör. 0.1.0)
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: "%LOCALAPPDATA%\\CarlUI\\logs\\ klasöründeki o günün dosyasından ilgili satırlar"
+      render: text

@@ -1,0 +1,16 @@
+[package]
+name = "carlui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "carlui"
+path = "src/main.rs"
+
+[dependencies]
+carlui-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+windows.workspace = true

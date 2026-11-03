@@ -1,0 +1,216 @@
+//! Bu modül "ayrı süreçlerdeki modüller birbirinden nasıl haberdar olur?"
+//! sorununu iki yönlü named pipe ile çözüyor. Ana süreç (`carlui.exe`) sunucu
+//! olur; her modül bir "yukarı" (modül → ana) ve bir "aşağı" (ana → modül)
+//! bağlantısı açar. Ana sürece gelen her olay tüm modüllere yayınlanır.
+//! Mesajlar satır başına bir JSON'dur. İki ayrı boru kullanılmasının sebebi,
+//! Windows'ta aynı senkron handle üzerinde okuma beklerken yazmanın
+//! kilitlenmesidir.
+
+use serde::{Deserialize, Serialize};
+use std::{
+    fs::{File, OpenOptions},
+    io::{BufRead, BufReader, Write},
+    os::windows::io::FromRawHandle,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+use windows::{
+    core::*,
+    Win32::{Foundation::*, Storage::FileSystem::*, System::Pipes::*},
+};
+
+const UP: &str = r"\\.\pipe\carlui-bus-up";
+const DOWN: &str = r"\\.\pipe\carlui-bus-down";
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum Event {
+    /// Bir modül bağlandı.
+    Hello { module: String },
+    /// Tüm modüller düzgünce kapansın.
+    Shutdown,
+    /// Tam ekran uygulama/oyun durumu değişti. `monitor`: tam ekran pencerenin
+    /// monitörünün aygıt adı (`win::monitor_name`); Windows görev çubuğu gibi
+    /// yüzeyler yalnızca kendi monitörlerindeki tam ekranda gizlenir.
+    Fullscreen {
+        active: bool,
+        exclusive: bool,
+        #[serde(default)]
+        monitor: String,
+    },
+    /// Win+D / "masaüstünü göster" algılandı; yüzeyler kendini yeniden göstermeli.
+    ShowDesktop,
+    /// Explorer yeniden başladı (görev çubuğu yeniden oluşturuldu).
+    ExplorerRestarted,
+    /// Genel amaçlı modül mesajı.
+    Custom { name: String, #[serde(default)] data: serde_json::Value },
+}
+
+fn pipe_name(s: &str) -> HSTRING {
+    HSTRING::from(s)
+}
+
+fn create_instance(name: &str, inbound: bool) -> Result<HANDLE> {
+    unsafe {
+        let mode = if inbound { PIPE_ACCESS_INBOUND } else { PIPE_ACCESS_OUTBOUND };
+        let h = CreateNamedPipeW(
+            &pipe_name(name),
+            mode,
+            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+            PIPE_UNLIMITED_INSTANCES,
+            64 * 1024,
+            64 * 1024,
+            0,
+            None,
+        );
+        if h.is_invalid() {
+            return Err(Error::from_win32());
+        }
+        Ok(h)
+    }
+}
+
+fn wait_client(h: HANDLE) -> bool {
+    unsafe {
+        match ConnectNamedPipe(h, None) {
+            Ok(()) => true,
+            Err(e) => e.code() == ERROR_PIPE_CONNECTED.to_hresult(),
+        }
+    }
+}
+
+fn write_line(f: &mut File, ev: &Event) -> std::io::Result<()> {
+    let mut line = serde_json::to_vec(ev).unwrap_or_default();
+    line.push(b'\n');
+    f.write_all(&line)
+}
+
+/// Ana süreçteki olay yolu sunucusu.
+#[derive(Clone)]
+pub struct BusServer {
+    clients: Arc<Mutex<Vec<File>>>,
+}
+
+impl BusServer {
+    /// Sunucuyu başlatır. Modüllerden gelen her olay önce `on_event`'e verilir,
+    /// sonra tüm modüllere yayınlanır.
+    pub fn start(on_event: impl Fn(&Event) + Send + Sync + 'static) -> Self {
+        let server = Self { clients: Arc::new(Mutex::new(Vec::new())) };
+        let on_event = Arc::new(on_event);
+
+        let down = server.clone();
+        std::thread::Builder::new()
+            .name("bus-down".into())
+            .spawn(move || loop {
+                match create_instance(DOWN, false) {
+                    Ok(h) if wait_client(h) => {
+                        let f = unsafe { File::from_raw_handle(h.0 as _) };
+                        down.clients.lock().unwrap_or_else(|e| e.into_inner()).push(f);
+                    }
+                    Ok(h) => unsafe {
+                        let _ = CloseHandle(h);
+                    },
+                    Err(e) => {
+                        crate::error!("bus (aşağı) oluşturulamadı: {e}");
+                        std::thread::sleep(Duration::from_secs(1));
+                    }
+                }
+            })
+            .ok();
+
+        let up = server.clone();
+        std::thread::Builder::new()
+            .name("bus-up".into())
+            .spawn(move || loop {
+                match create_instance(UP, true) {
+                    Ok(h) if wait_client(h) => {
+                        let f = unsafe { File::from_raw_handle(h.0 as _) };
+                        let srv = up.clone();
+                        let cb = on_event.clone();
+                        std::thread::spawn(move || {
+                            for line in BufReader::new(f).lines() {
+                                let Ok(line) = line else { break };
+                                match serde_json::from_str::<Event>(&line) {
+                                    Ok(ev) => {
+                                        cb(&ev);
+                                        srv.publish(&ev);
+                                    }
+                                    Err(e) => crate::warn!("bus: geçersiz mesaj: {e}"),
+                                }
+                            }
+                        });
+                    }
+                    Ok(h) => unsafe {
+                        let _ = CloseHandle(h);
+                    },
+                    Err(e) => {
+                        crate::error!("bus (yukarı) oluşturulamadı: {e}");
+                        std::thread::sleep(Duration::from_secs(1));
+                    }
+                }
+            })
+            .ok();
+
+        server
+    }
+
+    /// Tüm bağlı modüllere gönderir; kopmuş bağlantıları temizler.
+    pub fn publish(&self, ev: &Event) {
+        let mut clients = self.clients.lock().unwrap_or_else(|e| e.into_inner());
+        clients.retain_mut(|f| write_line(f, ev).is_ok());
+    }
+}
+
+/// Modül tarafı bağlantı. Ana süreç yoksa modül tek başına çalışmaya devam
+/// eder ve arka planda bağlanmayı denemeyi sürdürür.
+#[derive(Clone)]
+pub struct BusClient {
+    up: Arc<Mutex<Option<File>>>,
+}
+
+fn open_pipe(name: &str, write: bool) -> Option<File> {
+    OpenOptions::new().read(!write).write(write).open(name).ok()
+}
+
+impl BusClient {
+    pub fn connect(module: &str, on_event: impl Fn(Event) + Send + 'static) -> Self {
+        let client = Self { up: Arc::new(Mutex::new(None)) };
+        let me = client.clone();
+        let module = module.to_string();
+        std::thread::Builder::new()
+            .name("bus-client".into())
+            .spawn(move || loop {
+                let (Some(down), Some(up)) = (open_pipe(DOWN, false), open_pipe(UP, true)) else {
+                    std::thread::sleep(Duration::from_secs(2));
+                    continue;
+                };
+                *me.up.lock().unwrap_or_else(|e| e.into_inner()) = Some(up);
+                me.send(&Event::Hello { module: module.clone() });
+                crate::info!("olay yoluna bağlanıldı");
+                for line in BufReader::new(down).lines() {
+                    let Ok(line) = line else { break };
+                    if let Ok(ev) = serde_json::from_str::<Event>(&line) {
+                        on_event(ev);
+                    }
+                }
+                *me.up.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                crate::warn!("olay yolu bağlantısı koptu");
+                std::thread::sleep(Duration::from_secs(1));
+            })
+            .ok();
+        client
+    }
+
+    pub fn is_connected(&self) -> bool {
+        self.up.lock().map(|u| u.is_some()).unwrap_or(false)
+    }
+
+    pub fn send(&self, ev: &Event) {
+        let mut up = self.up.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(f) = up.as_mut() {
+            if write_line(f, ev).is_err() {
+                *up = None;
+            }
+        }
+    }
+}
