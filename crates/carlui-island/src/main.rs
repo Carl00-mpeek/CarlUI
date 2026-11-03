@@ -31,9 +31,11 @@ mod hubbing;
 mod island;
 mod launcher;
 mod media;
+mod netwatch;
 mod notify;
 mod searching;
 mod shots;
+mod steam;
 mod timing;
 mod update;
 mod viewer;
@@ -1096,6 +1098,7 @@ fn main() -> Result<()> {
         notify::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
         downloads::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
         update::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
+        netwatch::start(hwnd_raw);
 
         let icons_in: Arc<Mutex<Vec<IconPx>>> = Arc::default();
         let spot = Launcher::new(

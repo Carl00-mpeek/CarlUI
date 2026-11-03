@@ -95,6 +95,10 @@ pub fn pill(c: &carlui_core::config::DownloadConfig) -> Option<String> {
     let mut a = active();
     a.extend(crate::bridge::browser());
     if a.is_empty() {
+        // Başka bir programın indirmesi (tahmin; Steam'de toplam da bilinir).
+        a.extend(crate::netwatch::current().filter(|_| c.others));
+    }
+    if a.is_empty() {
         return None;
     }
     let got: u64 = a.iter().map(|d| d.1).sum();

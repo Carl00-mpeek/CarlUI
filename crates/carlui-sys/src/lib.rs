@@ -6,6 +6,7 @@
 //! - `gpu`: NVIDIA sürücüsünün kendi kütüphanesi (nvml.dll): sıcaklık, yük, VRAM.
 //! - `ram`: fiziksel bellek ve kayıt (commit) kullanımı.
 //! - `disk`: disk başına etkinlik, okuma/yazma hızı, NVMe sağlık kaydı ve sıcaklık.
+//! - `net`: fiziksel ağ bağdaştırıcılarından alınan toplam bayt.
 //! - `process`: süreç listesi, durdur/sürdür/sonlandır.
 //! - `temp`: CPU paket ve çekirdek sıcaklıkları (PawnIO sürücüsü kuruluysa).
 
@@ -17,6 +18,7 @@ pub mod cpu;
 pub mod disk;
 pub mod gpu;
 pub mod gpu_procs;
+pub mod net;
 pub mod privacy;
 pub mod process;
 pub mod ram;

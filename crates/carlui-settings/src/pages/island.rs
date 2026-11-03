@@ -42,6 +42,13 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.toggle(p, t!("İnen / toplam boyut", "Downloaded / total size"), "", cfg.download.size, |c| c.download.size ^= true);
     f.toggle(p, t!("Hız", "Speed"), "", cfg.download.speed, |c| c.download.speed ^= true);
     f.toggle(p, t!("Kalan süre", "Time left"), "", cfg.download.eta, |c| c.download.eta ^= true);
+    f.toggle(
+        p,
+        t!("Diğer programların indirmeleri", "Downloads from other apps"),
+        t!("Steam, Epic, torrent… İnternet ve disk kullanımından tahmin edilir; dosya adı ve yüzde görünmez.", "Steam, Epic, torrents… Estimated from network and disk use; no file name or percentage."),
+        cfg.download.others,
+        |c| c.download.others ^= true,
+    );
 
     f.section(p, t!("Bildirimler", "Notifications"));
     f.toggle(p, t!("Bildirimleri adada göster", "Show notifications on the island"), "", cfg.notify.enabled, |c| c.notify.enabled ^= true);

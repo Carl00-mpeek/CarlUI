@@ -54,7 +54,9 @@
   sürükle-bırak, otomatik gizleme, Win+1…9, Geri Dönüşüm Kutusu.
 - **Ada:** Üst ortada saat; bildirimler, çalan şarkı (kapak, ilerleme,
   uygulamaya özel ses), indirme ilerlemesi: dosya adı, boyut, hız ve kalan
-  süre (her biri Ayarlar'dan kapatılabilir).
+  süre (her biri Ayarlar'dan kapatılabilir). Başka programların (Steam, Epic,
+  torrent…) indirmeleri de görünür: internet ve disk kullanımından tahmin
+  edilir, Steam'de oyunun adı ve ilerlemesi de gelir.
 - **Arama:** Windows tuşu ya da Ctrl+Space. Uygulamalar, dosyalar, hesap
   makinesi, birim/döviz çevirisi, web ve yapay zekâ kısayolları.
 - **Win menüsü:** Sabitlenmiş uygulamalar, klasörler, güç düğmeleri.

@@ -54,7 +54,9 @@
   auto-hide, Win+1…9, Recycle Bin.
 - **Island:** Clock at the top center; notifications, now playing (cover,
   progress, per-app volume), download progress with file name, size, speed
-  and time left (each can be turned off in Settings).
+  and time left (each can be turned off in Settings). Downloads from other
+  apps (Steam, Epic, torrent clients…) show up too: estimated from network and
+  disk use, with the game's name and progress for Steam.
 - **Search:** Windows key or Ctrl+Space. Apps, files, calculator,
   unit/currency conversion, web and AI shortcuts.
 - **Win menu:** Pinned apps, folders, power buttons.

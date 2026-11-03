@@ -45,11 +45,14 @@ pub struct DownloadConfig {
     pub speed: bool,
     /// Kalan süre ("2 dk kaldı").
     pub eta: bool,
+    /// Başka programların (Steam, Epic, torrent…) indirmeleri: ağ alımı ve
+    /// disk yazımından tahmin edilir.
+    pub others: bool,
 }
 
 impl Default for DownloadConfig {
     fn default() -> Self {
-        Self { name: true, percent: true, size: true, speed: true, eta: true }
+        Self { name: true, percent: true, size: true, speed: true, eta: true, others: true }
     }
 }
 
