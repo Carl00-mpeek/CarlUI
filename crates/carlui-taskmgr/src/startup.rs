@@ -25,6 +25,8 @@ pub enum Toggle {
     Approved { hive: isize, key: &'static str, name: String },
     /// Zamanlanmış görevin tam yolu.
     Task(String),
+    /// Windows dışı hizmet: kapatınca "elle başlat" olur, açınca yine otomatik.
+    Service(String),
     None,
 }
 
@@ -176,23 +178,34 @@ fn services(out: &mut Vec<Item>) {
         resume = 0;
         if EnumServicesStatusExW(scm, SC_ENUM_PROCESS_INFO, SERVICE_WIN32, SERVICE_STATE_ALL, Some(&mut buf), &mut need, &mut count, Some(&mut resume), None).is_ok() {
             let list = std::slice::from_raw_parts(buf.as_ptr() as *const ENUM_SERVICE_STATUS_PROCESSW, count as usize);
+            let marked = marked_services();
             for s in list {
                 let Ok(svc) = OpenServiceW(scm, s.lpServiceName, SERVICE_QUERY_CONFIG) else { continue };
                 let mut need = 0u32;
                 let _ = QueryServiceConfigW(svc, None, 0, &mut need);
                 let mut cb = vec![0u8; need as usize + 64];
                 let cfg = cb.as_mut_ptr() as *mut QUERY_SERVICE_CONFIGW;
-                if QueryServiceConfigW(svc, Some(cfg), cb.len() as u32, &mut need).is_ok() && (*cfg).dwStartType == SERVICE_AUTO_START {
+                let id = s.lpServiceName.to_string().unwrap_or_default();
+                if QueryServiceConfigW(svc, Some(cfg), cb.len() as u32, &mut need).is_ok() {
+                    let auto = (*cfg).dwStartType == SERVICE_AUTO_START;
+                    // Bizim kapattıklarımız da listede kalır ki geri açılabilsin.
+                    let ours = (*cfg).dwStartType == SERVICE_DEMAND_START && marked.iter().any(|m| m.eq_ignore_ascii_case(&id));
+                    if !(auto || ours) {
+                        let _ = CloseServiceHandle(svc);
+                        continue;
+                    }
                     let command = (*cfg).lpBinaryPathName.to_string().unwrap_or_default();
                     let path = exe_of(&command);
+                    let windows = is_windows_path(&path);
                     out.push(Item {
                         name: s.lpDisplayName.to_string().unwrap_or_default(),
                         source: t!("Hizmet (otomatik)", "Service (automatic)"),
-                        windows: is_windows_path(&path),
+                        windows,
                         command,
                         path,
-                        enabled: true,
-                        toggle: Toggle::None,
+                        enabled: auto,
+                        // Windows'un kendi hizmetleri buradan kapatılmaz (sistemi bozabilir).
+                        toggle: if windows { Toggle::None } else { Toggle::Service(id) },
                     });
                 }
                 let _ = CloseServiceHandle(svc);
@@ -291,14 +304,19 @@ pub fn scan() -> Vec<Item> {
     out
 }
 
-/// Öğeyi etkinleştir/devre dışı bırak. Hata metni döner (ör. yönetici gerekir).
-pub fn set_enabled(item: &Item, on: bool) -> std::result::Result<(), String> {
-    match &item.toggle {
+/// Değiştirme denemesinin sonucu: yetki yoksa yönetici olarak yeniden denenir.
+enum Fail {
+    Denied,
+    Other(String),
+}
+
+fn direct(toggle: &Toggle, on: bool) -> std::result::Result<(), Fail> {
+    match toggle {
         Toggle::Approved { hive, key, name } => unsafe {
             let mut k = HKEY::default();
             let path = HSTRING::from(format!("{APPROVED}{key}"));
             if RegCreateKeyExW(hkey(*hive), &path, 0, None, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, None, &mut k, None).is_err() {
-                return Err(t!("Bu öğeyi değiştirmek için yönetici izni gerekiyor", "Changing this item needs admin rights").into());
+                return Err(Fail::Denied);
             }
             // 02 = etkin, 03 = devre dışı; ardından devre dışı bırakılma zamanı (FILETIME).
             let mut data = [0u8; 12];
@@ -310,17 +328,127 @@ pub fn set_enabled(item: &Item, on: bool) -> std::result::Result<(), String> {
             }
             let r = RegSetValueExW(k, &HSTRING::from(name.as_str()), 0, REG_BINARY, Some(&data));
             let _ = RegCloseKey(k);
-            r.ok().map_err(|_| t!("Bu öğeyi değiştirmek için yönetici izni gerekiyor", "Changing this item needs admin rights").to_string())
+            r.ok().map_err(|_| Fail::Denied)
         },
         Toggle::Task(path) => unsafe {
-            let svc: ITaskService = CoCreateInstance(&TaskScheduler, None, CLSCTX_INPROC_SERVER).map_err(|e| e.message())?;
+            let other = |e: Error| Fail::Other(e.message());
+            let svc: ITaskService = CoCreateInstance(&TaskScheduler, None, CLSCTX_INPROC_SERVER).map_err(other)?;
             let v = VARIANT::default();
-            svc.Connect(&v, &v, &v, &v).map_err(|e| e.message())?;
+            svc.Connect(&v, &v, &v, &v).map_err(other)?;
             let (dir, name) = path.rsplit_once('\\').unwrap_or(("", path));
-            let folder = svc.GetFolder(&BSTR::from(if dir.is_empty() { "\\" } else { dir })).map_err(|e| e.message())?;
-            let task = folder.GetTask(&BSTR::from(name)).map_err(|e| e.message())?;
-            task.SetEnabled(VARIANT_BOOL::from(on)).map_err(|_| t!("Bu görevi değiştirmek için yönetici izni gerekiyor", "Changing this task needs admin rights").to_string())
+            let folder = svc.GetFolder(&BSTR::from(if dir.is_empty() { "\\" } else { dir })).map_err(other)?;
+            let task = folder.GetTask(&BSTR::from(name)).map_err(other)?;
+            task.SetEnabled(VARIANT_BOOL::from(on)).map_err(|_| Fail::Denied)
         },
-        Toggle::None => Err(t!("Bu öğe buradan kapatılamaz (hizmet/Winlogon)", "This item can't be turned off here (service/Winlogon)").into()),
+        Toggle::Service(name) => unsafe {
+            let scm = OpenSCManagerW(None, None, SC_MANAGER_CONNECT).map_err(|_| Fail::Denied)?;
+            let r = match OpenServiceW(scm, &HSTRING::from(name.as_str()), SERVICE_CHANGE_CONFIG) {
+                Ok(svc) => {
+                    let start = if on { SERVICE_AUTO_START } else { SERVICE_DEMAND_START };
+                    let r = ChangeServiceConfigW(svc, ENUM_SERVICE_TYPE(SERVICE_NO_CHANGE), start, SERVICE_ERROR(SERVICE_NO_CHANGE), None, None, None, None, None, None, None);
+                    let _ = CloseServiceHandle(svc);
+                    r.map_err(|e| if e.code() == ERROR_ACCESS_DENIED.to_hresult() { Fail::Denied } else { Fail::Other(e.message()) })
+                }
+                Err(e) if e.code() == ERROR_ACCESS_DENIED.to_hresult() => Err(Fail::Denied),
+                Err(e) => Err(Fail::Other(e.message())),
+            };
+            let _ = CloseServiceHandle(scm);
+            if r.is_ok() {
+                mark_service(name, !on);
+            }
+            r
+        },
+        Toggle::None => Err(Fail::Other(t!("Bu öğe buradan kapatılamaz (Winlogon/RunOnce/ilke)", "This item can't be turned off here (Winlogon/RunOnce/policy)").into())),
+    }
+}
+
+/// CarlUI'nin elle başlatmaya çevirdiği hizmetler; listede kalsınlar ki geri açılabilsinler.
+const OFF_SERVICES: &str = "Software\\CarlUI\\DisabledServices";
+
+fn mark_service(name: &str, off: bool) {
+    unsafe {
+        let mut k = HKEY::default();
+        // Yönetici olarak çalışan yardımcı yazsa da kayıt asıl kullanıcınındır (aynı oturum).
+        if RegCreateKeyExW(HKEY_CURRENT_USER, &HSTRING::from(OFF_SERVICES), 0, None, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, None, &mut k, None).is_ok() {
+            if off {
+                let _ = RegSetValueExW(k, &HSTRING::from(name), 0, REG_DWORD, Some(&1u32.to_le_bytes()));
+            } else {
+                let _ = RegDeleteValueW(k, &HSTRING::from(name));
+            }
+            let _ = RegCloseKey(k);
+        }
+    }
+}
+
+fn marked_services() -> Vec<String> {
+    values(HKEY_CURRENT_USER, OFF_SERVICES).into_iter().map(|(n, ..)| n).collect()
+}
+
+/// Yönetici olarak çalışan yardımcıya geçirilecek argümanlar.
+fn args(toggle: &Toggle, on: bool) -> Vec<String> {
+    let on = if on { "1" } else { "0" }.to_string();
+    match toggle {
+        Toggle::Approved { hive, key, name } => vec!["approved".into(), on, hive.to_string(), key.to_string(), name.clone()],
+        Toggle::Task(p) => vec!["task".into(), on, p.clone()],
+        Toggle::Service(n) => vec!["service".into(), on, n.clone()],
+        Toggle::None => vec![],
+    }
+}
+
+/// `--startup-set …` ile açılan yönetici yardımcısı: değişikliği yapar, çıkış kodu 0 = başarılı.
+pub fn run_helper(a: &[String]) -> i32 {
+    let on = a.get(1).map(|s| s == "1").unwrap_or(false);
+    let key = |k: &str| -> Option<&'static str> { ["Run", "Run32", "StartupFolder"].into_iter().find(|x| *x == k) };
+    let toggle = match (a.first().map(String::as_str), a.get(2), a.get(3), a.get(4)) {
+        (Some("approved"), Some(h), Some(k), Some(n)) => match (h.parse(), key(k)) {
+            (Ok(hive), Some(key)) => Toggle::Approved { hive, key, name: n.clone() },
+            _ => return 2,
+        },
+        (Some("task"), Some(p), ..) => Toggle::Task(p.clone()),
+        (Some("service"), Some(n), ..) => Toggle::Service(n.clone()),
+        _ => return 2,
+    };
+    match direct(&toggle, on) {
+        Ok(()) => 0,
+        Err(_) => 1,
+    }
+}
+
+fn quote(s: &str) -> String {
+    format!("\"{}\"", s.replace('"', "\\\""))
+}
+
+/// Kendini yönetici olarak (UAC sorusuyla) çalıştırıp değişikliği ona yaptırır.
+fn elevated(toggle: &Toggle, on: bool) -> std::result::Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let params = std::iter::once("--startup-set".to_string()).chain(args(toggle, on).iter().map(|a| quote(a))).collect::<Vec<_>>().join(" ");
+    let (exe_w, params_w) = (HSTRING::from(exe.as_os_str()), HSTRING::from(params));
+    unsafe {
+        let mut info = SHELLEXECUTEINFOW {
+            cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+            fMask: SEE_MASK_NOCLOSEPROCESS,
+            lpVerb: w!("runas"),
+            lpFile: PCWSTR(exe_w.as_ptr()),
+            lpParameters: PCWSTR(params_w.as_ptr()),
+            nShow: 0,
+            ..Default::default()
+        };
+        if ShellExecuteExW(&mut info).is_err() || info.hProcess.is_invalid() {
+            return Err(t!("Yönetici izni verilmedi", "Admin permission was not given").into());
+        }
+        windows::Win32::System::Threading::WaitForSingleObject(info.hProcess, 30_000);
+        let mut code = 1u32;
+        let _ = windows::Win32::System::Threading::GetExitCodeProcess(info.hProcess, &mut code);
+        let _ = CloseHandle(info.hProcess);
+        if code == 0 { Ok(()) } else { Err(t!("Yönetici olarak da değiştirilemedi", "Couldn't change it even as admin").into()) }
+    }
+}
+
+/// Öğeyi etkinleştir/devre dışı bırak. Yetki yetmezse UAC ile yönetici izni ister.
+pub fn set_enabled(item: &Item, on: bool) -> std::result::Result<(), String> {
+    match direct(&item.toggle, on) {
+        Ok(()) => Ok(()),
+        Err(Fail::Other(e)) => Err(e),
+        Err(Fail::Denied) => elevated(&item.toggle, on),
     }
 }

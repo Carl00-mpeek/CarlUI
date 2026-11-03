@@ -636,6 +636,14 @@ fn main() -> Result<()> {
     log::init("taskmgr");
     // Ayarı okumak arayüz dilini de uygular.
     let _ = carlui_core::config::load();
+    // Yönetici izni gereken başlangıç değişikliği için kendini UAC ile açtığında.
+    let argv: Vec<String> = std::env::args().collect();
+    if let Some(i) = argv.iter().position(|a| a == "--startup-set") {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        }
+        std::process::exit(startup::run_helper(&argv[i + 1..]));
+    }
     let pid_arg = std::env::args().skip_while(|a| a != "--pid").nth(1).and_then(|s| s.parse::<u32>().ok());
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
