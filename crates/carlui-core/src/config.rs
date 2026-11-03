@@ -32,6 +32,31 @@ pub struct Config {
     pub stats: StatsConfig,
     pub cursor: CursorConfig,
     pub download: DownloadConfig,
+    pub alerts: AlertsConfig,
+}
+
+/// Sıcaklık ve disk uyarıları: sınır aşılınca adada bildirim.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct AlertsConfig {
+    /// CPU sıcaklığı (°C); yalnızca CarlUI Sensors çalışıyorsa okunur.
+    pub cpu: bool,
+    pub cpu_temp: u32,
+    /// GPU sıcaklığı (°C; NVIDIA).
+    pub gpu: bool,
+    pub gpu_temp: u32,
+    /// SSD/disk sıcaklığı (°C).
+    pub disk: bool,
+    pub disk_temp: u32,
+    /// Bir sürücüde (C:, D: …) boş alan bu yüzdenin altına inince.
+    pub space: bool,
+    pub space_pct: u32,
+}
+
+impl Default for AlertsConfig {
+    fn default() -> Self {
+        Self { cpu: true, cpu_temp: 90, gpu: true, gpu_temp: 85, disk: true, disk_temp: 70, space: true, space_pct: 10 }
+    }
 }
 
 /// Adanın indirme hapında hangi bilgiler görünsün.

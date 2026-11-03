@@ -22,4 +22,4 @@ gerekmez. Kurucu imzasız olduğu için SmartScreen uyarı verebilir:
   üstünde görünemez; oyunu "kenarlıksız pencere" moduna al.
 
 **SHA-256 (CarlUI-Setup.exe):**
-`c52ba81ad4633608255409191753fa1c16f90c234a13a986f0f8cea11c14b15c`
+`3563d3310a40bc053c981eb4d83b9694dc96d62a26b3439e282ff4ace31e3597`

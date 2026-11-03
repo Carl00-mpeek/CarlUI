@@ -65,6 +65,9 @@
   oyunu küçültmeden açılır.
 - **Kontrol merkezi:** Tepsi ikonları, ses (çıkış aygıtı ve uygulama başına
   ses), Wi-Fi, Bluetooth, parlaklık.
+- **Uyarılar:** CPU, GPU ya da SSD belirlediğin sıcaklığı geçince veya bir
+  sürücü dolmak üzereyken bildirim gelir. Sınırlar **Ayarlar → Ada ve
+  bildirimler → Uyarılar** bölümünde.
 - **Oyun modu:** Tam ekranda arayüz çekilir, modüller uyku moduna geçer,
   bildirimler oyundan sonra gösterilir.
 - **Görev yöneticisi, dosya dönüştürücü, ekran görüntüsü aracı** ve hepsini

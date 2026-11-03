@@ -57,4 +57,25 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.slider(p, t!("Ekranda kalma süresi", "Time on screen"), "", cfg.notify.duration_ms as f32, 1000.0, 10000.0, 250.0, |v| t!(format!("{:.1} sn", v / 1000.0).replace('.', ","), format!("{:.1} s", v / 1000.0)), |c, v| c.notify.duration_ms = v as u32);
     f.toggle(p, t!("Tam ekran pencerede de göster", "Also show over maximized windows"), "", cfg.notify.over_maximized, |c| c.notify.over_maximized ^= true);
     f.toggle(p, t!("Windows bildirim balonlarını gizle", "Hide Windows notification banners"), t!("Bildirimler yalnızca adada görünür; Bildirim Merkezi'ne yine düşer.", "Notifications only show on the island; they still reach the Notification Center."), cfg.notify.hide_windows_banners, |c| c.notify.hide_windows_banners ^= true);
+
+    // Sınır aşılınca adada bildirim (bkz. carlui-island/src/alerts.rs).
+    f.section(p, t!("Uyarılar", "Alerts"));
+    let a = &cfg.alerts;
+    let deg = |v: f32| format!("{v:.0} °C");
+    f.toggle(p, t!("CPU ısınınca", "When the CPU gets hot"), t!("CPU sıcaklığı için CarlUI Sensors gerekir.", "CPU temperature needs CarlUI Sensors."), a.cpu, |c| c.alerts.cpu ^= true);
+    if a.cpu {
+        f.slider(p, t!("CPU sınırı", "CPU limit"), "", a.cpu_temp as f32, 60.0, 105.0, 1.0, deg, |c, v| c.alerts.cpu_temp = v as u32);
+    }
+    f.toggle(p, t!("GPU ısınınca", "When the GPU gets hot"), "", a.gpu, |c| c.alerts.gpu ^= true);
+    if a.gpu {
+        f.slider(p, t!("GPU sınırı", "GPU limit"), "", a.gpu_temp as f32, 60.0, 100.0, 1.0, deg, |c, v| c.alerts.gpu_temp = v as u32);
+    }
+    f.toggle(p, t!("SSD / disk ısınınca", "When an SSD or disk gets hot"), "", a.disk, |c| c.alerts.disk ^= true);
+    if a.disk {
+        f.slider(p, t!("Disk sınırı", "Disk limit"), "", a.disk_temp as f32, 40.0, 90.0, 1.0, deg, |c, v| c.alerts.disk_temp = v as u32);
+    }
+    f.toggle(p, t!("Disk dolmak üzereyken", "When a drive is almost full"), t!("C:, D: … sürücülerinden biri bu kadar boş alana inince.", "When any drive (C:, D: …) drops to this much free space."), a.space, |c| c.alerts.space ^= true);
+    if a.space {
+        f.slider(p, t!("Boş alan sınırı", "Free space limit"), "", a.space_pct as f32, 1.0, 30.0, 1.0, |v| carlui_core::lang::pct(v), |c, v| c.alerts.space_pct = v as u32);
+    }
 }

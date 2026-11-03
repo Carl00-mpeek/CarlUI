@@ -17,6 +17,7 @@
 extern crate carlui_core;
 
 mod activate;
+mod alerts;
 mod audio;
 mod banners;
 mod clipper;
@@ -1102,6 +1103,7 @@ fn main() -> Result<()> {
         downloads::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
         update::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
         netwatch::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
+        alerts::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
 
         let icons_in: Arc<Mutex<Vec<IconPx>>> = Arc::default();
         let spot = Launcher::new(

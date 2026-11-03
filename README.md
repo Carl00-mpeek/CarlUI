@@ -65,6 +65,9 @@
   games without minimizing them.
 - **Control center:** Tray icons, volume (output device and per-app volume),
   Wi-Fi, Bluetooth, brightness.
+- **Alerts:** A notification when the CPU, GPU or an SSD passes the
+  temperature you set, or when a drive is almost full. Limits are in
+  **Settings → Island and notifications → Alerts**.
 - **Game mode:** In fullscreen the UI steps aside, modules go to sleep and
   notifications wait until you're done.
 - **Task manager, file converter, screenshot tool** and a **Settings** window
