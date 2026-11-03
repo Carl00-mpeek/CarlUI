@@ -35,6 +35,7 @@ mod notify;
 mod searching;
 mod shots;
 mod timing;
+mod update;
 mod viewer;
 
 use carlui_core::{
@@ -1094,6 +1095,7 @@ fn main() -> Result<()> {
         notify::set_hide_banners(cfg.notify.enabled && cfg.notify.hide_windows_banners);
         notify::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
         downloads::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
+        update::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
 
         let icons_in: Arc<Mutex<Vec<IconPx>>> = Arc::default();
         let spot = Launcher::new(

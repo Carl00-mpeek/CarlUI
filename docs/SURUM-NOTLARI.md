@@ -9,6 +9,8 @@ menüsü, pano geçmişi (Win+V, tam ekran oyunun üstünde de), kontrol merkezi
 oyun modu, görev yöneticisi, dosya dönüştürücü ve Ayarlar penceresi. Kurucuda
 isteğe bağlı CarlUI duvar kâğıdı. Arayüz Türkçe ve İngilizce: Windows'un
 görüntü diline uyar, **Ayarlar → Genel → Dil** bölümünden değiştirilebilir.
+Yeni sürüm çıkınca adada bildirim gelir (günde bir kez GitHub'a bakılır,
+kendiliğinden kurulmaz; **Ayarlar → Genel → Güncellemeler**).
 
 **Kurulum:** `CarlUI-Setup.exe` dosyasını indirip çalıştır. Yönetici izni
 gerekmez. Kurucu imzasız olduğu için SmartScreen uyarı verebilir:
@@ -20,4 +22,4 @@ gerekmez. Kurucu imzasız olduğu için SmartScreen uyarı verebilir:
   üstünde görünemez; oyunu "kenarlıksız pencere" moduna al.
 
 **SHA-256 (CarlUI-Setup.exe):**
-`b87acdb997f7398db0fcf22ed9121297f4daf98de81aaa93aa6ac6265eb2dc6a`
+`dff3a16668b414d3a40db4379a8cd0bc5e79a229b624a95844d12bfc63d86889`

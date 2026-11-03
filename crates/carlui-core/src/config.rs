@@ -277,11 +277,13 @@ pub struct GeneralConfig {
     pub start_with_windows: bool,
     /// Arayüz dili: "auto" (Windows'un diline göre), "tr" ya da "en".
     pub language: String,
+    /// Günde bir kez GitHub'da yeni sürüm var mı diye bak, varsa bildir.
+    pub check_updates: bool,
 }
 
 impl Default for GeneralConfig {
     fn default() -> Self {
-        Self { hide_taskbar: true, top_monitor: 0, start_with_windows: true, language: "auto".into() }
+        Self { hide_taskbar: true, top_monitor: 0, start_with_windows: true, language: "auto".into(), check_updates: true }
     }
 }
 

@@ -82,6 +82,7 @@ features = [
     "UI_Notifications_Management",
     "Web",
     "Web_Http",
+    "Web_Http_Headers",
     "Win32_System_Memory",
     "Win32_System_Ole",
     "Win32_System_Power",

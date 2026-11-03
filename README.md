@@ -73,6 +73,14 @@ SHA-256 değerini Releases sayfasındakiyle karşılaştırabilirsin.
   klasöründeki `extension` klasöründe gelir; nasıl yükleneceği **Ayarlar →
   Arama → Tarayıcı eklentisi** bölümünde anlatılır.
 
+### Güncelleme
+
+CarlUI günde bir kez GitHub'da yeni sürüm olup olmadığına bakar; varsa adada
+bildirim çıkar, tıklayınca sürüm sayfası açılır. Hiçbir şey kendiliğinden
+indirilip kurulmaz: yeni `CarlUI-Setup.exe`'yi çalıştırıp **Güncelle**'ye
+basarsın, ayarların korunur. Denetim **Ayarlar → Genel → Güncellemeler**
+bölümünden kapatılabilir.
+
 ### Kaldırma
 
 **Windows Ayarları → Uygulamalar → Yüklü uygulamalar** listesinden ya da Başlat menüsündeki **CarlUI'yi
