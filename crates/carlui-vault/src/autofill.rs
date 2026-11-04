@@ -67,6 +67,83 @@ pub fn credentials(body: &Body) -> (String, String) {
     (user, pass)
 }
 
+/// Sayfanın kökeni ("https://www.roblox.com"); kayda yol ve sorgu (oturum
+/// belirteci içerebilir) yazılmasın diye yalnızca bu saklanır.
+pub fn origin(url: &str) -> Option<String> {
+    let (scheme, rest) = url.trim().split_once("://")?;
+    let scheme = scheme.to_ascii_lowercase();
+    if scheme != "https" && scheme != "http" {
+        return None;
+    }
+    let auth = rest.split(['/', '?', '#']).next()?.rsplit('@').next()?.to_ascii_lowercase();
+    (!auth.is_empty()).then(|| format!("{scheme}://{auth}"))
+}
+
+/// Kayıt adı: alan adının asıl kısmı ("accounts.google.com" → "Google",
+/// "www.hepsiburada.com.tr" → "Hepsiburada"); IP ya da tek parçalı adda makinenin kendisi.
+pub fn site_name(url: &str) -> String {
+    let Some((_, host, _)) = parts(url, false) else { return String::new() };
+    let labels: Vec<&str> = host.split('.').collect();
+    if labels.len() < 2 || host.parse::<std::net::Ipv4Addr>().is_ok() {
+        return host;
+    }
+    let n = labels.len();
+    // "com.tr", "co.uk" gibi ikili uzantılar.
+    let second = labels[n - 2];
+    let pick = if n >= 3 && labels[n - 1].len() == 2 && ["com", "co", "org", "net", "gov", "edu", "ac", "gen", "web", "bel"].contains(&second) { labels[n - 3] } else { second };
+    let mut c = pick.chars();
+    c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
+}
+
+/// Tarayıcıda gönderilen giriş/kayıt formunun kasadaki karşılığı.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Capture {
+    /// Bu site ve kullanıcı adıyla kayıt yok.
+    New,
+    /// Kayıt var, parola farklı (kaydın kimliği).
+    Changed(String),
+    /// Aynısı zaten kayıtlı.
+    Same,
+}
+
+/// Yakalanan bilgiyi kasadaki kayıtlarla karşılaştırır. Kullanıcı adı büyük/küçük
+/// harf duyarsız eşlenir; form kullanıcı adı vermediyse sitede tek kayıt varsa o sayılır.
+pub fn classify<'a>(items: impl IntoIterator<Item = (&'a str, &'a Body)>, url: &str, user: &str, password: &str) -> Capture {
+    let user = user.trim();
+    let site: Vec<(&str, String, String)> = items
+        .into_iter()
+        .filter(|(_, b)| body_matches(b, url))
+        .map(|(id, b)| {
+            let (u, p) = credentials(b);
+            (id, u, p)
+        })
+        .collect();
+    let same_user: Vec<_> = if user.is_empty() && site.len() == 1 { site.iter().collect() } else { site.iter().filter(|(_, u, _)| u.eq_ignore_ascii_case(user)).collect() };
+    if same_user.iter().any(|(_, _, p)| p == password) {
+        return Capture::Same;
+    }
+    match same_user.first() {
+        Some((id, _, _)) => Capture::Changed(id.to_string()),
+        None => Capture::New,
+    }
+}
+
+/// Kaydın parola alanını değiştirir (yoksa ekler).
+pub fn set_password(body: &mut Body, password: &str) {
+    match body.fields.iter_mut().find(|f| f.kind == FieldKind::Secret) {
+        Some(f) => f.value = password.into(),
+        None => body.fields.push(crate::entry::Field { label: carlui_core::t!("Parola", "Password").into(), value: password.into(), kind: FieldKind::Secret, fmt: Default::default() }),
+    }
+}
+
+/// Yakalanan bilgiden yeni giriş kaydı.
+pub fn new_login(url: &str, user: &str, password: &str) -> (crate::entry::Meta, Body) {
+    let origin = origin(url).unwrap_or_default();
+    let name = site_name(url);
+    let i = crate::import::login(crate::import::Login { name: &name, url: &origin, user, password, totp: "", notes: "" });
+    (i.meta, i.body)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,5 +180,36 @@ mod tests {
         assert_eq!(credentials(&body), ("carl@ornek.com".into(), "s3cret".into()));
         assert!(body_matches(&body, "https://github.com/login"));
         assert!(!body_matches(&body, "https://gitlab.com/login"));
+    }
+    #[test]
+    fn captured_logins() {
+        assert_eq!(origin("https://www.Roblox.com/signup?ref=abc#x").as_deref(), Some("https://www.roblox.com"));
+        assert_eq!(origin("http://localhost:8765/login").as_deref(), Some("http://localhost:8765"));
+        assert_eq!(origin("https://user:pw@site.com/").as_deref(), Some("https://site.com"));
+        assert_eq!(origin("file:///C:/x.html"), None);
+        assert_eq!(site_name("https://www.roblox.com/signup"), "Roblox");
+        assert_eq!(site_name("https://accounts.google.com/"), "Google");
+        assert_eq!(site_name("https://giris.hepsiburada.com.tr/"), "Hepsiburada");
+        assert_eq!(site_name("https://www.bbc.co.uk/"), "Bbc");
+        assert_eq!(site_name("http://192.168.1.1/"), "192.168.1.1");
+        assert_eq!(site_name("http://localhost:3000/"), "localhost");
+
+        let (meta, body) = new_login("https://www.roblox.com/signup?ref=abc", "carl", "Parola-1");
+        assert_eq!(meta.name, "Roblox");
+        assert_eq!(credentials(&body), ("carl".into(), "Parola-1".into()));
+        assert!(body.fields.iter().any(|f| f.kind == FieldKind::Url && f.value == "https://www.roblox.com"), "yol ve sorgu saklanmaz");
+        assert!(body_matches(&body, "https://www.roblox.com/login"));
+
+        let (_, other) = new_login("https://github.com/login", "carl", "x");
+        let items = [("r", &body), ("g", &other)];
+        assert_eq!(classify(items, "https://www.roblox.com/login", "Carl", "Parola-1"), Capture::Same);
+        assert_eq!(classify(items, "https://www.roblox.com/login", "carl", "Yeni-2"), Capture::Changed("r".into()));
+        assert_eq!(classify(items, "https://www.roblox.com/login", "baska", "Parola-1"), Capture::New);
+        assert_eq!(classify(items, "https://www.roblox.com/login", "", "Yeni-2"), Capture::Changed("r".into()), "kullanıcı adı yoksa tek kayıt");
+        assert_eq!(classify(items, "https://roblox.com.evil.io/login", "carl", "Parola-1"), Capture::New, "benzer alan adı eşlenmez");
+
+        let mut b = body.clone();
+        set_password(&mut b, "Yeni-2");
+        assert_eq!(credentials(&b).1, "Yeni-2");
     }
 }

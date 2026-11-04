@@ -65,6 +65,11 @@ pub enum Request {
     /// parola kendi penceresine yazılır); açılınca odak `back` penceresine
     /// (istek anındaki tarayıcı) döner ki eklenti doldurmayı sürdürsün.
     Open { back: isize },
+    /// Tarayıcı eklentisi: sayfada gönderilen giriş/kayıt formunun bilgileri.
+    /// `commit` false ise yalnızca durum sorulur (`Reply::status`: "new",
+    /// "changed", "same"); true ise kullanıcı sayfadaki "Kaydet"e basmıştır,
+    /// kayıt eklenir ya da parolası güncellenir.
+    Save { url: String, user: String, password: String, commit: bool },
 }
 
 /// Bir sayfaya uyan kayıt (yalnızca ad ve kullanıcı adı; parola yok).
@@ -89,6 +94,9 @@ pub struct Reply {
     /// Kasa kilitli (eklenti "Carl Vault'u aç" gösterir).
     #[serde(default)]
     pub locked: bool,
+    /// `Save` yanıtı: "new", "changed" ya da "same".
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub status: String,
 }
 
 impl Reply {
@@ -221,6 +229,8 @@ mod tests {
         assert_eq!(serde_json::from_str::<Request>(&j).unwrap(), r);
         let r = Request::ImportTotp { uri: "otpauth://totp/X?secret=AB".into() };
         assert!(serde_json::to_string(&r).unwrap().contains("\"op\":\"import-totp\""));
+        let r = Request::Save { url: "https://roblox.com".into(), user: "carl".into(), password: "p".into(), commit: true };
+        assert_eq!(serde_json::from_str::<Request>(&serde_json::to_string(&r).unwrap()).unwrap(), r);
         let r = Request::Open { back: 42 };
         assert!(serde_json::to_string(&r).unwrap().contains("\"op\":\"open\""));
         let reply = Reply::no("x");

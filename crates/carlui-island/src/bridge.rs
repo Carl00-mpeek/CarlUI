@@ -8,7 +8,9 @@
 //!   seçimi (CarlUI indirir / tarayıcıya bırak) yanıt olarak döner;
 //!   eklenti tarayıcıdaki indirmeyi buna göre iptal eder ya da sürdürür.
 //! - `POST /vault/find`, `/vault/fill`, `/vault/open` → Carl Vault ile giriş
-//!   sayfası doldurma; istek kasanın borusuna aktarılır (bkz. `vaultlink`).
+//!   sayfası doldurma; `/vault/save` → sayfada gönderilen giriş/kayıt formunu
+//!   kasaya sorma ve (kullanıcı onaylayınca) kaydetme. İstek kasanın borusuna
+//!   aktarılır (bkz. `vaultlink`).
 //! - `POST /progress` → yönetici kapalıyken tarayıcının kendi indirmeleri
 //!   gerçek yüzde ve hızla adada görünür.
 //!
@@ -189,9 +191,13 @@ fn handle(mut s: TcpStream, hwnd: isize) {
         ("POST", p) if p.starts_with("/vault/") && !VAULT_FILL.load(Ordering::Relaxed) => {
             respond(&mut s, "200 OK", &serde_json::json!({ "ok": false, "off": true, "message": t!("Tarayıcıda doldurma Ayarlar'da kapalı.", "Browser filling is turned off in Settings.") }).to_string());
         }
-        ("POST", "/vault/find") | ("POST", "/vault/fill") => {
+        ("POST", "/vault/find") | ("POST", "/vault/fill") | ("POST", "/vault/save") => {
             use carlui_core::vaultlink::{ask, Request};
-            let req = if path == "/vault/find" { Request::Find { url: g("url") } } else { Request::Fill { url: g("url"), id: g("id") } };
+            let req = match path.as_str() {
+                "/vault/find" => Request::Find { url: g("url") },
+                "/vault/fill" => Request::Fill { url: g("url"), id: g("id") },
+                _ => Request::Save { url: g("url"), user: g("user"), password: g("password"), commit: v.get("commit").and_then(|x| x.as_bool()).unwrap_or(false) },
+            };
             let body = match ask(&req) {
                 Ok(r) => serde_json::to_string(&r).unwrap_or_default(),
                 Err(m) => serde_json::json!({ "ok": false, "closed": true, "message": m }).to_string(),

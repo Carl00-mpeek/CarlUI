@@ -27,8 +27,9 @@ Son durum: 2026-11-04. Aşama 1–5 bitti ve main'e push edildi.
 - **Firefox:** eklenti 1.2.0 zip'inin AMO'da yeniden imzalanması gerekiyor (kullanıcı yapacak).
 - **Helium:** Ctrl+Shift+L kısayolu atanmış ama yapay tuşla açılmadı; elle denenecek.
 - **Tarayıcıda doldurma:** kayıtta 2FA alanı varsa giriş sonrası kod alanını da doldurmak (isteğe bağlı).
-- **Kayıtta yakalama:** tarayıcıda kayıt/giriş formu gönderilince kullanıcı adı ve parolayı yakalayıp
-  "kaydedilsin mi?" diye sormak (sıradaki iş).
+- **Kayıtta yakalama (eklenti 1.3.0):** yazıldı; arka plan mantığı Node'da, sayfa şeridi deneme sayfasında denendi.
+  Gerçek kasa + ada ile uçtan uca canlı denenmedi (kurulu ada eski; yeni sürüm kurulunca denenmeli).
+  Helium'da eklenti kartında ↻ gerekir; Firefox için 1.3.0 zip imzalanmalı.
 - **Passkey:** Windows 11 üçüncü taraf passkey sağlayıcı (eklenti kimlik doğrulayıcı) olarak kaydolmak.
   MSIX paketi + COM sunucu gerekir; büyük iş, kullanıcıyla konuşuldu.
 - **Ayrı işler:** Win menüsü ya da kurucu (bkz. hafıza notu "Modül 5-8 durumu").

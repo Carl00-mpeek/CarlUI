@@ -29,8 +29,15 @@ boyut görünür.
     orada yazın; sayfaya yazmayın, çünkü sayfa kendi kutularına basılan tuşları
     okuyabilir. Kilit açılınca tarayıcıya dönülür ve bilgiler kendiliğinden
     yazılır (2 dk bekler).
+- **Yeni girişi kaydetme (1.3.0):** Bir siteye kayıt olunca ya da kasada
+  olmayan bir hesapla giriş yapınca sağ üstte "Carl Vault'a kaydedilsin mi?"
+  çıkar. **Kaydet**'e basmadan hiçbir şey kaydedilmez. Parola değişmişse
+  "Güncelle" sorulur. Kasada aynısı varsa hiçbir şey sorulmaz. Kasa kilitliyse
+  yalnızca kayıt formlarında sorulur, "Aç ve kaydet" ile kilit açılınca yazılır.
+  Kullanıcı adı ve parola beklerken yalnızca eklentinin belleğinde durur (en
+  çok 3 dk), sayfaya geri verilmez.
 - Ayarlar → Carl Vault → "Tarayıcıda doldurma" ile tamamen kapatılabilir
-  (sayfa içi düğme de kaybolur).
+  (sayfa içi düğme ve kaydetme sorusu da kaybolur).
 - Eklenti güncellenince Chromium tabanlı tarayıcılarda (Chrome, Edge, Helium)
   uzantılar sayfasında CarlUI kartındaki ↻ (yeniden yükle) düğmesine basın.
 - Not: Bilgisayarda kötü amaçlı bir program çalışıyorsa, kasa açıkken hiçbir

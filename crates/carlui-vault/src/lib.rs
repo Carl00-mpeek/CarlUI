@@ -35,6 +35,10 @@
 //! İçe aktarma (`import`): başka şifre yöneticilerinin ve 2FA uygulamalarının
 //! şifresiz dışa aktarımları (CSV / JSON / otpauth listesi) ve Google
 //! Authenticator aktarım QR'ı önizlenip tek seferde kasaya yazılır.
+//!
+//! Yeni girişi kaydetme (`autofill::classify`, pencere tarafı `app/capture.rs`):
+//! eklenti gönderilen formu sorar; kasada yoksa ya da parola değişmişse sayfa
+//! "kaydedilsin mi?" der, kullanıcı onaylarsa kayıt eklenir/güncellenir.
 
 pub mod autofill;
 pub mod card;

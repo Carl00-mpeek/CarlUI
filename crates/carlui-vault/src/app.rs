@@ -33,6 +33,7 @@ use windows::Win32::{
 };
 use zeroize::Zeroizing;
 
+mod capture;
 pub mod importing;
 
 pub const TIMER_CLIP: usize = 3;
@@ -418,7 +419,7 @@ impl App {
         if let Request::ImportTotp { uri } = req {
             return self.import_totp(Zeroizing::new(uri));
         }
-        if matches!(req, Request::Find { .. } | Request::Fill { .. } | Request::Open { .. }) && !self.cfg.vault.browser_fill {
+        if matches!(req, Request::Find { .. } | Request::Fill { .. } | Request::Open { .. } | Request::Save { .. }) && !self.cfg.vault.browser_fill {
             return Reply::no(t!("Tarayıcıda doldurma Ayarlar'da kapalı.", "Browser filling is turned off in Settings."));
         }
         if let Request::Open { back } = req {
@@ -432,6 +433,7 @@ impl App {
             Request::Type { token, hwnd } => self.type_token(&token, hwnd, client_pid),
             Request::Find { url } => self.find_logins(&url),
             Request::Fill { url, id } => self.fill_login(&url, &id),
+            Request::Save { url, user, password, commit } => self.save_login(&url, Zeroizing::new(user), Zeroizing::new(password), commit),
             Request::ImportTotp { .. } | Request::Open { .. } => unreachable!(),
         }
     }
@@ -528,6 +530,7 @@ impl App {
     }
 
     /// Tarayıcı istekleri yalnızca ayar açıkken ve öndeki pencere tarayıcıyken.
+    #[allow(clippy::result_large_err)]
     fn browser_gate(&self) -> Result<String, Reply> {
         if !self.cfg.vault.browser_fill {
             return Err(Reply::no(t!("Tarayıcıda doldurma Ayarlar'da kapalı.", "Browser filling is turned off in Settings.")));

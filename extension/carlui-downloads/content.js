@@ -249,6 +249,149 @@
     if (e.target !== host) menu.classList.remove("on");
   }, true);
 
+  // --- Gönderilen formu yakala ve "kaydedilsin mi?" sor ---------------------
+  // Parola kutusu dolu bir form gönderilince (submit, gönder düğmesi ya da
+  // Enter) kullanıcı adı ve parola arka plana gider; sayfada saklanmaz. Kasa
+  // yeni ya da değişmiş derse sağ üstte küçük bir şerit sorar. Kasaya ancak
+  // "Kaydet"e (gerçek tıklama) basılınca yazılır.
+  function grab(scope) {
+    const pws = [...scope.querySelectorAll("input[type=password]")].filter((e) => e.value);
+    if (!pws.length) return null;
+    // Kayıt formunda "new-password"; parola değiştirmede [eski, yeni, tekrar].
+    const fresh = pws.find((e) => e.autocomplete === "new-password");
+    const pw = fresh || (pws.length > 1 && pws[0].value !== pws[1].value ? pws[1] : pws[0]);
+    const all = [...scope.querySelectorAll("input")];
+    const before = all.slice(0, all.indexOf(pws[0])).filter((e) => textLike(e) && e.value.trim());
+    const user =
+      before.filter((e) => e.autocomplete === "username" || e.autocomplete === "email" || e.type === "email").pop() ||
+      before.filter(userLike).pop() ||
+      before.pop() ||
+      null;
+    const signup = !!fresh || pws.length >= 2 || /sign.?up|regist|kay[ıi]t|uye|üye|join|create|new.?account/i.test(location.pathname + " " + (scope.action || "") + " " + (scope.id || ""));
+    return { user: user ? user.value.trim() : "", password: pw.value, signup };
+  }
+
+  let sent = ""; // aynı bilgiyi iki kez yollama
+  async function captured(target) {
+    const scope = target?.closest?.("form") || target?.form || document;
+    const g = grab(scope);
+    if (!g) return;
+    const key = g.user + "\u0000" + g.password;
+    if (key === sent) return;
+    sent = key;
+    const r = await ask({ op: "vault-capture", ...g });
+    g.password = "";
+    if (r && r.show) offer(r);
+  }
+
+  document.addEventListener("submit", (e) => e.isTrusted && captured(e.target), true);
+  document.addEventListener("click", (e) => {
+    if (!e.isTrusted || e.composedPath().includes(host) || e.composedPath().includes(bar)) return;
+    const b = e.target.closest?.("button, input[type=submit], input[type=button], [role=button]");
+    if (b && (b.type === "submit" || b.form || b.closest("form") || /giri|log.?in|sign|kay[ıi]t|devam|next|continue|create|oluştur/i.test(b.textContent + " " + (b.value || "")))) captured(b);
+  }, true);
+  document.addEventListener("keydown", (e) => {
+    if (e.isTrusted && e.key === "Enter" && e.target instanceof HTMLInputElement) captured(e.target);
+  }, true);
+
+  const bar = document.createElement("carl-vault-save");
+  bar.style.cssText = "all:initial;position:fixed;z-index:2147483647;top:12px;right:12px;display:none";
+  const barRoot = bar.attachShadow({ mode: "closed" });
+  barRoot.innerHTML = `
+<style>
+  * { box-sizing: border-box; font: 400 13px/1.35 "Segoe UI", system-ui, sans-serif; }
+  .box { width: 330px; padding: 12px 12px 10px; border-radius: 10px; background: #23202a; color: #eee; box-shadow: 0 8px 28px rgba(0,0,0,.4); }
+  .head { display: flex; align-items: center; gap: 7px; font-weight: 600; color: #d9b8f5; margin-bottom: 6px; }
+  .head svg { width: 15px; height: 15px; }
+  .msg { overflow-wrap: anywhere; }
+  .msg b { font-weight: 600; color: #fff; }
+  .row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+  button { height: 28px; padding: 0 12px; border: 0; border-radius: 6px; cursor: pointer; font-weight: 600; }
+  .yes { background: #b06ce6; color: #fff; }
+  .yes:hover { background: #9b55d6; }
+  .no { background: #3a3445; color: #eee; }
+  .no:hover { background: #48405a; }
+  button:focus-visible { outline: 2px solid #fff; outline-offset: -3px; }
+</style>
+<div class="box" role="dialog" aria-label="Carl Vault">
+  <div class="head"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.6v4.1c0 3.2 2.3 5.8 5.5 6.8 3.2-1 5.5-3.6 5.5-6.8V3.6z"/></svg>Carl Vault</div>
+  <div class="msg"></div>
+  <div class="row"><button class="no">Şimdi değil</button><button class="yes">Kaydet</button></div>
+</div>`;
+  const barMsg = barRoot.querySelector(".msg");
+  const barRow = barRoot.querySelector(".row");
+  const yes = barRoot.querySelector(".yes");
+  const no = barRoot.querySelector(".no");
+  let saving = false;
+
+  function say(parts) {
+    // Site ve kullanıcı adı sayfadan gelir: yalnızca metin olarak yazılır.
+    barMsg.replaceChildren(...parts.map((p) => (typeof p === "string" ? document.createTextNode(p) : Object.assign(document.createElement("b"), { textContent: p.b }))));
+  }
+
+  function closeBar(ms) {
+    clearTimeout(closeBar.t);
+    closeBar.t = setTimeout(() => (bar.style.display = "none"), ms || 0);
+  }
+
+  function offer(r) {
+    if (saving) return;
+    const who = r.user ? [{ b: r.site }, " · ", { b: r.user }] : [{ b: r.site }];
+    if (r.status === "changed") {
+      say([...who, " için kayıtlı parola farklı. Carl Vault'ta güncellensin mi?"]);
+      yes.textContent = "Güncelle";
+    } else if (r.status === "locked" || r.status === "closed") {
+      say([...who, " hesabı Carl Vault'a kaydedilsin mi? Kasa kilitli; önce kilidi açman istenecek."]);
+      yes.textContent = "Aç ve kaydet";
+    } else {
+      say([...who, " hesabı Carl Vault'a kaydedilsin mi?"]);
+      yes.textContent = "Kaydet";
+    }
+    barRow.style.display = "flex";
+    if (!bar.isConnected) document.documentElement.append(bar);
+    bar.style.display = "block";
+    clearTimeout(closeBar.t);
+  }
+
+  function done(text) {
+    say([text]);
+    barRow.style.display = "none";
+    closeBar(3500);
+  }
+
+  yes.addEventListener("click", async (e) => {
+    if (!e.isTrusted || saving) return;
+    saving = true;
+    try {
+      let r = await ask({ op: "vault-save" });
+      if (r && r.retry) {
+        // Kilitli ya da kapalı: kasa öne gelir, parola oraya yazılır; açılınca kaydedilir.
+        say(["Carl Vault'ta kilidi aç; açılınca kaydedilecek."]);
+        barRow.style.display = "none";
+        const o = await ask({ op: "vault-open" });
+        if (!o || o.off || (!o.ok && !o.closed)) return done((o && o.message) || "Carl Vault açılamadı.");
+        const end = Date.now() + 120000;
+        while (Date.now() < end && r && r.retry) {
+          await new Promise((ok) => setTimeout(ok, 1000));
+          r = await ask({ op: "vault-save" });
+        }
+      }
+      if (r && r.ok) done(r.status === "same" ? "Zaten kayıtlı." : r.message || "Kaydedildi.");
+      else done((r && !r.retry && r.message) || "Kaydedilemedi; süre doldu.");
+    } finally {
+      saving = false;
+    }
+  });
+  no.addEventListener("click", (e) => {
+    if (!e.isTrusted) return;
+    ask({ op: "vault-dismiss" });
+    closeBar();
+  });
+  for (const t of ["mousedown", "pointerdown", "mouseup", "keydown"]) bar.addEventListener(t, (e) => e.stopPropagation());
+
+  // Form gönderilince sayfa değiştiyse soru yeni sayfada sürer.
+  ask({ op: "vault-pending" }).then((r) => r && r.show && offer(r));
+
   // Sayfa değiştikçe (tek sayfalık uygulamalar) yeniden bak; az sık.
   let pending = 0;
   const soon = () => {
