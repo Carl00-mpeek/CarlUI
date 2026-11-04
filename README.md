@@ -29,6 +29,11 @@
   <sub><b>Island</b> · live download progress (name, size, speed, time left), Steam games included, and notifications</sub>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/steam-en.png" alt="Steam download on the island"><br>
+  <sub><b>Steam download</b> · the game's name and total size come straight from Steam; downloaded amount, speed and time left are estimated from network and disk use</sub>
+</p>
+
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/calc-en.png" alt="Calculator"><br><sub><b>Search</b> · calculates as you type</sub></td>

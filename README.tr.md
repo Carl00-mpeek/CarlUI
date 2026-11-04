@@ -29,6 +29,11 @@
   <sub><b>Ada</b> · canlı indirme ilerlemesi (ad, boyut, hız, kalan süre), Steam oyunları dahil, ve bildirimler</sub>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/steam-tr.png" alt="Steam indirmesi adada"><br>
+  <sub><b>Steam indirmesi</b> · oyunun adı ve toplam boyutu Steam'den birebir gelir; inen miktar, hız ve kalan süre ağ ve disk kullanımından tahmin edilir</sub>
+</p>
+
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/calc-tr.png" alt="Hesap makinesi"><br><sub><b>Arama</b> · yazdıkça hesaplar</sub></td>
