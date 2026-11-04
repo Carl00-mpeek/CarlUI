@@ -1,6 +1,7 @@
 //! Bu modül "CarlUI'yi tek tıkla, yönetici izni istemeden ve çalışan sürümü
 //! bozmadan kur" sorununu arka plan iş parçacığında sıralı adımlarla çözüyor:
-//! çalışan CarlUI kibarca kapatılır, gömülü exe'ler kullanıcı klasörüne yazılır
+//! çalışan CarlUI kibarca kapatılır (açıksa Carl Vault da kilitlenip kapanır,
+//! sonda yeniden açılır), gömülü exe'ler kullanıcı klasörüne yazılır
 //! (kilitli bir exe varsa yeniden adlandırılıp yenisi yanına konur), Programlar
 //! listesine kayıt ve Başlat menüsü kısayolları eklenir. İsteğe bağlı adımlar:
 //! masaüstü kısayolu, imzalı Firefox eklentisi, CarlUI duvar kâğıdı, CPU
@@ -143,6 +144,9 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
             std::thread::sleep(Duration::from_millis(1200));
         }
     }
+    // Carl Vault açıksa kapatılır (kilitlenir) ve kurulumdan sonra yeni sürümü,
+    // kilitli olarak, yeniden açılır.
+    let vault_was_open = !o.dry && shell::quit_vault(Duration::from_secs(5));
     if let Err(e) = std::fs::create_dir_all(&o.dir) {
         return fail(vec![t!(format!("Klasör oluşturulamadı: {} ({e})", o.dir.display()), format!("Couldn't create folder: {} ({e})", o.dir.display()))]);
     }
@@ -259,6 +263,9 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
     if o.launch {
         tick(rep, t!("CarlUI başlatılıyor", "Starting CarlUI"));
         shell::open(&exe.display().to_string(), "");
+    }
+    if vault_was_open {
+        shell::open(&o.dir.join("carlui-vault.exe").display().to_string(), "");
     }
     Outcome { ok: true, notes }
 }

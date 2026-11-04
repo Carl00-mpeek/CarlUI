@@ -212,6 +212,40 @@ pub fn quit_carlui(timeout: Duration) -> bool {
     true
 }
 
+const VAULT_MUTEX: PCWSTR = w!("Local\\CarlUI.Vault");
+const VAULT_CLASS: PCWSTR = w!("CarlUI.Vault");
+
+fn vault_running() -> bool {
+    unsafe {
+        match OpenMutexW(SYNCHRONIZATION_SYNCHRONIZE, false, VAULT_MUTEX) {
+            Ok(h) => {
+                let _ = CloseHandle(h);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+}
+
+/// Carl Vault ayrı bir süreçtir ve CarlUI'nin "kapan" olayını dinlemez; açık
+/// kalırsa güncellemeden sonra da eski sürüm çalışır. Penceresine kapat
+/// iletisi yollanır (kasa kilitlenir, pano temizlenir). Açıktıysa true.
+pub fn quit_vault(timeout: Duration) -> bool {
+    if !vault_running() {
+        return false;
+    }
+    unsafe {
+        if let Ok(h) = FindWindowW(VAULT_CLASS, None) {
+            let _ = PostMessageW(h, WM_CLOSE, WPARAM(0), LPARAM(0));
+        }
+    }
+    let start = Instant::now();
+    while vault_running() && start.elapsed() < timeout {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    true
+}
+
 pub fn run_hidden(exe: &str, args: &[&str]) -> Option<String> {
     let out = Command::new(exe).args(args).creation_flags(NO_WINDOW).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).to_string())
