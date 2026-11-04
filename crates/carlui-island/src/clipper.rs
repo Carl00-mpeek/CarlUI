@@ -168,6 +168,9 @@ impl Clipper {
         self.scroll = 0;
         self.confirm_clear = false;
         self.confirm_delete = None;
+        // Eski liste unutulsun: yoksa `rebuild` önceki üst öğeyi korur ve
+        // araya yeni kayıt girdiyse en yeni değil o seçili açılır.
+        self.shown.clear();
         self.rebuild();
     }
 
