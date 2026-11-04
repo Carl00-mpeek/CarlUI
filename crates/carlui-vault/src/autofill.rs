@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn picks_fields() {
-        let f = |label: &str, value: &str, kind| Field { label: label.into(), value: value.into(), kind };
+        let f = |label: &str, value: &str, kind| Field { label: label.into(), value: value.into(), kind, fmt: Default::default() };
         let body = Body {
             fields: vec![f("Not", "x", FieldKind::Text), f("E-posta", "carl@ornek.com", FieldKind::Text), f("Parola", "s3cret", FieldKind::Secret), f("Adres", "https://github.com", FieldKind::Url)],
             file: None,

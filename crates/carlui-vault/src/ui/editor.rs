@@ -8,7 +8,8 @@ use crate::app::{Act, App, Editor, Focus};
 use carlui_core::t;
 use carlui_ui::paint::{Align, ORANGE, R, TEXT};
 use carlui_vault::{
-    entry::{now, Category, FieldKind},
+    card::{self, Part},
+    entry::{now, Category, FieldKind, Format},
     totp::{grouped, Totp},
 };
 
@@ -29,6 +30,46 @@ fn totp_row(p: &mut P, value: &str, x: f32, y: f32, cw: f32) {
         }
         Err(e) => p.text(&e.to_string(), R::new(x + 2.0, y, cw, 28.0), 12.5, false, ORANGE, 0.95, Align::Left),
     }
+}
+
+/// Kart alanının altındaki kısa bilgi: kart türü, numara hatası, süresi geçmiş.
+fn card_hint(fmt: Format, stored: &str) -> Option<(String, u32)> {
+    match fmt {
+        Format::CardNumber if !stored.is_empty() => {
+            let brand = card::brand(stored);
+            let full = stored.len() >= card::max_digits(fmt, stored).min(16);
+            match (brand, full, card::luhn(stored)) {
+                (_, true, false) => Some((t!("Numara geçersiz görünüyor; bir rakam yanlış olabilir.", "The number looks invalid; a digit may be wrong.").into(), ORANGE)),
+                (Some(b), _, _) => Some((b.to_string(), TEXT)),
+                _ => None,
+            }
+        }
+        Format::Expiry if card::expired(stored, now()) => Some((t!("Bu kartın süresi geçmiş.", "This card has expired.").into(), ORANGE)),
+        _ => None,
+    }
+}
+
+/// "Hızlı kopyala": sitelerin istediği farklı dizilimler (ayrı ay/yıl, AA/YY,
+/// AA/YYYY, boşluklu numara…) tek tıkla panoya. Kullanılan yüksekliği ekleyip yeni y döner.
+fn quick_copy(p: &mut P, x: f32, mut y: f32, cw: f32) -> f32 {
+    y += 4.0;
+    p.text(t!("Hızlı kopyala", "Quick copy"), R::new(x + 2.0, y, cw, 20.0), 12.0, true, TEXT, 0.6, Align::Left);
+    y += 24.0;
+    let mut cx = x;
+    for part in Part::ALL {
+        let label = part.title();
+        let bw = p.fonts.width(label, 12.5, false) + 26.0;
+        if cx + bw > x + cw {
+            cx = x;
+            y += 38.0;
+        }
+        let r = R::new(cx, y, bw, 30.0);
+        p.round(r, 15.0, 0xFFFFFF, if p.hover(r) { 0.12 } else { 0.06 });
+        p.text(label, r, 12.5, false, TEXT, 0.88, Align::Center);
+        p.hit(r, Act::CopyPart(part));
+        cx += bw + 6.0;
+    }
+    y + 44.0
 }
 
 fn size_text(n: u64) -> String {
@@ -123,9 +164,16 @@ pub fn paint(app: &App, e: &Editor, p: &mut P, w: f32, h: f32) -> f32 {
                 y += vh + 6.0;
                 totp_row(p, f.value.as_str(), x, y, cw);
                 y += 40.0;
+            } else if let Some((msg, col)) = card_hint(f.value.fmt, &f.value.value()) {
+                y += vh + 4.0;
+                p.text(&msg, R::new(x + 2.0, y, cw, 18.0), 12.0, false, col, 0.8, Align::Left);
+                y += 26.0;
             } else {
                 y += vh + 14.0;
             }
+        }
+        if e.category == Category::Card {
+            y = quick_copy(p, x, y, cw);
         }
         p.button(R::new(x, y, 130.0, 32.0), Some('\u{E710}'), t!("Alan", "Field"), Act::AddField(FieldKind::Text), true, false);
         p.button(R::new(x + 138.0, y, 150.0, 32.0), Some('\u{E710}'), t!("Gizli alan", "Secret field"), Act::AddField(FieldKind::Secret), true, false);

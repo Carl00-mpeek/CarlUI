@@ -57,12 +57,15 @@ impl Category {
         match self {
             Category::Password => vec![f(t!("Kullanıcı adı", "Username"), Text), f(t!("Parola", "Password"), Secret), f(t!("Adres", "Website"), Url), f(t!("Not", "Note"), Multiline)],
             Category::Email => vec![f(t!("E-posta adresi", "Email address"), Text), f(t!("Parola", "Password"), Secret), f(t!("Sunucu", "Server"), Text), f(t!("Not", "Note"), Multiline)],
+            // Kart alanları biçimlidir (bkz. `card`): yalnızca rakam, boşluk ve "/"
+            // kendiliğinden konur.
             Category::Card => vec![
-                f(t!("Kart üzerindeki ad", "Name on card"), Text),
-                f(t!("Kart numarası", "Card number"), Secret),
-                f(t!("Son kullanma", "Expiry"), Text),
-                f("CVV", Secret),
-                f("PIN", Secret),
+                f(t!("Kart üzerindeki ad", "Name on card"), Text).with(Format::Holder),
+                f(t!("Kart numarası", "Card number"), Secret).with(Format::CardNumber),
+                f(t!("Son kullanma (AA/YY)", "Expiry (MM/YY)"), Text).with(Format::Expiry),
+                f("CVV", Secret).with(Format::Cvv),
+                f("PIN", Secret).with(Format::Pin),
+                f(t!("Banka", "Bank"), Text),
                 f(t!("Not", "Note"), Multiline),
             ],
             Category::Identity => vec![f(t!("Ad soyad", "Full name"), Text), f(t!("Kimlik no", "ID number"), Secret), f(t!("Doğum tarihi", "Date of birth"), Text), f(t!("Not", "Note"), Multiline)],
@@ -98,11 +101,49 @@ pub struct Field {
     pub value: String,
     #[zeroize(skip)]
     pub kind: FieldKind,
+    /// Yazım biçimi (kart numarası, son kullanma …); eski kayıtlarda yok = serbest.
+    #[zeroize(skip)]
+    #[serde(default, skip_serializing_if = "Format::is_free")]
+    pub fmt: Format,
 }
 
 impl Field {
     pub fn new(label: &str, kind: FieldKind) -> Self {
-        Self { label: label.into(), value: String::new(), kind }
+        Self { label: label.into(), value: String::new(), kind, fmt: Format::Free }
+    }
+
+    pub fn with(mut self, fmt: Format) -> Self {
+        self.fmt = fmt;
+        self
+    }
+}
+
+/// Alanın yazım biçimi. Serbest dışındakilerde yalnızca rakam yazılabilir;
+/// gruplama boşlukları ve "/" kendiliğinden konur (bkz. `card`).
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default, Hash)]
+pub enum Format {
+    #[default]
+    Free,
+    /// Kart üzerindeki ad (serbest metin; hızlı kopyalamada "Ad" olarak bulunur).
+    Holder,
+    /// 12–19 rakam, 4'erli (Amex 4-6-5) gruplanır; rakam olarak saklanır.
+    CardNumber,
+    /// Son kullanma: "AA/YY" olarak saklanır.
+    Expiry,
+    /// 3–4 rakam.
+    Cvv,
+    /// 4–6 rakam.
+    Pin,
+}
+
+impl Format {
+    pub fn is_free(&self) -> bool {
+        *self == Format::Free
+    }
+
+    /// Yalnızca rakam alan biçim mi.
+    pub fn numeric(self) -> bool {
+        matches!(self, Format::CardNumber | Format::Expiry | Format::Cvv | Format::Pin)
     }
 }
 

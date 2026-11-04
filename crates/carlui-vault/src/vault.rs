@@ -274,6 +274,30 @@ impl Vault {
         Ok(())
     }
 
+    /// Çok kaydı tek seferde ekler (içe aktarma): hepsi mühürlenir, dosya bir kez
+    /// yazılır. Eklenen kayıt sayısını döner.
+    pub fn add_many(&mut self, items: Vec<(Meta, Body)>) -> Result<usize> {
+        let mut recs = Vec::with_capacity(items.len());
+        let mut metas = Vec::with_capacity(items.len());
+        for (meta, body) in &items {
+            let id = hex::encode(&crypto::random::<12>()?);
+            recs.push(self.seal_rec(&id, &Key::random()?, meta, body)?);
+            metas.push((id, meta.clone()));
+        }
+        let n = recs.len();
+        self.file.entries.extend(recs);
+        if let Err(e) = self.save() {
+            let keep = self.file.entries.len() - n;
+            self.file.entries.truncate(keep);
+            return Err(e);
+        }
+        if let Some(o) = self.open.as_mut() {
+            o.items.extend(metas.into_iter().map(|(id, meta)| Item { id, meta }));
+            o.items.sort_by_cached_key(|i| i.meta.name.to_lowercase());
+        }
+        Ok(n)
+    }
+
     pub fn delete(&mut self, id: &str) -> Result<()> {
         self.opened()?;
         self.file.entries.retain(|e| e.id != id);
@@ -482,6 +506,65 @@ mod tests {
         assert!(Vault::load(&d).unwrap().unlock_recovery(&key2).is_ok());
         v3.remove_recovery().unwrap();
         assert!(Vault::load(&d).unwrap().unlock_recovery(&key2).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn add_many_writes_once() {
+        let d = tmp();
+        let mut v = Vault::create(&d, "pw", KdfParams::fast()).unwrap();
+        let items: Vec<_> = (0..50).map(|i| sample(&format!("K{i:02}"), "x")).collect();
+        assert_eq!(v.add_many(items).unwrap(), 50);
+        assert_eq!(v.items().len(), 50);
+        let mut v2 = Vault::load(&d).unwrap();
+        v2.unlock("pw").unwrap();
+        assert_eq!(v2.items().len(), 50);
+        assert_eq!(v2.items()[0].meta.name, "K00");
+        let id = v2.items()[7].id.clone();
+        assert_eq!(v2.decrypt(&id).unwrap().fields[0].value, "x");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn import_round_trip() {
+        // Dosyadan kasaya: içe aktarılan kayıtlar şifreli yazılır, geri açılır
+        // ve ikinci aktarımda "kasada var" sayılır (karttaki biçim yükseltmesi dahil).
+        use crate::import;
+        let csv = "name,url,username,password,note\nRoblox,https://www.roblox.com/login,carl,Gizli-Parola-123,\n";
+        let json = r#"{"encrypted":false,"items":[{"type":3,"name":"Ziraat","card":{"cardholderName":"CARL","number":"4111 1111 1111 1111","expMonth":"4","expYear":"2027","code":"123"}}]}"#;
+        let d = tmp();
+        let mut v = Vault::create(&d, "pw", KdfParams::fast()).unwrap();
+        let mut keys = Vec::new();
+        for data in [csv.as_bytes(), json.as_bytes()] {
+            let b = import::parse(data).unwrap();
+            let items: Vec<_> = b
+                .items
+                .into_iter()
+                .map(|i| {
+                    keys.push(import::key(i.meta.category, &i.meta.name, &i.body));
+                    let mut body = i.body.clone();
+                    crate::card::upgrade(i.meta.category, &mut body);
+                    (i.meta.clone(), body)
+                })
+                .collect();
+            v.add_many(items).unwrap();
+        }
+        assert_eq!(v.items().len(), 2);
+        for f in std::fs::read_dir(&d).unwrap() {
+            let raw = std::fs::read(f.unwrap().path()).unwrap();
+            assert!(!raw.windows(10).any(|w| w == b"Gizli-Paro"), "parola düz yazılmamalı");
+            assert!(!raw.windows(8).any(|w| w == b"41111111"), "kart no düz yazılmamalı");
+        }
+        let mut v2 = Vault::load(&d).unwrap();
+        v2.unlock("pw").unwrap();
+        for (it, k) in v2.items().iter().zip(&keys) {
+            let body = v2.decrypt(&it.id).unwrap();
+            assert_eq!(&import::key(it.meta.category, &it.meta.name, &body), k, "{} tekrar eklenirdi", it.meta.name);
+        }
+        let card = v2.items().iter().find(|i| i.meta.category == crate::entry::Category::Card).unwrap();
+        let body = v2.decrypt(&card.id).unwrap();
+        assert_eq!(crate::card::Part::NumberSpaced.value(&body).unwrap().as_str(), "4111 1111 1111 1111");
+        assert_eq!(crate::card::Part::MmYyyy.value(&body).unwrap().as_str(), "04/2027");
         let _ = std::fs::remove_dir_all(&d);
     }
 

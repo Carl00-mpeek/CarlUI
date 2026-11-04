@@ -63,7 +63,7 @@ fn base32(s: &str) -> Option<Zeroizing<Vec<u8>>> {
 }
 
 /// `%XX` çözümü (anahtar ve sorgu değerleri için yeter).
-fn unescape(s: &str) -> String {
+pub(crate) fn unescape(s: &str) -> String {
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;

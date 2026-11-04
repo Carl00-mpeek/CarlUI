@@ -18,8 +18,9 @@ use carlui_core::{
     warn,
 };
 use carlui_vault::{
+    card::{self, Part},
     crypto::{Error, KdfParams},
-    entry::{now, Attachment, Body, Category, Field, FieldKind, Meta},
+    entry::{now, Attachment, Body, Category, Field, FieldKind, Format, Meta},
     throttle::Throttle,
     token::{TokenError, Tokens},
     totp::{self, Totp},
@@ -31,6 +32,8 @@ use windows::Win32::{
     UI::WindowsAndMessaging::{KillTimer, SetTimer},
 };
 use zeroize::Zeroizing;
+
+pub mod importing;
 
 pub const TIMER_CLIP: usize = 3;
 /// En az parola uzunluğu.
@@ -78,6 +81,11 @@ pub enum Act {
     NewRecovery,
     RemoveRecovery,
     OpenSettings,
+    /// Kartın bir parçasını kopyala (ay, yıl, boşluksuz numara …).
+    CopyPart(Part),
+    /// Başka bir uygulamanın dışa aktarım dosyasını seç ve önizle.
+    Import,
+    ImportConfirm,
     /// Kaydırılabilir alan (tekerlek hedefi, tıklanmaz).
     Scroll,
 }
@@ -104,7 +112,12 @@ pub struct Editor {
 
 impl Editor {
     fn fields_of(list: &[Field]) -> Vec<EdField> {
-        list.iter().map(|f| EdField { label: TextBox::new(&f.label, false), value: TextBox::new(&f.value, f.kind == FieldKind::Multiline), kind: f.kind, shown: false }).collect()
+        list.iter()
+            .map(|f| {
+                let value = if f.fmt == Format::Free { TextBox::new(&f.value, f.kind == FieldKind::Multiline) } else { TextBox::formatted(&f.value, f.fmt) };
+                EdField { label: TextBox::new(&f.label, false), value, kind: f.kind, shown: false }
+            })
+            .collect()
     }
 
     fn new(category: Category) -> Self {
@@ -112,12 +125,15 @@ impl Editor {
     }
 
     fn open(id: &str, meta: &Meta, body: &Body) -> Self {
+        // Biçimsiz eski kart kaydı: alanlar etiketlerinden biçim alır (kaydedince kalıcı).
+        let mut body = body.clone();
+        card::upgrade(meta.category, &mut body);
         Self { id: Some(id.to_string()), name: TextBox::new(&meta.name, false), category: meta.category, fields: Self::fields_of(&body.fields), file: body.file.clone(), new_file: None, drop_file: false, confirm_delete: false }
     }
 
     fn body(&self) -> Body {
         Body {
-            fields: self.fields.iter().map(|f| Field { label: f.label.as_str().trim().to_string(), value: f.value.as_str().to_string(), kind: f.kind }).collect(),
+            fields: self.fields.iter().map(|f| Field { label: f.label.as_str().trim().to_string(), value: f.value.value().to_string(), kind: f.kind, fmt: f.value.fmt }).collect(),
             file: if self.drop_file { None } else { self.file.clone() },
         }
     }
@@ -158,6 +174,8 @@ pub enum View {
     List,
     Edit(Box<Editor>),
     Security,
+    /// İçe aktarma önizlemesi (bkz. `importing`).
+    Import(Box<importing::Preview>),
 }
 
 pub struct App {
@@ -185,6 +203,10 @@ pub struct App {
     /// Ekran görüntüsü aracından gelen, henüz açılmamış 2FA (otpauth adresi).
     /// Kasa açılınca ya da açık kayıt kapanınca düzenleyiciye konur.
     import: Option<(Zeroizing<String>, Instant)>,
+    /// QR'dan gelen Google Authenticator aktarımı: kasa açılınca önizlenir.
+    batch: Option<(Box<carlui_vault::import::Batch>, Instant)>,
+    /// Son içe aktarma denemesinin hatası (güvenlik sayfasında, düğmenin altında).
+    pub import_error: Option<String>,
     /// Sayfa içi düğmeyle açılış: kilit açılınca odak bu tarayıcı penceresine döner.
     back: Option<(isize, Instant)>,
 }
@@ -244,6 +266,8 @@ impl App {
             confirm_remove_recovery: false,
             tokens: Tokens::default(),
             import: None,
+            batch: None,
+            import_error: None,
             back: None,
         }
     }
@@ -259,14 +283,19 @@ impl App {
     }
 
     fn go(&mut self, v: View) {
-        // Listeye dönerken bekleyen 2FA aktarımı varsa onun kaydı açılır.
-        let pending = matches!(v, View::List).then(|| self.import.take()).flatten().filter(|(_, at)| at.elapsed() < IMPORT_TTL);
-        self.view = match pending {
-            Some((uri, _)) => View::Edit(Box::new(Editor::import(&uri))),
-            None => v,
+        // Listeye dönerken bekleyen 2FA aktarımı varsa onun kaydı açılır; QR'dan
+        // gelen toplu aktarım (Google Authenticator) varsa önizlemesi.
+        let to_list = matches!(v, View::List) && self.is_open();
+        let batch = to_list.then(|| self.batch.take()).flatten().filter(|(_, at)| at.elapsed() < IMPORT_TTL);
+        let pending = (to_list && batch.is_none()).then(|| self.import.take()).flatten().filter(|(_, at)| at.elapsed() < IMPORT_TTL);
+        self.view = match (batch, pending) {
+            (Some((b, _)), _) => View::Import(Box::new(self.preview(*b, String::new()))),
+            (None, Some((uri, _))) => View::Edit(Box::new(Editor::import(&uri))),
+            (None, None) => v,
         };
         self.scroll = 0.0;
         self.error = None;
+        self.import_error = None;
         self.confirm_remove_recovery = false;
         self.focus = match self.view {
             View::Setup | View::Locked | View::Recover | View::NewPassword => Some(Focus::Form(0)),
@@ -330,7 +359,7 @@ impl App {
                 // 2FA alanında anahtar değil, o anki kod kopyalanır.
                 let (field, value) = match f.kind {
                     FieldKind::Totp => (t!("2FA kodu", "2FA code"), Totp::parse(f.value.as_str()).map(|t| t.code(now())).unwrap_or_default()),
-                    _ => (field, Zeroizing::new(f.value.as_str().to_string())),
+                    _ => (field, f.value.value()),
                 };
                 let label = if name.is_empty() { field.to_string() } else { format!("{name} · {field}") };
                 (e.id.clone().unwrap_or_default(), label, value)
@@ -339,15 +368,34 @@ impl App {
         }) else {
             return;
         };
+        self.give(&entry, i, &label, &value);
+    }
+
+    /// Kartın bir parçası (siteler ay/yıl/numarayı farklı biçimde ister).
+    fn copy_part(&mut self, part: Part) {
+        let View::Edit(e) = &self.view else { return };
+        let body = e.body();
+        let Some(value) = part.value(&body) else {
+            return self.toast(t!("Kartta bu bilgi yok.", "The card doesn't have this."));
+        };
+        let name = e.name.as_str().trim();
+        let label = if name.is_empty() { part.title().to_string() } else { format!("{name} · {}", part.title()) };
+        let entry = e.id.clone().unwrap_or_default();
+        self.give(&entry, part.slot(), &label, &value);
+    }
+
+    /// Değeri panoya verir: belirteç olarak (varsayılan) ya da `token_paste`
+    /// kapalıysa değerin kendisi olarak. `slot` belirtecin kayıt içindeki yeri.
+    fn give(&mut self, entry: &str, slot: usize, label: &str, value: &str) {
         if value.is_empty() {
             return;
         }
         if !self.cfg.vault.token_paste {
             let field = label.rsplit(" · ").next().unwrap_or_default().to_string();
-            self.copy(&value, &field);
+            self.copy(value, &field);
             return;
         }
-        let issued = match self.tokens.issue(&entry, i, &label, &value, now_ms()) {
+        let issued = match self.tokens.issue(entry, slot, label, value, now_ms()) {
             Ok(t) => t,
             Err(e) => return self.toast(e.to_string()),
         };
@@ -388,25 +436,33 @@ impl App {
         }
     }
 
-    /// Ekran görüntüsündeki 2FA QR'ı: kasa kilitliyken de kabul edilir, kayıt
-    /// açılınca düzenleyicide hazır durur. Hiçbir şey kendiliğinden kaydedilmez.
-    fn import_totp(&mut self, uri: Zeroizing<String>) -> Reply {
-        if let Err(e) = Totp::parse(&uri) {
-            return Reply::no(e.to_string());
-        }
-        self.import = Some((uri, Instant::now()));
+    fn restore_window(&self) {
         unsafe {
             use windows::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, ShowWindow, SW_RESTORE};
             let _ = ShowWindow(self.hwnd, SW_RESTORE);
             let _ = SetForegroundWindow(self.hwnd);
         }
+    }
+
+    /// Ekran görüntüsündeki 2FA QR'ı: kasa kilitliyken de kabul edilir, kayıt
+    /// açılınca düzenleyicide hazır durur. Hiçbir şey kendiliğinden kaydedilmez.
+    fn import_totp(&mut self, uri: Zeroizing<String>) -> Reply {
+        if uri.trim().get(..20).is_some_and(|p| p.eq_ignore_ascii_case("otpauth-migration://")) {
+            self.restore_window();
+            return self.import_migration(&uri);
+        }
+        if let Err(e) = Totp::parse(&uri) {
+            return Reply::no(e.to_string());
+        }
+        self.import = Some((uri, Instant::now()));
+        self.restore_window();
         info!("kasa: ekran görüntüsünden 2FA aktarımı geldi");
         let message = match &self.view {
             View::List => {
                 self.go(View::List);
                 t!("Carl Vault'ta yeni 2FA kaydı açıldı; Kaydet'e bas.", "A new 2FA item is open in Carl Vault; press Save.")
             }
-            View::Edit(_) | View::Security => {
+            View::Edit(_) | View::Security | View::Import(_) => {
                 self.toast(t!("Açık sayfayı kapatınca 2FA kaydı açılacak.", "The 2FA item opens when you close this page."));
                 t!("Carl Vault'ta açık sayfa kapanınca 2FA kaydı açılacak.", "The 2FA item opens in Carl Vault once the open page is closed.")
             }
@@ -703,6 +759,12 @@ impl App {
                     self.focus = Some(Focus::Value(e.fields.len() - 1));
                 }
             }
+            Act::CopyPart(p) => self.copy_part(p),
+            Act::Import => {
+                self.import_error = None;
+                self.pick_import();
+            }
+            Act::ImportConfirm => self.confirm_import(),
             Act::PickFile => self.pick_file(),
             Act::ExportFile => self.export_file(),
             Act::RemoveFile => {
@@ -872,7 +934,7 @@ impl App {
             View::Security => vec![Focus::Form(2), Focus::Form(0), Focus::Form(1)],
             View::List => vec![Focus::Search],
             View::Edit(e) => std::iter::once(Focus::Name).chain((0..e.fields.len()).map(Focus::Value)).collect(),
-            View::ShowRecovery { .. } => vec![],
+            View::ShowRecovery { .. } | View::Import(_) => vec![],
         }
     }
 

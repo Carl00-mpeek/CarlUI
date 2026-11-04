@@ -5,6 +5,7 @@
 
 pub mod clip;
 mod editor;
+mod import;
 mod list;
 mod lock;
 mod security;
@@ -156,6 +157,10 @@ pub fn paint(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
         View::Security => {
             list::sidebar(app, p, h);
             security::paint(app, p, w, h)
+        }
+        View::Import(pv) => {
+            list::sidebar(app, p, h);
+            import::paint(app, pv, p, w, h)
         }
     }
 }

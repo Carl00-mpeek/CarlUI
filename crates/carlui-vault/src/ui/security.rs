@@ -60,6 +60,39 @@ pub fn paint(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
         }
         y += 50.0;
 
+        section(p, t!("İçe aktar", "Import"), x, &mut y, cw);
+        y += para(
+            p,
+            t!(
+                "Başka bir parola yöneticisinin ya da 2FA uygulamasının dışa aktarım dosyasını seç. Önce bir önizleme görürsün; kasada zaten olan kayıtlar tekrar eklenmez.",
+                "Pick an export file from another password manager or 2FA app. You'll see a preview first; items already in the vault aren't added again."
+            ),
+            x,
+            y,
+            cw,
+            12.5,
+            TEXT,
+            0.6,
+        ) + 4.0;
+        y += para(
+            p,
+            t!(
+                "Parola: Bitwarden (JSON/CSV), Chrome, Edge, Brave, Firefox, 1Password, LastPass, KeePass, Proton Pass, Dashlane, NordPass (CSV). 2FA: Aegis, 2FAS, andOTP (şifresiz yedek), otpauth listesi; Google Authenticator için aktarım QR'ının ekran görüntüsünü al.",
+                "Passwords: Bitwarden (JSON/CSV), Chrome, Edge, Brave, Firefox, 1Password, LastPass, KeePass, Proton Pass, Dashlane, NordPass (CSV). 2FA: Aegis, 2FAS, andOTP (unencrypted backup), otpauth lists; for Google Authenticator, take a screenshot of its export QR."
+            ),
+            x,
+            y,
+            cw,
+            12.0,
+            TEXT,
+            0.45,
+        ) + 10.0;
+        if let Some(e) = &app.import_error {
+            y += para(p, e, x, y, cw, 12.5, ORANGE, 0.95) + 6.0;
+        }
+        p.button(R::new(x, y, 210.0, 34.0), Some('\u{E8B5}'), t!("Dosyadan içe aktar…", "Import from file…"), Act::Import, true, false);
+        y += 50.0;
+
         section(p, t!("Otomatik kilit", "Auto-lock"), x, &mut y, cw);
         let c = &app.cfg.vault;
         let mins = c.auto_lock_minutes.max(1);

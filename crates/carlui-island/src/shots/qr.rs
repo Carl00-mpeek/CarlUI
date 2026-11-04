@@ -3,6 +3,8 @@
 //! içeriği türüne ayrılır ve düzenleyicide türe uygun düğmeler çıkar:
 //! - 2FA (`otpauth://totp/…`): "Carl Vault" → anahtar kasanın doğrulanmış
 //!   borusuna gider, kasa doldurulmuş yeni kayıt açar. Panoya hiç girmez.
+//!   Google Authenticator'ın aktarım QR'ı (`otpauth-migration://`) da aynı
+//!   yoldan gider; kasa içindeki hesapları içe aktarma ekranında gösterir.
 //! - Bağlantı (http/https): Aç / Kopyala. Wi-Fi: parolayı kopyala.
 //! - E-posta, telefon, kişi kartı, düz metin: Kopyala.
 //!
@@ -39,7 +41,8 @@ fn starts(s: &str, p: &str) -> bool {
 
 pub fn classify(s: &str) -> Kind {
     let s = s.trim();
-    if starts(s, "otpauth://totp/") {
+    // Google Authenticator'ın "Hesapları aktar" QR'ı da 2FA'dır (birden çok hesap).
+    if starts(s, "otpauth://totp/") || starts(s, "otpauth-migration://offline?") {
         Kind::Totp
     } else if (starts(s, "https://") || starts(s, "http://")) && !s.contains(char::is_whitespace) {
         Kind::Url
@@ -91,6 +94,7 @@ impl Qr {
         use carlui_core::t;
         let s = self.text.trim();
         match self.kind {
+            Kind::Totp if starts(s, "otpauth-migration://") => t!("2FA · Google Authenticator aktarımı", "2FA · Google Authenticator export").into(),
             Kind::Totp => {
                 let label = s.get(15..).unwrap_or("").split('?').next().unwrap_or("");
                 let label = label.replace("%20", " ").replace("%40", "@").replace("%3A", ":").replace("%3a", ":");
@@ -183,6 +187,7 @@ mod tests {
         assert_eq!(classify("otpauth://totp/GitHub:carl?secret=JBSWY3DPEHPK3PXP"), Kind::Totp);
         assert_eq!(classify("OTPAUTH://TOTP/x?secret=A"), Kind::Totp);
         assert_eq!(classify("otpauth://hotp/x?secret=A"), Kind::Text, "HOTP desteklenmiyor, metin sayılır");
+        assert_eq!(classify("otpauth-migration://offline?data=CjEKCkhlbGxvId6tvu8%3D"), Kind::Totp);
         assert_eq!(classify("https://github.com/login"), Kind::Url);
         assert_eq!(classify("https://a.com bu bir cümle"), Kind::Text);
         assert_eq!(classify("WIFI:T:WPA;S:Ev;P:gizli;;"), Kind::Wifi);

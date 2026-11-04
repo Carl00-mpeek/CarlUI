@@ -28,11 +28,20 @@
 //! sürüm, kesik dosya) reddedilir (`vault` ve `crypto` testleri); yanlış parola
 //! beklemesi diske yazılır, pencereyi kapatmak sıfırlamaz (`throttle`). Elle
 //! bellek dökümü: kilitliyken ana parola ve kayıt değerleri bulunmadı.
+//!
+//! Kart alanları (`card`): rakam dışı yazılamaz, numara gruplanır, son kullanma
+//! "AA/YY"; hızlı kopyalama siteye göre parçaları (ay, yıl, AA/YYYY …) verir.
+//!
+//! İçe aktarma (`import`): başka şifre yöneticilerinin ve 2FA uygulamalarının
+//! şifresiz dışa aktarımları (CSV / JSON / otpauth listesi) ve Google
+//! Authenticator aktarım QR'ı önizlenip tek seferde kasaya yazılır.
 
 pub mod autofill;
+pub mod card;
 pub mod crypto;
 pub mod entry;
 mod hex;
+pub mod import;
 pub mod recovery;
 pub mod throttle;
 pub mod token;

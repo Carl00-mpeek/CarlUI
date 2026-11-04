@@ -4,15 +4,21 @@
 //! baştan geniş yer ayrılır. İmleç her zaman sondadır: Geri siler,
 //! Ctrl+Geri kelimeyi siler, Ctrl+V yapıştırır, Enter gönderir (çok satırlıda
 //! yeni satır), Tab sonraki kutuya geçer, Esc vazgeçer.
+//!
+//! Biçimli kutularda (`fmt`: kart numarası, son kullanma, CVV, PIN) yalnızca
+//! rakam tutulur; harf yazılmaz, boşluk ve "/" çizimde kendiliğinden konur
+//! (bkz. `carlui_vault::card`). Ctrl+Geri tüm kutuyu siler.
 
 use super::{clip, P};
 use carlui_ui::paint::{Align, R, TEXT};
+use carlui_vault::{card, entry::Format};
 use windows::Win32::Foundation::HWND;
 use zeroize::{Zeroize, Zeroizing};
 
 pub struct TextBox {
     pub text: Zeroizing<String>,
     pub multiline: bool,
+    pub fmt: Format,
 }
 
 pub enum Key {
@@ -27,7 +33,30 @@ impl TextBox {
     pub fn new(initial: &str, multiline: bool) -> Self {
         let mut s = String::with_capacity(initial.len().max(256) * 2);
         s.push_str(initial);
-        Self { text: Zeroizing::new(s), multiline }
+        Self { text: Zeroizing::new(s), multiline, fmt: Format::Free }
+    }
+
+    /// Biçimli kutu; `stored` saklanan değerdir (ör. "04/27"), kutuya rakamları konur.
+    pub fn formatted(stored: &str, fmt: Format) -> Self {
+        let raw = Zeroizing::new(card::load(fmt, stored));
+        Self { fmt, ..Self::new(&raw, false) }
+    }
+
+    /// Saklanacak değer (biçimliyse sade hâli: numara rakam, son kullanma "AA/YY").
+    pub fn value(&self) -> Zeroizing<String> {
+        Zeroizing::new(if self.fmt.numeric() { card::store(self.fmt, &self.text) } else { self.text.to_string() })
+    }
+
+    /// Biçime uyan karakteri ekler; uymayanı yok sayar. Değiştiyse true.
+    fn put(&mut self, c: char) -> bool {
+        match card::push(self.fmt, &self.text, c) {
+            Some(s) => {
+                let before = self.text.len();
+                self.push(&s);
+                self.text.len() != before
+            }
+            None => false,
+        }
     }
 
     pub fn clear(&mut self) {
@@ -53,6 +82,9 @@ impl TextBox {
     }
 
     pub fn char(&mut self, hwnd: HWND, c: u32) -> Key {
+        if self.fmt.numeric() {
+            return self.char_numeric(hwnd, c);
+        }
         match c {
             0x0D if self.multiline && !ctrl_down() => self.push("\n"),
             0x0D | 0x0A => return Key::Submit,
@@ -85,6 +117,35 @@ impl TextBox {
             _ => return Key::None,
         }
         Key::Changed
+    }
+
+    /// Biçimli (yalnızca rakam) kutu: yapıştırılan metinden de yalnızca uyan rakamlar alınır.
+    fn char_numeric(&mut self, hwnd: HWND, c: u32) -> Key {
+        match c {
+            0x0D | 0x0A => Key::Submit,
+            0x1B => Key::Cancel,
+            0x09 => Key::Next,
+            0x08 => {
+                self.text.pop();
+                Key::Changed
+            }
+            0x7F => {
+                self.text.zeroize();
+                Key::Changed
+            }
+            0x16 => {
+                if let Some(t) = clip::paste(hwnd) {
+                    for ch in t.chars() {
+                        self.put(ch);
+                    }
+                }
+                Key::Changed
+            }
+            c => match char::from_u32(c) {
+                Some(ch) if self.put(ch) => Key::Changed,
+                _ => Key::None,
+            },
+        }
     }
 
     /// Kutunun yüksekliği (çok satırlıda satır sayısına göre büyür).
@@ -125,7 +186,9 @@ pub fn draw(p: &mut P, r: R, tb: &TextBox, focused: bool, masked: bool, placehol
         }
         return;
     }
-    let shown: Zeroizing<String> = if masked { Zeroizing::new("•".repeat(tb.text.chars().count().min(40))) } else { Zeroizing::new(tb.text.replace('\n', " ⏎ ")) };
+    let shown: Zeroizing<String> = if tb.fmt.numeric() {
+        Zeroizing::new(card::display(tb.fmt, &tb.text, masked))
+    } else if masked { Zeroizing::new("•".repeat(tb.text.chars().count().min(40))) } else { Zeroizing::new(tb.text.replace('\n', " ⏎ ")) };
     // Sığmıyorsa sonunu göster (imleç sondadır).
     let mut start = 0;
     let chars: Vec<(usize, char)> = shown.char_indices().collect();
