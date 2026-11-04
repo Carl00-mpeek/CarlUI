@@ -189,6 +189,31 @@ async function save(tab, name) {
   return r;
 }
 
+// Passkey (passkey-page.js → passkey-relay.js): sayfanın verdiği alanlar
+// kırpılır; köken olarak tarayıcının bildirdiği sekme adresi gider. CarlUI
+// kapalıysa ya da kasa karşılamazsa yanıt "fallback": sayfa tarayıcının kendi
+// passkey akışını kullanır. Onay kasada beklenir (en çok ~2 dk).
+function passkey(url, msg) {
+  const d = msg.data && typeof msg.data === "object" ? msg.data : {};
+  const s = (v, n) => String(v ?? "").slice(0, n);
+  const list = (a) => (Array.isArray(a) ? a.slice(0, 32).map((x) => s(x, 344)) : []);
+  const common = { origin: url, rp_id: s(d.rp_id, 253), challenge: s(d.challenge, 1400) };
+  const body =
+    msg.kind === "create"
+      ? {
+          op: "create",
+          ...common,
+          rp_name: s(d.rp_name, 256),
+          user_name: s(d.user_name, 256),
+          user_display: s(d.user_display, 256),
+          user_id: s(d.user_id, 128),
+          algs: Array.isArray(d.algs) ? d.algs.slice(0, 16).filter(Number.isInteger) : [],
+          exclude: list(d.exclude),
+        }
+      : { op: "get", ...common, allow: list(d.allow) };
+  return call("/vault/passkey", body, 130000).then((r) => r ?? { ok: false, fallback: true });
+}
+
 API.tabs?.onRemoved?.addListener((tab) => forget(tab));
 
 API.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -202,6 +227,7 @@ API.runtime.onMessage.addListener((msg, sender, reply) => {
     : msg.op === "vault-capture" ? capture(tab, url, msg)
     : msg.op === "vault-pending" ? (pending.get(tab)?.check ?? Promise.resolve({ show: false }))
     : msg.op === "vault-save" ? save(tab, msg.name)
+    : msg.op === "vault-passkey" ? passkey(url, msg)
     : msg.op === "lang" ? currentLang()
     : msg.op === "vault-dismiss" ? Promise.resolve((forget(tab), { ok: true }))
     : null;

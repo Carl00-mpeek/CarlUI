@@ -11,6 +11,8 @@
 //!   sayfası doldurma; `/vault/save` → sayfada gönderilen giriş/kayıt formunu
 //!   kasaya sorma ve (kullanıcı onaylayınca) kaydetme. İstek kasanın borusuna
 //!   aktarılır (bkz. `vaultlink`).
+//! - `POST /vault/passkey` → sitenin passkey isteği (oluşturma/giriş) kasaya
+//!   sorulur; kasa onay isterken köprü sonucu bekler (bkz. `app/passkeys.rs`).
 //! - `POST /progress` → yönetici kapalıyken tarayıcının kendi indirmeleri
 //!   gerçek yüzde ve hızla adada görünür.
 //!
@@ -81,9 +83,10 @@ pub fn take_offers() -> Vec<Offer> {
 }
 
 /// Tarayıcının kendi indirmeleri: (ad, inen, toplam, bayt/sn).
-static BROWSER: Mutex<(Option<Instant>, Vec<(String, u64, u64, f64)>)> = Mutex::new((None, Vec::new()));
+type Progress = (String, u64, u64, f64);
+static BROWSER: Mutex<(Option<Instant>, Vec<Progress>)> = Mutex::new((None, Vec::new()));
 
-pub fn browser() -> Vec<(String, u64, u64, f64)> {
+pub fn browser() -> Vec<Progress> {
     match BROWSER.lock() {
         Ok(g) if g.0.is_some_and(|t| t.elapsed() < Duration::from_secs(3)) => g.1.clone(),
         _ => Vec::new(),
@@ -202,6 +205,46 @@ fn handle(mut s: TcpStream, hwnd: isize) {
             let body = match ask(&req) {
                 Ok(r) => serde_json::to_string(&r).unwrap_or_default(),
                 Err(m) => serde_json::json!({ "ok": false, "closed": true, "message": m }).to_string(),
+            };
+            respond(&mut s, "200 OK", &body);
+        }
+        // Passkey: kasa hemen bir bilet döner ve onay ister; sonuç gelene dek
+        // (en çok 2 dk) burada sorulur. Kasa kapalıysa eklenti tarayıcının
+        // kendi passkey akışına düşer (`fallback`).
+        ("POST", "/vault/passkey") => {
+            use carlui_core::vaultlink::{ask, Reply, Request};
+            let list = |k: &str| v.get(k).and_then(|x| x.as_array()).map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).take(64).collect()).unwrap_or_default();
+            let req = match g("op").as_str() {
+                "create" => Request::PasskeyCreate {
+                    origin: g("origin"),
+                    rp_id: g("rp_id"),
+                    rp_name: g("rp_name"),
+                    user_name: g("user_name"),
+                    user_display: g("user_display"),
+                    user_id: g("user_id"),
+                    challenge: g("challenge"),
+                    algs: v.get("algs").and_then(|x| x.as_array()).map(|a| a.iter().filter_map(|n| n.as_i64()).take(16).collect()).unwrap_or_default(),
+                    exclude: list("exclude"),
+                },
+                "get" => Request::PasskeyGet { origin: g("origin"), rp_id: g("rp_id"), challenge: g("challenge"), allow: list("allow") },
+                _ => {
+                    respond(&mut s, "400 Bad Request", "{}");
+                    return;
+                }
+            };
+            let started = Instant::now();
+            let mut reply = ask(&req);
+            while let Ok(Reply { pending, .. }) = &reply {
+                if pending.is_empty() || started.elapsed() > Duration::from_secs(120) {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(250));
+                reply = ask(&Request::PasskeyWait { ticket: pending.clone() });
+            }
+            let body = match reply {
+                Ok(r) if !r.pending.is_empty() => serde_json::json!({ "ok": false, "fallback": true }).to_string(),
+                Ok(r) => serde_json::to_string(&r).unwrap_or_default(),
+                Err(m) => serde_json::json!({ "ok": false, "closed": true, "fallback": true, "message": m }).to_string(),
             };
             respond(&mut s, "200 OK", &body);
         }

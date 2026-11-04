@@ -42,6 +42,10 @@
 //! Yeni girişi kaydetme (`autofill::classify`, pencere tarafı `app/capture.rs`):
 //! eklenti gönderilen formu sorar; kasada yoksa ya da parola değişmişse sayfa
 //! "kaydedilsin mi?" der, kullanıcı onaylarsa kayıt eklenir/güncellenir.
+//!
+//! Passkey (`passkey`, pencere tarafı `app/passkeys.rs`): eklenti sitenin
+//! WebAuthn isteğini yakalar; kasa onay kartını gösterir, ES256 anahtarını
+//! kaydın şifreli gövdesinde saklar ve girişte imzalar.
 
 pub mod autofill;
 pub mod card;
@@ -50,6 +54,7 @@ pub mod crypto;
 pub mod entry;
 mod hex;
 pub mod import;
+pub mod passkey;
 pub mod recovery;
 pub mod throttle;
 pub mod token;

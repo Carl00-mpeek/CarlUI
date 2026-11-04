@@ -208,6 +208,24 @@ pub fn paint(app: &App, e: &Editor, p: &mut P, w: f32, h: f32) -> f32 {
         p.button(R::new(x + 296.0, y, 130.0, 32.0), Some('\u{E710}'), t!("2FA kodu", "2FA code"), Act::AddField(FieldKind::Totp), true, false);
         y += 50.0;
 
+        // Passkey'ler: yalnızca gösterilir (özel anahtar hiç görünmez) ve kaldırılabilir.
+        if !e.passkeys.is_empty() {
+            p.text(t!("Passkey'ler", "Passkeys"), R::new(x + 2.0, y, cw, 20.0), 12.0, true, TEXT, 0.6, Align::Left);
+            y += 24.0;
+            for (i, k) in e.passkeys.iter().enumerate() {
+                let r = R::new(x, y, cw, 54.0);
+                p.card(r);
+                p.glyph(super::passkey::GLYPH, R::new(r.x + 12.0, r.y, 26.0, r.h), 15.0, p.accent, 1.0);
+                let who = if k.user_name.is_empty() { k.user_display.as_str() } else { k.user_name.as_str() };
+                p.text(&k.rp_id, R::new(r.x + 46.0, r.y + 8.0, r.w - 160.0, 20.0), 13.5, true, TEXT, 0.92, Align::Left);
+                let s = t!(format!("{who} · {} · {} kez kullanıldı", super::date(k.created), k.counter), format!("{who} · {} · used {} times", super::date(k.created), k.counter));
+                p.text(&s, R::new(r.x + 46.0, r.y + 28.0, r.w - 160.0, 18.0), 12.0, false, TEXT, 0.5, Align::Left);
+                p.button(R::new(r.right() - 100.0, r.y + 11.0, 88.0, 32.0), None, t!("Kaldır", "Remove"), Act::RemovePasskey(i), true, true);
+                y += 62.0;
+            }
+            y += para(p, t!("Kaldırılan passkey kaydedince silinir; site o passkey ile girişi artık kabul etmez.", "A removed passkey is deleted on save; the site will no longer accept it."), x, y, cw, 12.0, TEXT, 0.45) + 10.0;
+        }
+
         if e.category == Category::File || e.file.is_some() || e.new_file.is_some() {
             p.text(t!("Dosya", "File"), R::new(x + 2.0, y, cw, 20.0), 12.0, true, TEXT, 0.6, Align::Left);
             y += 24.0;

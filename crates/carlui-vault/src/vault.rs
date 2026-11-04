@@ -375,7 +375,7 @@ mod tests {
     fn sample(name: &str, secret: &str) -> (Meta, Body) {
         let mut f = Field::new("Parola", FieldKind::Secret);
         f.value = secret.into();
-        (Meta { name: name.into(), category: Category::Password, updated: 1 }, Body { fields: vec![f], file: None })
+        (Meta { name: name.into(), category: Category::Password, updated: 1 }, Body { fields: vec![f], file: None, passkeys: Vec::new() })
     }
 
     #[test]

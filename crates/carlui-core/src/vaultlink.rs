@@ -37,7 +37,7 @@ use windows::{
 pub const FORMAT: &str = "CarlUI.VaultToken";
 /// Belirtecin ömrü.
 pub const TTL_MS: i64 = 60_000;
-const MAX_LINE: u64 = 8 * 1024;
+const MAX_LINE: u64 = 32 * 1024;
 
 /// Panoya konan teklif: belirteç ve listede görünecek ad ("GitHub · Parola").
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -78,6 +78,38 @@ pub enum Request {
         #[serde(default)]
         name: String,
     },
+    /// Tarayıcı eklentisi: sitenin `navigator.credentials.create` isteği.
+    /// `origin` eklentinin arka planının bildirdiği sekme kökenidir (sayfanın
+    /// söylediği değil). Kimlikler ve meydan okuma base64url. Kasa hemen
+    /// `Reply::pending` ile yanıtlar ve öne gelip onay ister; sonuç
+    /// `PasskeyWait` ile alınır.
+    PasskeyCreate {
+        origin: String,
+        rp_id: String,
+        #[serde(default)]
+        rp_name: String,
+        user_name: String,
+        #[serde(default)]
+        user_display: String,
+        user_id: String,
+        challenge: String,
+        /// İstenen COSE algoritmaları (yalnızca -7 desteklenir).
+        algs: Vec<i64>,
+        /// Sitenin zaten tanıdığı kimlikler (`excludeCredentials`).
+        #[serde(default)]
+        exclude: Vec<String>,
+    },
+    /// Tarayıcı eklentisi: sitenin `navigator.credentials.get` isteği.
+    PasskeyGet {
+        origin: String,
+        rp_id: String,
+        challenge: String,
+        /// `allowCredentials` (boşsa sitenin tüm passkey'leri).
+        #[serde(default)]
+        allow: Vec<String>,
+    },
+    /// Bekleyen passkey onayının sonucu (`ticket`: `Reply::pending`).
+    PasskeyWait { ticket: String },
 }
 
 /// Bir sayfaya uyan kayıt (yalnızca ad ve kullanıcı adı; parola yok).
@@ -108,11 +140,45 @@ pub struct Reply {
     /// `Save` yanıtı: önerilen kayıt adı (yeni) ya da mevcut kaydın adı (değişmiş).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub name: String,
+    /// Passkey isteği: onay bekleniyor; sonuç bu bilet ile sorulur.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub pending: String,
+    /// Passkey isteği kasada karşılanmayacak: tarayıcının kendi akışı sürsün.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fallback: bool,
+    /// Passkey isteği sayfada bu DOMException adıyla reddedilsin (ör. "InvalidStateError").
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub error: String,
+    /// Passkey sonucu.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub passkey: Option<PasskeyCred>,
+}
+
+/// Passkey sonucu (hepsi base64url). Kayıtta `attestation_object` ve
+/// `public_key`, girişte `signature` ve `user_handle` dolu.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct PasskeyCred {
+    pub id: String,
+    pub client_data: String,
+    pub authenticator_data: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub attestation_object: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub public_key: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub signature: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub user_handle: String,
 }
 
 impl Reply {
     pub fn no(message: impl Into<String>) -> Self {
         Self { ok: false, message: message.into(), ..Default::default() }
+    }
+
+    /// Passkey isteğini tarayıcıya bırak.
+    pub fn fallback(message: impl Into<String>) -> Self {
+        Self { fallback: true, ..Self::no(message) }
     }
 }
 
@@ -242,6 +308,11 @@ mod tests {
         assert!(serde_json::to_string(&r).unwrap().contains("\"op\":\"import-totp\""));
         let r = Request::Save { url: "https://roblox.com".into(), user: "carl".into(), password: "p".into(), commit: true, name: "Roblox".into() };
         assert_eq!(serde_json::from_str::<Request>(&serde_json::to_string(&r).unwrap()).unwrap(), r);
+        let r = Request::PasskeyGet { origin: "https://webauthn.io".into(), rp_id: "webauthn.io".into(), challenge: "AA".into(), allow: vec![] };
+        let j = serde_json::to_string(&r).unwrap();
+        assert!(j.contains("\"op\":\"passkey-get\""), "{j}");
+        assert_eq!(serde_json::from_str::<Request>(&j).unwrap(), r);
+        assert!(!serde_json::to_string(&Reply::fallback("x")).unwrap().contains("pending"));
         let r = Request::Open { back: 42 };
         assert!(serde_json::to_string(&r).unwrap().contains("\"op\":\"open\""));
         let reply = Reply::no("x");

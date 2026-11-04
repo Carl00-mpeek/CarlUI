@@ -35,6 +35,7 @@ use zeroize::Zeroizing;
 
 mod capture;
 pub mod importing;
+pub mod passkeys;
 
 pub const TIMER_CLIP: usize = 3;
 /// En az parola uzunluğu.
@@ -88,6 +89,12 @@ pub enum Act {
     CopyPart(Part),
     /// Listedeki kaydın o anki 2FA kodunu kopyala.
     CopyCode(String),
+    /// Passkey onayı: oluştur ya da (girişte) bu sıradaki passkey ile imzala.
+    PasskeyApprove(usize),
+    /// Passkey isteğini tarayıcının kendi akışına bırak.
+    PasskeyDecline,
+    /// Düzenleyicide kayda bağlı passkey'i kaldır.
+    RemovePasskey(usize),
     /// Başka bir uygulamanın dışa aktarım dosyasını seç ve önizle.
     Import,
     ImportConfirm,
@@ -113,6 +120,8 @@ pub struct Editor {
     pub new_file: Option<(String, Zeroizing<Vec<u8>>)>,
     pub drop_file: bool,
     pub confirm_delete: bool,
+    /// Kayda bağlı passkey'ler (düzenleyicide yalnızca görünür ve silinebilir).
+    pub passkeys: Vec<carlui_vault::passkey::Passkey>,
     /// Açıldığı andaki ad ve alanların özeti (değişti mi diye bakmak için).
     snap: [u8; 32],
 }
@@ -127,6 +136,10 @@ impl Editor {
             h.update(f.label.as_str().trim().as_bytes());
             h.update([0x1e, f.kind as u8]);
             h.update(f.value.value().as_bytes());
+        }
+        for k in &self.passkeys {
+            h.update([0x1d]);
+            h.update(k.credential_id.as_bytes());
         }
         h.finalize().into()
     }
@@ -150,20 +163,21 @@ impl Editor {
     }
 
     fn new(category: Category) -> Self {
-        Self { id: None, name: TextBox::new("", false), category, fields: Self::fields_of(&category.template()), file: None, new_file: None, drop_file: false, confirm_delete: false, snap: [0; 32] }.snapshot()
+        Self { id: None, name: TextBox::new("", false), category, fields: Self::fields_of(&category.template()), file: None, new_file: None, drop_file: false, confirm_delete: false, passkeys: Vec::new(), snap: [0; 32] }.snapshot()
     }
 
     fn open(id: &str, meta: &Meta, body: &Body) -> Self {
         // Biçimsiz eski kart kaydı: alanlar etiketlerinden biçim alır (kaydedince kalıcı).
         let mut body = body.clone();
         card::upgrade(meta.category, &mut body);
-        Self { id: Some(id.to_string()), name: TextBox::new(&meta.name, false), category: meta.category, fields: Self::fields_of(&body.fields), file: body.file.clone(), new_file: None, drop_file: false, confirm_delete: false, snap: [0; 32] }.snapshot()
+        Self { id: Some(id.to_string()), name: TextBox::new(&meta.name, false), category: meta.category, fields: Self::fields_of(&body.fields), file: body.file.clone(), new_file: None, drop_file: false, confirm_delete: false, passkeys: body.passkeys.clone(), snap: [0; 32] }.snapshot()
     }
 
     fn body(&self) -> Body {
         Body {
             fields: self.fields.iter().map(|f| Field { label: f.label.as_str().trim().to_string(), value: f.value.value().to_string(), kind: f.kind, fmt: f.value.fmt }).collect(),
             file: if self.drop_file { None } else { self.file.clone() },
+            passkeys: self.passkeys.clone(),
         }
     }
 
@@ -241,6 +255,12 @@ pub struct App {
     /// Listede gösterilen 2FA kodları: kayıt kimliği → (alan sırası, anahtar).
     /// Liste açılınca kurulur, kilitlenince silinir (anahtarlar Zeroizing).
     pub codes: HashMap<String, (usize, Totp)>,
+    /// Passkey'i olan kayıtlar (listede işaretlenir; `codes` ile birlikte kurulur).
+    pub with_passkey: std::collections::HashSet<String>,
+    /// Tarayıcıdan gelen, onay bekleyen passkey isteği (bkz. `passkeys`).
+    pub passkey: Option<passkeys::PasskeyAsk>,
+    /// Sonuçlanan passkey isteği: köprü `PasskeyWait` ile alır.
+    passkey_done: Option<(String, Reply)>,
 }
 
 /// Bekleyen 2FA aktarımı bu kadar sonra unutulur.
@@ -301,6 +321,9 @@ impl App {
             batch: None,
             import_error: None,
             codes: HashMap::new(),
+            with_passkey: Default::default(),
+            passkey: None,
+            passkey_done: None,
             back: None,
         }
     }
@@ -328,6 +351,9 @@ impl App {
         };
         if matches!(self.view, View::List) {
             self.refresh_codes();
+        }
+        if to_list {
+            self.passkey_unlocked();
         }
         self.scroll = 0.0;
         self.error = None;
@@ -357,6 +383,8 @@ impl App {
         self.search.clear();
         self.codes.clear();
         self.tokens.clear();
+        self.with_passkey.clear();
+        self.passkey_drop();
         self.import = None;
         self.back = None;
         self.clear_clipboard();
@@ -455,11 +483,18 @@ impl App {
         if let Request::ImportTotp { uri } = req {
             return self.import_totp(Zeroizing::new(uri));
         }
-        if matches!(req, Request::Find { .. } | Request::Fill { .. } | Request::Open { .. } | Request::Save { .. }) && !self.cfg.vault.browser_fill {
-            return Reply::no(t!("Tarayıcıda doldurma Ayarlar'da kapalı.", "Browser filling is turned off in Settings."));
+        let passkey = matches!(req, Request::PasskeyCreate { .. } | Request::PasskeyGet { .. } | Request::PasskeyWait { .. });
+        if (passkey || matches!(req, Request::Find { .. } | Request::Fill { .. } | Request::Open { .. } | Request::Save { .. })) && !self.cfg.vault.browser_fill {
+            return Reply::fallback(t!("Tarayıcıda doldurma Ayarlar'da kapalı.", "Browser filling is turned off in Settings."));
         }
         if let Request::Open { back } = req {
             return self.open_for_browser(back);
+        }
+        if let Request::PasskeyWait { ticket } = req {
+            return self.passkey_wait(&ticket);
+        }
+        if passkey {
+            return self.passkey_request(req);
         }
         if !self.is_open() {
             self.tokens.clear();
@@ -470,7 +505,7 @@ impl App {
             Request::Find { url } => self.find_logins(&url),
             Request::Fill { url, id } => self.fill_login(&url, &id),
             Request::Save { url, user, password, commit, name } => self.save_login(&url, Zeroizing::new(user), Zeroizing::new(password), commit, &name),
-            Request::ImportTotp { .. } | Request::Open { .. } => unreachable!(),
+            Request::ImportTotp { .. } | Request::Open { .. } | Request::PasskeyCreate { .. } | Request::PasskeyGet { .. } | Request::PasskeyWait { .. } => unreachable!(),
         }
     }
 
@@ -637,9 +672,13 @@ impl App {
     /// çözmemek için). Kayıt başına ilk geçerli 2FA alanı alınır.
     fn refresh_codes(&mut self) {
         self.codes.clear();
+        self.with_passkey.clear();
         let Some(v) = self.vault.as_ref() else { return };
         for it in v.items() {
             let Ok(body) = v.decrypt(&it.id) else { continue };
+            if !body.passkeys.is_empty() {
+                self.with_passkey.insert(it.id.clone());
+            }
             let found = body.fields.iter().enumerate().filter(|(_, f)| f.kind == FieldKind::Totp).find_map(|(i, f)| Totp::parse(&f.value).ok().map(|t| (i, t)));
             if let Some(c) = found {
                 self.codes.insert(it.id.clone(), c);
@@ -854,6 +893,15 @@ impl App {
             }
             Act::CopyPart(p) => self.copy_part(p),
             Act::CopyCode(id) => self.copy_code(&id),
+            Act::PasskeyApprove(i) => self.passkey_approve(i),
+            Act::PasskeyDecline => self.passkey_decline(),
+            Act::RemovePasskey(i) => {
+                if let View::Edit(e) = &mut self.view {
+                    if i < e.passkeys.len() {
+                        e.passkeys.remove(i);
+                    }
+                }
+            }
             Act::Import => {
                 self.import_error = None;
                 self.pick_import();
@@ -1051,6 +1099,11 @@ impl App {
             self.lock(t!("Ctrl+L", "Ctrl+L"));
             return true;
         }
+        // Passkey onay kartı açıkken: Enter onaylar (girişte ilk passkey), Esc tarayıcıya bırakır.
+        if self.passkey.is_some() && self.is_open() && (c == 0x0D || c == 0x1B) {
+            self.act(if c == 0x0D { Act::PasskeyApprove(0) } else { Act::PasskeyDecline });
+            return true;
+        }
         let Some(f) = self.focus else {
             if c == 0x1B && matches!(self.view, View::Edit(_)) {
                 self.act(Act::Cancel);
@@ -1108,6 +1161,7 @@ impl App {
 
     /// Boşta kalma denetimi (zamanlayıcıdan).
     pub fn check_idle(&mut self) {
+        self.passkey_expired();
         if !self.is_open() {
             return;
         }
@@ -1125,7 +1179,7 @@ mod tests {
 
     #[test]
     fn editor_dirty() {
-        let body = Body { fields: vec![Field { label: "Parola".into(), value: "x".into(), kind: FieldKind::Secret, fmt: Format::Free }], file: None };
+        let body = Body { fields: vec![Field { label: "Parola".into(), value: "x".into(), kind: FieldKind::Secret, fmt: Format::Free }], file: None, passkeys: Vec::new() };
         let meta = Meta { name: "GitHub".into(), category: Category::Password, updated: 0 };
         let mut e = Editor::open("id", &meta, &body);
         assert!(!e.dirty(), "açılır açılmaz değişmemiş sayılır");

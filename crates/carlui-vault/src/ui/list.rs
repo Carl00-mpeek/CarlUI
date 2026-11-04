@@ -128,6 +128,10 @@ pub fn paint(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
             let code = app.codes.get(&it.id).map(|(_, t)| t);
             let tw = r.w - 190.0 - if code.is_some() { CODE_W + 8.0 } else { 0.0 };
             p.text(&it.meta.name, R::new(r.x + 62.0, r.y + 9.0, tw, 22.0), 14.0, true, TEXT, 0.95, Align::Left);
+            if app.with_passkey.contains(&it.id) {
+                let nw = p.fonts.width(&it.meta.name, 14.0, true).min(tw - 90.0);
+                super::passkey::badge(p, r.x + 62.0 + nw + 10.0, r.y + 10.0);
+            }
             p.text(&format!("{} · {}", c.title(), date(it.meta.updated)), R::new(r.x + 62.0, r.y + 31.0, tw, 18.0), 12.0, false, TEXT, 0.5, Align::Left);
             if let Some(t) = code {
                 code_chip(p, t, R::new(r.right() - 116.0 - 8.0 - CODE_W, r.y + 12.0, CODE_W, 34.0), Act::CopyCode(it.id.clone()));

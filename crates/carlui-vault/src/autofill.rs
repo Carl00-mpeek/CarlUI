@@ -214,6 +214,7 @@ mod tests {
         let body = Body {
             fields: vec![f("Not", "x", FieldKind::Text), f("E-posta", "carl@ornek.com", FieldKind::Text), f("Parola", "s3cret", FieldKind::Secret), f("Adres", "https://github.com", FieldKind::Url)],
             file: None,
+            passkeys: Vec::new(),
         };
         assert_eq!(credentials(&body), ("carl@ornek.com".into(), "s3cret".into()));
         assert!(body_matches(&body, "https://github.com/login"));

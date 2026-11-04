@@ -365,6 +365,7 @@ mod tests {
                 Field { label: "PIN".into(), value: "not: bankadan sor".into(), kind: FieldKind::Secret, fmt: Format::Free },
             ],
             file: None,
+            passkeys: Vec::new(),
         };
         upgrade(Category::Card, &mut body);
         assert_eq!(body.fields[1].value, "4111111111111111");

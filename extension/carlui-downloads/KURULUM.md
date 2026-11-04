@@ -48,6 +48,21 @@ boyut görünür.
 - Not: Bilgisayarda kötü amaçlı bir program çalışıyorsa, kasa açıkken hiçbir
   parola yöneticisi tam koruma sağlayamaz.
 
+## Passkey (Carl Vault)
+- Bir site passkey oluşturmak istediğinde Carl Vault öne gelir ve "Passkey
+  kaydedilsin mi?" diye sorar. **Passkey kaydet** derseniz anahtar kasada
+  şifreli saklanır (kasa kilitliyse önce kilidi açarsınız). Aynı site ve
+  kullanıcı adıyla kayıt varsa passkey ona eklenir, yoksa yeni giriş kaydı açılır.
+- Girişte site passkey isterse kasa bu siteye ait passkey'leri listeler;
+  **Giriş yap** ile imzalanır. Kasada bu siteye passkey yoksa hiçbir şey
+  sorulmaz.
+- **Tarayıcıya bırak**, Carl Vault'un kapalı olması ya da sitenin desteklenmeyen
+  bir algoritma istemesi durumunda tarayıcının kendi passkey penceresi açılır.
+- Sitenin hangi adrese ait olduğu sayfanın söylediğine göre değil, tarayıcının
+  bildirdiği sekme adresine göre denetlenir; yalnızca https (ya da localhost).
+- Listede passkey'i olan kayıtlarda mor **Passkey** etiketi görünür; kaydı
+  düzenlerken passkey'i kaldırabilirsiniz.
+
 ## İndirmeler: ne yapar?
 - **İndirme yöneticisi açıkken:** Tarayıcıda bir indirme başlayınca indirme
   duraklatılır. Ada aşağı doğru "İndirme bilgisi" kartıyla açılır ve dosya adı,

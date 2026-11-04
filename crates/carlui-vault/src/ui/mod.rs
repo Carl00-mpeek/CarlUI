@@ -8,6 +8,7 @@ mod editor;
 mod import;
 mod list;
 mod lock;
+pub mod passkey;
 mod security;
 pub mod textbox;
 
@@ -140,7 +141,7 @@ pub fn date(secs: u64) -> String {
 /// Tüm pencereyi çizer; kaydırılabilir içeriğin taşan yüksekliğini döner.
 pub fn paint(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
     p.fill(R::new(0.0, 0.0, w, h), 0x101014, 0.30);
-    match &app.view {
+    let over = match &app.view {
         View::Setup => lock::setup(app, p, w, h),
         View::ShowRecovery { key, .. } => lock::show_recovery(app, p, w, h, key),
         View::Locked => lock::locked(app, p, w, h),
@@ -162,7 +163,10 @@ pub fn paint(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
             list::sidebar(app, p, h);
             import::paint(app, pv, p, w, h)
         }
-    }
+    };
+    // Tarayıcıdan gelen passkey isteği her görünümün üstünde.
+    passkey::paint(app, p, w, h);
+    over
 }
 
 #[cfg(test)]

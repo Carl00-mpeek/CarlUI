@@ -186,13 +186,13 @@ pub fn login(l: Login) -> Imported {
     }
     fields.push(field(t!("Not", "Note"), l.notes.trim(), FieldKind::Multiline));
     let category = if mail { Category::Email } else { Category::Password };
-    Imported { meta: meta(name_or(l.name, l.url, l.user), category), body: Body { fields, file: None } }
+    Imported { meta: meta(name_or(l.name, l.url, l.user), category), body: Body { fields, file: None, passkeys: Vec::new() } }
 }
 
 /// Güvenli not.
 pub fn note(name: &str, text: &str) -> Imported {
     let fields = vec![field(carlui_core::t!("Not", "Note"), text.trim(), FieldKind::Multiline)];
-    Imported { meta: meta(name_or(name, "", ""), Category::Note), body: Body { fields, file: None } }
+    Imported { meta: meta(name_or(name, "", ""), Category::Note), body: Body { fields, file: None, passkeys: Vec::new() } }
 }
 
 /// 2FA kaydı: anahtar alanına otpauth adresinin tamamı (hane/süre/algoritma korunur).
@@ -204,7 +204,7 @@ pub fn two_factor(issuer: &str, account: &str, uri: &str) -> Imported {
         field(t!("Gizli anahtar", "Secret key"), uri.trim(), FieldKind::Totp),
         field(t!("Yedek kodlar", "Backup codes"), "", FieldKind::Multiline),
     ];
-    Imported { meta: meta(name, Category::TwoFactor), body: Body { fields, file: None } }
+    Imported { meta: meta(name, Category::TwoFactor), body: Body { fields, file: None, passkeys: Vec::new() } }
 }
 
 /// Banka kartı (alanlar kasanın kart şablonuyla aynı sırada ve biçimde).
@@ -220,7 +220,7 @@ pub struct Card<'a> {
 
 pub fn card(c: Card) -> Imported {
     use crate::card::{digits, expiry};
-    let mut body = Body { fields: Category::Card.template(), file: None };
+    let mut body = Body { fields: Category::Card.template(), file: None, passkeys: Vec::new() };
     let exp = expiry(&format!("{}/{}", c.month.trim(), c.year.trim())).map(|(m, y)| format!("{m:02}/{:02}", y % 100)).unwrap_or_default();
     for f in body.fields.iter_mut() {
         f.value = match (f.fmt, f.kind) {
@@ -244,7 +244,7 @@ pub fn card(c: Card) -> Imported {
 /// Kimlik kaydı.
 pub fn identity(name: &str, full: &str, id_no: &str, notes: &str) -> Imported {
     // Şablon: ad soyad, kimlik no, doğum tarihi, not.
-    let mut body = Body { fields: Category::Identity.template(), file: None };
+    let mut body = Body { fields: Category::Identity.template(), file: None, passkeys: Vec::new() };
     for (i, v) in [full, id_no, "", notes].into_iter().enumerate() {
         if let Some(f) = body.fields.get_mut(i) {
             f.value = v.trim().to_string();

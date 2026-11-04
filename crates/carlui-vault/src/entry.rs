@@ -173,11 +173,14 @@ pub struct Body {
     pub fields: Vec<Field>,
     #[serde(default)]
     pub file: Option<Attachment>,
+    /// Bu kayda bağlı passkey'ler (bkz. `passkey`); özel anahtarları gövdeyle şifrelenir.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub passkeys: Vec<crate::passkey::Passkey>,
 }
 
 impl std::fmt::Debug for Body {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Body({} alan)", self.fields.len())
+        write!(f, "Body({} alan, {} passkey)", self.fields.len(), self.passkeys.len())
     }
 }
 
