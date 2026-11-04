@@ -9,9 +9,12 @@ Son durum: 2026-11-04. Aşama 1–5 bitti ve main'e push edildi.
 - Bellek dökümü: kilitliyken ve düzenleyici kapalıyken ana parola, parola, e-posta ve not bulunmadı.
   "GitHub" bulguları programdaki örnek metin. Düzenleyici açıkken değerler bellekte (beklenen).
 
+- Sayfa içi "Carl Vault" düğmesi (eklenti 1.2.0) eklendi; Helium'da kilitli ve açık kasayla denendi.
+  Aynı siteye birden çok kayıt varken açılan liste canlı denenmedi.
+
 ## Bekleyenler
 
-- **Firefox:** eklenti 1.1.0 zip'inin AMO'da yeniden imzalanması gerekiyor (kullanıcı yapacak).
+- **Firefox:** eklenti 1.2.0 zip'inin AMO'da yeniden imzalanması gerekiyor (kullanıcı yapacak).
 - **Helium:** Ctrl+Shift+L kısayolu atanmış ama yapay tuşla açılmadı; elle denenecek.
 - **Tarayıcıda doldurma:** kayıtta 2FA alanı varsa giriş sonrası kod alanını da doldurmak (isteğe bağlı).
 - **Ayrı işler:** Win menüsü ya da kurucu (bkz. hafıza notu "Modül 5-8 durumu").

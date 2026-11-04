@@ -19,7 +19,20 @@ boyut görünür.
   uymaz. https kaydı http sayfaya verilmez.
 - Kasa yalnızca açıkken ve tarayıcı öndeyken yanıt verir; kasa kilitliyse
   eklenti "Carl Vault'u aç" düğmesi gösterir. Eklenti parolayı saklamaz.
-- Ayarlar → Carl Vault → "Tarayıcıda doldurma" ile tamamen kapatılabilir.
+- **Sayfa içi düğme:** Giriş kutusunun sağında mor bir **Carl Vault** düğmesi
+  çıkar. Kasa açıkken bu düğme yalnızca kasada kaydı olan sitelerde görünür.
+  Kasa kilitliyken hangi sitede kayıt olduğu bilinemez; düğme her giriş
+  sayfasında çıkar.
+  - Kasa açıksa: basınca bilgiler yazılır. Siteye ait birden çok kayıt varsa
+    önce bir liste açılır.
+  - Kasa kilitli ya da kapalıysa: Carl Vault penceresi öne gelir. Ana parolayı
+    orada yazın; sayfaya yazmayın, çünkü sayfa kendi kutularına basılan tuşları
+    okuyabilir. Kilit açılınca tarayıcıya dönülür ve bilgiler kendiliğinden
+    yazılır (2 dk bekler).
+- Ayarlar → Carl Vault → "Tarayıcıda doldurma" ile tamamen kapatılabilir
+  (sayfa içi düğme de kaybolur).
+- Eklenti güncellenince Chromium tabanlı tarayıcılarda (Chrome, Edge, Helium)
+  uzantılar sayfasında CarlUI kartındaki ↻ (yeniden yükle) düğmesine basın.
 - Not: Bilgisayarda kötü amaçlı bir program çalışıyorsa, kasa açıkken hiçbir
   parola yöneticisi tam koruma sağlayamaz.
 

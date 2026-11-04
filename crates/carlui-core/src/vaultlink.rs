@@ -61,6 +61,10 @@ pub enum Request {
     /// Ekran görüntüsü aracının okuduğu 2FA QR'ı (otpauth adresi): kasa
     /// doldurulmuş yeni bir 2FA kaydı açar; kaydetmek kullanıcıya kalır.
     ImportTotp { uri: String },
+    /// Tarayıcı eklentisinin sayfa içi düğmesi: kasa öne gelir (kilitliyse
+    /// parola kendi penceresine yazılır); açılınca odak `back` penceresine
+    /// (istek anındaki tarayıcı) döner ki eklenti doldurmayı sürdürsün.
+    Open { back: isize },
 }
 
 /// Bir sayfaya uyan kayıt (yalnızca ad ve kullanıcı adı; parola yok).
@@ -217,6 +221,8 @@ mod tests {
         assert_eq!(serde_json::from_str::<Request>(&j).unwrap(), r);
         let r = Request::ImportTotp { uri: "otpauth://totp/X?secret=AB".into() };
         assert!(serde_json::to_string(&r).unwrap().contains("\"op\":\"import-totp\""));
+        let r = Request::Open { back: 42 };
+        assert!(serde_json::to_string(&r).unwrap().contains("\"op\":\"open\""));
         let reply = Reply::no("x");
         assert!(!serde_json::to_string(&reply).unwrap().contains("fill"), "boş alanlar yazılmaz");
     }

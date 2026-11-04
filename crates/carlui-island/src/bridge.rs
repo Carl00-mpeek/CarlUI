@@ -28,6 +28,9 @@ pub const WM_APP_OFFER: u32 = WM_APP + 30;
 
 /// Ayarlardaki "İndirme yöneticisi".
 pub static ENABLED: AtomicBool = AtomicBool::new(true);
+/// Ayarlardaki Carl Vault → "Tarayıcıda doldurma" (kasa kapalıyken de eklenti
+/// sayfa içi düğmeyi göstermesin).
+pub static VAULT_FILL: AtomicBool = AtomicBool::new(true);
 
 /// Karttaki seçim: eklentiye dönen yanıt.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -149,6 +152,9 @@ fn handle(mut s: TcpStream, hwnd: isize) {
         }
         // Carl Vault: istek kasanın doğrulanmış borusuna aktarılır (kasa açık,
         // adres uyuyor ve tarayıcı önde olmalı; bkz. carlui_core::vaultlink).
+        ("POST", p) if p.starts_with("/vault/") && !VAULT_FILL.load(Ordering::Relaxed) => {
+            respond(&mut s, "200 OK", &serde_json::json!({ "ok": false, "off": true, "message": t!("Tarayıcıda doldurma Ayarlar'da kapalı.", "Browser filling is turned off in Settings.") }).to_string());
+        }
         ("POST", "/vault/find") | ("POST", "/vault/fill") => {
             use carlui_core::vaultlink::{ask, Request};
             let req = if path == "/vault/find" { Request::Find { url: g("url") } } else { Request::Fill { url: g("url"), id: g("id") } };
@@ -158,11 +164,30 @@ fn handle(mut s: TcpStream, hwnd: isize) {
             };
             respond(&mut s, "200 OK", &body);
         }
+        // Kasa öne gelir; kapalıysa başlatılır. Öndeki pencere (eklentiye basılan
+        // tarayıcı) bildirilir ki kilit açılınca odak oraya dönsün.
         ("POST", "/vault/open") => {
-            let exe = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("carlui-vault.exe")));
-            let ok = exe.is_some_and(|e| std::process::Command::new(e).spawn().is_ok());
-            info!("eklentiden Carl Vault açıldı: {ok}");
-            respond(&mut s, "200 OK", &format!("{{\"ok\":{ok}}}"));
+            use carlui_core::vaultlink::{ask, Request};
+            let req = Request::Open { back: unsafe { GetForegroundWindow() }.0 as isize };
+            let mut reply = ask(&req);
+            if reply.is_err() {
+                let exe = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("carlui-vault.exe")));
+                if exe.is_some_and(|e| std::process::Command::new(e).spawn().is_ok()) {
+                    for _ in 0..30 {
+                        std::thread::sleep(Duration::from_millis(250));
+                        reply = ask(&req);
+                        if reply.is_ok() {
+                            break;
+                        }
+                    }
+                }
+            }
+            info!("eklentiden Carl Vault açıldı: {}", reply.is_ok());
+            let body = match reply {
+                Ok(r) => serde_json::to_string(&r).unwrap_or_default(),
+                Err(m) => serde_json::json!({ "ok": false, "closed": true, "message": m }).to_string(),
+            };
+            respond(&mut s, "200 OK", &body);
         }
         ("POST", "/offer") if !on => respond(&mut s, "200 OK", "{\"action\":\"browser\"}"),
         ("POST", "/offer") => {

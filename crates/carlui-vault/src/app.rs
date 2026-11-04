@@ -185,10 +185,14 @@ pub struct App {
     /// Ekran görüntüsü aracından gelen, henüz açılmamış 2FA (otpauth adresi).
     /// Kasa açılınca ya da açık kayıt kapanınca düzenleyiciye konur.
     import: Option<(Zeroizing<String>, Instant)>,
+    /// Sayfa içi düğmeyle açılış: kilit açılınca odak bu tarayıcı penceresine döner.
+    back: Option<(isize, Instant)>,
 }
 
 /// Bekleyen 2FA aktarımı bu kadar sonra unutulur.
 const IMPORT_TTL: std::time::Duration = std::time::Duration::from_secs(300);
+/// Eklentinin "kilidi aç" isteği bu kadar sonra unutulur (eklenti de 2 dk bekler).
+const BACK_TTL: std::time::Duration = std::time::Duration::from_secs(120);
 
 fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
@@ -240,6 +244,7 @@ impl App {
             confirm_remove_recovery: false,
             tokens: Tokens::default(),
             import: None,
+            back: None,
         }
     }
 
@@ -287,6 +292,7 @@ impl App {
         self.search.clear();
         self.tokens.clear();
         self.import = None;
+        self.back = None;
         self.clear_clipboard();
         self.go(View::Locked);
         info!("kasa kilitlendi ({why})");
@@ -364,6 +370,12 @@ impl App {
         if let Request::ImportTotp { uri } = req {
             return self.import_totp(Zeroizing::new(uri));
         }
+        if matches!(req, Request::Find { .. } | Request::Fill { .. } | Request::Open { .. }) && !self.cfg.vault.browser_fill {
+            return Reply::no(t!("Tarayıcıda doldurma Ayarlar'da kapalı.", "Browser filling is turned off in Settings."));
+        }
+        if let Request::Open { back } = req {
+            return self.open_for_browser(back);
+        }
         if !self.is_open() {
             self.tokens.clear();
             return Reply { locked: true, ..Reply::no(t!("Carl Vault kilitli.", "Carl Vault is locked.")) };
@@ -372,7 +384,7 @@ impl App {
             Request::Type { token, hwnd } => self.type_token(&token, hwnd, client_pid),
             Request::Find { url } => self.find_logins(&url),
             Request::Fill { url, id } => self.fill_login(&url, &id),
-            Request::ImportTotp { .. } => unreachable!(),
+            Request::ImportTotp { .. } | Request::Open { .. } => unreachable!(),
         }
     }
 
@@ -401,6 +413,37 @@ impl App {
             _ => t!("Carl Vault'u açınca 2FA kaydı hazır olacak.", "The 2FA item will be ready once you unlock Carl Vault."),
         };
         Reply { ok: true, message: message.into(), ..Default::default() }
+    }
+
+    /// Sayfa içi "Carl Vault" düğmesi: kasa öne gelir. Kilitliyse parola bu
+    /// pencereye yazılır (sayfaya değil: sayfa kendi kutularındaki tuşları
+    /// okuyabilir); açılınca `return_to_browser` odağı geri verir.
+    fn open_for_browser(&mut self, back: isize) -> Reply {
+        let open = self.is_open();
+        self.back = (!open).then(|| (back, Instant::now()));
+        unsafe {
+            use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_RESTORE};
+            let _ = ShowWindow(self.hwnd, SW_RESTORE);
+        }
+        carlui_core::win::force_foreground(self.hwnd);
+        info!("kasa: tarayıcıdaki düğmeyle öne getirildi");
+        Reply { ok: true, locked: !open, ..Default::default() }
+    }
+
+    /// Kilit eklentinin isteğiyle açıldıysa odağı o tarayıcıya geri ver.
+    fn return_to_browser(&mut self) {
+        let Some((back, at)) = self.back.take() else { return };
+        let hwnd = HWND(back as _);
+        let exe = carlui_core::win::window_exe(hwnd);
+        let name = exe.rsplit('\\').next().unwrap_or_default();
+        if at.elapsed() > BACK_TTL || !crate::inject::is_browser(name) {
+            return;
+        }
+        unsafe {
+            use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_MINIMIZE};
+            let _ = ShowWindow(self.hwnd, SW_MINIMIZE);
+        }
+        carlui_core::win::force_foreground(hwnd);
     }
 
     /// Pano belirteci: hedefi doğrula, belirteci tüket, değeri yaz.
@@ -538,6 +581,7 @@ impl App {
                         self.clear_forms();
                         self.go(View::List);
                         info!("kasa açıldı ({} kayıt)", self.vault.as_ref().map(|v| v.items().len()).unwrap_or(0));
+                        self.return_to_browser();
                     }
                     Err(e) => {
                         self.form[0].clear();

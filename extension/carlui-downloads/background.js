@@ -108,3 +108,18 @@ async function watchProgress() {
 API.downloads.onChanged.addListener((d) => {
   if (d.state || d.paused) watchProgress();
 });
+
+// Sayfa içi "Carl Vault" düğmesi (content.js). Adres sayfanın söylediği değil,
+// tarayıcının bildirdiği sekme adresidir; yalnızca ana çerçeve.
+API.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (!sender.tab || sender.frameId !== 0 || !/^https?:/i.test(sender.url || "")) return false;
+  const url = sender.url;
+  const run =
+    msg.op === "vault-find" ? call("/vault/find", { url }, 5000)
+    : msg.op === "vault-fill" ? call("/vault/fill", { url, id: String(msg.id || "") }, 5000)
+    : msg.op === "vault-open" ? call("/vault/open", {}, 15000)
+    : null;
+  if (!run) return false;
+  run.then((r) => reply(r ?? { ok: false, closed: true, message: "CarlUI çalışmıyor." }));
+  return true;
+});

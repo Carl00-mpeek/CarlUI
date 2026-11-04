@@ -31,6 +31,17 @@ pub fn force_foreground(hwnd: HWND) {
                 let _ = AttachThreadInput(me, ft, false);
             }
         }
+        if GetForegroundWindow() != hwnd {
+            // Son çare: Alt basılıyken Windows öne geçişe izin verir. Alt
+            // bırakılmadan araya atanmamış tuş girer ki pencere menüye geçmesin.
+            let alt = |up: bool| INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VK_MENU, dwFlags: if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) }, ..Default::default() } },
+            };
+            SendInput(&[alt(false)], std::mem::size_of::<INPUT>() as i32);
+            let _ = SetForegroundWindow(hwnd);
+            SendInput(&[key(false), key(true), alt(true)], std::mem::size_of::<INPUT>() as i32);
+        }
         let _ = SetFocus(hwnd);
     }
 }
