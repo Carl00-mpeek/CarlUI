@@ -91,6 +91,8 @@ pub enum Hit {
     NoteRow(usize),
     NoteDel(usize),
     NoteAct(usize, u8),
+    /// Ekrana düşen ekran görüntüsü bildiriminin düğmeleri (0 Aç, 1 Düzenle, 2 Sil).
+    BannerAct(u8),
     /// Uygulama grubu başlığı: daralt/genişlet ve o uygulamanın hepsini sil.
     GroupToggle(usize),
     GroupClear(usize),
@@ -100,6 +102,8 @@ pub enum Hit {
 pub struct Model<'a> {
     pub media: Option<&'a Snap>,
     pub note: Option<&'a Note>,
+    /// Ekran görüntüsü bildirimine tıklandı: altında Aç / Düzenle / Sil.
+    pub note_open: bool,
     pub app_volume: Option<f32>,
     pub spot: Option<SpotView<'a>>,
     pub clip: Option<crate::clipper::ClipView<'a>>,
@@ -602,7 +606,9 @@ impl Island {
                 let pad = (14.0 * s).round();
                 let ipx = (40.0 * s).round();
                 let has_body = !n.body.is_empty();
-                let h = if has_body { (74.0 * s).round() } else { (62.0 * s).round() };
+                let head = if has_body { (74.0 * s).round() } else { (62.0 * s).round() };
+                let open = m.note_open && n.shot.is_some();
+                let h = if open { head + (34.0 * s).round() } else { head };
                 let icon: Visual = match n.logo.as_ref().map(|b| self.art(gfx, b, ipx, 10.0 * s)) {
                     Some(Ok(Some(v))) => v.cast()?,
                     _ => {
@@ -614,7 +620,7 @@ impl Island {
                         c.cast()?
                     }
                 };
-                Self::place(&icon, pad, ((h - ipx) / 2.0).round())?;
+                Self::place(&icon, pad, ((head - ipx) / 2.0).round())?;
                 kids.InsertAtTop(&icon)?;
                 let tx = pad + ipx + 12.0 * s;
                 let tmax = w - tx - pad;
@@ -633,6 +639,15 @@ impl Island {
                     let (b, _, _) = self.label(gfx, &n.body, 12.5, false, tmax, 0.7)?;
                     Self::place(&b, tx, y + th + 1.0 * s)?;
                     kids.InsertAtTop(&b)?;
+                }
+                if open {
+                    let py = head - 4.0 * s;
+                    let mut px = tx;
+                    for (k, (label, danger)) in [(t!("Aç", "Open"), false), (t!("Düzenle", "Edit"), false), (t!("Sil", "Delete"), true)].into_iter().enumerate() {
+                        let pw = self.hub_pill(gfx, &kids, label, px, py, danger)?;
+                        self.hits.push((Hit::BannerAct(k as u8), RECT { left: px as i32, top: py as i32, right: (px + pw) as i32, bottom: (py + 24.0 * s) as i32 }));
+                        px += pw + 6.0 * s;
+                    }
                 }
                 (w, h)
             }

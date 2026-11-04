@@ -133,7 +133,7 @@ impl Island {
     }
 
     /// Küçük yazılı düğme (Aç / Düzenle / Sil).
-    fn hub_pill(&self, gfx: &Gfx, kids: &VisualCollection, text: &str, x: f32, y: f32, danger: bool) -> Result<f32> {
+    pub(super) fn hub_pill(&self, gfx: &Gfx, kids: &VisualCollection, text: &str, x: f32, y: f32, danger: bool) -> Result<f32> {
         let s = self.s;
         let (t, tw, th) = self.label(gfx, text, 11.5, true, 100.0 * s, 0.95)?;
         let (pw, ph) = ((tw + 20.0 * s).round(), (24.0 * s).round());

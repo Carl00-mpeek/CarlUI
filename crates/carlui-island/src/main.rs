@@ -129,6 +129,8 @@ struct App {
     notes_in: Arc<Mutex<VecDeque<Note>>>,
     pending: VecDeque<Note>,
     note: Option<Note>,
+    /// Ekran görüntüsü bildirimine tıklandı: düğmeler açık.
+    note_open: bool,
     /// Son gösterilen bildirimler (tray balonu + aynı bildirimin Windows kopyası tekrar görünmesin).
     recent: VecDeque<(String, Instant)>,
     expanded: bool,
@@ -287,6 +289,7 @@ impl App {
         let model = Model {
             media: self.media.as_ref(),
             note: self.note.as_ref(),
+            note_open: self.note_open,
             app_volume: if media_panel { audio::get(&self.vols) } else { None },
             spot: (view == View::Search).then(|| self.spot.view()),
             clip: None,
@@ -353,6 +356,7 @@ impl App {
             let _ = KillTimer(self.island.hwnd, TIMER_NOTE);
         }
         self.note = self.pending.pop_front();
+        self.note_open = false;
         if self.note.is_some() {
             self.expanded = false;
             self.date = false;
@@ -691,13 +695,41 @@ impl App {
         let view = self.island.view;
         match view {
             View::Note => {
+                // Ekran görüntüsü: ilk tıklama düğmeleri açar; bildirim yalnızca Sil ile silinir.
+                if let Some(path) = self.note.as_ref().and_then(|n| n.shot.clone()) {
+                    let Hit::BannerAct(act) = h else {
+                        if !self.note_open {
+                            self.note_open = true;
+                            self.refresh(true);
+                        }
+                        return;
+                    };
+                    let Some(n) = self.note.take() else { return };
+                    match act {
+                        0 => {
+                            shots::open(&path);
+                            self.archive(n);
+                        }
+                        1 => {
+                            self.shot_edit(&path);
+                            self.archive(n);
+                        }
+                        _ => self.delete_shot(&path, n.clip_id.as_deref()),
+                    }
+                    self.show_next_note();
+                    return;
+                }
                 if let Some(n) = self.note.take() {
                     if let Some(r) = &n.update {
                         update::apply(self.island.hwnd.0 as isize, WM_APP_NOTE, self.notes_in.clone(), r.clone());
-                    } else if let Some(f) = &n.file {
-                        dlman::open(f);
-                    } else if !activate::open_app(&n.aumid) && !n.app.is_empty() {
-                        activate::open_app(&n.app);
+                    } else {
+                        if let Some(f) = &n.file {
+                            dlman::open(f);
+                        } else if !activate::open_app(&n.aumid) && !n.app.is_empty() {
+                            activate::open_app(&n.app);
+                        }
+                        // Açılan bildirim kaybolmasın, adada saklansın.
+                        self.archive(n);
                     }
                 }
                 self.show_next_note();
@@ -1153,6 +1185,7 @@ fn main() -> Result<()> {
                 notes_in,
                 pending: VecDeque::new(),
                 note: None,
+                note_open: false,
                 recent: VecDeque::new(),
                 expanded: false,
                 date: false,
