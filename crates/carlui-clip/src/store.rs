@@ -18,6 +18,8 @@ pub enum Kind {
     Text,
     Image,
     Files,
+    /// Carl Vault belirteci: yalnızca bellekte; diske yazılmaz, süresi dolunca silinir.
+    Vault,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -43,6 +45,12 @@ pub struct Clip {
     pub secret: bool,
     /// Unix zamanı (ms).
     pub time: i64,
+    /// Kasa belirteci (yalnızca `Kind::Vault`; `text` listede görünen addır).
+    #[serde(skip)]
+    pub token: String,
+    /// Kasa belirtecinin geçerlilik sonu (Unix ms).
+    #[serde(skip)]
+    pub expires: i64,
 }
 
 pub fn now_ms() -> i64 {
@@ -120,7 +128,9 @@ impl Store {
         }
         let file = self.dir.join("history.json");
         let tmp = self.dir.join("history.json.tmp");
-        if let Ok(j) = serde_json::to_vec(&self.items) {
+        // Kasa belirteçleri yalnızca bellekte kalır.
+        let keep: Vec<&Clip> = self.items.iter().filter(|c| c.kind != Kind::Vault).collect();
+        if let Ok(j) = serde_json::to_vec(&keep) {
             if std::fs::write(&tmp, j).is_ok() {
                 let _ = std::fs::rename(&tmp, &file);
             }
@@ -133,6 +143,14 @@ impl Store {
             Content::Text(t) => (Kind::Text, hash(Kind::Text, t.as_bytes())),
             Content::Image { png, .. } => (Kind::Image, hash(Kind::Image, png)),
             Content::Files(f) => (Kind::Files, hash(Kind::Files, f.join("\n").as_bytes())),
+            Content::Vault(o) => {
+                if o.expires <= now_ms() || o.token.is_empty() {
+                    return false;
+                }
+                // Aynı alan yeniden kopyalandı: eski belirteç kasada da geçersiz.
+                self.items.retain(|x| !(x.kind == Kind::Vault && x.text == o.label));
+                (Kind::Vault, hash(Kind::Vault, o.token.as_bytes()))
+            }
         };
         if let Some(i) = self.items.iter().position(|x| x.hash == h) {
             if i == 0 {
@@ -145,13 +163,18 @@ impl Store {
             return true;
         }
         let id = new_id();
-        let mut clip = Clip { id: id.clone(), kind, text: String::new(), image: String::new(), w: 0, h: 0, hash: h, pinned: false, secret: false, time: now_ms() };
+        let mut clip = Clip { id: id.clone(), kind, text: String::new(), image: String::new(), w: 0, h: 0, hash: h, pinned: false, secret: false, time: now_ms(), token: String::new(), expires: 0 };
         match c {
             Content::Text(t) => {
                 clip.secret = crate::secret::looks_secret(&t);
                 clip.text = t;
             }
             Content::Files(f) => clip.text = f.join("\n"),
+            Content::Vault(o) => {
+                clip.text = o.label;
+                clip.token = o.token;
+                clip.expires = o.expires;
+            }
             Content::Image { png, w, h } => {
                 clip.image = format!("{id}.png");
                 clip.w = w;
@@ -241,8 +264,17 @@ impl Store {
         self.save();
     }
 
+    /// Süresi dolan kasa belirteçlerini siler. Bir şey silindiyse true.
+    pub fn expire_vault(&mut self) -> bool {
+        let now = now_ms();
+        let before = self.items.len();
+        self.items.retain(|c| !(c.kind == Kind::Vault && now >= c.expires));
+        before != self.items.len()
+    }
+
+    /// Kasa belirteci sabitlenemez (kısa ömürlü, tek kullanımlık).
     pub fn toggle_pin(&mut self, id: &str) {
-        if let Some(c) = self.items.iter_mut().find(|c| c.id == id) {
+        if let Some(c) = self.items.iter_mut().find(|c| c.id == id && c.kind != Kind::Vault) {
             c.pinned = !c.pinned;
             self.save();
         }
@@ -371,5 +403,32 @@ mod tests {
         assert_eq!(super::parse_iso("1970-01-02T00:00:00+00:00"), Some(86_400_000));
         assert_eq!(super::parse_iso("1970-01-01T03:00:00+03:00"), Some(0));
         assert_eq!(super::parse_iso("2026-11-01T09:01:56.2113293+03:00"), Some(1_793_512_916_000));
+    }
+
+    /// Kasa belirteci listede görünür ama diske yazılmaz, sabitlenemez, süresi dolunca gider.
+    #[test]
+    fn vault_tokens_stay_in_memory() {
+        use super::*;
+        use carlui_core::vaultlink::Offer;
+        let dir = std::env::temp_dir().join(format!("carlui-clip-test-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let mut s = Store { items: Vec::new(), dir: dir.clone(), max_items: 10, loaded: true };
+        s.add(Content::Text("merhaba".into()));
+        let offer = |t: &str, exp| Content::Vault(Offer { token: t.into(), label: "GitHub · Parola".into(), expires: exp });
+        assert!(!s.add(offer("aa", now_ms() - 1)), "süresi dolmuş belirteç alınmaz");
+        assert!(s.add(offer("bb", now_ms() + 60_000)));
+        assert!(s.add(offer("cc", now_ms() + 60_000)));
+        let vaults: Vec<&Clip> = s.items.iter().filter(|c| c.kind == Kind::Vault).collect();
+        assert_eq!(vaults.len(), 1, "aynı alanın eski belirteci silinir");
+        assert_eq!(vaults[0].token, "cc");
+        let id = vaults[0].id.clone();
+        s.toggle_pin(&id);
+        assert!(!s.get(&id).unwrap().pinned);
+        let disk = std::fs::read_to_string(dir.join("history.json")).unwrap();
+        assert!(disk.contains("merhaba") && !disk.contains("cc") && !disk.contains("GitHub") && !disk.contains("vault"));
+        s.items.iter_mut().for_each(|c| c.expires = if c.kind == Kind::Vault { 1 } else { c.expires });
+        assert!(s.expire_vault());
+        assert!(s.items.iter().all(|c| c.kind != Kind::Vault));
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

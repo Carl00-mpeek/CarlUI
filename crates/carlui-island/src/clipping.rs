@@ -60,6 +60,10 @@ pub(crate) fn start_listener(hwnd: HWND, store: Arc<Mutex<carlui_clip::store::St
             match rx.recv_timeout(Duration::from_secs(5)) {
                 Ok(()) => {}
                 Err(mpsc::RecvTimeoutError::Timeout) => {
+                    if store.lock().map(|mut s| s.expire_vault()).unwrap_or(false) {
+                        info!("pano: süresi dolan kasa belirteci silindi");
+                        let _ = PostMessageW(HWND(raw as _), WM_APP_CLIP, WPARAM(0), LPARAM(0));
+                    }
                     let secs = SECRET_SECS.load(Ordering::Relaxed);
                     if secs > 0 && store.lock().map(|mut s| s.expire_secrets(secs as i64 * 1000)).unwrap_or(false) {
                         info!("pano: süresi dolan gizli kayıt silindi");
@@ -380,6 +384,18 @@ impl App {
     /// Kaydı panoya yazar; `paste` ise önceki pencereye yapıştırır.
     fn use_clip(&mut self, id: &str, paste: bool) {
         let hwnd = self.island.hwnd;
+        // Kasa belirteci panoya yazılmaz: tek kullanımlık, kasa hedefe yazar.
+        let vault = self.clip.store.lock().ok().and_then(|mut st| {
+            let token = st.get(id).filter(|c| c.kind == Kind::Vault).map(|c| c.token.clone())?;
+            st.remove(id);
+            Some(token)
+        });
+        if let Some(token) = vault {
+            let target = self.clip.prev_fg;
+            self.close_clip(true);
+            self.vault_type(token, target);
+            return;
+        }
         let ok = {
             let Ok(mut st) = self.clip.store.lock() else { return };
             let Some(c) = st.get(id).cloned() else { return };
@@ -390,6 +406,8 @@ impl App {
                     write::set(hwnd, write::Data::Files(&list))
                 }
                 Kind::Image => std::fs::read(st.image_path(&c)).ok().and_then(|png| write::set(hwnd, write::Data::Png(&png))),
+                // Yukarıda ayrıldı; buraya gelmez.
+                Kind::Vault => None,
             };
             if let Some(seq) = seq {
                 OWN_SEQ.store(seq, Ordering::SeqCst);
@@ -407,6 +425,31 @@ impl App {
                 SetTimer(hwnd, TIMER_PASTE, 90, None);
             }
         }
+    }
+
+    /// Kasadan, panodan önceki pencereye yazmasını ister (Vault Aşama 2). Kasa
+    /// belirteci, bu süreci ve hedefi doğrular; sonuç adada bildirim olur.
+    fn vault_type(&mut self, token: String, target: HWND) {
+        let raw = self.island.hwnd.0 as isize;
+        let notes = self.notes_in.clone();
+        let target = target.0 as isize;
+        let _ = std::thread::Builder::new().name("vault-type".into()).spawn(move || {
+            // Odak önceki pencereye dönsün (kasa da birkaç yüz ms bekler).
+            std::thread::sleep(Duration::from_millis(120));
+            let reply = carlui_core::vaultlink::ask(&carlui_core::vaultlink::Request { token, hwnd: target });
+            let (ok, msg) = match reply {
+                Ok(r) => (r.ok, r.message),
+                Err(m) => (false, m),
+            };
+            info!("pano: kasa yazma isteği {}: {msg}", if ok { "tamam" } else { "olmadı" });
+            let (title, body) = if ok { (msg, String::new()) } else { (t!("Yazılamadı", "Couldn't type it").into(), msg) };
+            if let Ok(mut q) = notes.lock() {
+                q.push_back(Note { app: "Carl Vault".into(), title, body, ..Default::default() });
+            }
+            unsafe {
+                let _ = PostMessageW(HWND(raw as _), WM_APP_NOTE, WPARAM(0), LPARAM(0));
+            }
+        });
     }
 
     /// Düzenleyici kapandı (kaydedildi ya da vazgeçildi).

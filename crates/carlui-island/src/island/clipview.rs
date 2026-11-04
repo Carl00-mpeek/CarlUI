@@ -129,6 +129,7 @@ fn first_line(c: &Clip) -> String {
             if n > 1 { format!("{name} +{}", n - 1) } else { name }
         }
         Kind::Text => c.text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or_default().chars().take(200).collect(),
+        Kind::Vault => c.text.clone(),
     }
 }
 
@@ -143,6 +144,10 @@ fn describe(c: &Clip) -> String {
             let n = c.text.chars().count();
             let lines = c.text.lines().count();
             if lines > 1 { t!(format!("{n} karakter · {lines} satır"), format!("{n} characters · {lines} lines")) } else { t!(format!("{n} karakter"), format!("{n} characters")) }
+        }
+        Kind::Vault => {
+            let left = ((c.expires - carlui_clip::store::now_ms()) / 1000).max(0);
+            t!(format!("tek kullanımlık · {left} sn"), format!("one-time · {left} s"))
         }
     }
 }
@@ -195,6 +200,7 @@ impl Island {
         }
         let glyph = match c.kind {
             _ if c.secret => '\u{E72E}',
+            Kind::Vault => '\u{E72E}',
             Kind::Files => '\u{E8B7}',
             _ => '\u{E8A5}',
         };
@@ -208,6 +214,16 @@ impl Island {
         }
         let made = match c.kind {
             Kind::Image => std::fs::read(v.store.image_path(c)).ok().and_then(|b| picture(gfx, &b)),
+            Kind::Vault => {
+                let note = format!(
+                    "{MASK}{MASK}\n\n{}",
+                    t!(
+                        "Carl Vault kaydı. Değer panoda değil, kasada.\nEnter: kasa değeri bu panodan önceki pencereye yazar.\nTek kullanımlık; 60 sn içinde geçersiz olur ve geçmişe kaydedilmez.",
+                        "Carl Vault item. The value is in the vault, not on the clipboard.\nEnter: the vault types it into the window you came from.\nOne-time; it expires within 60 s and isn't saved to history."
+                    )
+                );
+                self.text.render_block(gfx, &note, 13.0 * self.s, Some(wrap_w), 8192.0, 0.6).ok().map(|r| (r.surface, r.width, r.height))
+            }
             _ if c.secret => {
                 let note = format!(
                     "{MASK}{MASK}\n\n{}\n{}",
@@ -370,6 +386,7 @@ impl Island {
                 Kind::Text => t!("Metin", "Text"),
                 Kind::Image => t!("Resim", "Image"),
                 Kind::Files => t!("Dosyalar", "Files"),
+                Kind::Vault => "Carl Vault",
             };
             let mut buttons: Vec<(u8, char, f32)> = Vec::new();
             if c.kind == Kind::Text {
@@ -378,7 +395,10 @@ impl Island {
             if c.kind == Kind::Image {
                 buttons.push((3, '\u{E890}', 0.9));
             }
-            buttons.push((1, '\u{E718}', if c.pinned { 1.0 } else { 0.55 }));
+            // Kasa belirteci sabitlenemez.
+            if c.kind != Kind::Vault {
+                buttons.push((1, '\u{E718}', if c.pinned { 1.0 } else { 0.55 }));
+            }
             buttons.push((2, '\u{E74D}', 0.7));
             let bs = (26.0 * s).round();
             let mut bx = px0 + pw - 6.0 * s;

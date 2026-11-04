@@ -34,6 +34,8 @@ pub enum Content {
     /// PNG baytları + boyut.
     Image { png: Vec<u8>, w: u32, h: u32 },
     Files(Vec<String>),
+    /// Carl Vault belirteci (değer değil); geçmişe yazılmaz.
+    Vault(carlui_core::vaultlink::Offer),
 }
 
 fn reg(name: &str) -> u32 {
@@ -157,6 +159,18 @@ unsafe fn read_open() -> Option<Content> {
         formats.push(f);
     }
     let has = |f: u32| formats.contains(&f);
+    // Carl Vault belirteci: geçmiş işaretlerinden önce tanınır (yalnızca bellekte tutulur).
+    let vault = reg(carlui_core::vaultlink::FORMAT);
+    if has(vault) {
+        let offer = bytes_of(vault).and_then(|b| {
+            let n = b.iter().position(|&x| x == 0).unwrap_or(b.len());
+            serde_json::from_slice::<carlui_core::vaultlink::Offer>(&b[..n]).ok()
+        });
+        if offer.is_none() {
+            warn!("pano: Carl Vault belirteci okunamadı");
+        }
+        return offer.map(Content::Vault);
+    }
     // Şifre yöneticileri vb.: geçmişe alma.
     let exclude = reg("ExcludeClipboardContentFromMonitorProcessing");
     let no_history = reg("CanIncludeInClipboardHistory");

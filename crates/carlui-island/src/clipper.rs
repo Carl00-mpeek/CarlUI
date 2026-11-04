@@ -129,6 +129,7 @@ fn matches(c: &Clip, q: &str) -> bool {
     }
     let hay = match c.kind {
         Kind::Image => format!("resim görsel image picture {}x{}", c.w, c.h),
+        Kind::Vault => format!("{} carl vault kasa parola password", fold(&c.text)),
         // Gizli kaydın içeriği aramayla da açığa çıkmasın.
         _ if c.secret => "gizli şifre anahtar secret password key".into(),
         _ => fold(&c.text),
@@ -285,6 +286,18 @@ impl Clipper {
         let Some(id) = self.selected_id() else { return ClipOut::Nothing };
         let Ok(st) = self.store.lock() else { return ClipOut::Nothing };
         let Some(c) = st.get(&id) else { return ClipOut::Nothing };
+        if c.kind == Kind::Vault {
+            // Kasa belirteci: yalnızca hedefe yazdırılır ya da silinir.
+            self.actions = vec![
+                Action { label: t!("Kasadan yaz", "Type from the vault").into(), key: "Enter", glyph: '\u{E72E}', act: Act::Paste },
+                Action { label: t!("Sil", "Delete").into(), key: "Delete", glyph: '\u{E74D}', act: Act::Delete },
+            ];
+            drop(st);
+            self.act_sel = 0;
+            self.mode = ClipMode::Actions;
+            self.scroll = 0;
+            return ClipOut::Redraw;
+        }
         let mut a = vec![
             Action { label: t!("Yapıştır", "Paste").into(), key: "Enter", glyph: '\u{E77F}', act: Act::Paste },
             Action { label: t!("Yalnızca panoya kopyala", "Copy to clipboard only").into(), key: "Shift+Enter", glyph: '\u{E8C8}', act: Act::Copy },
