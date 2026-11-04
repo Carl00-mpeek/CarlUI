@@ -319,34 +319,92 @@ impl App {
         self.toast(t!(format!("Hazır · hedef pencerede Win+V ile seç ({secs} sn)"), format!("Ready · pick it with Win+V in the target window ({secs} s)")));
     }
 
-    /// Adadan gelen yapıştırma isteği: hedefi doğrula, belirteci tüket, değeri yaz.
+    /// Adadan gelen istek: pano belirteci ya da tarayıcı eklentisi.
     pub fn link(&mut self, req: Request, client_pid: u32) -> Reply {
-        let no = |m: String| Reply { ok: false, message: m };
         if !self.is_open() {
             self.tokens.clear();
-            return no(t!("Carl Vault kilitli.", "Carl Vault is locked.").into());
+            return Reply { locked: true, ..Reply::no(t!("Carl Vault kilitli.", "Carl Vault is locked.")) };
         }
-        let app = match crate::inject::check_target(HWND(req.hwnd as _), client_pid) {
+        match req {
+            Request::Type { token, hwnd } => self.type_token(&token, hwnd, client_pid),
+            Request::Find { url } => self.find_logins(&url),
+            Request::Fill { url, id } => self.fill_login(&url, &id),
+        }
+    }
+
+    /// Pano belirteci: hedefi doğrula, belirteci tüket, değeri yaz.
+    fn type_token(&mut self, token: &str, hwnd: isize, client_pid: u32) -> Reply {
+        let app = match crate::inject::check_target(HWND(hwnd as _), client_pid) {
             Ok(a) => a,
             Err(m) => {
                 warn!("kasa: yapıştırma reddedildi: {m}");
-                return no(m);
+                return Reply::no(m);
             }
         };
-        let (value, label) = match self.tokens.take(&req.token, now_ms()) {
+        let (value, label) = match self.tokens.take(token, now_ms()) {
             Ok(v) => v,
-            Err(TokenError::Expired) => return no(t!("Süresi doldu; kasadan yeniden kopyala.", "It expired; copy it again from the vault.").into()),
-            Err(TokenError::Unknown) => return no(t!("Bu kayıt artık geçerli değil.", "This item is no longer valid.").into()),
+            Err(TokenError::Expired) => return Reply::no(t!("Süresi doldu; kasadan yeniden kopyala.", "It expired; copy it again from the vault.")),
+            Err(TokenError::Unknown) => return Reply::no(t!("Bu kayıt artık geçerli değil.", "This item is no longer valid.")),
         };
         // Belirteç kullanıldı: panoda kaldıysa sil.
         self.clear_clipboard();
         if !crate::inject::type_text(&value) {
-            return no(t!("Değer yazılamadı.", "Couldn't type the value.").into());
+            return Reply::no(t!("Değer yazılamadı.", "Couldn't type the value."));
         }
         info!("kasa: bir alan {app} penceresine yazıldı");
         let field = label.rsplit(" · ").next().unwrap_or_default().to_string();
         self.toast(t!(format!("{field} → {app}"), format!("{field} → {app}")));
-        Reply { ok: true, message: t!(format!("{field} yazıldı"), format!("{field} typed")) }
+        Reply { ok: true, message: t!(format!("{field} yazıldı"), format!("{field} typed")), ..Default::default() }
+    }
+
+    /// Tarayıcı istekleri yalnızca ayar açıkken ve öndeki pencere tarayıcıyken.
+    fn browser_gate(&self) -> Result<String, Reply> {
+        if !self.cfg.vault.browser_fill {
+            return Err(Reply::no(t!("Tarayıcıda doldurma Ayarlar'da kapalı.", "Browser filling is turned off in Settings.")));
+        }
+        crate::inject::browser_in_front().ok_or_else(|| Reply::no(t!("Öndeki pencere bir tarayıcı değil.", "The window in front isn't a browser.")))
+    }
+
+    /// Sayfa adresine uyan kayıtlar (ad ve kullanıcı adı; parola yok).
+    fn find_logins(&mut self, url: &str) -> Reply {
+        if let Err(r) = self.browser_gate() {
+            return r;
+        }
+        let Some(v) = self.vault.as_ref() else { return Reply::no("") };
+        let mut logins = Vec::new();
+        for it in v.items() {
+            // Kayıt geçici olarak çözülür; `Body` düşerken bellekten silinir.
+            let Ok(body) = v.decrypt(&it.id) else { continue };
+            if carlui_vault::autofill::body_matches(&body, url) {
+                let (username, _) = carlui_vault::autofill::credentials(&body);
+                logins.push(carlui_core::vaultlink::Login { id: it.id.clone(), name: it.meta.name.clone(), username });
+            }
+        }
+        let message = if logins.is_empty() { t!("Bu site için kayıt yok.", "No item for this site.").to_string() } else { String::new() };
+        Reply { ok: true, message, logins, ..Default::default() }
+    }
+
+    /// Seçilen kaydın giriş bilgileri; kayıt adresi sayfaya uymazsa verilmez.
+    fn fill_login(&mut self, url: &str, id: &str) -> Reply {
+        let browser = match self.browser_gate() {
+            Ok(b) => b,
+            Err(r) => return r,
+        };
+        let Some(v) = self.vault.as_ref() else { return Reply::no("") };
+        let Ok(body) = v.decrypt(id) else { return Reply::no(t!("Kayıt bulunamadı.", "Item not found.")) };
+        if !carlui_vault::autofill::body_matches(&body, url) {
+            warn!("kasa: doldurma reddedildi, kayıt adresi sayfaya uymuyor");
+            return Reply::no(t!("Bu kayıt bu siteye ait değil.", "This item doesn't belong to this site."));
+        }
+        let (user, pass) = carlui_vault::autofill::credentials(&body);
+        if pass.is_empty() && user.is_empty() {
+            return Reply::no(t!("Kayıtta kullanıcı adı ya da parola yok.", "The item has no username or password."));
+        }
+        let name = v.items().iter().find(|i| i.id == id).map(|i| i.meta.name.clone()).unwrap_or_default();
+        let host = url.split("://").nth(1).and_then(|r| r.split(['/', '?', '#']).next()).unwrap_or_default().to_string();
+        info!("kasa: {browser} içinde {host} için giriş bilgisi verildi");
+        self.toast(t!(format!("{name} → {host}"), format!("{name} → {host}")));
+        Reply { ok: true, fill: Some((user, pass)), ..Default::default() }
     }
 
     fn fail(&mut self, e: Error) {

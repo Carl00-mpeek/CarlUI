@@ -52,11 +52,14 @@ pub struct VaultConfig {
     /// değer yalnızca CarlUI panosundan (Win+V) seçilince hedef pencereye yazılır.
     /// Kapalıysa değer doğrudan panoya konur (eski davranış).
     pub token_paste: bool,
+    /// Tarayıcı eklentisi giriş sayfalarını kasadan doldurabilsin (kullanıcı
+    /// eklentide kaydı seçince; yalnızca adresi uyan kayıtlar).
+    pub browser_fill: bool,
 }
 
 impl Default for VaultConfig {
     fn default() -> Self {
-        Self { auto_lock_minutes: 5, lock_on_sleep: true, clear_clipboard_seconds: 30, hide_from_capture: true, token_paste: true }
+        Self { auto_lock_minutes: 5, lock_on_sleep: true, clear_clipboard_seconds: 30, hide_from_capture: true, token_paste: true, browser_fill: true }
     }
 }
 

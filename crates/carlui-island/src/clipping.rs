@@ -436,7 +436,7 @@ impl App {
         let _ = std::thread::Builder::new().name("vault-type".into()).spawn(move || {
             // Odak önceki pencereye dönsün (kasa da birkaç yüz ms bekler).
             std::thread::sleep(Duration::from_millis(120));
-            let reply = carlui_core::vaultlink::ask(&carlui_core::vaultlink::Request { token, hwnd: target });
+            let reply = carlui_core::vaultlink::ask(&carlui_core::vaultlink::Request::Type { token, hwnd: target });
             let (ok, msg) = match reply {
                 Ok(r) => (r.ok, r.message),
                 Err(m) => (false, m),

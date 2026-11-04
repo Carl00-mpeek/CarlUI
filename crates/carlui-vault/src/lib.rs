@@ -21,6 +21,7 @@
 //! - Aşama 4, ekran görüntüsü aracında QR algılama → 2FA kaydı olarak aktarım.
 //! - Aşama 5, güvenlik testleri (bellek dökümü, dosya kurcalama, hız sınırı).
 
+pub mod autofill;
 pub mod crypto;
 pub mod entry;
 mod hex;

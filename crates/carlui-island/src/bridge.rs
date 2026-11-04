@@ -7,6 +7,8 @@
 //!   kartıyla aşağı açılır (ad, boyut, kaynak, kayıt yeri). Kullanıcının
 //!   seçimi (CarlUI indirir / tarayıcıya bırak) yanıt olarak döner;
 //!   eklenti tarayıcıdaki indirmeyi buna göre iptal eder ya da sürdürür.
+//! - `POST /vault/find`, `/vault/fill`, `/vault/open` → Carl Vault ile giriş
+//!   sayfası doldurma; istek kasanın borusuna aktarılır (bkz. `vaultlink`).
 //! - `POST /progress` → yönetici kapalıyken tarayıcının kendi indirmeleri
 //!   gerçek yüzde ve hızla adada görünür.
 //!
@@ -144,6 +146,23 @@ fn handle(mut s: TcpStream, hwnd: isize) {
             }
             post(WM_TIMER, crate::dlman::TIMER_DL);
             respond(&mut s, "200 OK", "{}");
+        }
+        // Carl Vault: istek kasanın doğrulanmış borusuna aktarılır (kasa açık,
+        // adres uyuyor ve tarayıcı önde olmalı; bkz. carlui_core::vaultlink).
+        ("POST", "/vault/find") | ("POST", "/vault/fill") => {
+            use carlui_core::vaultlink::{ask, Request};
+            let req = if path == "/vault/find" { Request::Find { url: g("url") } } else { Request::Fill { url: g("url"), id: g("id") } };
+            let body = match ask(&req) {
+                Ok(r) => serde_json::to_string(&r).unwrap_or_default(),
+                Err(m) => serde_json::json!({ "ok": false, "closed": true, "message": m }).to_string(),
+            };
+            respond(&mut s, "200 OK", &body);
+        }
+        ("POST", "/vault/open") => {
+            let exe = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("carlui-vault.exe")));
+            let ok = exe.is_some_and(|e| std::process::Command::new(e).spawn().is_ok());
+            info!("eklentiden Carl Vault açıldı: {ok}");
+            respond(&mut s, "200 OK", &format!("{{\"ok\":{ok}}}"));
         }
         ("POST", "/offer") if !on => respond(&mut s, "200 OK", "{\"action\":\"browser\"}"),
         ("POST", "/offer") => {

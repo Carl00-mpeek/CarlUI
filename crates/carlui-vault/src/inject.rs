@@ -36,6 +36,15 @@ pub fn check_target(hwnd: HWND, client_pid: u32) -> Result<String, String> {
     }
 }
 
+/// Tarayıcı eklentisinin istekleri: öndeki pencere bilinen bir tarayıcı mı
+/// (kullanıcı az önce eklentinin düğmesine bastı). Öyleyse exe adı.
+pub fn browser_in_front() -> Option<String> {
+    const BROWSERS: [&str; 9] = ["firefox.exe", "chrome.exe", "msedge.exe", "brave.exe", "opera.exe", "vivaldi.exe", "librewolf.exe", "waterfox.exe", "zen.exe"];
+    let exe = carlui_core::win::window_exe(unsafe { GetForegroundWindow() });
+    let name = exe.rsplit('\\').next().unwrap_or_default().to_string();
+    BROWSERS.contains(&name.as_str()).then_some(name)
+}
+
 fn key(vk: VIRTUAL_KEY, scan: u16, flags: KEYBD_EVENT_FLAGS) -> INPUT {
     INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, wScan: scan, dwFlags: flags, time: 0, dwExtraInfo: 0 } } }
 }

@@ -8,6 +8,12 @@
 //! pencereyi doğrular; değeri doğrudan o pencereye yazar. Gerçek değer panoya
 //! hiç girmez. Ada da karşıdaki sunucunun `carlui-vault.exe` olduğuna bakar.
 //!
+//! Tarayıcı eklentisi de (indirme eklentisiyle aynı eklenti) bu boruyu adanın
+//! yerel köprüsü üzerinden kullanır: `Find` sayfa adresine uyan kayıtların
+//! adlarını, `Fill` kullanıcının seçtiği kaydın giriş bilgilerini ister. Kasa
+//! yalnızca açıkken, adres kayıttaki adrese sıkı biçimde uyuyorsa ve öndeki
+//! pencere bir tarayıcıysa yanıt verir.
+//!
 //! Mesajlar satır başına bir JSON'dur; bağlantı başına tek istek/yanıt.
 
 use serde::{Deserialize, Serialize};
@@ -42,18 +48,46 @@ pub struct Offer {
     pub expires: i64,
 }
 
-/// Adanın isteği: belirteç ve değerin yazılacağı pencere.
+/// Adanın kasaya isteği.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct Request {
-    pub token: String,
-    pub hwnd: isize,
+#[serde(tag = "op", rename_all = "kebab-case")]
+pub enum Request {
+    /// Pano belirtecinin değerini `hwnd` penceresine yaz.
+    Type { token: String, hwnd: isize },
+    /// Tarayıcı eklentisi (ada köprüsü üzerinden): bu sayfa adresine uyan kayıtlar.
+    Find { url: String },
+    /// Tarayıcı eklentisi: bu kaydın giriş bilgileri; kayıt adresi sayfaya uymalı.
+    Fill { url: String, id: String },
 }
 
+/// Bir sayfaya uyan kayıt (yalnızca ad ve kullanıcı adı; parola yok).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Login {
+    pub id: String,
+    pub name: String,
+    pub username: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct Reply {
     pub ok: bool,
     /// Kullanıcıya gösterilecek kısa açıklama.
     pub message: String,
+    /// `Find` yanıtı.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub logins: Vec<Login>,
+    /// `Fill` yanıtı: kullanıcı adı ve parola.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill: Option<(String, String)>,
+    /// Kasa kilitli (eklenti "Carl Vault'u aç" gösterir).
+    #[serde(default)]
+    pub locked: bool,
+}
+
+impl Reply {
+    pub fn no(message: impl Into<String>) -> Self {
+        Self { ok: false, message: message.into(), ..Default::default() }
+    }
 }
 
 /// Oturuma özel boru adı (aynı makinedeki başka oturumlar karışmasın).
@@ -143,11 +177,11 @@ pub fn serve(on: impl Fn(Request, u32) -> Reply + Send + 'static) {
             let exe = crate::win::process_exe(pid);
             let reply = if exe != island {
                 crate::warn!("kasa: tanınmayan süreçten istek reddedildi ({exe})");
-                Reply { ok: false, message: t!("İstek reddedildi.", "Request refused.").into() }
+                Reply::no(t!("İstek reddedildi.", "Request refused."))
             } else {
                 match read_line(&f).and_then(|l| serde_json::from_str::<Request>(&l).ok()) {
                     Some(r) => on(r, pid),
-                    None => Reply { ok: false, message: t!("Geçersiz istek.", "Invalid request.").into() },
+                    None => Reply::no(t!("Geçersiz istek.", "Invalid request.")),
                 }
             };
             write_line(&f, &reply);
@@ -170,5 +204,15 @@ mod tests {
         let j = serde_json::to_string(&o).unwrap();
         assert_eq!(serde_json::from_str::<Offer>(&j).unwrap(), o);
         assert!(pipe_name().starts_with(r"\\.\pipe\carlui-vault-"));
+    }
+
+    #[test]
+    fn request_tags() {
+        let r = Request::Fill { url: "https://github.com/login".into(), id: "e1".into() };
+        let j = serde_json::to_string(&r).unwrap();
+        assert!(j.contains("\"op\":\"fill\""));
+        assert_eq!(serde_json::from_str::<Request>(&j).unwrap(), r);
+        let reply = Reply::no("x");
+        assert!(!serde_json::to_string(&reply).unwrap().contains("fill"), "boş alanlar yazılmaz");
     }
 }

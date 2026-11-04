@@ -86,7 +86,7 @@ fn start_link(hwnd: HWND) {
             let _ = PostMessageW(HWND(h as _), WM_APP_LINK, WPARAM(0), LPARAM(0));
         }
         rx.recv_timeout(std::time::Duration::from_secs(5))
-            .unwrap_or(carlui_core::vaultlink::Reply { ok: false, message: carlui_core::t!("Kasa yanıt vermedi.", "The vault didn't answer.").into() })
+            .unwrap_or_else(|_| carlui_core::vaultlink::Reply::no(carlui_core::t!("Kasa yanıt vermedi.", "The vault didn't answer.")))
     });
 }
 

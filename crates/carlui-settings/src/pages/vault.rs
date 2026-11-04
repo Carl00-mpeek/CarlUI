@@ -30,6 +30,13 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         c.token_paste,
         |c| c.vault.token_paste ^= true,
     );
+    f.toggle(
+        p,
+        t!("Tarayıcıda doldurma", "Fill in the browser"),
+        t!("CarlUI eklentisinde bir kayıt seçince giriş sayfası doldurulur. Yalnızca adresi o siteye uyan kayıtlar görünür.", "Picking an item in the CarlUI extension fills the sign-in page. Only items whose address matches that site are shown."),
+        c.browser_fill,
+        |c| c.vault.browser_fill ^= true,
+    );
     f.slider(
         p,
         t!("Kopyalananı panodan sil", "Clear copied value"),
