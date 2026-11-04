@@ -71,6 +71,7 @@ impl App {
     /// `PasskeyCreate` / `PasskeyGet`.
     pub(super) fn passkey_request(&mut self, req: Request) -> Reply {
         if let Err(r) = self.browser_gate() {
+            info!("kasa: passkey isteği tarayıcıya bırakıldı: {}", r.message);
             return Reply::fallback(r.message);
         }
         let (origin, rp_id, challenge, kind) = match req {
@@ -141,6 +142,7 @@ impl App {
             }
         }
         if matches!(ask.kind, AskKind::Get { .. }) && ask.choices.is_empty() {
+            info!("kasa: {} için passkey yok, tarayıcıya bırakıldı", ask.site());
             return Some(Reply::fallback(t!("Carl Vault'ta bu site için passkey yok.", "Carl Vault has no passkey for this site.")));
         }
         None
