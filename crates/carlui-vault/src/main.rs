@@ -9,6 +9,7 @@
 
 mod app;
 mod dialog;
+mod inject;
 mod ui;
 
 use app::{App, View};
@@ -20,7 +21,7 @@ use carlui_ui::{
 };
 use std::{
     cell::RefCell,
-    sync::{Arc, Mutex},
+    sync::{mpsc, Arc, Mutex},
     time::Instant,
 };
 use windows::{
@@ -46,6 +47,8 @@ use windows::{
 
 const CLASS: PCWSTR = w!("CarlUI.Vault");
 const WM_APP_RELOAD: u32 = WM_APP + 1;
+/// Adadan yapıştırma isteği geldi (`LINK` kuyruğunda).
+const WM_APP_LINK: u32 = WM_APP + 2;
 const TIMER_ANIM: usize = 2;
 const TIMER_IDLE: usize = 4;
 const WTS_SESSION_LOCK: usize = 7;
@@ -65,6 +68,26 @@ struct Win {
 
 thread_local! {
     static WIN: RefCell<Option<Win>> = const { RefCell::new(None) };
+}
+
+/// Boru iş parçacığından arayüz iş parçacığına: istek, istekçinin süreci, yanıt kanalı.
+type LinkJob = (carlui_core::vaultlink::Request, u32, mpsc::Sender<carlui_core::vaultlink::Reply>);
+static LINK: Mutex<Vec<LinkJob>> = Mutex::new(Vec::new());
+
+/// Adanın isteklerini dinler; her isteği arayüz iş parçacığında `App::link` yanıtlar.
+fn start_link(hwnd: HWND) {
+    let h = hwnd.0 as isize;
+    carlui_core::vaultlink::serve(move |req, pid| {
+        let (tx, rx) = mpsc::channel();
+        if let Ok(mut q) = LINK.lock() {
+            q.push((req, pid, tx));
+        }
+        unsafe {
+            let _ = PostMessageW(HWND(h as _), WM_APP_LINK, WPARAM(0), LPARAM(0));
+        }
+        rx.recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap_or(carlui_core::vaultlink::Reply { ok: false, message: carlui_core::t!("Kasa yanıt vermedi.", "The vault didn't answer.").into() })
+    });
 }
 
 fn with<T>(f: impl FnOnce(&mut Win) -> T) -> Option<T> {
@@ -280,6 +303,20 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             });
             LRESULT(0)
         }
+        WM_APP_LINK => {
+            let jobs = LINK.lock().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default();
+            for (req, pid, tx) in jobs {
+                let reply = with(|a| {
+                    let r = a.app.link(req, pid);
+                    a.invalidate();
+                    r
+                });
+                if let Some(r) = reply {
+                    let _ = tx.send(r);
+                }
+            }
+            LRESULT(0)
+        }
         WM_DPICHANGED => {
             with(|a| {
                 a.scale = (wp.0 & 0xFFFF) as f32 / 96.0;
@@ -371,6 +408,7 @@ fn main() -> Result<()> {
         tween::enable();
         WIN.with(|a| *a.borrow_mut() = Some(win));
         SetTimer(hwnd, TIMER_IDLE, 5000, None);
+        start_link(hwnd);
         info!("Vault penceresi açıldı");
         let _ = ShowWindow(hwnd, SW_SHOW);
         let _ = SetForegroundWindow(hwnd);

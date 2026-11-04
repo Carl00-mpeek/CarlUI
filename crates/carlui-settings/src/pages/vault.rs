@@ -1,5 +1,6 @@
 //! Carl Vault: otomatik kilit süresi, uyku/oturum kilidinde kilitleme, panodan
-//! silme süresi ve ekran yakalamadan gizleme. Kısayol Kısayollar sayfasında.
+//! silme süresi, pano belirteci ve ekran yakalamadan gizleme. Kısayol Kısayollar
+//! sayfasında.
 
 use crate::{
     ui::{Flow, P},
@@ -22,6 +23,13 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     );
     f.toggle(p, t!("Uykuda ve oturum kilitlenince kilitle", "Lock on sleep and session lock"), t!("Bilgisayar uykuya geçerken ya da Win+L ile kilitlenirken.", "When the computer sleeps or is locked with Win+L."), c.lock_on_sleep, |c| c.vault.lock_on_sleep ^= true);
     f.section(p, t!("Gizlilik", "Privacy"));
+    f.toggle(
+        p,
+        t!("Panoya değer yerine belirteç koy", "Put a token on the clipboard, not the value"),
+        t!("Kopyalanan alan Win+V'de kasa kaydı olarak görünür; seçince hedef pencereye kasa yazar. Gerçek değer panoya girmez, 60 sn sonra geçersiz olur.", "The copied field shows up in Win+V as a vault item; picking it makes the vault type it into the target window. The real value never enters the clipboard and expires after 60 s."),
+        c.token_paste,
+        |c| c.vault.token_paste ^= true,
+    );
     f.slider(
         p,
         t!("Kopyalananı panodan sil", "Clear copied value"),

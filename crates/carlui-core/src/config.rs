@@ -48,11 +48,15 @@ pub struct VaultConfig {
     pub clear_clipboard_seconds: u64,
     /// Kasa penceresi ekran görüntülerinde ve ekran paylaşımında görünmesin.
     pub hide_from_capture: bool,
+    /// Kopyalanan alan panoya değer yerine tek kullanımlık belirteç olarak konur;
+    /// değer yalnızca CarlUI panosundan (Win+V) seçilince hedef pencereye yazılır.
+    /// Kapalıysa değer doğrudan panoya konur (eski davranış).
+    pub token_paste: bool,
 }
 
 impl Default for VaultConfig {
     fn default() -> Self {
-        Self { auto_lock_minutes: 5, lock_on_sleep: true, clear_clipboard_seconds: 30, hide_from_capture: true }
+        Self { auto_lock_minutes: 5, lock_on_sleep: true, clear_clipboard_seconds: 30, hide_from_capture: true, token_paste: true }
     }
 }
 

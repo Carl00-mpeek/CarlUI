@@ -1,11 +1,13 @@
-//! Pano. Sorun: kasadan kopyalanan bir parola pano geçmişinde (CarlUI'nin ya
-//! da Windows'un) kalıcı olarak durmamalı. Aşama 1 çözümü: değer panoya
-//! "geçmişe alma / buluta gönderme" işaretleriyle konur (CarlUI panosu ve
-//! Windows bu işaretlere uyar) ve süre dolunca, hâlâ panodaysa silinir.
+//! Pano. Sorun: kasadan kopyalanan bir parola panoda ya da pano geçmişinde
+//! (CarlUI'nin ya da Windows'un) durmamalı, başka uygulamalar okuyamamalı.
+//! - `offer` (Aşama 2, varsayılan): panoya değer değil, tek kullanımlık
+//!   belirteç konur (`carlui_core::vaultlink`). CarlUI panosu bunu Win+V'de
+//!   "kasa kaydı" olarak gösterir; seçilince değer hedef pencereye kasadan
+//!   yazılır. Başka uygulamalar panoda düz metin bulamaz.
+//! - `copy_secret`: değer "geçmişe alma / buluta gönderme" işaretleriyle
+//!   doğrudan konur (kurtarma anahtarı ve `vault.token_paste` kapalıyken).
 //!
-//! Aşama 2'de (henüz yok) panoya gerçek değer yerine kısa ömürlü bir belirteç
-//! konacak; değer yalnızca doğrulanan hedef pencereye yapıştırılırken kasadan
-//! alınacak. `copy_secret` o zaman bu belirteci yazacak tek giriş noktasıdır.
+//! Her ikisinde de süre dolunca, hâlâ panodaysa silinir.
 
 use windows::{
     core::HSTRING,
@@ -57,6 +59,26 @@ pub fn copy_secret(hwnd: HWND, text: &str) -> Option<u32> {
         let data: Zeroizing<Vec<u8>> = Zeroizing::new(text.encode_utf16().chain([0]).flat_map(|u| u.to_le_bytes()).collect());
         let ok = put(CF_UNICODETEXT, &data);
         let reg = |n: &str| RegisterClipboardFormatW(&HSTRING::from(n));
+        put(reg("ExcludeClipboardContentFromMonitorProcessing"), &[0]);
+        put(reg("CanIncludeInClipboardHistory"), &0u32.to_le_bytes());
+        put(reg("CanUploadToCloudClipboard"), &0u32.to_le_bytes());
+        let _ = CloseClipboard();
+        ok.then(|| GetClipboardSequenceNumber())
+    }
+}
+
+/// Panoya yalnızca belirteç teklifini koyar (düz metin yok); sıra numarasını döner.
+/// Geçmiş/bulut işaretleri de konur: Windows panosu ve diğer pano yöneticileri
+/// almasın. CarlUI panosu teklif biçimini bu işaretlerden önce tanır.
+pub fn offer(hwnd: HWND, o: &carlui_core::vaultlink::Offer) -> Option<u32> {
+    let json = serde_json::to_vec(o).ok()?;
+    unsafe {
+        if !open(hwnd) {
+            return None;
+        }
+        let _ = EmptyClipboard();
+        let reg = |n: &str| RegisterClipboardFormatW(&HSTRING::from(n));
+        let ok = put(reg(carlui_core::vaultlink::FORMAT), &json);
         put(reg("ExcludeClipboardContentFromMonitorProcessing"), &[0]);
         put(reg("CanIncludeInClipboardHistory"), &0u32.to_le_bytes());
         put(reg("CanUploadToCloudClipboard"), &0u32.to_le_bytes());

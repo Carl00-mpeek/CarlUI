@@ -132,10 +132,17 @@ pub fn downloads_dir() -> Option<std::path::PathBuf> {
 }
 
 pub fn window_exe(hwnd: HWND) -> String {
+    let mut pid = 0;
+    unsafe {
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    }
+    process_exe(pid)
+}
+
+/// Sürecin exe yolu (küçük harf); açılamazsa boş.
+pub fn process_exe(pid: u32) -> String {
     use windows::Win32::System::Threading::*;
     unsafe {
-        let mut pid = 0;
-        GetWindowThreadProcessId(hwnd, Some(&mut pid));
         let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else { return String::new() };
         let mut buf = [0u16; 512];
         let mut len = buf.len() as u32;

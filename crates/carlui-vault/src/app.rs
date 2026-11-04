@@ -11,10 +11,16 @@ use crate::{
         textbox::{Key as TKey, TextBox},
     },
 };
-use carlui_core::{config::Config, info, t, warn};
+use carlui_core::{
+    config::Config,
+    info, t,
+    vaultlink::{Offer, Reply, Request},
+    warn,
+};
 use carlui_vault::{
     crypto::{Error, KdfParams},
     entry::{now, Attachment, Body, Category, Field, FieldKind, Meta},
+    token::{TokenError, Tokens},
     vault::{Vault, MAX_FILE},
 };
 use std::{path::PathBuf, time::Instant};
@@ -152,6 +158,12 @@ pub struct App {
     fails: u32,
     pub retry_at: Option<Instant>,
     pub confirm_remove_recovery: bool,
+    /// Panoya verilen tek kullanımlık belirteçler (Aşama 2).
+    pub tokens: Tokens,
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
 fn check_new(a: &str, b: &str) -> Result<(), String> {
@@ -198,6 +210,7 @@ impl App {
             fails: 0,
             retry_at: None,
             confirm_remove_recovery: false,
+            tokens: Tokens::default(),
         }
     }
 
@@ -238,6 +251,7 @@ impl App {
         }
         self.clear_forms();
         self.search.clear();
+        self.tokens.clear();
         self.clear_clipboard();
         self.go(View::Locked);
         info!("kasa kilitlendi ({why})");
@@ -263,6 +277,76 @@ impl App {
             }
         }
         self.toast(if secs > 0 { t!(format!("{what} kopyalandı · {secs} sn sonra panodan silinecek"), format!("{what} copied · cleared from the clipboard in {secs} s")) } else { t!(format!("{what} kopyalandı"), format!("{what} copied")) });
+    }
+
+    /// Düzenleyicideki alanı panoya verir: belirteç olarak (varsayılan) ya da
+    /// `token_paste` kapalıysa değerin kendisi olarak.
+    fn copy_field(&mut self, i: usize) {
+        let Some((entry, label, value)) = (match &self.view {
+            View::Edit(e) => e.fields.get(i).map(|f| {
+                let name = e.name.as_str().trim();
+                let field = f.label.as_str().trim();
+                let label = if name.is_empty() { field.to_string() } else { format!("{name} · {field}") };
+                (e.id.clone().unwrap_or_default(), label, Zeroizing::new(f.value.as_str().to_string()))
+            }),
+            _ => None,
+        }) else {
+            return;
+        };
+        if value.is_empty() {
+            return;
+        }
+        if !self.cfg.vault.token_paste {
+            let field = label.rsplit(" · ").next().unwrap_or_default().to_string();
+            self.copy(&value, &field);
+            return;
+        }
+        let issued = match self.tokens.issue(&entry, i, &label, &value, now_ms()) {
+            Ok(t) => t,
+            Err(e) => return self.toast(e.to_string()),
+        };
+        let offer = Offer { token: issued.token.to_string(), label: issued.label, expires: issued.expires };
+        let Some(seq) = clip::offer(self.hwnd, &offer) else {
+            self.toast(t!("Panoya konamadı.", "Couldn't put it on the clipboard."));
+            return;
+        };
+        self.clip_seq = Some(seq);
+        let secs = (carlui_vault::token::TTL_MS / 1000) as u32;
+        unsafe {
+            let _ = KillTimer(self.hwnd, TIMER_CLIP);
+            SetTimer(self.hwnd, TIMER_CLIP, secs * 1000, None);
+        }
+        self.toast(t!(format!("Hazır · hedef pencerede Win+V ile seç ({secs} sn)"), format!("Ready · pick it with Win+V in the target window ({secs} s)")));
+    }
+
+    /// Adadan gelen yapıştırma isteği: hedefi doğrula, belirteci tüket, değeri yaz.
+    pub fn link(&mut self, req: Request, client_pid: u32) -> Reply {
+        let no = |m: String| Reply { ok: false, message: m };
+        if !self.is_open() {
+            self.tokens.clear();
+            return no(t!("Carl Vault kilitli.", "Carl Vault is locked.").into());
+        }
+        let app = match crate::inject::check_target(HWND(req.hwnd as _), client_pid) {
+            Ok(a) => a,
+            Err(m) => {
+                warn!("kasa: yapıştırma reddedildi: {m}");
+                return no(m);
+            }
+        };
+        let (value, label) = match self.tokens.take(&req.token, now_ms()) {
+            Ok(v) => v,
+            Err(TokenError::Expired) => return no(t!("Süresi doldu; kasadan yeniden kopyala.", "It expired; copy it again from the vault.").into()),
+            Err(TokenError::Unknown) => return no(t!("Bu kayıt artık geçerli değil.", "This item is no longer valid.").into()),
+        };
+        // Belirteç kullanıldı: panoda kaldıysa sil.
+        self.clear_clipboard();
+        if !crate::inject::type_text(&value) {
+            return no(t!("Değer yazılamadı.", "Couldn't type the value.").into());
+        }
+        info!("kasa: bir alan {app} penceresine yazıldı");
+        let field = label.rsplit(" · ").next().unwrap_or_default().to_string();
+        self.toast(t!(format!("{field} → {app}"), format!("{field} → {app}")));
+        Reply { ok: true, message: t!(format!("{field} yazıldı"), format!("{field} typed")) }
     }
 
     fn fail(&mut self, e: Error) {
@@ -427,17 +511,7 @@ impl App {
                     }
                 }
             }
-            Act::Copy(i) => {
-                let Some((v, label)) = (match &self.view {
-                    View::Edit(e) => e.fields.get(i).map(|f| (Zeroizing::new(f.value.as_str().to_string()), f.label.as_str().to_string())),
-                    _ => None,
-                }) else {
-                    return;
-                };
-                if !v.is_empty() {
-                    self.copy(&v, &label);
-                }
-            }
+            Act::Copy(i) => self.copy_field(i),
             Act::RemoveField(i) => {
                 if let View::Edit(e) = &mut self.view {
                     if i < e.fields.len() {
@@ -705,6 +779,7 @@ impl App {
         if !self.is_open() {
             return;
         }
+        self.tokens.sweep(now_ms());
         let limit = self.cfg.vault.auto_lock_minutes.max(1) as u64 * 60_000;
         if crate::ui::idle_ms() >= limit {
             self.lock(t!("boşta", "idle"));
