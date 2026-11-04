@@ -46,8 +46,7 @@ pub fn browser_in_front() -> Option<String> {
 
 /// Exe adı (ör. `chrome.exe`) bilinen bir tarayıcının mı.
 pub fn is_browser(exe_name: &str) -> bool {
-    const BROWSERS: [&str; 9] = ["firefox.exe", "chrome.exe", "msedge.exe", "brave.exe", "opera.exe", "vivaldi.exe", "librewolf.exe", "waterfox.exe", "zen.exe"];
-    BROWSERS.contains(&exe_name)
+    carlui_core::win::is_browser(exe_name)
 }
 
 fn key(vk: VIRTUAL_KEY, scan: u16, flags: KEYBD_EVENT_FLAGS) -> INPUT {

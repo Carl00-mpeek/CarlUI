@@ -130,7 +130,6 @@ pub fn is_explorer_window(hwnd: HWND) -> bool {
     window_exe(hwnd).ends_with("\\explorer.exe")
 }
 
-/// Pencerenin sürecinin exe yolu, küçük harfle (erişilemezse boş).
 /// Kullanıcının İndirilenler klasörü (taşınmışsa yeni yeri).
 pub fn downloads_dir() -> Option<std::path::PathBuf> {
     use windows::Win32::UI::Shell::{FOLDERID_Downloads, SHGetKnownFolderPath, KNOWN_FOLDER_FLAG};
@@ -142,6 +141,7 @@ pub fn downloads_dir() -> Option<std::path::PathBuf> {
     }
 }
 
+/// Pencerenin sürecinin exe yolu, küçük harfle (erişilemezse boş).
 pub fn window_exe(hwnd: HWND) -> String {
     let mut pid = 0;
     unsafe {
@@ -160,6 +160,50 @@ pub fn process_exe(pid: u32) -> String {
         let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len).is_ok();
         let _ = CloseHandle(h);
         if ok { String::from_utf16_lossy(&buf[..len as usize]).to_lowercase() } else { String::new() }
+    }
+}
+
+/// Carl Vault'un konuştuğu tarayıcılar (exe adı, küçük harf).
+pub const BROWSERS: [&str; 9] = ["firefox.exe", "chrome.exe", "msedge.exe", "brave.exe", "opera.exe", "vivaldi.exe", "librewolf.exe", "waterfox.exe", "zen.exe"];
+
+/// Exe adı (ör. `chrome.exe`) ya da tam yolu bilinen bir tarayıcının mı.
+pub fn is_browser(exe: &str) -> bool {
+    let name = exe.rsplit('\\').next().unwrap_or_default().to_ascii_lowercase();
+    BROWSERS.contains(&name.as_str())
+}
+
+/// Bu makinedeki bir IPv4 TCP bağlantısının istemci tarafındaki süreç.
+/// Sunucu (`server_port`) kabul ettiği bağlantının karşı ucunu (`peer`) verir;
+/// Windows'un bağlantı tablosunda yerel ucu `peer`, uzak ucu sunucu olan satırın
+/// sahibi döner. Bulunamazsa None.
+pub fn tcp_client_pid(peer: std::net::SocketAddrV4, server_port: u16) -> Option<u32> {
+    use windows::Win32::NetworkManagement::IpHelper::*;
+    const AF_INET: u32 = 2;
+    // Tablo bayt sırası: adres ağ sırasında, port alt 16 bitte ağ sırasında.
+    let addr = u32::from_ne_bytes(peer.ip().octets());
+    let port = |p: u16| p.to_be() as u32;
+    unsafe {
+        let mut size = 0u32;
+        let _ = GetExtendedTcpTable(None, &mut size, false, AF_INET, TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
+        for _ in 0..4 {
+            // u32 hizasında tampon (satırlar u32 alanlı).
+            let mut buf = vec![0u32; (size as usize).div_ceil(4) + 16];
+            size = (buf.len() * 4) as u32;
+            let r = GetExtendedTcpTable(Some(buf.as_mut_ptr() as _), &mut size, false, AF_INET, TCP_TABLE_OWNER_PID_CONNECTIONS, 0);
+            if r == ERROR_INSUFFICIENT_BUFFER.0 {
+                continue;
+            }
+            if r != 0 {
+                return None;
+            }
+            let t = &*(buf.as_ptr() as *const MIB_TCPTABLE_OWNER_PID);
+            let rows = std::slice::from_raw_parts(t.table.as_ptr(), t.dwNumEntries as usize);
+            return rows
+                .iter()
+                .find(|r| r.dwLocalAddr == addr && (r.dwLocalPort & 0xFFFF) == port(peer.port()) && (r.dwRemotePort & 0xFFFF) == port(server_port))
+                .map(|r| r.dwOwningPid);
+        }
+        None
     }
 }
 
@@ -251,4 +295,31 @@ pub fn dock_hold(on: bool) {
 /// Kayıtlı pencere mesajı (ör. "TaskbarCreated").
 pub fn registered_message(name: &str) -> u32 {
     unsafe { RegisterWindowMessageW(&HSTRING::from(name)) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn browsers() {
+        assert!(is_browser("chrome.exe"));
+        assert!(is_browser(r"c:\program files\mozilla firefox\firefox.exe"));
+        assert!(is_browser("MSEDGE.EXE"));
+        assert!(!is_browser("powershell.exe"));
+        assert!(!is_browser(r"c:\temp\chrome.exe.evil"));
+    }
+
+    #[test]
+    fn tcp_peer_is_found() {
+        // Kendi kendimize bağlanırız: karşı ucun sahibi bu süreç olmalı.
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        let _c = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let (s, _) = l.accept().unwrap();
+        let std::net::SocketAddr::V4(peer) = s.peer_addr().unwrap() else { panic!("ipv4") };
+        assert_eq!(tcp_client_pid(peer, port), Some(std::process::id()));
+        // Yanlış sunucu portu: eşleşme yok.
+        assert_eq!(tcp_client_pid(peer, port.wrapping_add(1)), None);
+    }
 }

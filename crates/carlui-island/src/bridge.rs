@@ -15,6 +15,11 @@
 //! Web sayfaları bu adrese istek atamaz: `X-CarlUI` başlığı ön kontrol
 //! (CORS preflight) gerektirir ve buna izin verilmez; ayrıca köken yalnızca
 //! eklenti kökeni olabilir. Yönetici kapalıysa teklif hemen "browser" döner.
+//!
+//! Başlık ve köken bu bilgisayardaki başka bir programca taklit edilebilir;
+//! bu yüzden `/vault/` istekleri ayrıca bağlantıyı açan sürece bakılarak
+//! kabul edilir: bilinen bir tarayıcı olmalı ve öndeki pencereyle aynı exe
+//! olmalı (bkz. `browser_peer`).
 
 use crate::*;
 use std::{
@@ -91,6 +96,24 @@ fn respond(s: &mut TcpStream, code: &str, body: &str) {
     let _ = write!(s, "HTTP/1.1 {code}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
 }
 
+/// Bağlantıyı açan süreç bilinen bir tarayıcı mı ve öndeki pencereyle aynı
+/// exe mi (Chrome/Edge'de ağ isteği tarayıcının yardımcı sürecinden gelir;
+/// yolu ana pencereninkiyle aynıdır). Değilse nedeni.
+fn browser_peer(s: &TcpStream) -> std::result::Result<(), String> {
+    let std::net::SocketAddr::V4(peer) = s.peer_addr().map_err(|e| e.to_string())? else { return Err("IPv6".into()) };
+    let port = s.local_addr().map_err(|e| e.to_string())?.port();
+    let pid = carlui_core::win::tcp_client_pid(peer, port).ok_or("süreç bulunamadı")?;
+    let exe = carlui_core::win::process_exe(pid);
+    if !carlui_core::win::is_browser(&exe) {
+        return Err(format!("tarayıcı değil: {}", exe.rsplit('\\').next().unwrap_or("?")));
+    }
+    let front = carlui_core::win::window_exe(unsafe { GetForegroundWindow() });
+    if exe != front {
+        return Err("istekte bulunan tarayıcı önde değil".into());
+    }
+    Ok(())
+}
+
 fn handle(mut s: TcpStream, hwnd: isize) {
     let _ = s.set_read_timeout(Some(Duration::from_secs(5)));
     let mut r = BufReader::new(match s.try_clone() {
@@ -121,6 +144,17 @@ fn handle(mut s: TcpStream, hwnd: isize) {
     if method == "OPTIONS" || !marked || !from_ext {
         respond(&mut s, "403 Forbidden", "{}");
         return;
+    }
+    // Kasa istekleri: bağlantıyı açan süreç öndeki tarayıcının kendisi olmalı.
+    // Başlık ve köken başka bir yerel programca kolayca taklit edilir; süreç
+    // ise Windows'un bağlantı tablosundan okunur.
+    if path.starts_with("/vault/") {
+        if let Err(why) = browser_peer(&s) {
+            carlui_core::warn!("köprü: kasa isteği reddedildi ({why})");
+            let msg = t!("Bu istek tarayıcı eklentisinden gelmedi.", "This request didn't come from the browser extension.");
+            respond(&mut s, "403 Forbidden", &serde_json::json!({ "ok": false, "message": msg }).to_string());
+            return;
+        }
     }
     let mut body = vec![0u8; len];
     if len > 0 && r.read_exact(&mut body).is_err() {
@@ -244,4 +278,32 @@ pub fn start(hwnd: isize) {
             }
         })
         .ok();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_browser_peer_is_refused() {
+        // Test süreci tarayıcı değil: curl/PowerShell gibi her yerel program böyle reddedilir.
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let _c = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        let (s, _) = l.accept().unwrap();
+        let why = browser_peer(&s).unwrap_err();
+        assert!(why.starts_with("tarayıcı değil"), "{why}");
+    }
+
+    /// Elle: `cargo test -p carlui-island real_browser -- --ignored --nocapture`,
+    /// sonra yazdığı adresi öndeki tarayıcıda aç.
+    #[test]
+    #[ignore]
+    fn real_browser_peer_is_accepted() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        println!("ADRES http://{}/", l.local_addr().unwrap());
+        let (mut s, _) = l.accept().unwrap();
+        let r = browser_peer(&s);
+        respond(&mut s, "200 OK", &format!("{{\"sonuc\":\"{r:?}\"}}"));
+        assert_eq!(r, Ok(()));
+    }
 }
