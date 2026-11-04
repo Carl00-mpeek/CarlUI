@@ -1,0 +1,4 @@
+{
+  "desc": { "message": "Browser extension for CarlUI: sends downloads to the CarlUI island, fills sign-in pages from Carl Vault and offers to save new sign-ins. Does nothing while CarlUI is closed." },
+  "fill": { "message": "Fill with Carl Vault" }
+}

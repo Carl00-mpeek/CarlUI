@@ -105,6 +105,17 @@ async function watchProgress() {
   }
 }
 
+// Arayüz dili: CarlUI'de Ayarlar'da seçilen dil (/ping bildirir). CarlUI
+// kapalıysa tarayıcının dili. Sayfa ve açılır pencere de buradan öğrenir.
+let lang = /^tr\b/i.test(navigator.language || "") ? "tr" : "en";
+const L = (tr, en) => (lang === "tr" ? tr : en);
+
+async function currentLang() {
+  const p = await call("/ping", undefined, 800);
+  if (p && (p.lang === "tr" || p.lang === "en")) lang = p.lang;
+  return { lang };
+}
+
 API.downloads.onChanged.addListener((d) => {
   if (d.state || d.paused) watchProgress();
 });
@@ -170,7 +181,7 @@ function info(p) {
 
 async function save(tab, name) {
   const p = pending.get(tab);
-  if (!p || Date.now() - p.at > PENDING_MS) return { ok: false, gone: true, message: "Süre doldu." };
+  if (!p || Date.now() - p.at > PENDING_MS) return { ok: false, gone: true, message: L("Süre doldu.", "Timed out.") };
   const r = await call("/vault/save", { url: p.url, user: p.user, password: p.password, commit: true, name: String(name || "").slice(0, 120) }, 5000);
   // Kasa kilitli/öne gelmiş ya da kapalı: bilgi kilit açılana dek bekler.
   if (!r || r.locked || (!r.ok && !r.status)) return r ? { ...r, retry: true } : { ok: false, closed: true, retry: true };
@@ -191,9 +202,10 @@ API.runtime.onMessage.addListener((msg, sender, reply) => {
     : msg.op === "vault-capture" ? capture(tab, url, msg)
     : msg.op === "vault-pending" ? (pending.get(tab)?.check ?? Promise.resolve({ show: false }))
     : msg.op === "vault-save" ? save(tab, msg.name)
+    : msg.op === "lang" ? currentLang()
     : msg.op === "vault-dismiss" ? Promise.resolve((forget(tab), { ok: true }))
     : null;
   if (!run) return false;
-  run.then((r) => reply(r ?? { ok: false, closed: true, message: "CarlUI çalışmıyor." }));
+  run.then((r) => reply(r ?? { ok: false, closed: true, message: L("CarlUI çalışmıyor.", "CarlUI isn't running.") }));
   return true;
 });

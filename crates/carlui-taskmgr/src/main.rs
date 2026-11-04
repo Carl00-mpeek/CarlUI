@@ -711,6 +711,17 @@ fn main() -> Result<()> {
         let sw = GetSystemMetrics(SM_CXSCREEN);
         let sh = GetSystemMetrics(SM_CYSCREEN);
         let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), w!("CarlUI.TaskMgr"), &HSTRING::from(if admin { t!("Görev Yöneticisi (Yönetici)", "Task Manager (Administrator)") } else { t!("Görev Yöneticisi", "Task Manager") }), WS_OVERLAPPEDWINDOW, (sw - ww) / 2, (sh - wh) / 2, ww, wh, None, None, inst, None)?;
+        // Ayarlar'da dil değişince (ayar dosyası yeniden okunur, dil uygulanır)
+        // başlık ve sayfa hemen yeni dile geçer.
+        {
+            let h = hwnd.0 as isize;
+            carlui_core::config::watch(move |_| {
+                let hwnd = HWND(h as _);
+                let title = if admin { t!("Görev Yöneticisi (Yönetici)", "Task Manager (Administrator)") } else { t!("Görev Yöneticisi", "Task Manager") };
+                let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowTextW(hwnd, &HSTRING::from(title));
+                let _ = InvalidateRect(hwnd, None, false);
+            });
+        }
         let on: i32 = 1;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let backdrop = DWMSBT_TRANSIENTWINDOW;

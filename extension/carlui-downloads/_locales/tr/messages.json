@@ -1,0 +1,4 @@
+{
+  "desc": { "message": "CarlUI için tarayıcı eklentisi: indirmeleri CarlUI adasına gönderir, giriş sayfalarını Carl Vault kasasından doldurur ve yeni girişleri sorarak kaydeder. CarlUI kapalıysa hiçbir şeye karışmaz." },
+  "fill": { "message": "Carl Vault ile doldur" }
+}

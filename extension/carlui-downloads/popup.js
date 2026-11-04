@@ -9,9 +9,13 @@ const BASE = "http://127.0.0.1:47321";
 const HDR = { "Content-Type": "application/json", "X-CarlUI": "1" };
 const $ = (id) => document.getElementById(id);
 
-async function call(path, body) {
+// Arayüz dili: CarlUI'de seçilen dil (/ping), CarlUI kapalıysa tarayıcının dili.
+let lang = /^tr\b/i.test(navigator.language || "") ? "tr" : "en";
+const L = (tr, en) => (lang === "tr" ? tr : en);
+
+async function call(path, body, get) {
   try {
-    const res = await fetch(BASE + path, { method: "POST", headers: HDR, body: JSON.stringify(body ?? {}) });
+    const res = await fetch(BASE + path, get ? { headers: HDR } : { method: "POST", headers: HDR, body: JSON.stringify(body ?? {}) });
     return res.ok ? await res.json() : null;
   } catch {
     return null;
@@ -70,10 +74,10 @@ function fillPage(user, pass, origin) {
 }
 
 async function fill(tab, origin, login) {
-  note("Dolduruluyor…");
+  note(L("Dolduruluyor…", "Filling…"));
   const r = await call("/vault/fill", { url: tab.url, id: login.id });
   if (!r || !r.ok || !r.fill) {
-    note((r && r.message) || "CarlUI'ya ulaşılamadı.", true);
+    note((r && r.message) || L("CarlUI'ya ulaşılamadı.", "Couldn't reach CarlUI."), true);
     return;
   }
   let [user, pass] = r.fill;
@@ -85,31 +89,34 @@ async function fill(tab, origin, login) {
       window.close();
       return;
     }
-    note(out && out.why === "origin" ? "Sayfa değişti; tekrar dene." : "Bu sayfada giriş kutusu bulunamadı.", true);
+    note(out && out.why === "origin" ? L("Sayfa değişti; tekrar dene.", "The page changed; try again.") : L("Bu sayfada giriş kutusu bulunamadı.", "No sign-in box found on this page."), true);
   } catch (e) {
-    note("Bu sayfaya yazılamadı.", true);
+    note(L("Bu sayfaya yazılamadı.", "Couldn't write to this page."), true);
   } finally {
     user = pass = "";
   }
 }
 
 async function main() {
+  const p = await call("/ping", undefined, true);
+  if (p && (p.lang === "tr" || p.lang === "en")) lang = p.lang;
+  document.documentElement.lang = lang;
   const [tab] = await API.tabs.query({ active: true, currentWindow: true });
   let url;
   try { url = new URL(tab.url); } catch {}
   if (!url || !/^https?:$/.test(url.protocol)) {
-    note("Bu sayfada doldurma yapılamaz.");
+    note(L("Bu sayfada doldurma yapılamaz.", "Filling isn't possible on this page."));
     return;
   }
   $("host").textContent = url.hostname.replace(/^www\./, "");
   const r = await call("/vault/find", { url: tab.url });
   if (!r) {
-    note("CarlUI çalışmıyor.", true);
+    note(L("CarlUI çalışmıyor.", "CarlUI isn't running."), true);
     return;
   }
   if (r.closed || r.locked) {
-    note(r.locked ? "Kasa kilitli. Açıp tekrar dene." : "Carl Vault açık değil.", true);
-    button("act", [el("span", "Carl Vault'u aç")], async () => {
+    note(r.locked ? L("Kasa kilitli. Açıp tekrar dene.", "The vault is locked. Unlock it and try again.") : L("Carl Vault açık değil.", "Carl Vault isn't open."), true);
+    button("act", [el("span", L("Carl Vault'u aç", "Open Carl Vault"))], async () => {
       await call("/vault/open");
       window.close();
     });
@@ -121,14 +128,14 @@ async function main() {
   }
   const logins = r.logins || [];
   if (logins.length === 0) {
-    note(r.message || "Bu site için kayıt yok. Kasadaki kayda bu sitenin adresini ekle.");
+    note(r.message || L("Bu site için kayıt yok. Kasadaki kayda bu sitenin adresini ekle.", "No item for this site. Add this site's address to an item in the vault."));
     return;
   }
   for (const l of logins) {
-    const b = button("item", [el("b", l.name), el("span", l.username || "kullanıcı adı yok")], () => fill(tab, url.origin, l));
+    const b = button("item", [el("b", l.name), el("span", l.username || L("kullanıcı adı yok", "no username"))], () => fill(tab, url.origin, l));
     if (logins.length === 1) b.focus();
   }
-  note("Seçince kullanıcı adı ve parola bu sayfaya yazılır.");
+  note(L("Seçince kullanıcı adı ve parola bu sayfaya yazılır.", "Pick one to fill its username and password on this page."));
 }
 
 main();

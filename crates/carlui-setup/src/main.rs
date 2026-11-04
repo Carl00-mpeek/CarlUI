@@ -490,7 +490,13 @@ fn relaunch_from_temp(dir: &PathBuf) -> bool {
 
 fn main() -> Result<()> {
     let args = parse_args();
-    carlui_core::lang::apply("auto");
+    // Kurulu CarlUI varsa (güncelleme, kaldırma) Ayarlar'da seçilen dil
+    // kullanılır; ilk kurulumda Windows'un dili.
+    if carlui_core::paths::config_file().exists() {
+        let _ = carlui_core::config::load();
+    } else {
+        carlui_core::lang::apply("auto");
+    }
     shell::sweep_temp_copies();
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);

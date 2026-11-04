@@ -169,7 +169,8 @@ fn handle(mut s: TcpStream, hwnd: isize) {
         let _ = PostMessageW(HWND(hwnd as _), m, WPARAM(w), LPARAM(0));
     };
     match (method.as_str(), path.as_str()) {
-        ("GET", "/ping") => respond(&mut s, "200 OK", &format!("{{\"ok\":true,\"enabled\":{on}}}")),
+        // `lang`: Ayarlar'da seçili arayüz dili; eklenti metinlerini buna göre yazar.
+        ("GET", "/ping") => respond(&mut s, "200 OK", &format!("{{\"ok\":true,\"enabled\":{on},\"lang\":\"{}\"}}", if carlui_core::lang::is_tr() { "tr" } else { "en" })),
         ("POST", "/progress") => {
             let list = v.get("items").and_then(|x| x.as_array()).cloned().unwrap_or_default();
             let items: Vec<_> = list

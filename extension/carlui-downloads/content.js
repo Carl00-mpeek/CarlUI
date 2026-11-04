@@ -26,6 +26,19 @@
       }
     });
 
+  // Arayüz dili: CarlUI'de Ayarlar'da seçilen dil (arka plan /ping'den öğrenir),
+  // bilinene dek tarayıcının dili. Sabit yazılar `relabel` ile yenilenir.
+  let lang = /^tr\b/i.test(navigator.language || "") ? "tr" : "en";
+  const L = (tr, en) => (lang === "tr" ? tr : en);
+  const relabels = [];
+  const relabel = () => relabels.forEach((f) => f());
+  ask({ op: "lang" }).then((r) => {
+    if (r && (r.lang === "tr" || r.lang === "en") && r.lang !== lang) {
+      lang = r.lang;
+      relabel();
+    }
+  });
+
   const visible = (e) => !e.disabled && !e.readOnly && e.getClientRects().length > 0 && getComputedStyle(e).visibility !== "hidden" && e.offsetWidth > 40;
   const textLike = (e) => ["text", "email", "tel", ""].includes(e.type);
   const userLike = (e) =>
@@ -42,7 +55,9 @@
       user = before.filter((e) => e.form === pw.form).pop() || before.pop() || null;
     } else {
       user = inputs.find((e) => e.autocomplete === "username") || inputs.find(userLike) || null;
-      if (user && !user.form && !/user|login|email|giri/i.test(location.pathname + document.title)) user = null;
+      // Form dışındaki kutu (Google'ın e-posta adımı gibi): yalnızca açıkça kullanıcı
+      // adı kutusuysa ya da sayfa bir giriş sayfasıysa.
+      if (user && !user.form && user.autocomplete !== "username" && !/user|log.?in|sign.?in|auth|account|email|giri|oturum|hesap/i.test(location.hostname + location.pathname + " " + document.title)) user = null;
     }
     return { user, pw, anchor: user || pw };
   }
@@ -88,6 +103,7 @@
   const label = root.querySelector(".label");
   const menu = root.querySelector(".menu");
   const noteEl = root.querySelector(".note");
+  relabels.push(() => (pill.title = L("Carl Vault ile doldur", "Fill with Carl Vault")));
 
   let state = null; // son find yanıtı
   let anchor = null;
@@ -154,7 +170,7 @@
     note("");
     const r = await ask({ op: "vault-fill", id: login.id });
     if (!r || !r.ok || !r.fill) {
-      note((r && r.message) || "CarlUI'ya ulaşılamadı.", 4000);
+      note((r && r.message) || L("CarlUI'ya ulaşılamadı.", "Couldn't reach CarlUI."), 4000);
       return;
     }
     let [user, pass] = r.fill;
@@ -163,7 +179,7 @@
     if (f.user && user) setValue(f.user, user);
     if (f.pw && pass) setValue(f.pw, pass);
     user = pass = "";
-    if (!f.user && !f.pw) note("Giriş kutusu bulunamadı.", 4000);
+    if (!f.user && !f.pw) note(L("Giriş kutusu bulunamadı.", "No sign-in box found."), 4000);
   }
 
   function choose(logins) {
@@ -175,7 +191,7 @@
         const n = document.createElement("b");
         n.textContent = l.name;
         const u = document.createElement("span");
-        u.textContent = l.username || "kullanıcı adı yok";
+        u.textContent = l.username || L("kullanıcı adı yok", "no username");
         b.append(n, u);
         b.addEventListener("click", (e) => {
           if (!e.isTrusted) return;
@@ -192,12 +208,12 @@
   // Kilit açılsın diye kasa öne gelir; açılınca (en çok 2 dk) doldur.
   async function unlockThenFill() {
     busy = true;
-    label.textContent = "Carl Vault'ta kilidi aç…";
+    label.textContent = L("Carl Vault'ta kilidi aç…", "Unlock in Carl Vault…");
     place();
     try {
       const o = await ask({ op: "vault-open" });
       if (!o || o.off || (!o.ok && !o.closed)) {
-        note((o && o.message) || "Carl Vault açılamadı.", 4000);
+        note((o && o.message) || L("Carl Vault açılamadı.", "Couldn't open Carl Vault."), 4000);
         return;
       }
       const end = Date.now() + 120000;
@@ -209,14 +225,14 @@
         checkedAt = Date.now();
         const logins = r.logins || [];
         if (logins.length === 0) {
-          note("Bu site için Carl Vault'ta kayıt yok.", 4000);
+          note(L("Bu site için Carl Vault'ta kayıt yok.", "Carl Vault has no item for this site."), 4000);
           setTimeout(check, 4200);
           return;
         }
         await choose(logins);
         return;
       }
-      note("Süre doldu; tekrar bas.", 4000);
+      note(L("Süre doldu; tekrar bas.", "Timed out; press again."), 4000);
     } finally {
       busy = false;
       label.textContent = "Carl Vault";
@@ -236,9 +252,9 @@
     const r = await ask({ op: "vault-find" });
     if (r) state = r;
     if (r && r.ok && (r.logins || []).length) return choose(r.logins);
-    if (r && r.ok) return note("Bu site için Carl Vault'ta kayıt yok.", 4000);
+    if (r && r.ok) return note(L("Bu site için Carl Vault'ta kayıt yok.", "Carl Vault has no item for this site."), 4000);
     if (r && (r.locked || r.closed)) return unlockThenFill();
-    note((r && r.message) || "CarlUI çalışmıyor.", 4000);
+    note((r && r.message) || L("CarlUI çalışmıyor.", "CarlUI isn't running."), 4000);
   });
   // Tıklama sayfaya ulaşmasın (bazı formlar dış tıklamada kapanır).
   for (const t of ["mousedown", "pointerdown", "mouseup"]) host.addEventListener(t, (e) => e.stopPropagation());
@@ -320,8 +336,8 @@
 <div class="box" role="dialog" aria-label="Carl Vault">
   <div class="head"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.6v4.1c0 3.2 2.3 5.8 5.5 6.8 3.2-1 5.5-3.6 5.5-6.8V3.6z"/></svg>Carl Vault</div>
   <div class="msg"></div>
-  <label class="nm"><span>Kasada bu adla görünecek</span><input maxlength="120" spellcheck="false"></label>
-  <div class="row"><button class="no">Şimdi değil</button><button class="yes">Kaydet</button></div>
+  <label class="nm"><span></span><input maxlength="120" spellcheck="false"></label>
+  <div class="row"><button class="no"></button><button class="yes"></button></div>
 </div>`;
   const barMsg = barRoot.querySelector(".msg");
   const barRow = barRoot.querySelector(".row");
@@ -329,6 +345,12 @@
   const nameIn = barRoot.querySelector(".nm input");
   const yes = barRoot.querySelector(".yes");
   const no = barRoot.querySelector(".no");
+  const barText = () => {
+    barRoot.querySelector(".nm span").textContent = L("Kasada bu adla görünecek", "Name in the vault");
+    no.textContent = L("Şimdi değil", "Not now");
+  };
+  barText();
+  relabels.push(barText);
   let saving = false;
 
   function say(parts) {
@@ -348,14 +370,14 @@
     nameIn.value = r.name || r.site;
     nameBox.style.display = r.status === "changed" ? "none" : "block";
     if (r.status === "changed") {
-      say([...who, " için kayıtlı parola farklı. Carl Vault'taki ", { b: r.name || r.site }, " kaydı güncellensin mi?"]);
-      yes.textContent = "Güncelle";
+      say(lang === "tr" ? [...who, " için kayıtlı parola farklı. Carl Vault'taki ", { b: r.name || r.site }, " kaydı güncellensin mi?"] : ["The saved password for ", ...who, " is different. Update the ", { b: r.name || r.site }, " item in Carl Vault?"]);
+      yes.textContent = L("Güncelle", "Update");
     } else if (r.status === "locked" || r.status === "closed") {
-      say([...who, " hesabı Carl Vault'a kaydedilsin mi? Kasa kilitli; önce kilidi açman istenecek."]);
-      yes.textContent = "Aç ve kaydet";
+      say(lang === "tr" ? [...who, " hesabı Carl Vault'a kaydedilsin mi? Kasa kilitli; önce kilidi açman istenecek."] : ["Save ", ...who, " to Carl Vault? The vault is locked; you'll be asked to unlock it first."]);
+      yes.textContent = L("Aç ve kaydet", "Unlock and save");
     } else {
-      say([...who, " hesabı Carl Vault'a kaydedilsin mi?"]);
-      yes.textContent = "Kaydet";
+      say(lang === "tr" ? [...who, " hesabı Carl Vault'a kaydedilsin mi?"] : ["Save ", ...who, " to Carl Vault?"]);
+      yes.textContent = L("Kaydet", "Save");
     }
     barRow.style.display = "flex";
     if (!bar.isConnected) document.documentElement.append(bar);
@@ -383,19 +405,19 @@
       let r = await ask({ op: "vault-save", name });
       if (r && r.retry) {
         // Kilitli ya da kapalı: kasa öne gelir, parola oraya yazılır; açılınca kaydedilir.
-        say(["Carl Vault'ta kilidi aç; açılınca kaydedilecek."]);
+        say([L("Carl Vault'ta kilidi aç; açılınca kaydedilecek.", "Unlock Carl Vault; it will be saved once unlocked.")]);
         barRow.style.display = "none";
         nameBox.style.display = "none";
         const o = await ask({ op: "vault-open" });
-        if (!o || o.off || (!o.ok && !o.closed)) return done((o && o.message) || "Carl Vault açılamadı.");
+        if (!o || o.off || (!o.ok && !o.closed)) return done((o && o.message) || L("Carl Vault açılamadı.", "Couldn't open Carl Vault."));
         const end = Date.now() + 120000;
         while (Date.now() < end && r && r.retry) {
           await new Promise((ok) => setTimeout(ok, 1000));
           r = await ask({ op: "vault-save", name });
         }
       }
-      if (r && r.ok) done(r.status === "same" ? "Zaten kayıtlı." : r.message || "Kaydedildi.");
-      else done((r && !r.retry && r.message) || "Kaydedilemedi; süre doldu.");
+      if (r && r.ok) done(r.status === "same" ? L("Zaten kayıtlı.", "Already saved.") : r.message || L("Kaydedildi.", "Saved."));
+      else done((r && !r.retry && r.message) || L("Kaydedilemedi; süre doldu.", "Couldn't save; timed out."));
     } finally {
       saving = false;
     }
@@ -472,12 +494,20 @@
   .again:hover { background: #48405a; }
 </style>
 <div class="box">
-  <div class="t">Carl Vault · güçlü parola önerisi</div>
+  <div class="t"></div>
   <div class="pw"></div>
-  <div class="row"><label><input type="checkbox" class="sym" checked>Sembol</label><button class="again" title="Başka öner">↻</button><button class="use">Kullan</button></div>
+  <div class="row"><label><input type="checkbox" class="sym" checked><span class="symt"></span></label><button class="again">↻</button><button class="use"></button></div>
 </div>`;
   const genPw = genRoot.querySelector(".pw");
   const genSym = genRoot.querySelector(".sym");
+  const genText = () => {
+    genRoot.querySelector(".t").textContent = L("Carl Vault · güçlü parola önerisi", "Carl Vault · strong password");
+    genRoot.querySelector(".symt").textContent = L("Sembol", "Symbols");
+    genRoot.querySelector(".again").title = L("Başka öner", "Suggest another");
+    genRoot.querySelector(".use").textContent = L("Kullan", "Use");
+  };
+  genText();
+  relabels.push(genText);
   let genFor = null; // önerinin bağlı olduğu parola kutusu
   let genValue = "";
 

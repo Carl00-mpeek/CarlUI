@@ -180,7 +180,11 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
     let _ = std::fs::create_dir_all(&ext);
     for (name, bytes) in payload::EXTENSION {
         tick(rep, &format!("{} · {name}", t!("Eklenti", "Extension")));
-        if let Err(e) = std::fs::write(ext.join(name), bytes) {
+        let to = ext.join(name);
+        if let Some(d) = to.parent() {
+            let _ = std::fs::create_dir_all(d);
+        }
+        if let Err(e) = std::fs::write(&to, bytes) {
             notes.push(t!(format!("Eklenti dosyası yazılamadı ({name}): {e}"), format!("Couldn't write extension file ({name}): {e}")));
         }
     }
