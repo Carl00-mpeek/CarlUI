@@ -196,7 +196,7 @@ fn handle(mut s: TcpStream, hwnd: isize) {
             let req = match path.as_str() {
                 "/vault/find" => Request::Find { url: g("url") },
                 "/vault/fill" => Request::Fill { url: g("url"), id: g("id") },
-                _ => Request::Save { url: g("url"), user: g("user"), password: g("password"), commit: v.get("commit").and_then(|x| x.as_bool()).unwrap_or(false) },
+                _ => Request::Save { url: g("url"), user: g("user"), password: g("password"), commit: v.get("commit").and_then(|x| x.as_bool()).unwrap_or(false), name: g("name") },
             };
             let body = match ask(&req) {
                 Ok(r) => serde_json::to_string(&r).unwrap_or_default(),

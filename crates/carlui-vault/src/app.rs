@@ -433,7 +433,7 @@ impl App {
             Request::Type { token, hwnd } => self.type_token(&token, hwnd, client_pid),
             Request::Find { url } => self.find_logins(&url),
             Request::Fill { url, id } => self.fill_login(&url, &id),
-            Request::Save { url, user, password, commit } => self.save_login(&url, Zeroizing::new(user), Zeroizing::new(password), commit),
+            Request::Save { url, user, password, commit, name } => self.save_login(&url, Zeroizing::new(user), Zeroizing::new(password), commit, &name),
             Request::ImportTotp { .. } | Request::Open { .. } => unreachable!(),
         }
     }

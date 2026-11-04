@@ -305,6 +305,10 @@
   .head svg { width: 15px; height: 15px; }
   .msg { overflow-wrap: anywhere; }
   .msg b { font-weight: 600; color: #fff; }
+  .nm { display: block; margin-top: 9px; }
+  .nm span { display: block; font-size: 11.5px; color: #b9b4c2; margin-bottom: 4px; }
+  .nm input { width: 100%; height: 30px; padding: 0 9px; border: 1px solid #4a4256; border-radius: 6px; background: #17151c; color: #fff; font-weight: 600; }
+  .nm input:focus { outline: none; border-color: #b06ce6; }
   .row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
   button { height: 28px; padding: 0 12px; border: 0; border-radius: 6px; cursor: pointer; font-weight: 600; }
   .yes { background: #b06ce6; color: #fff; }
@@ -316,10 +320,13 @@
 <div class="box" role="dialog" aria-label="Carl Vault">
   <div class="head"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.6v4.1c0 3.2 2.3 5.8 5.5 6.8 3.2-1 5.5-3.6 5.5-6.8V3.6z"/></svg>Carl Vault</div>
   <div class="msg"></div>
+  <label class="nm"><span>Kasada bu adla görünecek</span><input maxlength="120" spellcheck="false"></label>
   <div class="row"><button class="no">Şimdi değil</button><button class="yes">Kaydet</button></div>
 </div>`;
   const barMsg = barRoot.querySelector(".msg");
   const barRow = barRoot.querySelector(".row");
+  const nameBox = barRoot.querySelector(".nm");
+  const nameIn = barRoot.querySelector(".nm input");
   const yes = barRoot.querySelector(".yes");
   const no = barRoot.querySelector(".no");
   let saving = false;
@@ -337,8 +344,11 @@
   function offer(r) {
     if (saving) return;
     const who = r.user ? [{ b: r.site }, " · ", { b: r.user }] : [{ b: r.site }];
+    // Yeni kayıtta ad sorulur (önerilen: site adı); değişmişte mevcut kaydın adı yazılır.
+    nameIn.value = r.name || r.site;
+    nameBox.style.display = r.status === "changed" ? "none" : "block";
     if (r.status === "changed") {
-      say([...who, " için kayıtlı parola farklı. Carl Vault'ta güncellensin mi?"]);
+      say([...who, " için kayıtlı parola farklı. Carl Vault'taki ", { b: r.name || r.site }, " kaydı güncellensin mi?"]);
       yes.textContent = "Güncelle";
     } else if (r.status === "locked" || r.status === "closed") {
       say([...who, " hesabı Carl Vault'a kaydedilsin mi? Kasa kilitli; önce kilidi açman istenecek."]);
@@ -356,24 +366,32 @@
   function done(text) {
     say([text]);
     barRow.style.display = "none";
+    nameBox.style.display = "none";
     closeBar(3500);
   }
 
-  yes.addEventListener("click", async (e) => {
-    if (!e.isTrusted || saving) return;
+  yes.addEventListener("click", (e) => e.isTrusted && commit());
+  nameIn.addEventListener("keydown", (e) => {
+    if (e.isTrusted && e.key === "Enter") commit();
+  });
+
+  async function commit() {
+    if (saving) return;
     saving = true;
+    const name = nameIn.value.trim();
     try {
-      let r = await ask({ op: "vault-save" });
+      let r = await ask({ op: "vault-save", name });
       if (r && r.retry) {
         // Kilitli ya da kapalı: kasa öne gelir, parola oraya yazılır; açılınca kaydedilir.
         say(["Carl Vault'ta kilidi aç; açılınca kaydedilecek."]);
         barRow.style.display = "none";
+        nameBox.style.display = "none";
         const o = await ask({ op: "vault-open" });
         if (!o || o.off || (!o.ok && !o.closed)) return done((o && o.message) || "Carl Vault açılamadı.");
         const end = Date.now() + 120000;
         while (Date.now() < end && r && r.retry) {
           await new Promise((ok) => setTimeout(ok, 1000));
-          r = await ask({ op: "vault-save" });
+          r = await ask({ op: "vault-save", name });
         }
       }
       if (r && r.ok) done(r.status === "same" ? "Zaten kayıtlı." : r.message || "Kaydedildi.");
@@ -381,7 +399,7 @@
     } finally {
       saving = false;
     }
-  });
+  }
   no.addEventListener("click", (e) => {
     if (!e.isTrusted) return;
     ask({ op: "vault-dismiss" });

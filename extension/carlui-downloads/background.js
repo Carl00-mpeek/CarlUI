@@ -142,11 +142,21 @@ function capture(tab, url, msg) {
       return { show: false };
     }
     p.status = status;
+    p.name = (r && r.name) || "";
     return info(p);
   });
   pending.set(tab, p);
   setTimeout(() => pending.get(tab) === p && forget(tab), PENDING_MS);
   return p.check;
+}
+
+// Kasa kilitliyken önerilecek ad ("accounts.google.com" → "Google").
+function siteName(host) {
+  const l = host.split(".");
+  if (l.length < 2 || /^[d.]+$/.test(host)) return host;
+  const two = l.length >= 3 && l.at(-1).length === 2 && ["com", "co", "org", "net", "gov", "edu", "ac", "gen", "web", "bel"].includes(l.at(-2));
+  const n = two ? l.at(-3) : l.at(-2);
+  return n.charAt(0).toUpperCase() + n.slice(1);
 }
 
 // Sayfaya giden bilgi: parola yok.
@@ -155,13 +165,13 @@ function info(p) {
   try {
     site = new URL(p.url).hostname.replace(/^www\./, "");
   } catch {}
-  return { show: true, status: p.status, site, user: p.user };
+  return { show: true, status: p.status, site, user: p.user, name: p.name || siteName(site) };
 }
 
-async function save(tab) {
+async function save(tab, name) {
   const p = pending.get(tab);
   if (!p || Date.now() - p.at > PENDING_MS) return { ok: false, gone: true, message: "Süre doldu." };
-  const r = await call("/vault/save", { url: p.url, user: p.user, password: p.password, commit: true }, 5000);
+  const r = await call("/vault/save", { url: p.url, user: p.user, password: p.password, commit: true, name: String(name || "").slice(0, 120) }, 5000);
   // Kasa kilitli/öne gelmiş ya da kapalı: bilgi kilit açılana dek bekler.
   if (!r || r.locked || (!r.ok && !r.status)) return r ? { ...r, retry: true } : { ok: false, closed: true, retry: true };
   forget(tab);
@@ -180,7 +190,7 @@ API.runtime.onMessage.addListener((msg, sender, reply) => {
     : msg.op === "vault-open" ? call("/vault/open", {}, 15000)
     : msg.op === "vault-capture" ? capture(tab, url, msg)
     : msg.op === "vault-pending" ? (pending.get(tab)?.check ?? Promise.resolve({ show: false }))
-    : msg.op === "vault-save" ? save(tab)
+    : msg.op === "vault-save" ? save(tab, msg.name)
     : msg.op === "vault-dismiss" ? Promise.resolve((forget(tab), { ok: true }))
     : null;
   if (!run) return false;

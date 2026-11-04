@@ -34,7 +34,8 @@ boyut görünür.
   çıkar. **Kaydet**'e basmadan hiçbir şey kaydedilmez. Parola değişmişse
   "Güncelle" sorulur. Kasada aynısı varsa hiçbir şey sorulmaz. Kasa kilitliyse
   yalnızca kayıt formlarında sorulur, "Aç ve kaydet" ile kilit açılınca yazılır.
-  Kullanıcı adı ve parola beklerken yalnızca eklentinin belleğinde durur (en
+  Şeritte kaydın kasada hangi adla görüneceği sorulur (önerilen: site adı, ör.
+  "Roblox"); istediğin adı yazabilirsin. Kullanıcı adı ve parola beklerken yalnızca eklentinin belleğinde durur (en
   çok 3 dk), sayfaya geri verilmez.
 - Ayarlar → Carl Vault → "Tarayıcıda doldurma" ile tamamen kapatılabilir
   (sayfa içi düğme ve kaydetme sorusu da kaybolur).

@@ -69,7 +69,15 @@ pub enum Request {
     /// `commit` false ise yalnızca durum sorulur (`Reply::status`: "new",
     /// "changed", "same"); true ise kullanıcı sayfadaki "Kaydet"e basmıştır,
     /// kayıt eklenir ya da parolası güncellenir.
-    Save { url: String, user: String, password: String, commit: bool },
+    Save {
+        url: String,
+        user: String,
+        password: String,
+        commit: bool,
+        /// Kullanıcının şeritte yazdığı kayıt adı (boşsa site adı).
+        #[serde(default)]
+        name: String,
+    },
 }
 
 /// Bir sayfaya uyan kayıt (yalnızca ad ve kullanıcı adı; parola yok).
@@ -97,6 +105,9 @@ pub struct Reply {
     /// `Save` yanıtı: "new", "changed" ya da "same".
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub status: String,
+    /// `Save` yanıtı: önerilen kayıt adı (yeni) ya da mevcut kaydın adı (değişmiş).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
 }
 
 impl Reply {
@@ -229,7 +240,7 @@ mod tests {
         assert_eq!(serde_json::from_str::<Request>(&j).unwrap(), r);
         let r = Request::ImportTotp { uri: "otpauth://totp/X?secret=AB".into() };
         assert!(serde_json::to_string(&r).unwrap().contains("\"op\":\"import-totp\""));
-        let r = Request::Save { url: "https://roblox.com".into(), user: "carl".into(), password: "p".into(), commit: true };
+        let r = Request::Save { url: "https://roblox.com".into(), user: "carl".into(), password: "p".into(), commit: true, name: "Roblox".into() };
         assert_eq!(serde_json::from_str::<Request>(&serde_json::to_string(&r).unwrap()).unwrap(), r);
         let r = Request::Open { back: 42 };
         assert!(serde_json::to_string(&r).unwrap().contains("\"op\":\"open\""));

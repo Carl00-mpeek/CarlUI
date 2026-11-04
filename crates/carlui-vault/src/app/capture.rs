@@ -2,16 +2,19 @@
 //! önce yalnızca durumu sorar (`commit` false): bu site ve kullanıcı adıyla
 //! kayıt yoksa "new", parola farklıysa "changed", aynısı varsa "same". Sayfada
 //! "Kaydet"/"Güncelle"ye basılınca aynı bilgi `commit` true ile gelir; ancak o
-//! zaman kasaya yazılır. Kullanıcı onaylamadan hiçbir şey kaydedilmez.
+//! zaman kasaya yazılır; yeni kayıt şeritte kullanıcının verdiği adla (önerilen:
+//! site adı) eklenir. Kullanıcı onaylamadan hiçbir şey kaydedilmez.
 
 use super::*;
 use carlui_vault::autofill::{self, Capture};
 
 /// Formdan gelen alanların üst sınırı (boru satırı 8 KB).
 const MAX_LEN: usize = 1024;
+/// Kayıt adının üst sınırı (karakter).
+const MAX_NAME: usize = 120;
 
 impl App {
-    pub(super) fn save_login(&mut self, url: &str, user: Zeroizing<String>, password: Zeroizing<String>, commit: bool) -> Reply {
+    pub(super) fn save_login(&mut self, url: &str, user: Zeroizing<String>, password: Zeroizing<String>, commit: bool, name: &str) -> Reply {
         let browser = match self.browser_gate() {
             Ok(b) => b,
             Err(r) => return r,
@@ -29,8 +32,13 @@ impl App {
             Capture::Changed(_) => "changed",
             Capture::Same => "same",
         };
+        // Şeritte görünecek ad: yeni kayıtta önerilen, değişmişte mevcut kaydın adı.
+        let shown = match &found {
+            Capture::Changed(id) => v.items().iter().find(|i| &i.id == id).map(|i| i.meta.name.clone()).unwrap_or_default(),
+            _ => autofill::site_name(url),
+        };
         if !commit || found == Capture::Same {
-            return Reply { ok: true, status: status.into(), ..Default::default() };
+            return Reply { ok: true, status: status.into(), name: shown, ..Default::default() };
         }
         let host = autofill::origin(url).unwrap_or_default();
         let host = host.split("://").nth(1).unwrap_or_default().to_string();
@@ -43,7 +51,12 @@ impl App {
                 v.update(id, Meta { name: name.clone(), category: Category::Password, updated: now() }, &body).map(|_| name)
             }
             _ => {
-                let (meta, body) = autofill::new_login(url, user, &password);
+                let (mut meta, body) = autofill::new_login(url, user, &password);
+                // Kullanıcının yazdığı ad (satır sonu ve aşırı uzunluk atılır).
+                let given: String = name.chars().filter(|c| !c.is_control()).take(MAX_NAME).collect();
+                if !given.trim().is_empty() {
+                    meta.name = given.trim().to_string();
+                }
                 let name = meta.name.clone();
                 v.add(meta, &body).map(|_| name)
             }
