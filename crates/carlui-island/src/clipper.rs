@@ -12,7 +12,9 @@ use std::{
     sync::{Arc, Mutex},
     time::Instant,
 };
+use crate::shots::qr::{self, Qr};
 use windows::Win32::Foundation::HWND;
+use zeroize::Zeroizing;
 
 pub const ROWS: usize = 5;
 
@@ -32,6 +34,8 @@ pub enum Act {
     Clear,
     Wrap,
     Transform(Op),
+    /// Resimde bulunan `n`. QR koduyla şu düğme (Carl Vault / Aç / Kopyala).
+    Qr(usize, qr::Act),
 }
 
 pub struct Action {
@@ -69,6 +73,8 @@ pub enum ClipOut {
     Edit(String),
     /// Önizlemede satır kaydırmayı aç/kapat.
     Wrap,
+    /// Resimdeki QR koduyla eylem: (düğme, (tür, metin, kopyalanacak, başlık)).
+    Qr(qr::Act, (qr::Kind, Zeroizing<String>, Zeroizing<String>, String)),
 }
 
 /// Çizim için anlık görüntü.
@@ -100,6 +106,9 @@ pub struct Clipper {
     pub scroll: usize,
     pub mode: ClipMode,
     actions: Vec<Action>,
+    /// Eylem listesi açılınca seçili resimde bulunan QR kodları (liste
+    /// kapanınca silinir; 2FA anahtarı taşıyabilir).
+    qr: Vec<Qr>,
     act_sel: usize,
     confirm_clear: bool,
     /// Silme onayı bekleyen kayıt (ikinci onay: ✓ sil, ✗ vazgeç).
@@ -148,6 +157,7 @@ impl Clipper {
             scroll: 0,
             mode: ClipMode::List,
             actions: Vec::new(),
+            qr: Vec::new(),
             act_sel: 0,
             confirm_clear: false,
             confirm_delete: None,
@@ -301,10 +311,23 @@ impl Clipper {
             self.scroll = 0;
             return ClipOut::Redraw;
         }
-        let mut a = vec![
-            Action { label: t!("Yapıştır", "Paste").into(), key: "Enter", glyph: '\u{E77F}', act: Act::Paste },
-            Action { label: t!("Yalnızca panoya kopyala", "Copy to clipboard only").into(), key: "Shift+Enter", glyph: '\u{E8C8}', act: Act::Copy },
-        ];
+        // Resimde QR varsa (telefondaki Google Authenticator aktarım ekranının
+        // fotoğrafı gibi) düğmeleri en üstte çıkar; tarama yalnızca burada olur.
+        self.qr = if c.kind == Kind::Image { std::fs::read(st.image_path(c)).map(|b| qr::scan_image(&b)).unwrap_or_default() } else { Vec::new() };
+        let mut a = Vec::new();
+        for (i, q) in self.qr.iter().enumerate().take(3) {
+            let title = q.title();
+            for (act, label) in q.actions() {
+                let (label, glyph) = match act {
+                    qr::Act::Vault => (t!(format!("Carl Vault'a aktar · {title}"), format!("Import to Carl Vault · {title}")), '\u{E72E}'),
+                    qr::Act::Open => (format!("QR · {label} · {title}"), '\u{E8A7}'),
+                    qr::Act::Copy => (format!("QR · {label} · {title}"), '\u{E8C8}'),
+                };
+                a.push(Action { label, key: "", glyph, act: Act::Qr(i, act) });
+            }
+        }
+        a.push(Action { label: t!("Yapıştır", "Paste").into(), key: "Enter", glyph: '\u{E77F}', act: Act::Paste });
+        a.push(Action { label: t!("Yalnızca panoya kopyala", "Copy to clipboard only").into(), key: "Shift+Enter", glyph: '\u{E8C8}', act: Act::Copy });
         if c.kind == Kind::Text {
             a.push(Action { label: t!("Metni düzenle", "Edit text").into(), key: "Ctrl+E", glyph: '\u{E70F}', act: Act::Edit });
             for (op, _, glyph) in transform::ALL {
@@ -326,6 +349,7 @@ impl Clipper {
     }
 
     fn back_to_list(&mut self) {
+        self.qr.clear();
         self.mode = ClipMode::List;
         self.confirm_clear = false;
         self.scroll = 0;
@@ -335,6 +359,15 @@ impl Clipper {
     pub fn run(&mut self, act: Act) -> ClipOut {
         let Some(id) = self.selected_id() else { return ClipOut::Nothing };
         let out = match act {
+            Act::Qr(i, act) => {
+                if i >= self.qr.len() {
+                    return ClipOut::Nothing;
+                }
+                let q = self.qr.swap_remove(i);
+                let data = (q.kind, q.copy_text(), q.title(), q.text);
+                self.back_to_list();
+                return ClipOut::Qr(act, (data.0, data.3, data.1, data.2));
+            }
             Act::Paste => return ClipOut::Use { id, paste: true },
             Act::Copy => return ClipOut::Use { id, paste: false },
             Act::Edit => {

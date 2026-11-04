@@ -16,7 +16,7 @@
 
 mod capture;
 mod overlay;
-mod qr;
+pub(crate) mod qr;
 
 use crate::*;
 use overlay::{Out, Overlay};
@@ -493,7 +493,7 @@ impl App {
     }
 
     /// QR düğmesi: (tür, okunan metin, kopyalanacak metin, başlık).
-    fn qr_act(&mut self, act: qr::Act, (kind, text, copy, title): (qr::Kind, Zeroizing<String>, Zeroizing<String>, String)) {
+    pub(crate) fn qr_act(&mut self, act: qr::Act, (kind, text, copy, title): (qr::Kind, Zeroizing<String>, Zeroizing<String>, String)) {
         let note = |app: &mut Self, title: String, body: String| app.push_note(Note { app: "QR".into(), title, body, ..Default::default() });
         match act {
             qr::Act::Vault if kind == qr::Kind::Totp => self.qr_to_vault(text),

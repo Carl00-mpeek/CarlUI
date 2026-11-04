@@ -307,6 +307,11 @@ impl App {
             // Düzenleyici klavye odağı ister; oyun üstünde açılmaz (oyun küçülürdü).
             ClipOut::Edit(_) if clipgame::active() => {}
             ClipOut::Edit(id) => self.open_edit_card(id),
+            // Resimdeki QR: ekran görüntüsü aracıyla aynı yol (2FA → Carl Vault).
+            ClipOut::Qr(act, data) => {
+                self.close_clip(act != crate::shots::qr::Act::Vault);
+                self.qr_act(act, data);
+            }
         }
     }
 

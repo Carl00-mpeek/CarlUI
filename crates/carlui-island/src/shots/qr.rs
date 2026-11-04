@@ -159,20 +159,68 @@ pub fn scan(px: &[u8], w: u32, h: u32, area: (u32, u32, u32, u32)) -> Vec<Qr> {
         if grid.decode_to(&mut *raw).is_err() {
             continue;
         }
-        // Baytlar kopyalanmadan metne taşınır; UTF-8 değilse silinip atlanır.
-        let text = match String::from_utf8(std::mem::take(&mut *raw)) {
-            Ok(s) => Zeroizing::new(s),
-            Err(e) => {
-                e.into_bytes().zeroize();
-                continue;
+        push_bytes(&mut out, std::mem::take(&mut *raw));
+    }
+    drop(img);
+    if out.is_empty() {
+        // rqrr eğik çekilmiş fotoğraflarda ve çok yoğun kodlarda (Google
+        // Authenticator aktarımı gibi) bulamıyor; ZXing'in algılayıcısı tam
+        // çözünürlükte (büyük seçimde daha az küçülterek) bir kez daha dener.
+        let step = (((sw as u64 * sh as u64) as f64 / MAX_FULL as f64).sqrt().ceil() as u32).max(1);
+        let (fw, fh) = (sw / step, sh / step);
+        let mut luma = Zeroizing::new(Vec::with_capacity(fw as usize * fh as usize));
+        for y in 0..fh as usize {
+            for x in 0..fw as usize {
+                let i = (y0 as usize + y * step as usize) * stride + (x0 as usize + x * step as usize) * 4;
+                luma.push(grey(px[i], px[i + 1], px[i + 2]));
             }
-        };
-        if !text.trim().is_empty() && !out.iter().any(|q| *q.text == *text) {
-            out.push(Qr { kind: classify(&text), text });
+        }
+        let mut hints = rxing::DecodeHints::default().with(rxing::DecodeHintValue::TryHarder(true));
+        if let Ok(r) = rxing::helpers::detect_in_luma_slice_with_hints(&luma, fw, fh, Some(rxing::BarcodeFormat::QR_CODE), &mut hints) {
+            let mut text = Zeroizing::new(r.getText().to_string());
+            push_text(&mut out, std::mem::take(&mut *text));
         }
     }
     out
 }
+
+/// rxing için en çok bu kadar piksel (yoğun kodda modüller küçülmesin).
+const MAX_FULL: u64 = 8_000_000;
+
+fn grey(b: u8, g: u8, r: u8) -> u8 {
+    ((r as u32 * 77 + g as u32 * 150 + b as u32 * 29) >> 8) as u8
+}
+
+/// Baytlar kopyalanmadan metne taşınır; UTF-8 değilse silinip atlanır.
+fn push_bytes(out: &mut Vec<Qr>, raw: Vec<u8>) {
+    match String::from_utf8(raw) {
+        Ok(s) => push_text(out, s),
+        Err(e) => e.into_bytes().zeroize(),
+    }
+}
+
+fn push_text(out: &mut Vec<Qr>, s: String) {
+    let text = Zeroizing::new(s);
+    if !text.trim().is_empty() && !out.iter().any(|q| *q.text == *text) {
+        out.push(Qr { kind: classify(&text), text });
+    }
+}
+
+/// Resim dosyası baytlarındaki (PNG, JPG…) QR kodları; pano geçmişindeki
+/// resimler için. Çözülen pikseller iş bitince silinir.
+pub fn scan_image(bytes: &[u8]) -> Vec<Qr> {
+    let Some(wic) = carlui_clip::image::wic() else { return Vec::new() };
+    let Some((conv, w, h)) = carlui_clip::image::decode(&wic, bytes) else { return Vec::new() };
+    if w as u64 * h as u64 > 40_000_000 {
+        return Vec::new();
+    }
+    let mut px = Zeroizing::new(vec![0u8; (w * h * 4) as usize]);
+    if unsafe { conv.CopyPixels(std::ptr::null(), w * 4, &mut px) }.is_err() {
+        return Vec::new();
+    }
+    scan(&px, w, h, (0, 0, w, h))
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -250,6 +298,57 @@ mod tests {
         let px = screen_with("https://github.com/login", 8, w, h, (1500, 800));
         let found = scan(&px, w as u32, h as u32, (0, 0, w as u32, h as u32));
         assert_eq!(found.first().map(|q| q.kind), Some(Kind::Url));
+    }
+
+    /// Elle: `QR_PHOTO=yol cargo test -p carlui-island photo_probe -- --ignored --nocapture`.
+    /// Gerçek bir fotoğrafı tarar; içeriği değil yalnızca türünü ve uzunluğunu yazar.
+    #[test]
+    #[ignore]
+    fn photo_probe() {
+        let path = std::env::var("QR_PHOTO").expect("QR_PHOTO");
+        let bytes = std::fs::read(path).unwrap();
+        unsafe { windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED).ok().unwrap() };
+        let t = std::time::Instant::now();
+        let found = scan_image(&bytes);
+        println!("{} kod, {:?}", found.len(), t.elapsed());
+        for q in &found {
+            println!("  {:?} {} karakter", q.kind, q.text.len());
+        }
+    }
+
+    /// Fotoğraf gibi: yoğun kod (Google aktarımı boyunda), küçük modüller,
+    /// eğik (perspektif benzeri kayma) ve soldan sağa kararan ışık.
+    #[test]
+    fn decodes_dense_skewed_photo() {
+        let uri = format!("otpauth-migration://offline?data={}", "Cj8KFEhlbGxvIUTerb7vAAECAwQFBgcIEhFjYXJsQG9ybmVrLmNvbRoGR29vZ2xlIAEoATACEMHI%2B" .repeat(14));
+        let code = qrcode::QrCode::new(uri.as_bytes()).unwrap();
+        let n = code.width();
+        let colors = code.to_colors();
+        let (w, h) = (1200usize, 1400usize);
+        let mut px = vec![60u8; w * h * 4];
+        let (ox, oy, m) = (200.0f32, 300.0f32, 5.2f32);
+        let side = (n as f32 + 8.0) * m;
+        for y in 0..h {
+            for x in 0..w {
+                // Ters eşleme: üst kenar dar, alt kenar geniş + hafif yatay kayma.
+                let v = (y as f32 - oy) / side;
+                let k = 0.88 + 0.12 * v;
+                let u = ((x as f32 - ox - 30.0 * v) - side * (1.0 - k) / 2.0) / (side * k);
+                if !(0.0..1.0).contains(&u) || !(0.0..1.0).contains(&v) {
+                    continue;
+                }
+                let (mx, my) = ((u * (n as f32 + 8.0)) as isize - 4, (v * (n as f32 + 8.0)) as isize - 4);
+                let dark = mx >= 0 && my >= 0 && (mx as usize) < n && (my as usize) < n && colors[my as usize * n + mx as usize] == qrcode::Color::Dark;
+                let light = 235.0 - 70.0 * (x as f32 / w as f32);
+                let val = if dark { 25.0 } else { light } as u8;
+                let i = (y * w + x) * 4;
+                px[i..i + 3].fill(val);
+            }
+        }
+        let found = scan(&px, w as u32, h as u32, (0, 0, w as u32, h as u32));
+        assert_eq!(found.len(), 1, "yoğun ve eğik kod okunmalı");
+        assert_eq!(found[0].kind, Kind::Totp);
+        assert_eq!(found[0].text.as_str(), uri);
     }
 
     #[test]
