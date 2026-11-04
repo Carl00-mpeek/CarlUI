@@ -68,7 +68,7 @@ impl Category {
             Category::Identity => vec![f(t!("Ad soyad", "Full name"), Text), f(t!("Kimlik no", "ID number"), Secret), f(t!("Doğum tarihi", "Date of birth"), Text), f(t!("Not", "Note"), Multiline)],
             Category::Note => vec![f(t!("Not", "Note"), Multiline)],
             Category::License => vec![f(t!("Ürün", "Product"), Text), f(t!("Lisans anahtarı", "License key"), Secret), f(t!("E-posta", "Email"), Text), f(t!("Not", "Note"), Multiline)],
-            // Aşama 3: `Totp` alanı kod üretecek; şimdilik gizli anahtar saklanır.
+            // `Totp` alanı anahtarı saklar; düzenleyici kodu ondan üretir (bkz. `totp`).
             Category::TwoFactor => vec![f(t!("Hesap", "Account"), Text), f(t!("Gizli anahtar", "Secret key"), Totp), f(t!("Yedek kodlar", "Backup codes"), Multiline)],
             Category::File => vec![f(t!("Not", "Note"), Multiline)],
         }
@@ -82,7 +82,7 @@ pub enum FieldKind {
     Secret,
     Url,
     Multiline,
-    /// 2FA gizli anahtarı (base32). Aşama 3'te kod üretimi bu alandan yapılacak.
+    /// 2FA gizli anahtarı (base32 ya da otpauth adresi); kod `totp` ile üretilir.
     Totp,
 }
 

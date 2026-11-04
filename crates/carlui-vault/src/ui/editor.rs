@@ -7,7 +7,29 @@ use super::{clipped, icon_button, input, list::column, para, primary, P};
 use crate::app::{Act, App, Editor, Focus};
 use carlui_core::t;
 use carlui_ui::paint::{Align, ORANGE, R, TEXT};
-use carlui_vault::entry::{Category, FieldKind};
+use carlui_vault::{
+    entry::{now, Category, FieldKind},
+    totp::{grouped, Totp},
+};
+
+/// 2FA alanının altı: o anki kod, kalan süre çubuğu ya da anahtar hatası.
+/// Kopyala düğmesi bu alanda anahtarı değil kodu kopyalar.
+fn totp_row(p: &mut P, value: &str, x: f32, y: f32, cw: f32) {
+    match Totp::parse(value) {
+        Ok(t) => {
+            let at = now();
+            let left = t.remaining(at);
+            p.text(&grouped(&t.code(at)), R::new(x + 2.0, y, 150.0, 28.0), 21.0, true, p.accent, 1.0, Align::Left);
+            let s = t!(format!("{left} sn · kopyala düğmesi kodu kopyalar"), format!("{left} s · the copy button copies the code"));
+            p.text(&s, R::new(x + 158.0, y, cw - 158.0, 28.0), 12.0, false, TEXT, 0.55, Align::Left);
+            let bar = R::new(x + 2.0, y + 30.0, 140.0, 3.0);
+            p.round(bar, 1.5, 0xFFFFFF, 0.08);
+            let col = if left <= 5 { ORANGE } else { p.accent };
+            p.round(R::new(bar.x, bar.y, bar.w * left as f32 / t.period as f32, bar.h), 1.5, col, 0.9);
+        }
+        Err(e) => p.text(&e.to_string(), R::new(x + 2.0, y, cw, 28.0), 12.5, false, ORANGE, 0.95, Align::Left),
+    }
+}
 
 fn size_text(n: u64) -> String {
     if n < 1024 {
@@ -85,6 +107,7 @@ pub fn paint(app: &App, e: &Editor, p: &mut P, w: f32, h: f32) -> f32 {
             let hint = match f.kind {
                 FieldKind::Url => "https://…",
                 FieldKind::Multiline => t!("Ctrl+Enter: kaydet", "Ctrl+Enter: save"),
+                FieldKind::Totp => t!("Base32 anahtar ya da otpauth://…", "Base32 key or otpauth://…"),
                 _ => "",
             };
             input(p, app, vr, Focus::Value(i), masked, hint);
@@ -96,10 +119,17 @@ pub fn paint(app: &App, e: &Editor, p: &mut P, w: f32, h: f32) -> f32 {
             icon_button(p, b, '\u{E8C8}', Act::Copy(i), 0.8);
             b.x += bw + 4.0;
             icon_button(p, b, '\u{E711}', Act::RemoveField(i), 0.55);
-            y += vh + 14.0;
+            if f.kind == FieldKind::Totp && !f.value.text.is_empty() {
+                y += vh + 6.0;
+                totp_row(p, f.value.as_str(), x, y, cw);
+                y += 40.0;
+            } else {
+                y += vh + 14.0;
+            }
         }
         p.button(R::new(x, y, 130.0, 32.0), Some('\u{E710}'), t!("Alan", "Field"), Act::AddField(FieldKind::Text), true, false);
         p.button(R::new(x + 138.0, y, 150.0, 32.0), Some('\u{E710}'), t!("Gizli alan", "Secret field"), Act::AddField(FieldKind::Secret), true, false);
+        p.button(R::new(x + 296.0, y, 130.0, 32.0), Some('\u{E710}'), t!("2FA kodu", "2FA code"), Act::AddField(FieldKind::Totp), true, false);
         y += 50.0;
 
         if e.category == Category::File || e.file.is_some() || e.new_file.is_some() {

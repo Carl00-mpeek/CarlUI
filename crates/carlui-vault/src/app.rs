@@ -21,6 +21,7 @@ use carlui_vault::{
     crypto::{Error, KdfParams},
     entry::{now, Attachment, Body, Category, Field, FieldKind, Meta},
     token::{TokenError, Tokens},
+    totp::Totp,
     vault::{Vault, MAX_FILE},
 };
 use std::{path::PathBuf, time::Instant};
@@ -286,8 +287,13 @@ impl App {
             View::Edit(e) => e.fields.get(i).map(|f| {
                 let name = e.name.as_str().trim();
                 let field = f.label.as_str().trim();
+                // 2FA alanında anahtar değil, o anki kod kopyalanır.
+                let (field, value) = match f.kind {
+                    FieldKind::Totp => (t!("2FA kodu", "2FA code"), Totp::parse(f.value.as_str()).map(|t| t.code(now())).unwrap_or_default()),
+                    _ => (field, Zeroizing::new(f.value.as_str().to_string())),
+                };
                 let label = if name.is_empty() { field.to_string() } else { format!("{name} · {field}") };
-                (e.id.clone().unwrap_or_default(), label, Zeroizing::new(f.value.as_str().to_string()))
+                (e.id.clone().unwrap_or_default(), label, value)
             }),
             _ => None,
         }) else {
@@ -417,6 +423,11 @@ impl App {
             }
         }
         self.error = Some(e.to_string());
+    }
+
+    /// Düzenleyicide 2FA alanı var mı (kod ve geri sayım her saniye yenilenir).
+    pub fn ticking(&self) -> bool {
+        matches!(&self.view, View::Edit(e) if e.fields.iter().any(|f| f.kind == FieldKind::Totp))
     }
 
     pub fn wait_left(&self) -> Option<u64> {
@@ -580,7 +591,11 @@ impl App {
             }
             Act::AddField(kind) => {
                 if let View::Edit(e) = &mut self.view {
-                    let label = if kind.masked() { t!("Gizli alan", "Secret field") } else { t!("Alan", "Field") };
+                    let label = match kind {
+                        FieldKind::Totp => t!("2FA anahtarı", "2FA key"),
+                        k if k.masked() => t!("Gizli alan", "Secret field"),
+                        _ => t!("Alan", "Field"),
+                    };
                     e.fields.push(EdField { label: TextBox::new(label, false), value: TextBox::new("", false), kind, shown: false });
                     self.focus = Some(Focus::Value(e.fields.len() - 1));
                 }

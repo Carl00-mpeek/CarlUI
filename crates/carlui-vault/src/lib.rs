@@ -16,8 +16,10 @@
 //! yazmadan gösterir; seçilince ada yerel borudan isteği yollar, kasa istekçiyi
 //! ve hedef pencereyi doğrulayıp değeri o pencereye klavye girdisi olarak yazar.
 //!
+//! Aşama 3, 2FA kodu (`totp`): `FieldKind::Totp` alanındaki base32 anahtar ya
+//! da otpauth adresinden RFC 6238 kodu; yalnızca kayıt açıkken üretilir.
+//!
 //! Sonraki aşamalar (henüz yazılmadı):
-//! - Aşama 3, TOTP: `FieldKind::Totp` alanlarından 6 haneli kod üretimi.
 //! - Aşama 4, ekran görüntüsü aracında QR algılama → 2FA kaydı olarak aktarım.
 //! - Aşama 5, güvenlik testleri (bellek dökümü, dosya kurcalama, hız sınırı).
 
@@ -27,4 +29,5 @@ pub mod entry;
 mod hex;
 pub mod recovery;
 pub mod token;
+pub mod totp;
 pub mod vault;

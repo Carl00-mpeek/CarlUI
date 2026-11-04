@@ -174,6 +174,9 @@ impl Win {
             } else if self.app.focus.is_some() || self.app.wait_left().is_some() {
                 // İmleç yanıp sönsün / bekleme süresi saysın.
                 SetTimer(hwnd, TIMER_ANIM, 530, None);
+            } else if self.app.ticking() {
+                // 2FA kodu ve geri sayımı.
+                SetTimer(hwnd, TIMER_ANIM, 1000, None);
             }
         }
         Ok(())
