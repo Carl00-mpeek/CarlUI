@@ -109,9 +109,33 @@ pub struct Editor {
     pub new_file: Option<(String, Zeroizing<Vec<u8>>)>,
     pub drop_file: bool,
     pub confirm_delete: bool,
+    /// Açıldığı andaki ad ve alanların özeti (değişti mi diye bakmak için).
+    snap: [u8; 32],
 }
 
 impl Editor {
+    fn digest(&self) -> [u8; 32] {
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        h.update(self.name.as_str().trim().as_bytes());
+        for f in &self.fields {
+            h.update([0x1f]);
+            h.update(f.label.as_str().trim().as_bytes());
+            h.update([0x1e, f.kind as u8]);
+            h.update(f.value.value().as_bytes());
+        }
+        h.finalize().into()
+    }
+
+    /// Açıldığından beri bir şey değişti mi (ad, alanlar, dosya).
+    pub fn dirty(&self) -> bool {
+        self.new_file.is_some() || self.drop_file || self.digest() != self.snap
+    }
+
+    fn snapshot(mut self) -> Self {
+        self.snap = self.digest();
+        self
+    }
     fn fields_of(list: &[Field]) -> Vec<EdField> {
         list.iter()
             .map(|f| {
@@ -122,14 +146,14 @@ impl Editor {
     }
 
     fn new(category: Category) -> Self {
-        Self { id: None, name: TextBox::new("", false), category, fields: Self::fields_of(&category.template()), file: None, new_file: None, drop_file: false, confirm_delete: false }
+        Self { id: None, name: TextBox::new("", false), category, fields: Self::fields_of(&category.template()), file: None, new_file: None, drop_file: false, confirm_delete: false, snap: [0; 32] }.snapshot()
     }
 
     fn open(id: &str, meta: &Meta, body: &Body) -> Self {
         // Biçimsiz eski kart kaydı: alanlar etiketlerinden biçim alır (kaydedince kalıcı).
         let mut body = body.clone();
         card::upgrade(meta.category, &mut body);
-        Self { id: Some(id.to_string()), name: TextBox::new(&meta.name, false), category: meta.category, fields: Self::fields_of(&body.fields), file: body.file.clone(), new_file: None, drop_file: false, confirm_delete: false }
+        Self { id: Some(id.to_string()), name: TextBox::new(&meta.name, false), category: meta.category, fields: Self::fields_of(&body.fields), file: body.file.clone(), new_file: None, drop_file: false, confirm_delete: false, snap: [0; 32] }.snapshot()
     }
 
     fn body(&self) -> Body {
@@ -704,6 +728,19 @@ impl App {
                 self.go(if back { View::Security } else { View::List });
             }
             Act::Filter(c) => {
+                // Soldaki kategoriler her sayfadan listeye döner. Düzenleyicide
+                // kaydedilmemiş değişiklik varsa sessizce atılmaz.
+                match &self.view {
+                    View::List => {}
+                    View::Edit(e) if e.dirty() => {
+                        return self.toast(t!("Önce Kaydet ya da Vazgeç'e bas.", "Press Save or Cancel first."));
+                    }
+                    View::Security => {
+                        self.clear_forms();
+                        self.go(View::List);
+                    }
+                    _ => self.go(View::List),
+                }
                 self.filter = c;
                 self.scroll = 0.0;
             }
@@ -1025,5 +1062,26 @@ impl App {
         if crate::ui::idle_ms() >= limit {
             self.lock(t!("boşta", "idle"));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn editor_dirty() {
+        let body = Body { fields: vec![Field { label: "Parola".into(), value: "x".into(), kind: FieldKind::Secret, fmt: Format::Free }], file: None };
+        let meta = Meta { name: "GitHub".into(), category: Category::Password, updated: 0 };
+        let mut e = Editor::open("id", &meta, &body);
+        assert!(!e.dirty(), "açılır açılmaz değişmemiş sayılır");
+        e.fields[0].value = TextBox::new("y", false);
+        assert!(e.dirty());
+        e.fields[0].value = TextBox::new("x", false);
+        assert!(!e.dirty(), "eski değere dönünce değişmemiş");
+        e.name = TextBox::new("GitLab", false);
+        assert!(e.dirty());
+        assert!(!Editor::new(Category::Password).dirty(), "boş yeni kayıt");
+        assert!(Editor::import("otpauth://totp/GitHub:carl?secret=JBSWY3DPEHPK3PXP").dirty(), "QR'dan dolu gelen kaydedilmemiş sayılır");
     }
 }
