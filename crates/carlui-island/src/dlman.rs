@@ -8,6 +8,11 @@
 //! yalnızca tamamlanınca asıl adını alır; iptal/hata olursa silinir (kendi
 //! yarım dosyamız, kullanıcı dosyası değil).
 //!
+//! Adanın genişleyen hâlinde her indirmenin Duraklat/Sürdür ve İptal düğmesi
+//! var. Duraklatınca bağlantı kapanır, yarım dosya kalır; sürdürünce
+//! `Range: bytes=N-` ile kaldığı yerden istenir. Sunucu parça vermezse (206
+//! yerine 200) baştan iner.
+//!
 //! Tarayıcının kendi indirmeleri ayrı izlenir (bkz. `downloads.rs`).
 
 use crate::*;
@@ -25,14 +30,20 @@ const RUNNING: u8 = 0;
 const DONE: u8 = 1;
 const FAILED: u8 = 2;
 const CANCELLED: u8 = 3;
+const PAUSED: u8 = 4;
+
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) struct Job {
+    id: u64,
     url: String,
     /// Ek istek başlıkları ("Cookie: …\r\nReferer: …"): eklentiden gelen oturum.
     headers: String,
     /// Kullanıcının "Farklı kaydet" ile seçtiği tam yol.
     dest: Option<PathBuf>,
     name: Mutex<String>,
+    /// Yazılan asıl yol (ilk istekte belirlenir; sürdürünce aynısı kullanılır).
+    target: Mutex<Option<PathBuf>>,
     path: Mutex<Option<PathBuf>>,
     error: Mutex<String>,
     got: AtomicU64,
@@ -41,6 +52,14 @@ pub(crate) struct Job {
     speed: AtomicU64,
     state: AtomicU8,
     cancel: AtomicBool,
+    pause: AtomicBool,
+}
+
+impl Job {
+    fn part(&self) -> Option<PathBuf> {
+        let t = self.target.lock().ok()?.clone()?;
+        Some(PathBuf::from(format!("{}{PART}", t.display())))
+    }
 }
 
 static JOBS: Mutex<Vec<Arc<Job>>> = Mutex::new(Vec::new());
@@ -53,15 +72,68 @@ fn running() -> Vec<Arc<Job>> {
     jobs().into_iter().filter(|j| j.state.load(Ordering::Relaxed) == RUNNING).collect()
 }
 
-/// Süren indirmeler: (ad, inen, toplam (0 = bilinmiyor), bayt/sn).
-pub fn active() -> Vec<(String, u64, u64, f64)> {
-    running()
+/// Süren ya da duraklatılmış indirmeler.
+fn live() -> Vec<Arc<Job>> {
+    jobs().into_iter().filter(|j| matches!(j.state.load(Ordering::Relaxed), RUNNING | PAUSED)).collect()
+}
+
+fn find(id: u64) -> Option<Arc<Job>> {
+    jobs().into_iter().find(|j| j.id == id)
+}
+
+/// Adada düğmeleriyle görünen indirme satırı.
+#[derive(Clone, Debug)]
+pub struct DlRow {
+    pub id: u64,
+    pub name: String,
+    pub got: u64,
+    pub total: u64,
+    pub speed: f64,
+    pub paused: bool,
+}
+
+impl DlRow {
+    /// "%12 · 420 MB / 3,5 GB · 48 MB/sn" ya da "Duraklatıldı · 420 MB / 3,5 GB".
+    pub fn status(&self) -> String {
+        let mut parts = Vec::new();
+        if self.paused {
+            parts.push(t!("Duraklatıldı", "Paused").to_string());
+        } else if self.total > 0 {
+            parts.push(carlui_core::lang::pct((self.got * 100 / self.total).min(99) as f32));
+        }
+        if self.total > 0 {
+            parts.push(format!("{} / {}", carlui_sys::bytes(self.got as f64), carlui_sys::bytes(self.total as f64)));
+        } else {
+            parts.push(carlui_sys::bytes(self.got as f64));
+        }
+        if !self.paused && self.speed > 1.0 {
+            parts.push(format!("{}{}", carlui_sys::bytes(self.speed), t!("/sn", "/s")));
+        }
+        parts.join(" · ")
+    }
+
+    pub fn frac(&self) -> f32 {
+        if self.total > 0 { (self.got as f64 / self.total as f64).clamp(0.0, 1.0) as f32 } else { 0.0 }
+    }
+}
+
+pub fn rows() -> Vec<DlRow> {
+    live()
         .iter()
-        .map(|j| {
-            let name = j.name.lock().map(|n| n.clone()).unwrap_or_default();
-            (name, j.got.load(Ordering::Relaxed), j.total.load(Ordering::Relaxed), f64::from_bits(j.speed.load(Ordering::Relaxed)))
+        .map(|j| DlRow {
+            id: j.id,
+            name: j.name.lock().map(|n| n.clone()).unwrap_or_default(),
+            got: j.got.load(Ordering::Relaxed),
+            total: j.total.load(Ordering::Relaxed),
+            speed: f64::from_bits(j.speed.load(Ordering::Relaxed)),
+            paused: j.pause.load(Ordering::Relaxed),
         })
         .collect()
+}
+
+/// Süren indirmeler: (ad, inen, toplam (0 = bilinmiyor), bayt/sn). Duraklatılanlar hızsız.
+pub fn active() -> Vec<(String, u64, u64, f64)> {
+    rows().into_iter().map(|r| (r.name, r.got, r.total, if r.paused { 0.0 } else { r.speed })).collect()
 }
 
 /// Uzun dosya adını ortadan kısaltır, uzantıyı korur: "ubuntu-24.04…iso".
@@ -93,6 +165,7 @@ fn eta(secs: u64) -> String {
 pub fn pill(c: &carlui_core::config::DownloadConfig) -> Option<String> {
     // Kendi indirmelerimiz + eklentinin bildirdiği tarayıcı indirmeleri.
     let mut a = active();
+    let all_paused = !a.is_empty() && rows().iter().all(|r| r.paused);
     a.extend(crate::bridge::browser());
     if a.is_empty() {
         // Başka bir programın indirmesi (tahmin; Steam'de toplam da bilinir).
@@ -124,6 +197,10 @@ pub fn pill(c: &carlui_core::config::DownloadConfig) -> Option<String> {
     }
     if speed > 1.0 && known && c.eta {
         parts.push(eta(((total.saturating_sub(got)) as f64 / speed).ceil() as u64));
+    }
+    if all_paused && a.len() == rows().len() {
+        parts.push(t!("duraklatıldı", "paused").into());
+        return Some(format!("⏸ {}", parts.join(" · ")));
     }
     Some(format!("↓ {}", parts.join(" · ")))
 }
@@ -278,37 +355,69 @@ pub fn probe(url: &str, headers: &str) -> (Option<String>, u64) {
     }
 }
 
-/// İptal edilen işin iç hata işareti (kullanıcıya gösterilmez).
+/// İptal edilen / duraklatılan işin iç işareti (kullanıcıya gösterilmez).
 const CANCEL: &str = "cancelled";
+const PAUSE: &str = "paused";
+
+/// `Range` başlığını var olan başlıklara ekler.
+fn with_range(headers: &str, from: u64) -> String {
+    if from == 0 {
+        return headers.to_string();
+    }
+    let sep = if headers.is_empty() { "" } else { "\r\n" };
+    format!("{headers}{sep}Range: bytes={from}-")
+}
 
 fn run(job: &Job) -> std::result::Result<(), String> {
-    let c = request(&job.url, &job.headers)?;
+    let from = job.got.load(Ordering::Relaxed);
+    let c = request(&job.url, &with_range(&job.headers, from))?;
     let req = &c.req;
     unsafe {
-        let total: u64 = header(req, WINHTTP_QUERY_CONTENT_LENGTH).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
+        let status: u32 = header(req, WINHTTP_QUERY_STATUS_CODE).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
+        let resumed = from > 0 && status == 206;
+        if from > 0 && !resumed {
+            info!("sunucu kaldığı yerden vermedi ({status}); baştan iniyor");
+            job.got.store(0, Ordering::Relaxed);
+        }
+        let len: u64 = header(req, WINHTTP_QUERY_CONTENT_LENGTH).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
+        let total = if resumed { if len > 0 { from + len } else { job.total.load(Ordering::Relaxed) } } else { len };
         job.total.store(total, Ordering::Relaxed);
-        if let Some(n) = header(req, WINHTTP_QUERY_CONTENT_DISPOSITION).and_then(|h| name_from_disposition(&h)) {
-            if job.dest.is_none() {
-                if let Ok(mut g) = job.name.lock() {
-                    *g = n;
+        let known = job.target.lock().ok().and_then(|t| t.clone());
+        let dest = match known {
+            Some(p) => p,
+            None => {
+                if let Some(n) = header(req, WINHTTP_QUERY_CONTENT_DISPOSITION).and_then(|h| name_from_disposition(&h)) {
+                    if job.dest.is_none() {
+                        if let Ok(mut g) = job.name.lock() {
+                            *g = n;
+                        }
+                    }
                 }
+                let name = job.name.lock().map(|n| n.clone()).unwrap_or_default();
+                let dest = match &job.dest {
+                    Some(p) => p.clone(),
+                    None => unique(&carlui_core::win::downloads_dir().ok_or(t!("İndirilenler klasörü bulunamadı", "Downloads folder not found"))?, &name),
+                };
+                if let Ok(mut g) = job.name.lock() {
+                    *g = dest.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or(name);
+                }
+                if let Ok(mut t) = job.target.lock() {
+                    *t = Some(dest.clone());
+                }
+                dest
             }
-        }
-        let name = job.name.lock().map(|n| n.clone()).unwrap_or_default();
-        let dest = match &job.dest {
-            Some(p) => p.clone(),
-            None => unique(&carlui_core::win::downloads_dir().ok_or(t!("İndirilenler klasörü bulunamadı", "Downloads folder not found"))?, &name),
         };
-        if let Ok(mut g) = job.name.lock() {
-            *g = dest.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or(name);
-        }
         let part = PathBuf::from(format!("{}{PART}", dest.display()));
-        let mut file = std::fs::File::create(&part).map_err(|e| format!("{}: {e}", t!("dosya açılamadı", "could not open the file")))?;
+        let opened = if resumed { std::fs::OpenOptions::new().append(true).open(&part) } else { std::fs::File::create(&part) };
+        let mut file = opened.map_err(|e| format!("{}: {e}", t!("dosya açılamadı", "could not open the file")))?;
         let mut buf = vec![0u8; 256 * 1024];
-        let (mut mark, mut mark_got) = (Instant::now(), 0u64);
+        let (mut mark, mut mark_got) = (Instant::now(), job.got.load(Ordering::Relaxed));
         let result = loop {
             if job.cancel.load(Ordering::Relaxed) {
                 break Err(CANCEL.to_string());
+            }
+            if job.pause.load(Ordering::Relaxed) {
+                break Err(PAUSE.to_string());
             }
             let mut n = 0u32;
             if let Err(e) = WinHttpReadData(req.0, buf.as_mut_ptr() as _, buf.len() as u32, &mut n) {
@@ -337,6 +446,8 @@ fn run(job: &Job) -> std::result::Result<(), String> {
                 }
                 Ok(())
             }
+            // Duraklatıldı: yarım dosya sürdürmek için kalır.
+            Err(e) if e == PAUSE => Err(e),
             r => {
                 // Yalnızca kendi yarım dosyamız silinir.
                 let _ = std::fs::remove_file(&part);
@@ -354,10 +465,12 @@ impl App {
     pub(crate) fn dl_start_with(&mut self, url: String, headers: String, name: Option<String>, dest: Option<PathBuf>) {
         let name = dest.as_ref().and_then(|p| p.file_name()).map(|s| s.to_string_lossy().to_string()).or(name).unwrap_or_else(|| name_from_url(&url));
         let job = Arc::new(Job {
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
             name: Mutex::new(name),
             url,
             headers,
             dest,
+            target: Mutex::new(None),
             path: Mutex::new(None),
             error: Mutex::new(String::new()),
             got: AtomicU64::new(0),
@@ -365,11 +478,17 @@ impl App {
             speed: AtomicU64::new(0),
             state: AtomicU8::new(RUNNING),
             cancel: AtomicBool::new(false),
+            pause: AtomicBool::new(false),
         });
         info!("indirme başladı: {}", job.url);
         if let Ok(mut v) = JOBS.lock() {
             v.push(job.clone());
         }
+        self.dl_spawn(job);
+    }
+
+    /// İşi ayrı iş parçacığında çalıştırır (ilk başlatma ve sürdürme).
+    fn dl_spawn(&mut self, job: Arc<Job>) {
         let hwnd = self.island.hwnd.0 as isize;
         std::thread::Builder::new()
             .name("download".into())
@@ -378,6 +497,7 @@ impl App {
                 let state = match &r {
                     Ok(()) => DONE,
                     Err(e) if e == CANCEL => CANCELLED,
+                    Err(e) if e == PAUSE => PAUSED,
                     Err(e) => {
                         if let Ok(mut g) = job.error.lock() {
                             *g = e.clone();
@@ -385,6 +505,7 @@ impl App {
                         FAILED
                     }
                 };
+                job.speed.store(0f64.to_bits(), Ordering::Relaxed);
                 job.state.store(state, Ordering::Relaxed);
                 unsafe {
                     let _ = PostMessageW(HWND(hwnd as _), WM_TIMER, WPARAM(TIMER_DL), LPARAM(0));
@@ -397,17 +518,52 @@ impl App {
         self.refresh(true);
     }
 
+    /// Duraklat ya da sürdür (adadaki düğme).
+    pub(crate) fn dl_toggle(&mut self, id: u64) {
+        let Some(j) = find(id) else { return };
+        let paused = j.pause.load(Ordering::Relaxed);
+        match j.state.load(Ordering::Relaxed) {
+            RUNNING if !paused => {
+                info!("indirme duraklatıldı: {}", j.url);
+                j.pause.store(true, Ordering::Relaxed);
+                self.refresh(true);
+            }
+            PAUSED => {
+                info!("indirme sürdürülüyor: {} ({} bayt sonrası)", j.url, j.got.load(Ordering::Relaxed));
+                j.pause.store(false, Ordering::Relaxed);
+                j.state.store(RUNNING, Ordering::Relaxed);
+                self.dl_spawn(j);
+            }
+            // Duraklatma isteği verildi, iş parçacığı henüz bırakmadı: bekle.
+            _ => {}
+        }
+    }
+
+    /// Tek indirmeyi iptal eder; yarım dosya silinir.
+    pub(crate) fn dl_cancel_one(&mut self, id: u64) {
+        let Some(j) = find(id) else { return };
+        j.cancel.store(true, Ordering::Relaxed);
+        if j.state.load(Ordering::Relaxed) == PAUSED {
+            // Çalışan iş parçacığı yok: yarım dosyayı burada sil.
+            if let Some(p) = j.part() {
+                let _ = std::fs::remove_file(p);
+            }
+            j.state.store(CANCELLED, Ordering::Relaxed);
+            self.dl_tick();
+        }
+    }
+
     /// Süren indirmeleri iptal eder (arama: "indirmeyi iptal et").
     pub(crate) fn dl_cancel(&mut self) {
-        for j in running() {
-            j.cancel.store(true, Ordering::Relaxed);
+        for j in live() {
+            self.dl_cancel_one(j.id);
         }
     }
 
     pub(crate) fn dl_tick(&mut self) {
         let finished: Vec<Arc<Job>> = {
             let Ok(mut v) = JOBS.lock() else { return };
-            let (done, keep): (Vec<_>, Vec<_>) = v.drain(..).partition(|j| j.state.load(Ordering::Relaxed) != RUNNING);
+            let (done, keep): (Vec<_>, Vec<_>) = v.drain(..).partition(|j| matches!(j.state.load(Ordering::Relaxed), DONE | FAILED | CANCELLED));
             *v = keep;
             done
         };

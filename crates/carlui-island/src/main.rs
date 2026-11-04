@@ -742,7 +742,7 @@ impl App {
             View::Clock if self.hub_click() => {}
             View::Media if self.hub_click() => {}
             View::Hub => match h {
-                Hit::HubClear | Hit::NoteRow(_) | Hit::NoteDel(_) | Hit::NoteAct(..) | Hit::GroupToggle(_) | Hit::GroupClear(_) => self.hub_hit(h),
+                Hit::HubClear | Hit::NoteRow(_) | Hit::NoteDel(_) | Hit::NoteAct(..) | Hit::GroupToggle(_) | Hit::GroupClear(_) | Hit::DlToggle(_) | Hit::DlCancel(_) => self.hub_hit(h),
                 Hit::Prev => self.command(Cmd::Prev),
                 Hit::Next => self.command(Cmd::Next),
                 Hit::Play => self.command(Cmd::PlayPause),

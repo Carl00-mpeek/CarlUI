@@ -16,6 +16,7 @@ const PAD: f32 = 14.0;
 const TOP_H: f32 = 38.0;
 const ROW_H: f32 = 52.0;
 const SHOT_H: f32 = 80.0;
+const DL_H: f32 = 56.0;
 
 /// Gösterge: (kısa ad, değer, uyarı düzeyi 0 normal / 1 ılık / 2 sıcak).
 pub type Stat = (&'static str, String, u8);
@@ -30,6 +31,8 @@ pub struct HubView<'a> {
     pub dying: &'a [u64],
     /// Daraltılmış uygulama grupları (yalnızca başlık görünür).
     pub collapsed: &'a std::collections::HashSet<String>,
+    /// CarlUI'nin kendi indirmeleri (düğmeleriyle).
+    pub downloads: Vec<crate::dlman::DlRow>,
 }
 
 /// Bir grupta en fazla bu kadar bildirim açık görünür.
@@ -180,6 +183,9 @@ impl Island {
             }
             y = dy + mh;
         }
+        for d in &hv.downloads {
+            y += self.hub_dl_row(gfx, kids, w, y, d)?;
+        }
         let notes = hv.notes;
         if notes.is_empty() {
             return Ok((w, (y + if media_is_last(hv) { 0.0 } else { 2.0 * s }).round().max(30.0 * s)));
@@ -245,6 +251,47 @@ impl Island {
             y += rh;
         }
         Ok((w, (y + 6.0 * s).round()))
+    }
+
+    /// İndirme satırı: ad, durum, ince çubuk; sağda Duraklat/Sürdür ve İptal.
+    fn hub_dl_row(&mut self, gfx: &Gfx, kids: &VisualCollection, w: f32, y: f32, d: &crate::dlman::DlRow) -> Result<f32> {
+        let s = self.s;
+        let rh = (DL_H * s).round();
+        let bs = (28.0 * s).round();
+        let tmax = w - 2.0 * PAD * s - 2.0 * bs - 16.0 * s;
+        let (n, _, nh) = self.label(gfx, &d.name, 12.5, true, tmax, 0.95)?;
+        Self::place(&n, PAD * s, y + 6.0 * s)?;
+        kids.InsertAtTop(&n)?;
+        let (st, _, _) = self.label(gfx, &d.status(), 11.0, false, tmax, 0.6)?;
+        Self::place(&st, PAD * s, y + 7.0 * s + nh)?;
+        kids.InsertAtTop(&st)?;
+        // İnce ilerleme çubuğu (toplam bilinmiyorsa boş iz).
+        let (bw, bh) = (tmax, (3.0 * s).round().max(2.0));
+        let by = (y + rh - 14.0 * s).round();
+        let (track, _) = self.rrect(bw, bh, bh / 2.0, &self.solid(Rgba(255, 255, 255, 0x1F))?)?;
+        track.SetOffset(v3(PAD * s, by))?;
+        kids.InsertAtTop(&track)?;
+        let fw = (bw * d.frac()).round();
+        if fw >= 1.0 {
+            let fill = if d.paused { self.solid(Rgba(255, 255, 255, 0x66))? } else { self.accent_brush()? };
+            let (f, _) = self.rrect(fw, bh, bh / 2.0, &fill)?;
+            f.SetOffset(v3(PAD * s, by))?;
+            kids.InsertAtTop(&f)?;
+        }
+        // Düğmeler: Duraklat (E769) / Sürdür (E768), İptal (E711).
+        let cy = (y + (rh - 6.0 * s - bs) / 2.0).round();
+        let mut bx = w - PAD * s - bs;
+        for (glyph, hit, danger) in [('\u{E711}', Hit::DlCancel(d.id), true), (if d.paused { '\u{E768}' } else { '\u{E769}' }, Hit::DlToggle(d.id), false)] {
+            let bg = if danger { self.solid(Rgba(255, 80, 80, 0x40))? } else { self.solid(Rgba(255, 255, 255, 0x1F))? };
+            let (b, _) = self.rrect(bs, bs, bs / 2.0, &bg)?;
+            b.SetOffset(v3(bx.round(), cy))?;
+            kids.InsertAtTop(&b)?;
+            let g = self.text.glyph(gfx, glyph, (11.0 * s).round(), 0.9)?;
+            kids.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, bx + (bs - g.width) / 2.0, cy + (bs - g.height) / 2.0)?)?;
+            self.hits.push((hit, Self::hub_rect(bx - 2.0 * s, cy - 2.0 * s, bs + 4.0 * s, bs + 4.0 * s)));
+            bx -= bs + 8.0 * s;
+        }
+        Ok(rh)
     }
 
     /// Uygulama grubu başlığı: ad · sayı, daralt oku ve grubu silen X.

@@ -93,6 +93,9 @@ pub enum Hit {
     NoteAct(usize, u8),
     /// Ekrana düşen ekran görüntüsü bildiriminin düğmeleri (0 Aç, 1 Düzenle, 2 Sil).
     BannerAct(u8),
+    /// Genişleyen adadaki indirme satırı: duraklat/sürdür ve iptal (indirme kimliği).
+    DlToggle(u64),
+    DlCancel(u64),
     /// Uygulama grubu başlığı: daralt/genişlet ve o uygulamanın hepsini sil.
     GroupToggle(usize),
     GroupClear(usize),

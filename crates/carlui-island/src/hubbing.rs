@@ -45,7 +45,7 @@ fn level_of(t: f32, warm: f32, hot: f32) -> u8 {
 
 impl Hub {
     pub fn view<'a>(&'a self, media: bool) -> HubView<'a> {
-        HubView { full: self.level >= 2, stats: self.stats.clone(), notes: &self.notes, media, dying: &self.dying, collapsed: &self.collapsed }
+        HubView { full: self.level >= 2, stats: self.stats.clone(), notes: &self.notes, media, dying: &self.dying, collapsed: &self.collapsed, downloads: crate::dlman::rows() }
     }
 
     /// Açık göstergeleri yeniden oku.
@@ -213,6 +213,8 @@ impl App {
                     self.hub_remove(ids);
                 }
             }
+            Hit::DlToggle(id) => self.dl_toggle(id),
+            Hit::DlCancel(id) => self.dl_cancel_one(id),
             Hit::NoteDel(i) => {
                 if let Some(k) = self.hub.index(i) {
                     self.hub_remove(vec![self.hub.notes[k].id]);
@@ -271,6 +273,8 @@ impl App {
                     "act" => Hit::NoteAct(i, n("act") as u8),
                     "group" => Hit::GroupToggle(i),
                     "group-clear" => Hit::GroupClear(i),
+                    "dl-toggle" => Hit::DlToggle(n("i")),
+                    "dl-cancel" => Hit::DlCancel(n("i")),
                     _ => return,
                 };
                 self.hub_hit(h);
