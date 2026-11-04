@@ -26,7 +26,7 @@ use carlui_vault::{
     totp::{self, Totp},
     vault::{Vault, MAX_FILE},
 };
-use std::{path::PathBuf, time::Instant};
+use std::{collections::HashMap, path::PathBuf, time::Instant};
 use windows::Win32::{
     Foundation::HWND,
     UI::WindowsAndMessaging::{KillTimer, SetTimer},
@@ -86,6 +86,8 @@ pub enum Act {
     OpenSettings,
     /// Kartın bir parçasını kopyala (ay, yıl, boşluksuz numara …).
     CopyPart(Part),
+    /// Listedeki kaydın o anki 2FA kodunu kopyala.
+    CopyCode(String),
     /// Başka bir uygulamanın dışa aktarım dosyasını seç ve önizle.
     Import,
     ImportConfirm,
@@ -236,6 +238,9 @@ pub struct App {
     pub import_error: Option<String>,
     /// Sayfa içi düğmeyle açılış: kilit açılınca odak bu tarayıcı penceresine döner.
     back: Option<(isize, Instant)>,
+    /// Listede gösterilen 2FA kodları: kayıt kimliği → (alan sırası, anahtar).
+    /// Liste açılınca kurulur, kilitlenince silinir (anahtarlar Zeroizing).
+    pub codes: HashMap<String, (usize, Totp)>,
 }
 
 /// Bekleyen 2FA aktarımı bu kadar sonra unutulur.
@@ -295,6 +300,7 @@ impl App {
             import: None,
             batch: None,
             import_error: None,
+            codes: HashMap::new(),
             back: None,
         }
     }
@@ -320,6 +326,9 @@ impl App {
             (None, Some((uri, _))) => View::Edit(Box::new(Editor::import(&uri))),
             (None, None) => v,
         };
+        if matches!(self.view, View::List) {
+            self.refresh_codes();
+        }
         self.scroll = 0.0;
         self.error = None;
         self.import_error = None;
@@ -346,6 +355,7 @@ impl App {
         }
         self.clear_forms();
         self.search.clear();
+        self.codes.clear();
         self.tokens.clear();
         self.import = None;
         self.back = None;
@@ -613,9 +623,39 @@ impl App {
         self.error = Some(e.to_string());
     }
 
-    /// Düzenleyicide 2FA alanı var mı (kod ve geri sayım her saniye yenilenir).
+    /// Ekranda 2FA kodu var mı (kod ve geri sayım her saniye yenilenir):
+    /// düzenleyicide 2FA alanı ya da listede 2FA'lı kayıt.
     pub fn ticking(&self) -> bool {
-        matches!(&self.view, View::Edit(e) if e.fields.iter().any(|f| f.kind == FieldKind::Totp))
+        match &self.view {
+            View::Edit(e) => e.fields.iter().any(|f| f.kind == FieldKind::Totp),
+            View::List => !self.codes.is_empty(),
+            _ => false,
+        }
+    }
+
+    /// Listedeki 2FA kodları için anahtarları bir kez çözer (her karede
+    /// çözmemek için). Kayıt başına ilk geçerli 2FA alanı alınır.
+    fn refresh_codes(&mut self) {
+        self.codes.clear();
+        let Some(v) = self.vault.as_ref() else { return };
+        for it in v.items() {
+            let Ok(body) = v.decrypt(&it.id) else { continue };
+            let found = body.fields.iter().enumerate().filter(|(_, f)| f.kind == FieldKind::Totp).find_map(|(i, f)| Totp::parse(&f.value).ok().map(|t| (i, t)));
+            if let Some(c) = found {
+                self.codes.insert(it.id.clone(), c);
+            }
+        }
+    }
+
+    /// Listedeki kaydın o anki kodu (düzenleyicideki kopyala ile aynı yol:
+    /// belirteç ya da doğrudan pano).
+    fn copy_code(&mut self, id: &str) {
+        let Some((slot, t)) = self.codes.get(id) else { return };
+        let (slot, code) = (*slot, t.code(now()));
+        let name = self.vault.as_ref().and_then(|v| v.items().iter().find(|i| i.id == id)).map(|i| i.meta.name.clone()).unwrap_or_default();
+        let field = t!("2FA kodu", "2FA code");
+        let label = if name.trim().is_empty() { field.to_string() } else { format!("{} · {field}", name.trim()) };
+        self.give(id, slot, &label, &code);
     }
 
     pub fn wait_left(&self) -> Option<u64> {
@@ -813,6 +853,7 @@ impl App {
                 }
             }
             Act::CopyPart(p) => self.copy_part(p),
+            Act::CopyCode(id) => self.copy_code(&id),
             Act::Import => {
                 self.import_error = None;
                 self.pick_import();

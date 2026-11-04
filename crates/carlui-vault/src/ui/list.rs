@@ -1,15 +1,20 @@
 //! Açık kasa: solda kategoriler (kayıt sayılarıyla), sağda kayıt listesi.
-//! Listede yalnızca ad, kategori ve tarih görünür; alanlar çözülmez. Bir
-//! kaydı açmanın tek yolu "Düzenle" düğmesidir.
+//! Listede ad, kategori ve tarih görünür; 2FA'lı kayıtta ayrıca o anki kod
+//! (tıklayınca kopyalanır). Başka alan gösterilmez; bir kaydı açmanın tek
+//! yolu "Düzenle" düğmesidir.
 
 use super::{clipped, date, input, SIDEBAR};
 use crate::app::{Act, App, Focus, View};
 use carlui_core::t;
 use carlui_ui::{
-    paint::{Align, R, TEXT},
+    paint::{mix, Align, ORANGE, R, TEXT},
     tween,
 };
-use carlui_vault::{entry::Category, vault::Item};
+use carlui_vault::{
+    entry::{now, Category},
+    totp::{grouped, Totp},
+    vault::Item,
+};
 
 use super::P;
 
@@ -46,6 +51,29 @@ pub fn sidebar(app: &App, p: &mut P, h: f32) {
     }
     side_row(p, R::new(10.0, h - 96.0, SIDEBAR - 20.0, 38.0), '\u{E83D}', t!("Güvenlik", "Security"), None, matches!(app.view, View::Security), Act::Security);
     side_row(p, R::new(10.0, h - 52.0, SIDEBAR - 20.0, 38.0), '\u{E72E}', t!("Kilitle  (Ctrl+L)", "Lock  (Ctrl+L)"), None, false, Act::Lock);
+}
+
+const CODE_W: f32 = 138.0;
+
+/// "Düzenle"nin solundaki 2FA kodu: o anki kod, kalan saniye ve altta süre
+/// çubuğu. Tıklanınca kod kopyalanır (anahtar değil).
+fn code_chip(p: &mut P, t: &Totp, r: R, act: Act) {
+    let at = now();
+    let left = t.remaining(at);
+    let hv = tween::to(tween::key(("vcode", r.y as i32)), if p.hover(r) { 1.0 } else { 0.0 }, 18.0);
+    p.round(r, 6.0, 0xFFFFFF, 0.06 + 0.06 * hv);
+    p.outline(r, 6.0, if hv > 0.0 { mix(0xFFFFFF, p.accent, hv) } else { 0xFFFFFF }, 0.08 + 0.25 * hv);
+    p.text(&grouped(&t.code(at)), R::new(r.x + 12.0, r.y, r.w - 52.0, r.h - 2.0), 15.5, true, p.accent, 1.0, Align::Left);
+    if hv > 0.5 {
+        p.glyph('\u{E8C8}', R::new(r.right() - 34.0, r.y, 24.0, r.h - 2.0), 13.0, TEXT, 0.8);
+    } else {
+        p.text(&t!(format!("{left} sn"), format!("{left} s")), R::new(r.right() - 46.0, r.y, 36.0, r.h - 2.0), 11.5, false, TEXT, 0.55, Align::Right);
+    }
+    let bar = R::new(r.x + 10.0, r.bottom() - 6.0, r.w - 20.0, 2.0);
+    p.round(bar, 1.0, 0xFFFFFF, 0.08);
+    let col = if left <= 5 { ORANGE } else { p.accent };
+    p.round(R::new(bar.x, bar.y, bar.w * left as f32 / t.period as f32, bar.h), 1.0, col, 0.9);
+    p.hit(r, act);
 }
 
 /// Kategori + arama süzgecinden geçen kayıtlar.
@@ -97,8 +125,13 @@ pub fn paint(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
             let c = it.meta.category;
             p.round(R::new(r.x + 12.0, r.y + 11.0, 36.0, 36.0), 9.0, p.accent, 0.14);
             p.glyph(c.glyph(), R::new(r.x + 12.0, r.y + 11.0, 36.0, 36.0), 15.0, p.accent, 1.0);
-            p.text(&it.meta.name, R::new(r.x + 62.0, r.y + 9.0, r.w - 190.0, 22.0), 14.0, true, TEXT, 0.95, Align::Left);
-            p.text(&format!("{} · {}", c.title(), date(it.meta.updated)), R::new(r.x + 62.0, r.y + 31.0, r.w - 190.0, 18.0), 12.0, false, TEXT, 0.5, Align::Left);
+            let code = app.codes.get(&it.id).map(|(_, t)| t);
+            let tw = r.w - 190.0 - if code.is_some() { CODE_W + 8.0 } else { 0.0 };
+            p.text(&it.meta.name, R::new(r.x + 62.0, r.y + 9.0, tw, 22.0), 14.0, true, TEXT, 0.95, Align::Left);
+            p.text(&format!("{} · {}", c.title(), date(it.meta.updated)), R::new(r.x + 62.0, r.y + 31.0, tw, 18.0), 12.0, false, TEXT, 0.5, Align::Left);
+            if let Some(t) = code {
+                code_chip(p, t, R::new(r.right() - 116.0 - 8.0 - CODE_W, r.y + 12.0, CODE_W, 34.0), Act::CopyCode(it.id.clone()));
+            }
             p.button(R::new(r.right() - 116.0, r.y + 12.0, 104.0, 34.0), Some('\u{E70F}'), t!("Düzenle", "Edit"), Act::Edit(it.id.clone()), true, false);
             y += 64.0;
         }
