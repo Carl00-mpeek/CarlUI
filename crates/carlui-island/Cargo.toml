@@ -15,5 +15,10 @@ carlui-core.workspace = true
 carlui-launcher = { path = "../carlui-launcher" }
 carlui-sys = { path = "../carlui-sys" }
 carlui-ui.workspace = true
+rqrr = { version = "0.11.0", default-features = false }
 serde_json.workspace = true
 windows.workspace = true
+zeroize = "1"
+
+[dev-dependencies]
+qrcode = { version = "0.14.1", default-features = false }

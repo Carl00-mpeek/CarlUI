@@ -21,7 +21,7 @@ use carlui_vault::{
     crypto::{Error, KdfParams},
     entry::{now, Attachment, Body, Category, Field, FieldKind, Meta},
     token::{TokenError, Tokens},
-    totp::Totp,
+    totp::{self, Totp},
     vault::{Vault, MAX_FILE},
 };
 use std::{path::PathBuf, time::Instant};
@@ -121,6 +121,27 @@ impl Editor {
         }
     }
 
+    /// Ekran görüntüsündeki QR'dan gelen 2FA: ad ve hesap otpauth etiketinden,
+    /// anahtar alanına adresin tamamı (hane/süre/algoritma korunsun).
+    fn import(uri: &str) -> Self {
+        let mut e = Self::new(Category::TwoFactor);
+        let (issuer, account) = totp::names(uri);
+        e.name = TextBox::new(if issuer.is_empty() { &account } else { &issuer }, false);
+        let mut account = Some(account);
+        for f in e.fields.iter_mut() {
+            match f.kind {
+                FieldKind::Text => {
+                    if let Some(a) = account.take() {
+                        f.value = TextBox::new(&a, false);
+                    }
+                }
+                FieldKind::Totp => f.value = TextBox::new(uri, false),
+                _ => {}
+            }
+        }
+        e
+    }
+
     fn untouched(&self) -> bool {
         self.fields.iter().all(|f| f.value.text.is_empty())
     }
@@ -161,7 +182,13 @@ pub struct App {
     pub confirm_remove_recovery: bool,
     /// Panoya verilen tek kullanımlık belirteçler (Aşama 2).
     pub tokens: Tokens,
+    /// Ekran görüntüsü aracından gelen, henüz açılmamış 2FA (otpauth adresi).
+    /// Kasa açılınca ya da açık kayıt kapanınca düzenleyiciye konur.
+    import: Option<(Zeroizing<String>, Instant)>,
 }
+
+/// Bekleyen 2FA aktarımı bu kadar sonra unutulur.
+const IMPORT_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 
 fn now_ms() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
@@ -212,6 +239,7 @@ impl App {
             retry_at: None,
             confirm_remove_recovery: false,
             tokens: Tokens::default(),
+            import: None,
         }
     }
 
@@ -226,7 +254,12 @@ impl App {
     }
 
     fn go(&mut self, v: View) {
-        self.view = v;
+        // Listeye dönerken bekleyen 2FA aktarımı varsa onun kaydı açılır.
+        let pending = matches!(v, View::List).then(|| self.import.take()).flatten().filter(|(_, at)| at.elapsed() < IMPORT_TTL);
+        self.view = match pending {
+            Some((uri, _)) => View::Edit(Box::new(Editor::import(&uri))),
+            None => v,
+        };
         self.scroll = 0.0;
         self.error = None;
         self.confirm_remove_recovery = false;
@@ -253,6 +286,7 @@ impl App {
         self.clear_forms();
         self.search.clear();
         self.tokens.clear();
+        self.import = None;
         self.clear_clipboard();
         self.go(View::Locked);
         info!("kasa kilitlendi ({why})");
@@ -327,6 +361,9 @@ impl App {
 
     /// Adadan gelen istek: pano belirteci ya da tarayıcı eklentisi.
     pub fn link(&mut self, req: Request, client_pid: u32) -> Reply {
+        if let Request::ImportTotp { uri } = req {
+            return self.import_totp(Zeroizing::new(uri));
+        }
         if !self.is_open() {
             self.tokens.clear();
             return Reply { locked: true, ..Reply::no(t!("Carl Vault kilitli.", "Carl Vault is locked.")) };
@@ -335,7 +372,35 @@ impl App {
             Request::Type { token, hwnd } => self.type_token(&token, hwnd, client_pid),
             Request::Find { url } => self.find_logins(&url),
             Request::Fill { url, id } => self.fill_login(&url, &id),
+            Request::ImportTotp { .. } => unreachable!(),
         }
+    }
+
+    /// Ekran görüntüsündeki 2FA QR'ı: kasa kilitliyken de kabul edilir, kayıt
+    /// açılınca düzenleyicide hazır durur. Hiçbir şey kendiliğinden kaydedilmez.
+    fn import_totp(&mut self, uri: Zeroizing<String>) -> Reply {
+        if let Err(e) = Totp::parse(&uri) {
+            return Reply::no(e.to_string());
+        }
+        self.import = Some((uri, Instant::now()));
+        unsafe {
+            use windows::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, ShowWindow, SW_RESTORE};
+            let _ = ShowWindow(self.hwnd, SW_RESTORE);
+            let _ = SetForegroundWindow(self.hwnd);
+        }
+        info!("kasa: ekran görüntüsünden 2FA aktarımı geldi");
+        let message = match &self.view {
+            View::List => {
+                self.go(View::List);
+                t!("Carl Vault'ta yeni 2FA kaydı açıldı; Kaydet'e bas.", "A new 2FA item is open in Carl Vault; press Save.")
+            }
+            View::Edit(_) | View::Security => {
+                self.toast(t!("Açık sayfayı kapatınca 2FA kaydı açılacak.", "The 2FA item opens when you close this page."));
+                t!("Carl Vault'ta açık sayfa kapanınca 2FA kaydı açılacak.", "The 2FA item opens in Carl Vault once the open page is closed.")
+            }
+            _ => t!("Carl Vault'u açınca 2FA kaydı hazır olacak.", "The 2FA item will be ready once you unlock Carl Vault."),
+        };
+        Reply { ok: true, message: message.into(), ..Default::default() }
     }
 
     /// Pano belirteci: hedefi doğrula, belirteci tüket, değeri yaz.

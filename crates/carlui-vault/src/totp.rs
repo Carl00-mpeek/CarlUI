@@ -155,6 +155,25 @@ impl Totp {
     }
 }
 
+/// otpauth adresinden (sağlayıcı, hesap): `otpauth://totp/GitHub:carl?issuer=GitHub`
+/// → ("GitHub", "carl"). Düz anahtarda ikisi de boş.
+pub fn names(value: &str) -> (String, String) {
+    let v = value.trim();
+    let Some(rest) = v.get(..15).filter(|p| p.eq_ignore_ascii_case("otpauth://totp/")).map(|_| &v[15..]) else { return Default::default() };
+    let (label, query) = rest.split_once('?').unwrap_or((rest, ""));
+    let label = unescape(label);
+    let (mut issuer, account) = match label.split_once(':') {
+        Some((i, a)) => (i.trim().to_string(), a.trim().to_string()),
+        None => (String::new(), label.trim().to_string()),
+    };
+    for (k, val) in query.split('&').filter_map(|p| p.split_once('=')) {
+        if k.eq_ignore_ascii_case("issuer") && !val.is_empty() {
+            issuer = unescape(val).trim().to_string();
+        }
+    }
+    (issuer, account)
+}
+
 /// Gösterim için ortadan böler: "123456" → "123 456".
 pub fn grouped(code: &str) -> String {
     let mid = code.len().div_ceil(2);
@@ -217,6 +236,14 @@ mod tests {
         assert_eq!((a.digits, a.period, a.algo), (6, 30, Algo::Sha1));
         assert_eq!(a.remaining(1_700_000_000), 10);
         assert_eq!(grouped("123456"), "123 456");
+    }
+
+    #[test]
+    fn names_from_uri() {
+        assert_eq!(names("otpauth://totp/GitHub:carl%40ornek.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub"), ("GitHub".into(), "carl@ornek.com".into()));
+        assert_eq!(names("otpauth://totp/Eski:ad?secret=X&issuer=Yeni%20Ad"), ("Yeni Ad".into(), "ad".into()));
+        assert_eq!(names("otpauth://totp/yalniz-hesap?secret=X"), (String::new(), "yalniz-hesap".into()));
+        assert_eq!(names("JBSWY3DPEHPK3PXP"), (String::new(), String::new()));
     }
 
     #[test]

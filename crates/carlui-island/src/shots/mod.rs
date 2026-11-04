@@ -9,14 +9,18 @@
 //!   doğrudan alınıp panoya kopyalanır; bildirimdeki "Düzenle" ile alan kırpılır.
 //! - Oyun öndeyse düzenleyici odak almaz: tuşlar ve tıklamalar kancadan
 //!   okunup oyuna gitmeden yutulur, böylece oyun simge durumuna düşmez.
+//! - Seçimdeki QR kodları okunup türüne ayrılır (bkz. `qr`); 2FA QR'ı tek
+//!   düğmeyle Carl Vault'a aktarılır.
 //! - Bitince adaya "Aç / Düzenle / Sil" düğmeli bir bildirim düşer. Sil
 //!   dosyayı Geri Dönüşüm Kutusu'na atar, panodaki kaydı da kaldırır.
 
 mod capture;
 mod overlay;
+mod qr;
 
 use crate::*;
 use overlay::{Out, Overlay};
+use zeroize::{Zeroize, Zeroizing};
 use std::{
     path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicU32},
@@ -471,6 +475,14 @@ impl App {
             self.shot_close();
             return;
         }
+        if let Out::Qr(i, act) = out {
+            let q = o.qr.get(i).map(|q| (q.kind, q.text.clone(), q.copy_text(), q.title()));
+            self.shot_close();
+            if let Some(q) = q {
+                self.qr_act(act, q);
+            }
+            return;
+        }
         let Some((png, w, h)) = o.render_png() else {
             self.shot_close();
             return;
@@ -478,6 +490,72 @@ impl App {
         let editing = o.editing.clone();
         self.shot_close();
         self.shot_store(png, w, h, out, editing);
+    }
+
+    /// QR düğmesi: (tür, okunan metin, kopyalanacak metin, başlık).
+    fn qr_act(&mut self, act: qr::Act, (kind, text, copy, title): (qr::Kind, Zeroizing<String>, Zeroizing<String>, String)) {
+        let note = |app: &mut Self, title: String, body: String| app.push_note(Note { app: "QR".into(), title, body, ..Default::default() });
+        match act {
+            qr::Act::Vault if kind == qr::Kind::Totp => self.qr_to_vault(text),
+            qr::Act::Open if kind == qr::Kind::Url => unsafe {
+                info!("QR bağlantısı açıldı: {title}");
+                ShellExecuteW(None, w!("open"), &HSTRING::from(text.trim()), None, None, SW_SHOWNORMAL);
+            },
+            qr::Act::Copy => {
+                let ok = carlui_clip::write::set(self.island.hwnd, carlui_clip::write::Data::Text(&copy)).is_some();
+                let head = if ok { t!("QR panoya kopyalandı", "QR copied to clipboard") } else { t!("Panoya konamadı", "Couldn't copy") };
+                note(self, head.into(), title);
+            }
+            _ => {}
+        }
+    }
+
+    /// 2FA QR'ını Carl Vault'a verir. Anahtar yalnızca kasanın doğrulanmış
+    /// yerel borusuna gider (panoya ya da diske yazılmaz). Kasa kapalıysa
+    /// açılır ve hazır olunca istek yinelenir.
+    fn qr_to_vault(&mut self, uri: Zeroizing<String>) {
+        use carlui_core::vaultlink::{ask, Request};
+        let raw = self.island.hwnd.0 as isize;
+        let notes = self.notes_in.clone();
+        let _ = std::thread::Builder::new().name("qr-vault".into()).spawn(move || {
+            let mut req = Request::ImportTotp { uri: uri.to_string() };
+            drop(uri);
+            unsafe {
+                // Kasa penceresi öne gelebilsin (odak şu an bizde).
+                let _ = AllowSetForegroundWindow(ASFW_ANY);
+            }
+            let mut reply = ask(&req);
+            if reply.is_err() {
+                let exe = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("carlui-vault.exe")));
+                if exe.is_some_and(|e| std::process::Command::new(e).spawn().is_ok()) {
+                    for _ in 0..30 {
+                        std::thread::sleep(Duration::from_millis(250));
+                        unsafe {
+                            let _ = AllowSetForegroundWindow(ASFW_ANY);
+                        }
+                        reply = ask(&req);
+                        if reply.is_ok() {
+                            break;
+                        }
+                    }
+                }
+            }
+            if let Request::ImportTotp { uri } = &mut req {
+                uri.zeroize();
+            }
+            let (ok, msg) = match reply {
+                Ok(r) => (r.ok, r.message),
+                Err(m) => (false, m),
+            };
+            info!("QR: Carl Vault aktarımı {}: {msg}", if ok { "tamam" } else { "olmadı" });
+            let (title, body) = if ok { (t!("2FA Carl Vault'a aktarıldı", "2FA sent to Carl Vault").to_string(), msg) } else { (t!("Carl Vault'a aktarılamadı", "Couldn't send to Carl Vault").to_string(), msg) };
+            if let Ok(mut q) = notes.lock() {
+                q.push_back(Note { app: "Carl Vault".into(), title, body, ..Default::default() });
+            }
+            unsafe {
+                let _ = PostMessageW(HWND(raw as _), WM_APP_NOTE, WPARAM(0), LPARAM(0));
+            }
+        });
     }
 
     /// PNG'yi dosyaya (ve Kopyala'da panoya) yazar, adaya bildirim düşer.

@@ -19,8 +19,12 @@
 //! Aşama 3, 2FA kodu (`totp`): `FieldKind::Totp` alanındaki base32 anahtar ya
 //! da otpauth adresinden RFC 6238 kodu; yalnızca kayıt açıkken üretilir.
 //!
-//! Sonraki aşamalar (henüz yazılmadı):
-//! - Aşama 4, ekran görüntüsü aracında QR algılama → 2FA kaydı olarak aktarım.
+//! Aşama 4, QR (`carlui-island` `shots/qr.rs`): ekran görüntüsü seçimindeki QR
+//! türüne ayrılır; 2FA ise "Carl Vault" düğmesi otpauth adresini yerel boruyla
+//! (`Request::ImportTotp`) yollar, kasa doldurulmuş yeni kayıt açar (kilitliyse
+//! açılınca). Kayıt kendiliğinden kaydedilmez.
+//!
+//! Sonraki aşama (henüz yazılmadı):
 //! - Aşama 5, güvenlik testleri (bellek dökümü, dosya kurcalama, hız sınırı).
 
 pub mod autofill;

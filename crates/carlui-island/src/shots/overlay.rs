@@ -8,6 +8,7 @@
 //! almaz) klavye/fare kancasından. Böylece oyun arka plana düşmez.
 
 use super::capture::Frame;
+use super::qr::{self, Qr};
 use std::path::PathBuf;
 use windows::{
     core::*,
@@ -41,6 +42,8 @@ pub enum Btn {
     Copy,
     Save,
     Close,
+    /// Bulunan QR kodunun düğmesi: (sıra, eylem).
+    Qr(usize, qr::Act),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -49,6 +52,7 @@ pub enum Out {
     Cancel,
     Copy,
     Save,
+    Qr(usize, qr::Act),
 }
 
 const COLORS: [(u8, u8, u8); 4] = [(255, 59, 48), (255, 204, 0), (10, 132, 255), (255, 255, 255)];
@@ -85,6 +89,8 @@ pub struct Overlay {
     rt: Option<ID2D1HwndRenderTarget>,
     bmp: Option<ID2D1Bitmap>,
     round: Option<ID2D1StrokeStyle>,
+    /// Seçimde bulunan QR kodları (seçim bitince taranır).
+    pub qr: Vec<Qr>,
 }
 
 fn rect(l: f32, t: f32, r: f32, b: f32) -> D2D_RECT_F {
@@ -137,14 +143,28 @@ impl Overlay {
             rt: None,
             bmp: None,
             round,
+            qr: Vec::new(),
         };
         o.layout();
         if o.editing.is_some() {
             // Düzenleme: resmin tamamı seçili, kalemle başla.
             o.sel = Some((0.0, 0.0, o.frame.w as f32, o.frame.h as f32));
             o.tool = Tool::Pen;
+            o.scan_qr();
         }
         Ok(o)
+    }
+
+    /// Seçili alandaki QR kodlarını bul (bkz. `qr`).
+    fn scan_qr(&mut self) {
+        self.qr = match self.sel_norm() {
+            Some((a, b, c, d)) => qr::scan(&self.frame.px, self.frame.w, self.frame.h, (a as u32, b as u32, c.ceil() as u32, d.ceil() as u32)),
+            None => Vec::new(),
+        };
+        if !self.qr.is_empty() {
+            let kinds: Vec<_> = self.qr.iter().map(|q| format!("{:?}", q.kind)).collect();
+            carlui_core::info!("ekran görüntüsü: QR bulundu ({})", kinds.join(", "));
+        }
     }
 
     fn win_size(&self) -> (f32, f32) {
@@ -229,6 +249,7 @@ impl Overlay {
                     self.tool = Tool::Select;
                     self.sel = Some((ix, iy, ix, iy));
                     self.drag = Some((ix, iy));
+                    self.qr.clear();
                 }
             }
         }
@@ -269,6 +290,7 @@ impl Overlay {
                     self.sel = Some((m.left, m.top, m.right, m.bottom));
                 }
             }
+            self.scan_qr();
             self.redraw();
         }
     }
@@ -355,6 +377,10 @@ impl Overlay {
                 return Out::Save;
             }
             Btn::Close => return Out::Cancel,
+            Btn::Qr(i, a) => {
+                self.finish_typing();
+                return Out::Qr(i, a);
+            }
         }
         self.redraw();
         Out::None
@@ -622,8 +648,11 @@ impl Overlay {
             self.buttons.push((*btn, br));
             x += bs + gap;
         }
+        if !self.qr.is_empty() {
+            self.qr_pills(rt, bar, m)?;
+        }
         // Üstüne gelinen düğmenin adı.
-        if let Some((b, r)) = self.hover.and_then(|h| self.buttons.iter().find(|x| x.0 == h)).copied() {
+        if let Some((b, r)) = self.hover.and_then(|h| self.buttons.iter().find(|x| x.0 == h && !matches!(x.0, Btn::Qr(..)))).copied() {
             let name = match b {
                 Btn::Tool(Tool::Pen) => t!("Kalem (P)", "Pen (P)"),
                 Btn::Tool(Tool::Text) => t!("Yazı (T)", "Text (T)"),
@@ -634,9 +663,76 @@ impl Overlay {
                 Btn::Copy => t!("Kopyala (Enter)", "Copy (Enter)"),
                 Btn::Save => if self.editing.is_some() { t!("Kaydet (Ctrl+S)", "Save (Ctrl+S)") } else { t!("Masaüstüne kaydet (Ctrl+S)", "Save to desktop (Ctrl+S)") },
                 Btn::Close => t!("Kapat (Esc)", "Close (Esc)"),
+                Btn::Qr(..) => "",
             };
             let above = r.top - 22.0 * s;
             self.label(rt, name, (r.left + r.right) / 2.0, if above > 10.0 { above } else { r.bottom + 22.0 * s }, false)?;
+        }
+        Ok(())
+    }
+
+    /// Bulunan QR kodları: araç çubuğunun altında (yer yoksa üstünde) birer
+    /// hap; türü ve önizlemesi, yanında türe göre düğmeler (bkz. `qr::Qr::actions`).
+    unsafe fn qr_pills(&mut self, rt: &ID2D1RenderTarget, bar: D2D_RECT_F, m: D2D_RECT_F) -> Result<()> {
+        let s = self.s;
+        let (ph, size, gap) = (40.0 * s, 13.0 * s, 6.0 * s);
+        let items: Vec<(String, Vec<(qr::Act, &str)>)> = self.qr.iter().take(3).map(|q| (q.title(), q.actions())).collect();
+        let need = items.len() as f32 * (ph + gap);
+        let below = bar.bottom + 8.0 * s + need <= m.bottom - 8.0 * s;
+        let mut y = if below { bar.bottom + 8.0 * s } else { bar.top - 8.0 * s - ph };
+        let fmt = self.dw.CreateTextFormat(w!("Segoe UI"), None, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr"))?;
+        fmt.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
+        fmt.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)?;
+        let centered = self.dw.CreateTextFormat(w!("Segoe UI"), None, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr"))?;
+        centered.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
+        centered.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
+        let icons = self
+            .dw
+            .CreateTextFormat(w!("Segoe Fluent Icons"), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 16.0 * s, w!("tr-tr"))
+            .or_else(|_| self.dw.CreateTextFormat(w!("Segoe MDL2 Assets"), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 16.0 * s, w!("tr-tr")))?;
+        icons.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
+        icons.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
+        let bg = rt.CreateSolidColorBrush(&D2D1_COLOR_F { r: 0.11, g: 0.11, b: 0.13, a: 0.94 }, None)?;
+        let edge = rt.CreateSolidColorBrush(&D2D1_COLOR_F { r: 1.0, g: 1.0, b: 1.0, a: 0.12 }, None)?;
+        let fg = rt.CreateSolidColorBrush(&D2D1_COLOR_F { r: 1.0, g: 1.0, b: 1.0, a: 0.92 }, None)?;
+        let btn = rt.CreateSolidColorBrush(&D2D1_COLOR_F { r: 1.0, g: 1.0, b: 1.0, a: 0.12 }, None)?;
+        let hov = rt.CreateSolidColorBrush(&D2D1_COLOR_F { r: 1.0, g: 1.0, b: 1.0, a: 0.22 }, None)?;
+        // Carl Vault düğmesi kasanın mor vurgusuyla öne çıksın.
+        let vault = rt.CreateSolidColorBrush(&col((176, 108, 230), 0.9), None)?;
+        let vault_hov = rt.CreateSolidColorBrush(&col((196, 132, 245), 1.0), None)?;
+        for (i, (title, acts)) in items.iter().enumerate() {
+            let (tw, _) = self.text_box(0.0, 0.0, title, size);
+            let tw = tw.min(420.0 * s);
+            let widths: Vec<f32> = acts.iter().map(|(_, l)| self.text_box(0.0, 0.0, l, size).0 + 28.0 * s).collect();
+            let total = 12.0 * s + 22.0 * s + 8.0 * s + tw + 14.0 * s + widths.iter().map(|w| w + gap).sum::<f32>();
+            let x = ((bar.left + bar.right) / 2.0 - total / 2.0).clamp(m.left + 8.0 * s, (m.right - total - 8.0 * s).max(m.left + 8.0 * s));
+            let pill = rect(x, y, x + total, y + ph);
+            let rr = D2D1_ROUNDED_RECT { rect: pill, radiusX: ph / 2.0, radiusY: ph / 2.0 };
+            rt.FillRoundedRectangle(&rr, &bg);
+            rt.DrawRoundedRectangle(&rr, &edge, 1.0, None);
+            let g: Vec<u16> = '\u{ED14}'.to_string().encode_utf16().collect();
+            rt.DrawText(&g, &icons, &rect(x + 12.0 * s, y, x + 34.0 * s, y + ph), &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+            let tx = x + 42.0 * s;
+            rt.PushAxisAlignedClip(&rect(tx, y, tx + tw, y + ph), D2D1_ANTIALIAS_MODE_ALIASED);
+            rt.DrawText(&wide(title), &fmt, &rect(tx, y, tx + tw + 200.0, y + ph), &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+            rt.PopAxisAlignedClip();
+            let mut bx = tx + tw + 14.0 * s;
+            for ((act, label), w) in acts.iter().zip(widths) {
+                let br = rect(bx, y + 6.0 * s, bx + w, y + ph - 6.0 * s);
+                let hover = self.hover == Some(Btn::Qr(i, *act));
+                let fill = match (*act == qr::Act::Vault, hover) {
+                    (true, true) => &vault_hov,
+                    (true, false) => &vault,
+                    (false, true) => &hov,
+                    (false, false) => &btn,
+                };
+                let r = (br.bottom - br.top) / 2.0;
+                rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: br, radiusX: r, radiusY: r }, fill);
+                rt.DrawText(&wide(label), &centered, &br, &fg, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                self.buttons.push((Btn::Qr(i, *act), br));
+                bx += w + gap;
+            }
+            y += if below { ph + gap } else { -(ph + gap) };
         }
         Ok(())
     }
