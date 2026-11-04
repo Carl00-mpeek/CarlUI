@@ -79,7 +79,7 @@ fn run(dir: &Path, purge: bool, dry: bool, rep: &Reporter) -> Outcome {
     rep.step(t!("Kısayollar ve kayıtlar kaldırılıyor", "Removing shortcuts and registry entries"), 0.55);
     if let Some(m) = shell::menu_dir() {
         // Kurulum hangi dilde yapıldıysa o adlar; ikisi de denenir.
-        for n in ["CarlUI.lnk", "CarlUI Ayarları.lnk", "CarlUI'yi kaldır.lnk", "CarlUI Settings.lnk", "Uninstall CarlUI.lnk"] {
+        for n in ["CarlUI.lnk", "CarlUI Ayarları.lnk", "CarlUI'yi kaldır.lnk", "CarlUI Settings.lnk", "Uninstall CarlUI.lnk", "Carl Vault.lnk"] {
             let _ = std::fs::remove_file(m.join(n));
         }
         let _ = std::fs::remove_dir(&m);

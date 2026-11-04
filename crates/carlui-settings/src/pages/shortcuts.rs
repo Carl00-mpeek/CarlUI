@@ -22,10 +22,11 @@ pub enum Key {
     Screenshot,
     Converter,
     AppNumbers,
+    Vault,
 }
 
 impl Key {
-    const COMBOS: [Key; 3] = [Key::Search, Key::Clipboard, Key::Screenshot];
+    const COMBOS: [Key; 4] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -34,6 +35,7 @@ impl Key {
             Key::Screenshot => t!("Ekran görüntüsü", "Screenshot"),
             Key::Converter => t!("Dönüştürücü", "Converter"),
             Key::AppNumbers => t!("Dock uygulamaları", "Dock apps"),
+            Key::Vault => "Carl Vault",
         }
     }
 
@@ -44,6 +46,7 @@ impl Key {
             Key::Screenshot => t!("Ekranın bir bölgesini seçip yakalar.", "Select and capture an area of the screen."),
             Key::Converter => t!("Seçili dosyalar için; tuşlar birlikte basılıp bırakılır.", "For selected files; press the keys together and release."),
             Key::AppNumbers => t!("Bu tuşlar + 1…9 dock'taki uygulamayı açar.", "These keys + 1…9 open the app on the dock."),
+            Key::Vault => t!("Şifreli kasayı açar ya da öne getirir.", "Opens the encrypted vault or brings it to the front."),
         }
     }
 
@@ -60,6 +63,7 @@ impl Key {
             Key::Screenshot => s.screenshot.clone(),
             Key::Converter => s.converter.clone(),
             Key::AppNumbers => s.app_numbers.clone(),
+            Key::Vault => s.vault.clone(),
         }
     }
 
@@ -71,6 +75,7 @@ impl Key {
             Key::Screenshot => s.screenshot = v,
             Key::Converter => s.converter = v,
             Key::AppNumbers => s.app_numbers = v,
+            Key::Vault => s.vault = v,
         }
     }
 
@@ -179,6 +184,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     key_row(app, p, f, Key::Clipboard);
     key_row(app, p, f, Key::Screenshot);
     key_row(app, p, f, Key::Converter);
+    key_row(app, p, f, Key::Vault);
     f.section(p, "Dock");
     key_row(app, p, f, Key::AppNumbers);
     f.y += 6.0;

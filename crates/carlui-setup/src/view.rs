@@ -121,7 +121,7 @@ impl App {
         }
         let card = R::new(PAD, y + 160.0, cw, 52.0);
         p.card(card);
-        option(p, card, t!("Ayarları ve verileri de kaldır", "Also remove settings and data"), t!(r"%APPDATA%\CarlUI ve %LOCALAPPDATA%\CarlUI · Geri Dönüşüm Kutusu'na", r"%APPDATA%\CarlUI and %LOCALAPPDATA%\CarlUI · to the Recycle Bin"), self.purge, true, Opt::Purge);
+        option(p, card, t!("Ayarları ve verileri de kaldır", "Also remove settings and data"), t!(r"%APPDATA%\CarlUI (Carl Vault kasası dahil) ve %LOCALAPPDATA%\CarlUI · Geri Dönüşüm Kutusu'na", r"%APPDATA%\CarlUI (Carl Vault included) and %LOCALAPPDATA%\CarlUI · to the Recycle Bin"), self.purge, true, Opt::Purge);
 
         p.button(R::new(W - PAD - 120.0 - 12.0 - 100.0, H - 58.0, 100.0, 34.0), None, t!("Vazgeç", "Cancel"), Act::Close, true, false);
         primary(p, R::new(W - PAD - 120.0, H - 58.0, 120.0, 34.0), t!("Kaldır", "Uninstall"), Act::Uninstall, RED);

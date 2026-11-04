@@ -14,6 +14,7 @@
 
 mod autostart;
 mod fullscreen;
+mod hotkey;
 mod pointer;
 mod supervisor;
 mod taskbar;
@@ -336,8 +337,15 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                     if h.cfg.cursor != new.cursor {
                         pointer::sync(&new.cursor);
                     }
+                    if h.cfg.shortcuts.vault != new.shortcuts.vault {
+                        hotkey::register(h.hwnd, &new);
+                    }
                     h.cfg = new;
                 });
+                LRESULT(0)
+            }
+            WM_HOTKEY if wp.0 == hotkey::VAULT as usize => {
+                hotkey::open_vault();
                 LRESULT(0)
             }
             WM_QUERYENDSESSION => LRESULT(1),
@@ -488,6 +496,7 @@ fn run() -> Result<()> {
             })
         });
         with_host(follow_foreground);
+        with_host(|h| hotkey::register(h.hwnd, &h.cfg));
         info!("hazır");
 
         let mut msg = MSG::default();

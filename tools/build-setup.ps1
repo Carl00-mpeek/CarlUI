@@ -12,7 +12,7 @@ $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 
 $target = Join-Path $root 'target\dist'
-$crates = 'carlui', 'carlui-dock', 'carlui-tray', 'carlui-island', 'carlui-start', 'carlui-settings', 'carlui-taskmgr', 'carlui-convert', 'carlui-sensors'
+$crates = 'carlui', 'carlui-dock', 'carlui-tray', 'carlui-island', 'carlui-start', 'carlui-settings', 'carlui-taskmgr', 'carlui-convert', 'carlui-sensors', 'carlui-vault'
 $pkgs = $crates | ForEach-Object { '-p'; $_ }
 
 Write-Host '1/2  CarlUI exe dosyaları derleniyor…'

@@ -218,7 +218,8 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
             let a = shell::shortcut(&m.join("CarlUI.lnk"), &exe, "", t!("CarlUI kabuğunu başlatır", "Starts the CarlUI shell"));
             let b = shell::shortcut(&m.join(t!("CarlUI Ayarları.lnk", "CarlUI Settings.lnk")), &o.dir.join("carlui-settings.exe"), "", t!("CarlUI ayarları", "CarlUI settings"));
             let c = shell::shortcut(&m.join(t!("CarlUI'yi kaldır.lnk", "Uninstall CarlUI.lnk")), &uninstaller, "--uninstall", t!("CarlUI'yi kaldırır", "Uninstalls CarlUI"));
-            if !(a && b && c) {
+            let d = shell::shortcut(&m.join("Carl Vault.lnk"), &o.dir.join("carlui-vault.exe"), "", t!("Yerel şifreli parola kasası", "Local encrypted password vault"));
+            if !(a && b && c && d) {
                 notes.push(t!("Başlat menüsü kısayollarının bazıları oluşturulamadı", "Some Start menu shortcuts couldn't be created").into());
             }
         }

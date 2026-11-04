@@ -541,6 +541,14 @@ pub fn build(raw: &str, cx: &Ctx) -> Vec<Item> {
             ranked.push((s + boost(cx.usage, &it.key), it));
         }
     }
+    // Carl Vault (yanındaki carlui-vault.exe).
+    let vs = ["carl vault", "vault", "kasa", "parola", "sifre", "password"].iter().map(|k| score(k, &q)).max().unwrap_or(0);
+    if vs >= 400 {
+        let exe = carlui_core::paths::sibling_exe("carlui-vault.exe").to_string_lossy().into_owned();
+        let mut it = Item::new("Carl Vault".to_string(), t!("Şifreli parola kasası", "Encrypted password vault"), Icon::Glyph('\u{E72E}'), Act::Open(exe), "Uygulama");
+        it.key = "carlui:vault".into();
+        ranked.push((vs + boost(cx.usage, &it.key), it));
+    }
     for (name, path, kw) in index::places() {
         let s = score(&norm(&name), &q).max(norm(kw).split(' ').map(|k| score(k, &q)).max().unwrap_or(0).min(700) - 60);
         if s >= 400 {

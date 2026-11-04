@@ -12,6 +12,7 @@ mod island;
 mod look;
 mod search;
 pub mod shortcuts;
+mod vault;
 
 use crate::{ui::Flow, ui::P, App};
 
@@ -25,10 +26,11 @@ pub enum Page {
     Clipboard,
     Game,
     Shortcuts,
+    Vault,
 }
 
 impl Page {
-    pub const ALL: [Page; 8] = [Page::General, Page::Look, Page::Dock, Page::Island, Page::Search, Page::Clipboard, Page::Game, Page::Shortcuts];
+    pub const ALL: [Page; 9] = [Page::General, Page::Look, Page::Dock, Page::Island, Page::Search, Page::Clipboard, Page::Game, Page::Vault, Page::Shortcuts];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -40,6 +42,7 @@ impl Page {
             Page::Clipboard => carlui_core::t!("Pano", "Clipboard"),
             Page::Game => carlui_core::t!("Oyun modu", "Game mode"),
             Page::Shortcuts => carlui_core::t!("Kısayollar", "Shortcuts"),
+            Page::Vault => "Carl Vault",
         }
     }
 
@@ -53,6 +56,7 @@ impl Page {
             Page::Clipboard => '\u{E77F}',
             Page::Game => '\u{E7FC}',
             Page::Shortcuts => '\u{E765}',
+            Page::Vault => '\u{E72E}',
         }
     }
 
@@ -67,6 +71,7 @@ impl Page {
             "clipboard" | "pano" => Page::Clipboard,
             "game" | "oyun" => Page::Game,
             "shortcuts" | "kisayollar" | "kısayollar" => Page::Shortcuts,
+            "vault" | "kasa" => Page::Vault,
             _ => return None,
         })
     }
@@ -82,5 +87,6 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         Page::Clipboard => clipboard::paint(app, p, f),
         Page::Game => game::paint(app, p, f),
         Page::Shortcuts => shortcuts::paint(app, p, f),
+        Page::Vault => vault::paint(app, p, f),
     }
 }
