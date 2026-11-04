@@ -25,7 +25,7 @@ impl App {
         }
         let Some(v) = self.vault.as_ref() else { return Reply::no("") };
         // Kayıtlar geçici olarak çözülür; `Body` düşerken bellekten silinir.
-        let bodies: Vec<(String, Body)> = v.items().iter().filter(|i| i.meta.category == Category::Password).filter_map(|i| Some((i.id.clone(), v.decrypt(&i.id).ok()?))).collect();
+        let bodies: Vec<(String, Body)> = v.items().iter().filter(|i| matches!(i.meta.category, Category::Password | Category::Email)).filter_map(|i| Some((i.id.clone(), v.decrypt(&i.id).ok()?))).collect();
         let found = autofill::classify(bodies.iter().map(|(id, b)| (id.as_str(), b)), url, user, &password);
         let status = match &found {
             Capture::New => "new",
@@ -47,8 +47,8 @@ impl App {
             Capture::Changed(id) => {
                 let Some((_, mut body)) = bodies.into_iter().find(|(i, _)| i == id) else { return Reply::no(t!("Kayıt bulunamadı.", "Item not found.")) };
                 autofill::set_password(&mut body, &password);
-                let name = v.items().iter().find(|i| &i.id == id).map(|i| i.meta.name.clone()).unwrap_or_default();
-                v.update(id, Meta { name: name.clone(), category: Category::Password, updated: now() }, &body).map(|_| name)
+                let (name, category) = v.items().iter().find(|i| &i.id == id).map(|i| (i.meta.name.clone(), i.meta.category)).unwrap_or((String::new(), Category::Password));
+                v.update(id, Meta { name: name.clone(), category, updated: now() }, &body).map(|_| name)
             }
             _ => {
                 let (mut meta, body) = autofill::new_login(url, user, &password);

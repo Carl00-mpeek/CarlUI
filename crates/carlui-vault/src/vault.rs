@@ -20,7 +20,7 @@
 
 use crate::{
     crypto::{self, Error, KdfParams, Key, Result, Sealed},
-    entry::{Attachment, Body, Meta},
+    entry::{Attachment, Body, Category, Meta},
     hex, recovery,
 };
 use serde::{Deserialize, Serialize};
@@ -274,6 +274,33 @@ impl Vault {
         Ok(())
     }
 
+    /// Kayıtların kategorisini değiştirir (yalnızca `Meta` yeniden mühürlenir);
+    /// dosya bir kez yazılır, hata olursa hiçbiri değişmez. Değişen sayısını döner.
+    pub fn set_categories(&mut self, ids: &[String], category: Category) -> Result<usize> {
+        let before = self.file.entries.clone();
+        let mut metas = Vec::new();
+        for id in ids {
+            let Some(item) = self.items().iter().find(|i| &i.id == id) else { continue };
+            let mut meta = item.meta.clone();
+            meta.category = category;
+            let sealed = crypto::seal(&self.opened()?.mk, &aad("meta", id), &to_json(&meta)?)?;
+            self.file.entries.iter_mut().find(|e| &e.id == id).ok_or(Error::Corrupt)?.meta = sealed;
+            metas.push((id.clone(), meta));
+        }
+        if metas.is_empty() {
+            return Ok(0);
+        }
+        if let Err(e) = self.save() {
+            self.file.entries = before;
+            return Err(e);
+        }
+        let n = metas.len();
+        for (id, meta) in metas {
+            self.put_item(&id, meta);
+        }
+        Ok(n)
+    }
+
     /// Çok kaydı tek seferde ekler (içe aktarma): hepsi mühürlenir, dosya bir kez
     /// yazılır. Eklenen kayıt sayısını döner.
     pub fn add_many(&mut self, items: Vec<(Meta, Body)>) -> Result<usize> {
@@ -337,7 +364,7 @@ impl Vault {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entry::{Category, Field, FieldKind};
+    use crate::entry::{Field, FieldKind};
 
     fn tmp() -> PathBuf {
         let d = std::env::temp_dir().join(format!("carlui-vault-test-{}", hex::encode(&crypto::random::<8>().unwrap())));
@@ -565,6 +592,21 @@ mod tests {
         let body = v2.decrypt(&card.id).unwrap();
         assert_eq!(crate::card::Part::NumberSpaced.value(&body).unwrap().as_str(), "4111 1111 1111 1111");
         assert_eq!(crate::card::Part::MmYyyy.value(&body).unwrap().as_str(), "04/2027");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn set_categories_persists() {
+        let d = tmp();
+        let mut v = Vault::create(&d, "pw", KdfParams::fast()).unwrap();
+        let a = v.add(sample("Gmail", "x").0, &sample("Gmail", "x").1).unwrap();
+        let b = v.add(sample("GitHub", "y").0, &sample("GitHub", "y").1).unwrap();
+        assert_eq!(v.set_categories(&[a.clone(), "yok".into()], Category::Email).unwrap(), 1);
+        let mut v2 = Vault::load(&d).unwrap();
+        v2.unlock("pw").unwrap();
+        let cat = |id: &str| v2.items().iter().find(|i| i.id == id).unwrap().meta.category;
+        assert_eq!((cat(&a), cat(&b)), (Category::Email, Category::Password));
+        assert_eq!(v2.decrypt(&a).unwrap().fields[0].value, "x", "içerik bozulmaz");
         let _ = std::fs::remove_dir_all(&d);
     }
 

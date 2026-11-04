@@ -665,6 +665,7 @@ impl App {
                         self.throttle.reset(&self.dir);
                         self.clear_forms();
                         self.go(View::List);
+                        self.move_mail_logins();
                         info!("kasa açıldı ({} kayıt)", self.vault.as_ref().map(|v| v.items().len()).unwrap_or(0));
                         self.return_to_browser();
                     }

@@ -56,7 +56,8 @@ impl Category {
         let f = |l: &str, k| Field::new(l, k);
         match self {
             Category::Password => vec![f(t!("Kullanıcı adı", "Username"), Text), f(t!("Parola", "Password"), Secret), f(t!("Adres", "Website"), Url), f(t!("Not", "Note"), Multiline)],
-            Category::Email => vec![f(t!("E-posta adresi", "Email address"), Text), f(t!("Parola", "Password"), Secret), f(t!("Sunucu", "Server"), Text), f(t!("Not", "Note"), Multiline)],
+            // Adres alanı tarayıcıda doldurma için (ör. https://accounts.google.com).
+            Category::Email => vec![f(t!("E-posta adresi", "Email address"), Text), f(t!("Parola", "Password"), Secret), f(t!("Giriş adresi", "Sign-in address"), Url), f(t!("Not", "Note"), Multiline)],
             // Kart alanları biçimlidir (bkz. `card`): yalnızca rakam, boşluk ve "/"
             // kendiliğinden konur.
             Category::Card => vec![

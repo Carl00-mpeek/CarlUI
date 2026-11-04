@@ -119,6 +119,35 @@ impl App {
         }
     }
 
+    /// Bir kez (kasa açılınca): önceki sürümün "Parolalar"a aktardığı e-posta
+    /// hesaplarını (Gmail, Outlook…) "E-posta" kategorisine taşır. Kasa
+    /// klasöründeki işaret dosyası tekrar yapılmasını önler; kullanıcı sonra
+    /// bir kaydı elle geri taşırsa dokunulmaz.
+    pub(super) fn move_mail_logins(&mut self) {
+        let mark = self.dir.join("mail-category.done");
+        if mark.exists() {
+            return;
+        }
+        let Some(v) = self.vault.as_mut() else { return };
+        let ids: Vec<String> = v
+            .items()
+            .iter()
+            .filter(|i| i.meta.category == Category::Password)
+            .filter(|i| v.decrypt(&i.id).is_ok_and(|b| carlui_vault::autofill::is_mail_login(&b)))
+            .map(|i| i.id.clone())
+            .collect();
+        match v.set_categories(&ids, Category::Email) {
+            Ok(n) => {
+                let _ = std::fs::write(&mark, b"1");
+                if n > 0 {
+                    info!("kasa: {n} e-posta hesabı E-posta kategorisine taşındı");
+                    self.toast(t!(format!("{n} e-posta hesabı E-posta kategorisine taşındı."), format!("{n} email accounts moved to the Email category.")));
+                }
+            }
+            Err(e) => warn!("kasa: e-posta hesapları taşınamadı: {e}"),
+        }
+    }
+
     /// Ekran görüntüsündeki Google Authenticator aktarım QR'ı: kasa kilitliyse
     /// açılınca önizlenir. Hiçbir şey onaysız kaydedilmez.
     pub(super) fn import_migration(&mut self, uri: &str) -> Reply {

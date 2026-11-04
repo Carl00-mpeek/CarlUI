@@ -67,6 +67,44 @@ pub fn credentials(body: &Body) -> (String, String) {
     (user, pass)
 }
 
+/// E-posta sağlayıcısının giriş sayfaları. Bunlara ait girişler "E-posta"
+/// kategorisine girer (alt alanlar da uyar: "accounts.google.com" → Google).
+const MAIL_SITES: [&str; 22] = [
+    "accounts.google.com",
+    "mail.google.com",
+    "myaccount.google.com",
+    "gmail.com",
+    "login.live.com",
+    "account.live.com",
+    "outlook.live.com",
+    "outlook.com",
+    "hotmail.com",
+    "login.microsoftonline.com",
+    "login.yahoo.com",
+    "mail.yahoo.com",
+    "passport.yandex.com",
+    "passport.yandex.com.tr",
+    "passport.yandex.ru",
+    "mail.yandex.com",
+    "account.proton.me",
+    "mail.proton.me",
+    "icloud.com",
+    "mail.ru",
+    "gmx.net",
+    "zoho.com",
+];
+
+/// Adres bir e-posta sağlayıcısının giriş sayfası mı.
+pub fn is_mail_site(url: &str) -> bool {
+    let Some((_, host, _)) = parts(url, true) else { return false };
+    MAIL_SITES.iter().any(|d| host == *d || host.ends_with(&format!(".{d}")))
+}
+
+/// Parola kaydı aslında bir e-posta hesabı mı (adresi sağlayıcının sitesi).
+pub fn is_mail_login(body: &Body) -> bool {
+    body.fields.iter().any(|f| f.kind == FieldKind::Url && is_mail_site(&f.value))
+}
+
 /// Sayfanın kökeni ("https://www.roblox.com"); kayda yol ve sorgu (oturum
 /// belirteci içerebilir) yazılmasın diye yalnızca bu saklanır.
 pub fn origin(url: &str) -> Option<String> {
@@ -181,6 +219,23 @@ mod tests {
         assert!(body_matches(&body, "https://github.com/login"));
         assert!(!body_matches(&body, "https://gitlab.com/login"));
     }
+    #[test]
+    fn mail_sites() {
+        assert!(is_mail_site("https://accounts.google.com/signin/v2"));
+        assert!(is_mail_site("accounts.google.com"));
+        assert!(is_mail_site("https://login.live.com/"));
+        assert!(is_mail_site("https://outlook.live.com/mail"));
+        assert!(!is_mail_site("https://www.google.com/"), "Google arama e-posta değil");
+        assert!(!is_mail_site("https://accounts.google.com.evil.io/"), "benzer alan adı");
+        assert!(!is_mail_site("https://github.com/login"));
+        let (meta, body) = new_login("https://accounts.google.com/signin", "carl@gmail.com", "x");
+        assert_eq!(meta.category, crate::entry::Category::Email);
+        assert_eq!(meta.name, "Google");
+        assert!(is_mail_login(&body));
+        assert_eq!(credentials(&body).0, "carl@gmail.com", "e-posta adresi kullanıcı adı olarak doldurulur");
+        assert!(body_matches(&body, "https://accounts.google.com/v3/signin"));
+    }
+
     #[test]
     fn captured_logins() {
         assert_eq!(origin("https://www.Roblox.com/signup?ref=abc#x").as_deref(), Some("https://www.roblox.com"));

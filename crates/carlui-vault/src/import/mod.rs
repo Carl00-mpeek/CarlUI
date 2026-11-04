@@ -173,8 +173,11 @@ pub struct Login<'a> {
 
 pub fn login(l: Login) -> Imported {
     use carlui_core::t;
+    // Gmail, Outlook gibi sağlayıcıların girişi e-posta hesabıdır.
+    let mail = crate::autofill::is_mail_site(l.url);
+    let user_label = if mail { t!("E-posta adresi", "Email address") } else { t!("Kullanıcı adı", "Username") };
     let mut fields = vec![
-        field(t!("Kullanıcı adı", "Username"), l.user.trim(), FieldKind::Text),
+        field(user_label, l.user.trim(), FieldKind::Text),
         field(t!("Parola", "Password"), l.password, FieldKind::Secret),
         field(t!("Adres", "Website"), l.url.trim(), FieldKind::Url),
     ];
@@ -182,7 +185,8 @@ pub fn login(l: Login) -> Imported {
         fields.push(field(t!("2FA anahtarı", "2FA key"), l.totp.trim(), FieldKind::Totp));
     }
     fields.push(field(t!("Not", "Note"), l.notes.trim(), FieldKind::Multiline));
-    Imported { meta: meta(name_or(l.name, l.url, l.user), Category::Password), body: Body { fields, file: None } }
+    let category = if mail { Category::Email } else { Category::Password };
+    Imported { meta: meta(name_or(l.name, l.url, l.user), category), body: Body { fields, file: None } }
 }
 
 /// Güvenli not.
@@ -319,6 +323,19 @@ pub fn key(category: Category, name: &str, body: &Body) -> Zeroizing<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mail_logins_go_to_email() {
+        let csv = "name,url,username,password,note
+accounts.google.com,https://accounts.google.com/,carl@gmail.com,p1,
+github.com,https://github.com/login,carl,p2,
+login.live.com,https://login.live.com/,carl@outlook.com,p3,
+";
+        let b = parse(csv.as_bytes()).unwrap();
+        let cats: Vec<_> = b.items.iter().map(|i| i.meta.category).collect();
+        assert_eq!(cats, [Category::Email, Category::Password, Category::Email]);
+        assert_eq!(b.items[0].body.fields[0].label, carlui_core::t!("E-posta adresi", "Email address"));
+    }
 
     #[test]
     fn otpauth_roundtrip() {
