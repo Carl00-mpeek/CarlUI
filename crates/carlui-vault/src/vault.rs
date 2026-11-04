@@ -94,7 +94,11 @@ fn write_atomic(path: &Path, data: &[u8], backup: bool) -> Result<()> {
     std::fs::rename(&tmp, path).map_err(io)
 }
 
+/// `%APPDATA%\CarlUI\vault`; `CARLUI_VAULT_DIR` (deneme için) önüne geçer.
 pub fn default_dir() -> PathBuf {
+    if let Some(d) = std::env::var_os("CARLUI_VAULT_DIR").filter(|d| !d.is_empty()) {
+        return PathBuf::from(d);
+    }
     std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir).join("CarlUI").join("vault")
 }
 
@@ -165,6 +169,11 @@ impl Vault {
         let pk = self.file.kdf.derive(password.as_bytes())?;
         let mk = crypto::unwrap_key(&pk, AAD_MK_PW, &self.file.mk_password)?;
         self.open_with(mk)
+    }
+
+    /// Parola doğru mu (kasa durumunu değiştirmez; parola değiştirirken sorulur).
+    pub fn verify_password(&self, password: &str) -> bool {
+        self.file.kdf.derive(password.as_bytes()).and_then(|pk| crypto::unwrap_key(&pk, AAD_MK_PW, &self.file.mk_password)).is_ok()
     }
 
     pub fn unlock_recovery(&mut self, text: &str) -> Result<()> {

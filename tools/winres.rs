@@ -31,6 +31,7 @@ fn version_rc() -> String {
         Ok("carlui-taskmgr") => "CarlUI Task manager",
         Ok("carlui-convert") => "CarlUI File converter",
         Ok("carlui-sensors") => "CarlUI Sensors",
+        Ok("carlui-vault") => "CarlUI Vault",
         Ok("carlui-setup") => "CarlUI Setup",
         _ => "CarlUI",
     };

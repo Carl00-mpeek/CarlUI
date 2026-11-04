@@ -1,6 +1,7 @@
 //! Kayıt içeriği. Bir kaydın iki ayrı şifreli parçası vardır:
 //! - `Meta` (ad, kategori, tarih): kasa açılınca listelenmek için çözülür.
 //! - `Body` (alanlar, ek dosya bilgisi): yalnızca o kayıt düzenlenirken çözülür.
+//!
 //! İkisi de düşerken bellekten silinir (`zeroize`). Kategoriler hazır alan
 //! şablonlarıyla gelir; kullanıcı alan ekleyip çıkarabilir.
 

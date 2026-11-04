@@ -33,6 +33,27 @@ pub struct Config {
     pub cursor: CursorConfig,
     pub download: DownloadConfig,
     pub alerts: AlertsConfig,
+    pub vault: VaultConfig,
+}
+
+/// Carl Vault (yerel şifreli kasa, `carlui-vault.exe`; kısayol: `shortcuts.vault`).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct VaultConfig {
+    /// Bu kadar dakika boyunca klavye/fare kullanılmazsa kasa kilitlenir (en az 1).
+    pub auto_lock_minutes: u32,
+    /// Bilgisayar uykuya geçerken ya da oturum kilitlenirken kilitle.
+    pub lock_on_sleep: bool,
+    /// Kopyalanan alan bu kadar saniye sonra panodan silinir (hâlâ oradaysa). 0 = silinmez.
+    pub clear_clipboard_seconds: u64,
+    /// Kasa penceresi ekran görüntülerinde ve ekran paylaşımında görünmesin.
+    pub hide_from_capture: bool,
+}
+
+impl Default for VaultConfig {
+    fn default() -> Self {
+        Self { auto_lock_minutes: 5, lock_on_sleep: true, clear_clipboard_seconds: 30, hide_from_capture: true }
+    }
 }
 
 /// Sıcaklık ve disk uyarıları: sınır aşılınca adada bildirim.
@@ -201,6 +222,8 @@ pub struct ShortcutsConfig {
     pub screenshot: String,
     /// Dönüştürücü: yalnızca değiştiriciler, birlikte basılıp bırakılınca açılır (ör. "Win+Alt").
     pub converter: String,
+    /// Carl Vault penceresini aç, ör. "Ctrl+Alt+P".
+    pub vault: String,
 }
 
 impl Default for ShortcutsConfig {
@@ -212,6 +235,7 @@ impl Default for ShortcutsConfig {
             clipboard: "Win+V".into(),
             screenshot: "Alt+X".into(),
             converter: "Win+Alt".into(),
+            vault: "Ctrl+Alt+P".into(),
         }
     }
 }
@@ -264,6 +288,17 @@ impl ShortcutsConfig {
         crate::keys::parse_combo(&self.search).or_else(|e| {
             crate::warn!("arama kısayolu '{}' kullanılamaz: {e}; varsayılan (Ctrl+Space) kullanılıyor", self.search);
             crate::keys::parse_combo(&Self::default().search)
+        }).ok()
+    }
+
+    /// Carl Vault kısayolu (kapalıysa None).
+    pub fn vault_combo(&self) -> Option<crate::keys::Combo> {
+        if self.vault.trim().is_empty() {
+            return None;
+        }
+        crate::keys::parse_combo(&self.vault).or_else(|e| {
+            crate::warn!("Vault kısayolu '{}' kullanılamaz: {e}; varsayılan (Ctrl+Alt+P) kullanılıyor", self.vault);
+            crate::keys::parse_combo(&Self::default().vault)
         }).ok()
     }
 
