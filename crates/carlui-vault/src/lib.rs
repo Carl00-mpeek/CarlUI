@@ -36,12 +36,16 @@
 //! şifresiz dışa aktarımları (CSV / JSON / otpauth listesi) ve Google
 //! Authenticator aktarım QR'ı önizlenip tek seferde kasaya yazılır.
 //!
+//! Parola üretici (`gen`): işletim sistemi rastgeleliğiyle, her türden en az
+//! bir karakter; düzenleyicide zar düğmesi ve güç göstergesi.
+//!
 //! Yeni girişi kaydetme (`autofill::classify`, pencere tarafı `app/capture.rs`):
 //! eklenti gönderilen formu sorar; kasada yoksa ya da parola değişmişse sayfa
 //! "kaydedilsin mi?" der, kullanıcı onaylarsa kayıt eklenir/güncellenir.
 
 pub mod autofill;
 pub mod card;
+pub mod gen;
 pub mod crypto;
 pub mod entry;
 mod hex;

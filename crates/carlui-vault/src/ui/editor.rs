@@ -6,9 +6,10 @@
 use super::{clipped, icon_button, input, list::column, para, primary, P};
 use crate::app::{Act, App, Editor, Focus};
 use carlui_core::t;
-use carlui_ui::paint::{Align, ORANGE, R, TEXT};
+use carlui_ui::paint::{Align, GREEN, ORANGE, R, TEXT};
 use carlui_vault::{
     card::{self, Part},
+    gen::{self, Strength},
     entry::{now, Category, FieldKind, Format},
     totp::{grouped, Totp},
 };
@@ -30,6 +31,21 @@ fn totp_row(p: &mut P, value: &str, x: f32, y: f32, cw: f32) {
         }
         Err(e) => p.text(&e.to_string(), R::new(x + 2.0, y, cw, 28.0), 12.5, false, ORANGE, 0.95, Align::Left),
     }
+}
+
+/// Parolanın altında üç parçalı güç çubuğu ve "Zayıf / Orta / Güçlü".
+fn strength_bar(p: &mut P, pw: &str, x: f32, y: f32, w: f32) {
+    let (n, col, label) = match gen::strength(pw) {
+        Strength::Weak => (1, ORANGE, t!("Zayıf parola · zar simgesiyle güçlüsünü üret", "Weak password · generate a strong one with the dice")),
+        Strength::Fair => (2, 0xE6C35C, t!("Orta güçte parola", "Fair password")),
+        Strength::Strong => (3, GREEN, t!("Güçlü parola", "Strong password")),
+    };
+    let seg = 36.0;
+    for k in 0..3 {
+        let on = k < n;
+        p.round(R::new(x + 2.0 + k as f32 * (seg + 4.0), y + 6.0, seg, 4.0), 2.0, if on { col } else { 0xFFFFFF }, if on { 0.9 } else { 0.10 });
+    }
+    p.text(label, R::new(x + 3.0 * (seg + 4.0) + 10.0, y, w - 130.0, 16.0), 12.0, false, TEXT, 0.6, Align::Left);
 }
 
 /// Kart alanının altındaki kısa bilgi: kart türü, numara hatası, süresi geçmiş.
@@ -143,7 +159,10 @@ pub fn paint(app: &App, e: &Editor, p: &mut P, w: f32, h: f32) -> f32 {
             y += 28.0;
             let bw = 34.0;
             let vh = if f.kind == FieldKind::Multiline { f.value.height() } else { 38.0 };
-            let vr = R::new(x, y, cw - 3.0 * (bw + 4.0) - 4.0, vh);
+            // Serbest gizli alan (parola): üretici düğmesi ve güç göstergesi.
+            let pw = f.kind == FieldKind::Secret && f.value.fmt == Format::Free;
+            let buttons = if pw { 4.0 } else { 3.0 };
+            let vr = R::new(x, y, cw - buttons * (bw + 4.0) - 4.0, vh);
             let masked = f.kind.masked() && !f.shown;
             let hint = match f.kind {
                 FieldKind::Url => "https://…",
@@ -153,6 +172,11 @@ pub fn paint(app: &App, e: &Editor, p: &mut P, w: f32, h: f32) -> f32 {
             };
             input(p, app, vr, Focus::Value(i), masked, hint);
             let mut b = R::new(vr.right() + 8.0, y + 2.0, bw, bw);
+            if pw {
+                // Zar simgesi: güçlü parola üret.
+                icon_button(p, b, '\u{E8B1}', Act::Generate(i), 0.8);
+                b.x += bw + 4.0;
+            }
             if f.kind.masked() {
                 icon_button(p, b, if f.shown { '\u{ED1A}' } else { '\u{E7B3}' }, Act::Reveal(i), 0.8);
             }
@@ -164,6 +188,10 @@ pub fn paint(app: &App, e: &Editor, p: &mut P, w: f32, h: f32) -> f32 {
                 y += vh + 6.0;
                 totp_row(p, f.value.as_str(), x, y, cw);
                 y += 40.0;
+            } else if pw && !f.value.text.is_empty() {
+                y += vh + 6.0;
+                strength_bar(p, f.value.as_str(), x, y, vr.w);
+                y += 22.0;
             } else if let Some((msg, col)) = card_hint(f.value.fmt, &f.value.value()) {
                 y += vh + 4.0;
                 p.text(&msg, R::new(x + 2.0, y, cw, 18.0), 12.0, false, col, 0.8, Align::Left);

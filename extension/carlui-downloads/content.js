@@ -410,6 +410,155 @@
   // Form gönderilince sayfa değiştiyse soru yeni sayfada sürer.
   ask({ op: "vault-pending" }).then((r) => r && r.show && offer(r));
 
+  // --- Kayıt formunda güçlü parola önerisi ---------------------------------
+  // Yeni parola kutusuna (kayıt ya da parola değiştirme) odaklanınca altında
+  // bir öneri çıkar. Parola bu bilgisayarda, tarayıcının şifreleme kalitesindeki
+  // rastgelelikle üretilir; "Kullan" ile parola ve tekrar kutularına yazılır.
+  // Form gönderilince yukarıdaki "kaydedilsin mi?" şeridi kasaya kaydetmeyi sorar.
+  const GEN = {
+    lower: "abcdefghijkmnopqrstuvwxyz",
+    upper: "ABCDEFGHJKLMNPQRSTUVWXYZ",
+    digits: "23456789",
+    symbols: "!@#$%&*-_+=?",
+  };
+
+  function below(n) {
+    const b = new Uint8Array(1);
+    const limit = 256 - (256 % n); // modulo sapması olmasın
+    for (;;) {
+      crypto.getRandomValues(b);
+      if (b[0] < limit) return b[0] % n;
+    }
+  }
+
+  function strongPassword(len, symbols) {
+    const sets = [GEN.lower, GEN.upper, GEN.digits, ...(symbols ? [GEN.symbols] : [])];
+    const all = sets.join("");
+    const out = sets.map((s) => s[below(s.length)]);
+    while (out.length < len) out.push(all[below(all.length)]);
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = below(i + 1);
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out.join("");
+  }
+
+  // Yeni parola kutusu mu (giriş formundaki mevcut parola değil)?
+  function newPasswordField(e) {
+    if (!(e instanceof HTMLInputElement) || e.type !== "password" || e.readOnly || e.disabled) return false;
+    if (e.autocomplete === "new-password") return true;
+    if (e.autocomplete === "current-password") return false;
+    const scope = e.form || document;
+    const pws = [...scope.querySelectorAll("input[type=password]")].filter(visible);
+    const hint = [e.name, e.id, e.placeholder, e.getAttribute("aria-label")].join(" ");
+    return pws.length >= 2 || /new|yeni|confirm|tekrar|regist|sign.?up|kay[ıi]t/i.test(hint) || /sign.?up|regist|kay[ıi]t|uye|üye|join|create|new.?account/i.test(location.pathname + " " + (scope.action || ""));
+  }
+
+  const gen = document.createElement("carl-vault-gen");
+  gen.style.cssText = "all:initial;position:absolute;z-index:2147483647;top:0;left:0;display:none";
+  const genRoot = gen.attachShadow({ mode: "closed" });
+  genRoot.innerHTML = `
+<style>
+  * { box-sizing: border-box; font: 400 12.5px/1.3 "Segoe UI", system-ui, sans-serif; }
+  .box { width: 300px; padding: 9px 10px; border-radius: 8px; background: #23202a; color: #eee; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+  .t { font-weight: 600; color: #d9b8f5; margin-bottom: 6px; }
+  .pw { font: 600 14px/1.2 Consolas, "Cascadia Mono", monospace; color: #fff; letter-spacing: .5px; overflow-wrap: anywhere; padding: 6px 8px; border-radius: 6px; background: #17151c; }
+  .row { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+  .row label { flex: 1; color: #b9b4c2; font-size: 11.5px; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  button { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; cursor: pointer; font-weight: 600; }
+  .use { background: #b06ce6; color: #fff; }
+  .use:hover { background: #9b55d6; }
+  .again { background: #3a3445; color: #eee; }
+  .again:hover { background: #48405a; }
+</style>
+<div class="box">
+  <div class="t">Carl Vault · güçlü parola önerisi</div>
+  <div class="pw"></div>
+  <div class="row"><label><input type="checkbox" class="sym" checked>Sembol</label><button class="again" title="Başka öner">↻</button><button class="use">Kullan</button></div>
+</div>`;
+  const genPw = genRoot.querySelector(".pw");
+  const genSym = genRoot.querySelector(".sym");
+  let genFor = null; // önerinin bağlı olduğu parola kutusu
+  let genValue = "";
+
+  // Önerinin yazılacağı kutular: bu kutu ve boş "parolayı tekrar yaz" kutuları
+  // (giriş formundaki mevcut parola değil).
+  function genTargets() {
+    const scope = genFor.form || document;
+    return [...scope.querySelectorAll("input[type=password]")].filter((x) => visible(x) && x.autocomplete !== "current-password" && (x === genFor || !x.value));
+  }
+
+  function genLen(list) {
+    // Sitenin sınırına uy: en dar maxlength, en geniş minlength (en az 12).
+    const max = Math.min(64, ...list.map((e) => (e.maxLength > 0 ? e.maxLength : 64)));
+    const min = Math.max(12, ...list.map((e) => (e.minLength > 0 ? e.minLength : 0)));
+    return Math.max(8, Math.min(max, Math.max(min, 20)));
+  }
+
+  function suggest() {
+    genValue = strongPassword(genLen(genTargets()), genSym.checked);
+    genPw.textContent = genValue;
+  }
+
+  function placeGen() {
+    if (!genFor || !genFor.isConnected || !visible(genFor)) return hideGen();
+    const r = genFor.getBoundingClientRect();
+    gen.style.left = `${Math.round(r.left + scrollX)}px`;
+    gen.style.top = `${Math.round(r.bottom + scrollY + 4)}px`;
+  }
+
+  function showGen(e) {
+    if (genFor !== e) {
+      genFor = e;
+      suggest();
+    }
+    if (!gen.isConnected) document.documentElement.append(gen);
+    gen.style.display = "block";
+    placeGen();
+  }
+
+  function hideGen() {
+    gen.style.display = "none";
+    genFor = null;
+    genValue = "";
+    genPw.textContent = "";
+  }
+
+  document.addEventListener("focusin", (e) => {
+    if (!e.isTrusted) return;
+    if (e.composedPath().includes(gen)) return;
+    const t = e.target;
+    if (newPasswordField(t) && !t.value) showGen(t);
+    else if (t !== genFor) hideGen();
+  }, true);
+  document.addEventListener("input", (e) => {
+    // Kullanıcı kendisi yazmaya başladıysa öneri çekilir.
+    if (e.isTrusted && e.target === genFor && genFor.value) hideGen();
+  }, true);
+  document.addEventListener("mousedown", (e) => {
+    if (genFor && !e.composedPath().includes(gen) && e.target !== genFor) hideGen();
+  }, true);
+  addEventListener("scroll", () => genFor && placeGen(), { passive: true, capture: true });
+  addEventListener("resize", () => genFor && placeGen(), { passive: true });
+
+  // Öneriye tıklamak kutudan odağı almasın; tıklama sayfaya ulaşmasın.
+  for (const t of ["mousedown", "pointerdown"]) gen.addEventListener(t, (e) => {
+    e.stopPropagation();
+    if (!e.composedPath().some((n) => n.classList?.contains("sym"))) e.preventDefault();
+  });
+  gen.addEventListener("mouseup", (e) => e.stopPropagation());
+  genRoot.querySelector(".again").addEventListener("click", (e) => e.isTrusted && suggest());
+  genSym.addEventListener("change", (e) => e.isTrusted && suggest());
+  genRoot.querySelector(".use").addEventListener("click", (e) => {
+    if (!e.isTrusted || !genFor) return;
+    const targets = genTargets();
+    const v = genValue;
+    const first = genFor;
+    for (const t of targets) setValue(t, v);
+    hideGen();
+    first.focus();
+  });
+
   // Sayfa değiştikçe (tek sayfalık uygulamalar) yeniden bak; az sık.
   let pending = 0;
   const soon = () => {

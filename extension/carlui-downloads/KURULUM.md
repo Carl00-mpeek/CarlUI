@@ -37,6 +37,10 @@ boyut görünür.
   Şeritte kaydın kasada hangi adla görüneceği sorulur (önerilen: site adı, ör.
   "Roblox"); istediğin adı yazabilirsin. Kullanıcı adı ve parola beklerken yalnızca eklentinin belleğinde durur (en
   çok 3 dk), sayfaya geri verilmez.
+- **Güçlü parola önerisi:** Kayıt ya da parola değiştirme formunda yeni parola
+  kutusuna tıklayınca altında bir öneri çıkar (20 karakter; site sınır koyduysa
+  ona uyar). ↻ başka öneri verir, "Sembol" kapatılabilir, **Kullan** parola ve
+  "tekrar" kutularına yazar. Parola bu bilgisayarda üretilir.
 - Ayarlar → Carl Vault → "Tarayıcıda doldurma" ile tamamen kapatılabilir
   (sayfa içi düğme ve kaydetme sorusu da kaybolur).
 - Eklenti güncellenince Chromium tabanlı tarayıcılarda (Chrome, Edge, Helium)

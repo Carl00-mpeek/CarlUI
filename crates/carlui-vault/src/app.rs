@@ -69,6 +69,8 @@ pub enum Act {
     Security,
     SetCategory(Category),
     Reveal(usize),
+    /// Bu gizli alana güçlü parola üret (eskisinin yerine; görünür olur).
+    Generate(usize),
     Copy(usize),
     RemoveField(usize),
     AddField(FieldKind),
@@ -771,6 +773,16 @@ impl App {
                     }
                     e.category = c;
                 }
+            }
+            Act::Generate(i) => {
+                if let View::Edit(e) = &mut self.view {
+                    if let Some(f) = e.fields.get_mut(i) {
+                        let pw = carlui_vault::gen::generate(Default::default());
+                        f.value = TextBox::new(&pw, false);
+                        f.shown = true;
+                    }
+                }
+                self.toast(t!("Güçlü parola üretildi; Kaydet'e basmayı unutma.", "Strong password generated; remember to press Save."));
             }
             Act::Reveal(i) => {
                 if let View::Edit(e) = &mut self.view {
