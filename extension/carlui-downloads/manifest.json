@@ -1,14 +1,24 @@
 {
   "manifest_version": 3,
-  "name": "CarlUI İndirmeler",
+  "name": "CarlUI",
   "short_name": "CarlUI",
-  "version": "1.0.0",
-  "description": "Tarayıcıda başlayan indirmeleri CarlUI adasına gönderir; ilerleme adada görünür. CarlUI kapalıysa hiçbir şeye karışmaz.",
-  "permissions": ["downloads", "cookies"],
+  "version": "1.1.0",
+  "description": "CarlUI için tarayıcı eklentisi: indirmeleri CarlUI adasına gönderir ve giriş sayfalarını Carl Vault kasasından doldurur. CarlUI kapalıysa hiçbir şeye karışmaz.",
+  "permissions": ["downloads", "cookies", "activeTab", "scripting"],
   "host_permissions": ["<all_urls>", "http://127.0.0.1:47321/*"],
   "background": {
     "service_worker": "background.js",
     "scripts": ["background.js"]
+  },
+  "action": {
+    "default_title": "Carl Vault ile doldur",
+    "default_popup": "popup.html"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Ctrl+Shift+L" },
+      "description": "Carl Vault ile doldur"
+    }
   },
   "browser_specific_settings": {
     "gecko": {

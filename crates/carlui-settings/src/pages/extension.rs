@@ -58,7 +58,7 @@ pub fn browsers() -> &'static Browsers {
 pub fn paint(p: &mut P, f: &mut Flow) {
     let b = browsers();
     f.section(p, t!("Tarayıcı eklentisi", "Browser extension"));
-    f.note(p, t!("İsteğe bağlı. Tarayıcıda başlayan indirmeleri adaya taşır; yüzde ve hız adada görünür.", "Optional. Shows downloads started in the browser on the island, with progress and speed."));
+    f.note(p, t!("İsteğe bağlı. Tarayıcıda başlayan indirmeleri adaya taşır (yüzde ve hız adada görünür) ve giriş sayfalarını Carl Vault kasasından doldurur (eklenti düğmesi ya da Ctrl+Shift+L).", "Optional. Shows downloads started in the browser on the island (with progress and speed) and fills sign-in pages from the Carl Vault (extension button or Ctrl+Shift+L)."));
 
     let dir = b.dir.as_ref().map(|d| d.display().to_string()).unwrap_or_else(|| t!("Eklenti klasörü bulunamadı (CarlUI kurucuyla kurulmamış olabilir)", "Extension folder not found (CarlUI may not have been installed with the installer)").into());
     let r = f.row(p, t!("Eklenti klasörü", "Extension folder"), &dir, 150.0);

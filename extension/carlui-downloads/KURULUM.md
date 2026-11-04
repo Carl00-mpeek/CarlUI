@@ -1,10 +1,29 @@
-# CarlUI İndirmeler eklentisi (isteğe bağlı)
+# CarlUI tarayıcı eklentisi (isteğe bağlı)
+
+Tek eklenti iki iş yapar: tarayıcı indirmelerini CarlUI adasına gönderir ve
+giriş sayfalarını Carl Vault kasasından doldurur.
 
 Eklenti kurulmazsa CarlUI yine çalışır. Bu durumda tarayıcı indirmeleri
 İndirilenler klasörü izlenerek adada görünür; yüzde gösterilmez, yalnızca
 boyut görünür.
 
-## Ne yapar?
+## Carl Vault ile doldurma
+- Giriş sayfasında eklentinin düğmesine basın (ya da **Ctrl+Shift+L**; tuşu
+  tarayıcının eklenti kısayolları sayfasından değiştirebilirsiniz).
+- Açılan listede bu siteye ait kayıtlar görünür (yalnızca ad ve kullanıcı
+  adı). Birini seçince kullanıcı adı ve parola sayfaya yazılır.
+- Bir kaydın listede görünmesi için kasadaki kayıtta bu sitenin adresi
+  (ör. `https://github.com`) bir **Adres** alanında olmalıdır.
+- Eşleme sıkıdır: `github.com` kaydı `gist.github.com`'a da uyar, ama
+  `githuh.com` ya da `github.com.baska-site.com` gibi benzer adreslere asla
+  uymaz. https kaydı http sayfaya verilmez.
+- Kasa yalnızca açıkken ve tarayıcı öndeyken yanıt verir; kasa kilitliyse
+  eklenti "Carl Vault'u aç" düğmesi gösterir. Eklenti parolayı saklamaz.
+- Ayarlar → Carl Vault → "Tarayıcıda doldurma" ile tamamen kapatılabilir.
+- Not: Bilgisayarda kötü amaçlı bir program çalışıyorsa, kasa açıkken hiçbir
+  parola yöneticisi tam koruma sağlayamaz.
+
+## İndirmeler: ne yapar?
 - **İndirme yöneticisi açıkken:** Tarayıcıda bir indirme başlayınca indirme
   duraklatılır. Ada aşağı doğru "İndirme bilgisi" kartıyla açılır ve dosya adı,
   boyutu, kaynağı ve kayıt yeri görünür. Üç seçenek vardır:
@@ -38,7 +57,7 @@ sitenin çerezleri yalnızca bu yerel adrese, yalnızca o indirme için gönderi
 1. https://addons.mozilla.org/developers/ adresinde Mozilla hesabıyla oturum açın.
 2. **Yeni Eklenti Gönder** → dağıtım olarak **Kendim (On your own)** seçin.
    Eklenti mağazada listelenmez; yalnızca imzalanır.
-3. `extension\carlui-downloads-1.0.0.zip` dosyasını yükleyin. Otomatik
+3. `extension\carlui-downloads-1.1.0.zip` dosyasını yükleyin. Otomatik
    denetimden geçince imzalı `.xpi` birkaç dakika içinde indirilebilir.
 4. Firefox'ta `about:addons` → dişli → **Dosyadan eklenti yükle…** ile `.xpi`
    dosyasını seçin. Bu kurulum kalıcıdır.
