@@ -18,6 +18,10 @@ use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 pub const KEY_LEN: usize = 32;
+/// Kasa dosyasındaki Argon2 ayarlarının üst sınırları (varsayılan 64 MiB, 3, 1).
+const MAX_M_KIB: u32 = 1024 * 1024;
+const MAX_T: u32 = 16;
+const MAX_P: u32 = 16;
 const NONCE_LEN: usize = 24;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,8 +106,9 @@ impl KdfParams {
     }
 
     pub fn derive(&self, password: &[u8]) -> Result<Key> {
-        // Saldırganın düşürdüğü ayarlarla zayıf bir kasa kabul edilmesin.
-        if self.salt.len() < 16 || self.m_kib < 8 || self.t == 0 || self.p == 0 {
+        // Saldırganın düşürdüğü ayarlarla zayıf bir kasa kabul edilmesin; aşırı
+        // yükseltilmiş ayarlar da (ör. 4 GiB bellek) kasayı açarken dondurmasın.
+        if self.salt.len() < 16 || self.salt.len() > 64 || !(8..=MAX_M_KIB).contains(&self.m_kib) || !(1..=MAX_T).contains(&self.t) || !(1..=MAX_P).contains(&self.p) {
             return Err(Error::Format("kdf".into()));
         }
         let params = Params::new(self.m_kib, self.t, self.p, Some(KEY_LEN)).map_err(|e| Error::Format(e.to_string()))?;
@@ -189,6 +194,27 @@ mod tests {
         assert_ne!(p.derive(b"pw").unwrap(), KdfParams::fast().derive(b"pw").unwrap());
         let weak = KdfParams { salt: vec![0; 4], ..KdfParams::fast() };
         assert!(weak.derive(b"pw").is_err());
+    }
+
+    #[test]
+    fn kdf_rejects_tampered_params() {
+        // Dosyada kurcalanmış ayarlar Argon2 çalışmadan reddedilir (anında döner).
+        let base = KdfParams::fast();
+        let started = std::time::Instant::now();
+        for bad in [
+            KdfParams { m_kib: 4 * 1024 * 1024, ..base.clone() },
+            KdfParams { m_kib: u32::MAX, ..base.clone() },
+            KdfParams { m_kib: 4, ..base.clone() },
+            KdfParams { t: 0, ..base.clone() },
+            KdfParams { t: 1_000_000, ..base.clone() },
+            KdfParams { p: 0, ..base.clone() },
+            KdfParams { p: 255, ..base.clone() },
+            KdfParams { salt: vec![0; 1 << 20], ..base.clone() },
+        ] {
+            assert!(matches!(bad.derive(b"pw"), Err(Error::Format(_))), "m {} t {} p {}", bad.m_kib, bad.t, bad.p);
+        }
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+        assert!(KdfParams::new().unwrap().derive(b"pw").is_ok(), "varsayılan ayar sınırın içinde");
     }
 
     #[test]

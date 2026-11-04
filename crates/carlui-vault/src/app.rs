@@ -20,6 +20,7 @@ use carlui_core::{
 use carlui_vault::{
     crypto::{Error, KdfParams},
     entry::{now, Attachment, Body, Category, Field, FieldKind, Meta},
+    throttle::Throttle,
     token::{TokenError, Tokens},
     totp::{self, Totp},
     vault::{Vault, MAX_FILE},
@@ -176,9 +177,8 @@ pub struct App {
     pub max_scroll: f32,
     pub caret_since: Instant,
     pub clip_seq: Option<u32>,
-    /// Art arda yanlış parola: bekleme süresi.
-    fails: u32,
-    pub retry_at: Option<Instant>,
+    /// Art arda yanlış parola: bekleme süresi (diskte, bkz. `throttle`).
+    throttle: Throttle,
     pub confirm_remove_recovery: bool,
     /// Panoya verilen tek kullanımlık belirteçler (Aşama 2).
     pub tokens: Tokens,
@@ -207,6 +207,7 @@ fn check_new(a: &str, b: &str) -> Result<(), String> {
 impl App {
     pub fn new(hwnd: HWND, cfg: Config) -> Self {
         let dir = carlui_vault::vault::default_dir();
+        let throttle = Throttle::load(&dir);
         let (vault, view, error) = if Vault::exists(&dir) {
             match Vault::load(&dir) {
                 Ok(v) => (Some(v), View::Locked, None),
@@ -235,8 +236,7 @@ impl App {
             max_scroll: 0.0,
             caret_since: Instant::now(),
             clip_seq: None,
-            fails: 0,
-            retry_at: None,
+            throttle,
             confirm_remove_recovery: false,
             tokens: Tokens::default(),
             import: None,
@@ -480,12 +480,7 @@ impl App {
 
     fn fail(&mut self, e: Error) {
         if e == Error::WrongKey {
-            self.fails += 1;
-            // 3. hatadan sonra artan bekleme: 5, 10, 20 … sn (en çok 5 dk).
-            if self.fails >= 3 {
-                let secs = (5u64 << (self.fails - 3).min(6)).min(300);
-                self.retry_at = Some(Instant::now() + std::time::Duration::from_secs(secs));
-            }
+            self.throttle.fail(&self.dir, now());
         }
         self.error = Some(e.to_string());
     }
@@ -496,7 +491,7 @@ impl App {
     }
 
     pub fn wait_left(&self) -> Option<u64> {
-        self.retry_at.and_then(|at| at.checked_duration_since(Instant::now())).map(|d| d.as_secs() + 1)
+        self.throttle.left(now())
     }
 
     pub fn act(&mut self, a: Act) {
@@ -539,8 +534,7 @@ impl App {
                 let Some(v) = self.vault.as_mut() else { return };
                 match v.unlock(self.form[0].as_str()) {
                     Ok(()) => {
-                        self.fails = 0;
-                        self.retry_at = None;
+                        self.throttle.reset(&self.dir);
                         self.clear_forms();
                         self.go(View::List);
                         info!("kasa açıldı ({} kayıt)", self.vault.as_ref().map(|v| v.items().len()).unwrap_or(0));
@@ -566,7 +560,7 @@ impl App {
                 let Some(v) = self.vault.as_mut() else { return };
                 match v.unlock_recovery(self.form[0].as_str()) {
                     Ok(()) => {
-                        self.fails = 0;
+                        self.throttle.reset(&self.dir);
                         self.clear_forms();
                         info!("kasa kurtarma anahtarıyla açıldı");
                         self.go(View::NewPassword);
@@ -711,7 +705,7 @@ impl App {
                 }
                 match self.vault.as_mut().map(|v| v.change_password(self.form[0].as_str())) {
                     Some(Ok(())) => {
-                        self.fails = 0;
+                        self.throttle.reset(&self.dir);
                         self.clear_forms();
                         self.error = None;
                         self.toast(t!("Parola değiştirildi", "Password changed"));

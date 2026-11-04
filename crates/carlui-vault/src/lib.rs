@@ -24,14 +24,17 @@
 //! (`Request::ImportTotp`) yollar, kasa doldurulmuş yeni kayıt açar (kilitliyse
 //! açılınca). Kayıt kendiliğinden kaydedilmez.
 //!
-//! Sonraki aşama (henüz yazılmadı):
-//! - Aşama 5, güvenlik testleri (bellek dökümü, dosya kurcalama, hız sınırı).
+//! Aşama 5, sağlamlaştırma: kurcalanmış dosya (kayıt kimliği, KDF ayarları,
+//! sürüm, kesik dosya) reddedilir (`vault` ve `crypto` testleri); yanlış parola
+//! beklemesi diske yazılır, pencereyi kapatmak sıfırlamaz (`throttle`). Elle
+//! bellek dökümü: kilitliyken ana parola ve kayıt değerleri bulunmadı.
 
 pub mod autofill;
 pub mod crypto;
 pub mod entry;
 mod hex;
 pub mod recovery;
+pub mod throttle;
 pub mod token;
 pub mod totp;
 pub mod vault;

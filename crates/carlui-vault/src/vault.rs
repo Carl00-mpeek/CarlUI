@@ -398,6 +398,36 @@ mod tests {
     }
 
     #[test]
+    fn tampered_ids_and_kdf() {
+        let d = tmp();
+        let mut v = Vault::create(&d, "pw", KdfParams::fast()).unwrap();
+        let (m, b) = sample("A", "x");
+        v.add(m, &b).unwrap();
+        let good = Vault::load(&d).unwrap().file;
+        // Kimlik dosya yoluna çevrilirse (files\<id>.bin) kasa hiç açılmaz:
+        // ad AAD'ye bağlı olduğundan çözülmez, yol kullanılmadan reddedilir.
+        let mut f = good.clone();
+        f.entries[0].id = r"..\..\kotu".into();
+        std::fs::write(d.join("vault.json"), serde_json::to_vec(&f).unwrap()).unwrap();
+        assert_eq!(Vault::load(&d).unwrap().unlock("pw").err(), Some(Error::Corrupt));
+        // Argon2 ayarları kurcalanırsa (bellek 4 GiB) donmadan reddedilir.
+        let mut f = good.clone();
+        f.kdf.m_kib = 4 * 1024 * 1024;
+        std::fs::write(d.join("vault.json"), serde_json::to_vec(&f).unwrap()).unwrap();
+        assert!(matches!(Vault::load(&d).unwrap().unlock("pw").err(), Some(Error::Format(_))));
+        // Biçim sürümü değiştirilirse yüklenmez.
+        let mut f = good.clone();
+        f.format = 99;
+        std::fs::write(d.join("vault.json"), serde_json::to_vec(&f).unwrap()).unwrap();
+        assert!(Vault::load(&d).is_err());
+        // Kesilmiş dosya.
+        let raw = serde_json::to_vec(&good).unwrap();
+        std::fs::write(d.join("vault.json"), &raw[..raw.len() / 2]).unwrap();
+        assert!(Vault::load(&d).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
     fn per_entry_keys_are_separate() {
         let d = tmp();
         let mut v = Vault::create(&d, "pw", KdfParams::fast()).unwrap();
