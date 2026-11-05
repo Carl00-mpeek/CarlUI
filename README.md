@@ -7,7 +7,8 @@
 
 <p align="center">
   A lightweight, fast desktop shell for Windows 11, written in Rust.<br>
-  Floating dock, a top island for the clock, notifications and media, search, clipboard history and a control center.
+  Floating dock, a top island for the clock, notifications and media, search, clipboard history, a control center,<br>
+  the Carl Vault password manager, instant replay and on-device AI.
 </p>
 
 <p align="center">
@@ -87,11 +88,85 @@
     own, add text to a page.
   - Saving keeps everything you didn't touch (charts, macros, images…) as it
     was. Nothing runs in the background; it's optional in the installer.
-- **Task manager, file converter, screenshot tool** and a **Settings** window
-  that controls all of it. The task manager has a **Run as administrator**
-  button for processes and startup items that need it.
+- **Carl Vault (Ctrl+Alt+P):** An encrypted password and 2FA vault. It stays
+  on this PC only, encrypted with your master password (Argon2id +
+  XChaCha20-Poly1305); nothing goes to the cloud.
+  - Passwords, emails, cards, notes and 2FA entries; 2FA codes are generated
+    in the vault.
+  - Strong password generator and strength meter.
+  - With the browser extension it fills login pages (Ctrl+Shift+L), offers to
+    save new logins and changed passwords, and suggests a strong password on
+    sign-up forms. It stores passkeys too.
+  - Import from Bitwarden, Chrome, Edge, Brave, Firefox, 1Password, LastPass,
+    KeePass, Proton Pass, Dashlane, NordPass; for 2FA from Aegis, 2FAS,
+    andOTP, otpauth lists and the Google Authenticator export QR.
+  - Locks itself after a period of inactivity, on sleep and when Windows
+    locks.
+- **Instant replay (Alt+F10):** While on, the screen and sound are recorded in
+  the background and only the last 1–30 minutes are kept. Press the shortcut
+  and that stretch is saved as an MP4 in `Videos\CarlUI`. Encoded on the
+  graphics card (H.264 / H.265), so games don't slow down; works in exclusive
+  fullscreen too. Settings for microphone, noise suppression, quality,
+  resolution, frame rate and deleting old clips. **Alt+F8** opens a small
+  control panel that doesn't steal focus from the game.
+- **Screenshot (Alt+X):** All monitors freeze; select an area, draw, type,
+  erase, undo, copy or save. **Ctrl+T** reads the text in the selection and
+  copies it (OCR); QR codes in the selection are read, and a 2FA QR goes to
+  Carl Vault with one button. Doesn't minimize fullscreen games. When done, a
+  notification with **Open / Edit / Delete** appears on the island.
+- **File converter (Win+Alt):** Converts the selected images, videos and audio
+  files to other formats; turns video into GIF or extracts its audio.
+- **Task manager:** Processes (unsigned programs first), every startup item,
+  CPU (per core and temperature), GPU, RAM and disk graphs. A **Run as
+  administrator** button for processes that need it.
+- **Small tools:**
+  - **Text expander:** Type an abbreviation like `;addr` and it's replaced
+    with longer text; it stays off in apps you choose (games, terminals).
+  - **Color picker**, **batch rename (Ctrl+Shift+R)** and **disk analyzer**
+    (which folders take up space).
+- **Download manager:** Paste a link into search and pick "Download" (or type
+  `download <url>`); the file goes to Downloads with percent and speed on the
+  island. Pause / resume / cancel.
+- **Look:** Light / dark / system theme, accent color, glass density, corner
+  radius, animation speed and an optional **CarlUI cursor** (turn it off to
+  get the Windows cursor back).
+- **Settings:** Everything in one window, applied instantly; export / import
+  all settings as a single file. Text doesn't get cut off on small screens
+  (1366×768) either.
+- **Shortcuts:** All of them can be changed in **Settings → Shortcuts** (see
+  the table below).
 - **English and Turkish:** Follows the Windows display language; change it in
   **Settings → General → Language**.
+
+### Shortcuts
+
+| Shortcut | What it does |
+|---|---|
+| Windows key / Ctrl+Space | Win menu / search |
+| Win+1…9 | Opens the 1st–9th app on the dock |
+| Win+V | Clipboard history |
+| Alt+X | Screenshot (in a selection, Ctrl+T: copy text, Ctrl+Shift+T: translate) |
+| Win+Alt | File converter |
+| Ctrl+Alt+P | Carl Vault |
+| Ctrl+Shift+R | Batch rename |
+| Alt+F10 / Alt+F8 | Instant replay: save the last minutes / open the panel |
+| Ctrl+Alt+S | Read selected text aloud |
+| Ctrl+Alt+D | Dictation |
+| Ctrl+Alt+A (hold) | Voice assistant |
+
+The color picker and disk analyzer have no shortcut by default; you can set one
+in Settings.
+
+### Search commands
+
+- Type `yt`, `chatgpt`, `claude`, `grok`, `gemini` or `wp` to open that site or
+  app; keep typing to search / ask there. `@` lists them all. `wp name message`
+  opens that contact's WhatsApp chat with the message ready.
+- `/lock`, `/restart`, `/shutdown`: lock, restart, shut down.
+- `:fire`, `:heart`… copy an emoji. `>` lists open windows, `recent` lists
+  recently opened files.
+- `wifi off`, `bluetooth on`, `volume 30`, `mute`, `brightness 70`,
+  `dark mode`: quick settings.
 
 ### AI
 
@@ -105,6 +180,10 @@ Everything runs on your PC; nothing goes to the cloud. Options are in
   English voice.
 - **Dictation (Ctrl+Alt+D):** Speak and your words are typed where the cursor
   is.
+- **Voice assistant (Ctrl+Alt+A):** Hold the shortcut, say a command, let go:
+  "open YouTube", "set volume to 30", "search lofi on YouTube". It does by
+  voice anything search can do. It never listens all the time; optional in the
+  installer and in Settings.
 - **Screen translation:** Select an area in the screenshot tool and press
   **Ctrl+Shift+T**; English text on screen is translated to Turkish (or the
   other way round) and copied to the clipboard.
@@ -148,7 +227,8 @@ compare the SHA-256 of your download with the one on the Releases page.
 - **CPU temperature:** Intel CPUs need the [PawnIO](https://pawnio.eu) driver.
   If it's installed, the installer turns on "CPU temperature"; it asks for
   admin rights once.
-- **Browser extension:** Moves downloads started in the browser to the island.
+- **Browser extension:** Moves downloads started in the browser to the island
+  and fills login pages from Carl Vault.
   It ships in `%LOCALAPPDATA%\Programs\CarlUI\extension\carlui-downloads`; turn
   on developer mode on your browser's extensions page and use **Load unpacked**
   on that folder. See **Settings → Search → Browser extension**.
@@ -163,7 +243,7 @@ a notification on the island. Nothing happens until you click it: then CarlUI
 downloads the new installer, checks its SHA-256 against the release, installs
 it silently and restarts. Your settings are kept. If something goes wrong, the
 notification links to the release page so you can update by hand. Turn the
-check off in **Settings → General → Updates**.
+check off in **Settings → General → System**.
 
 ### Uninstall
 
@@ -184,6 +264,8 @@ the Recycle Bin. You choose whether to keep your settings.
 | Program | `%LOCALAPPDATA%\Programs\CarlUI\` |
 | Settings | `%APPDATA%\CarlUI\config.toml` (edited from the Settings window, applied instantly) |
 | Clipboard history, cache | `%LOCALAPPDATA%\CarlUI\` |
+| Carl Vault | `%APPDATA%\CarlUI\vault\vault.json` (encrypted with your master password) |
+| Instant replay clips | `Videos\CarlUI\` (folder can be changed in Settings) |
 | AI models | `%LOCALAPPDATA%\CarlUI\models\` (remove them from the Voice studio) |
 | Logs | `%LOCALAPPDATA%\CarlUI\logs\` (kept for 7 days) |
 
@@ -226,7 +308,7 @@ Windows installers are to be signed for free through
 CarlUI collects no data and has no telemetry. It only connects to other
 systems when you ask it to (currency rates, translation, web search,
 downloads, model downloads) and for the daily update check against the GitHub
-API, which can be turned off in **Settings → General → Updates**. AI features
+API, which can be turned off in **Settings → General → System**. AI features
 run entirely on your PC; your voice, text and images are never sent anywhere.
 
 ## License

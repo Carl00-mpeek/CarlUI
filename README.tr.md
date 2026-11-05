@@ -7,7 +7,8 @@
 
 <p align="center">
   Windows 11 için Rust ile yazılmış, hafif ve hızlı bir masaüstü kabuğu.<br>
-  Yüzen dock, üstte saat/bildirim/medya adası, arama, pano geçmişi ve kontrol merkezi.
+  Yüzen dock, üstte saat/bildirim/medya adası, arama, pano geçmişi, kontrol merkezi,<br>
+  Carl Vault parola kasası, anlık tekrar ve yerel yapay zekâ.
 </p>
 
 <p align="center">
@@ -87,11 +88,81 @@
     kaydetme, sayfaya metin yazma.
   - Kaydederken dokunmadığın her şey (grafik, makro, resim…) olduğu gibi
     kalır. Arka planda çalışmaz; kurucuda isteğe bağlıdır.
-- **Görev yöneticisi, dosya dönüştürücü, ekran görüntüsü aracı** ve hepsini
-  yöneten **Ayarlar** penceresi. Yetki isteyen süreçler ve başlangıç öğeleri
-  için görev yöneticisinde **Yönetici olarak çalıştır** düğmesi var.
+- **Carl Vault (Ctrl+Alt+P):** Şifreli parola ve 2FA kasası. Kasa yalnızca
+  bu bilgisayarda durur, ana parolayla (Argon2id + XChaCha20-Poly1305)
+  şifrelenir; hiçbir şey buluta gitmez.
+  - Parola, e-posta, kart, not ve 2FA kayıtları; 2FA kodları kasada üretilir.
+  - Güçlü parola üretici ve güç göstergesi.
+  - Tarayıcı eklentisiyle giriş sayfalarını doldurur (Ctrl+Shift+L), yeni
+    girişte ya da parola değişince kaydetmeyi sorar, kayıt formunda güçlü
+    parola önerir. Passkey de saklar.
+  - İçe aktarma: Bitwarden, Chrome, Edge, Brave, Firefox, 1Password, LastPass,
+    KeePass, Proton Pass, Dashlane, NordPass; 2FA için Aegis, 2FAS, andOTP,
+    otpauth listeleri ve Google Authenticator aktarım QR'ı.
+  - Bir süre kullanılmayınca, uykuda ve Windows kilitlenince kendiliğinden
+    kilitlenir.
+- **Anlık tekrar (Alt+F10):** Açıkken ekran ve ses arka planda kaydedilir,
+  yalnızca son 1–30 dakika tutulur. Kısayola basınca o süre MP4 olarak
+  `Videolar\CarlUI` klasörüne kaydedilir. Ekran kartında kodlanır (H.264 /
+  H.265), oyunu yavaşlatmaz, özel tam ekranda da çalışır. Mikrofon, gürültü
+  engelleme, kalite, çözünürlük, kare hızı ve eski klipleri silme ayarları var.
+  **Alt+F8** oyunun odağını almayan küçük denetim panelini açar.
+- **Ekran görüntüsü (Alt+X):** Tüm monitörler donar; alan seç, çiz, yaz, sil,
+  geri al, kopyala ya da kaydet. **Ctrl+T** seçimdeki yazıyı okuyup panoya
+  koyar (OCR); seçimdeki QR kodu okunur, 2FA QR'ı tek düğmeyle Carl Vault'a
+  gider. Tam ekran oyunda oyunu küçültmez. Bitince adada **Aç / Düzenle / Sil**
+  düğmeli bildirim çıkar.
+- **Dosya dönüştürücü (Win+Alt):** Seçili resim, video ve ses dosyalarını
+  başka biçime çevirir; videodan GIF ya da ses çıkarır.
+- **Görev yöneticisi:** İşlemler (imzasız programlar öne), tüm başlangıç
+  öğeleri, CPU (çekirdek başına ve sıcaklık), GPU, RAM ve disk grafikleri.
+  Yetki isteyen süreçler için **Yönetici olarak çalıştır** düğmesi var.
+- **Küçük araçlar:**
+  - **Metin genişletici:** `;adres` gibi bir kısaltma yazınca yerine uzun
+    metin gelir; seçtiğin uygulamalarda (oyun, terminal) çalışmaz.
+  - **Renk seçici**, **toplu yeniden adlandırma (Ctrl+Shift+R)** ve
+    **disk analizörü** (hangi klasör ne kadar yer kaplıyor).
+- **İndirme yöneticisi:** Aramaya bağlantı yapıştırıp "İndir" de (ya da
+  `indir <adres>` yaz); dosya İndirilenler'e iner, adada yüzde ve hız görünür.
+  Duraklat / sürdür / iptal.
+- **Görünüm:** Açık / koyu / sistem teması, vurgu rengi, cam yoğunluğu, köşe
+  yuvarlaklığı, animasyon hızı ve isteğe bağlı **CarlUI imleci** (kapatınca
+  Windows'un imleci geri gelir).
+- **Ayarlar:** Hepsi tek pencerede, anında uygulanır; ayarları tek bir dosyaya
+  dışa / içe aktarabilirsin. Küçük ekranlarda (1366×768) da yazılar kesilmez.
+- **Kısayollar:** Hepsi **Ayarlar → Kısayollar** sayfasından değiştirilebilir
+  (aşağıdaki tabloya bak).
 - **Türkçe ve İngilizce arayüz:** Windows'un görüntü diline uyar; **Ayarlar →
   Genel → Dil** bölümünden değiştirilebilir.
+
+### Kısayollar
+
+| Kısayol | Ne yapar |
+|---|---|
+| Windows tuşu / Ctrl+Space | Win menüsü / arama |
+| Win+1…9 | Dock'taki 1.–9. uygulamayı açar |
+| Win+V | Pano geçmişi |
+| Alt+X | Ekran görüntüsü (seçimde Ctrl+T: yazıyı kopyala, Ctrl+Shift+T: çevir) |
+| Win+Alt | Dosya dönüştürücü |
+| Ctrl+Alt+P | Carl Vault |
+| Ctrl+Shift+R | Toplu yeniden adlandırma |
+| Alt+F10 / Alt+F8 | Anlık tekrar: son dakikaları kaydet / paneli aç |
+| Ctrl+Alt+S | Seçili metni sesli oku |
+| Ctrl+Alt+D | Dikte |
+| Ctrl+Alt+A (basılı tut) | Sesli asistan |
+
+Renk seçici ve disk analizörü için kısayol yok; istersen Ayarlar'dan atarsın.
+
+### Arama komutları
+
+- `yt`, `chatgpt`, `claude`, `grok`, `gemini`, `wp` yazınca ilgili site ya da
+  uygulama açılır; ardından metin yazarsan orada arar / sorar. `@` hepsini
+  listeler. `wp ad mesaj` kişinin WhatsApp sohbetini mesaj hazır açar.
+- `/lock`, `/restart`, `/shutdown`: kilitle, yeniden başlat, kapat.
+- `:gül`, `:kalp`… emoji kopyalar. `>` açık pencereleri, `son` son açılan
+  dosyaları listeler.
+- `wifi kapat`, `bluetooth aç`, `ses 30`, `sessiz`, `parlaklık 70`,
+  `karanlık mod`: hızlı ayarlar.
 
 ### Yapay zekâ
 
@@ -104,6 +175,9 @@ Yapay zekâ** sayfasında.
   basınca susar. Türkçe metin Türkçe sesle, İngilizce metin İngilizce sesle
   okunur.
 - **Dikte (Ctrl+Alt+D):** Konuş, söylediklerin imlecin olduğu yere yazılsın.
+- **Sesli asistan (Ctrl+Alt+A):** Kısayolu basılı tut, komutu söyle, bırak:
+  "YouTube'u aç", "sesi 30 yap", "YouTube'da lofi ara". Aramanın yaptığı
+  her şeyi sesle yapar. Sürekli dinlemez; kurucuda ve Ayarlar'da isteğe bağlı.
 - **Ekran çevirisi:** Ekran görüntüsü aracında alan seçip **Ctrl+Shift+T**'ye
   bas; ekrandaki İngilizce yazı Türkçeye (ya da tersi) çevrilip panoya konur.
 - **Sesli komutla klip:** Anlık tekrar açıkken "son iki dakikayı kaydet" de,
@@ -148,7 +222,8 @@ SHA-256 değerini Releases sayfasındakiyle karşılaştırabilirsin.
 - **CPU sıcaklığı:** Intel işlemcilerde sıcaklık için
   [PawnIO](https://pawnio.eu) sürücüsü gerekir. Kuruluysa kurucu "CPU
   sıcaklığı" seçeneğini açar; bir kez yönetici izni ister.
-- **Tarayıcı eklentisi:** Tarayıcıda başlayan indirmeleri adaya taşır.
+- **Tarayıcı eklentisi:** Tarayıcıda başlayan indirmeleri adaya taşır
+  ve giriş sayfalarını Carl Vault kasasından doldurur.
   `%LOCALAPPDATA%\Programs\CarlUI\extension\carlui-downloads` klasöründe gelir;
   tarayıcının eklentiler sayfasında geliştirici modunu açıp **Paketlenmemiş öğe
   yükle** ile bu klasörü seç. Ayrıntı: **Ayarlar → Arama → Tarayıcı eklentisi**.
@@ -163,7 +238,7 @@ bildirim çıkar. Sen tıklamadıkça hiçbir şey olmaz. Tıklayınca CarlUI ye
 kurucuyu indirir, SHA-256 değerini sürümdekiyle karşılaştırır, sessizce kurar
 ve yeniden başlar. Ayarların korunur. Bir sorun çıkarsa bildirim sürüm
 sayfasına yönlendirir, oradan elle güncelleyebilirsin. Denetim **Ayarlar →
-Genel → Güncellemeler** bölümünden kapatılabilir.
+Genel → Sistem** bölümünden kapatılabilir.
 
 ### Kaldırma
 
@@ -184,6 +259,8 @@ Kutusu'na taşınır. Ayarların kalmasını ya da silinmesini sen seçersin.
 | Program | `%LOCALAPPDATA%\Programs\CarlUI\` |
 | Ayarlar | `%APPDATA%\CarlUI\config.toml` (Ayarlar penceresinden değiştirilir, anında uygulanır) |
 | Pano geçmişi, önbellek | `%LOCALAPPDATA%\CarlUI\` |
+| Carl Vault kasası | `%APPDATA%\CarlUI\vault\vault.json` (ana parolayla şifreli) |
+| Anlık tekrar klipleri | `Videolar\CarlUI\` (klasör Ayarlar'dan değiştirilebilir) |
 | Yapay zekâ modelleri | `%LOCALAPPDATA%\CarlUI\models\` (Ses stüdyosundan silinebilir) |
 | Loglar | `%LOCALAPPDATA%\CarlUI\logs\` (7 gün saklanır) |
 
@@ -226,7 +303,7 @@ imzalanması için başvuru yapıldı.
 CarlUI veri toplamaz, telemetri içermez. Yalnızca senin istediğin işlerde
 (döviz kuru, çeviri, web araması, indirmeler, model indirme) ve günlük
 güncelleme denetiminde (GitHub API) internete bağlanır; denetim **Ayarlar →
-Genel → Güncellemeler** bölümünden kapatılabilir. Yapay zekâ özellikleri
+Genel → Sistem** bölümünden kapatılabilir. Yapay zekâ özellikleri
 tamamen bilgisayarında çalışır; ses, metin ve görüntülerin hiçbir yere
 gönderilmez.
 
