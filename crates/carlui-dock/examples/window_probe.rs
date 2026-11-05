@@ -3,6 +3,9 @@
 #[path = "../src/apps.rs"]
 #[allow(dead_code)]
 mod apps;
+#[path = "../src/resolver.rs"]
+#[allow(dead_code)]
+mod resolver;
 
 use windows::Win32::{
     Foundation::*,
@@ -21,6 +24,9 @@ unsafe extern "system" fn each(h: HWND, _: LPARAM) -> BOOL {
         let id = apps::AppId::of_window(&apps::window_app_id(h), &apps::process_exe_of_window(h));
         let ex = GetWindowLongW(h, GWL_EXSTYLE) as u32;
         println!("{:?} '{t}' visible={} ex={ex:#x} explicit='{}' -> {id:?}", h.0, IsWindowVisible(h).as_bool(), apps::window_aumid(h));
+        if IsWindowVisible(h).as_bool() {
+            println!("   resolver={:?} pin={:?}", resolver::app_id(h), apps::pin_for_window(h));
+        }
     }
     TRUE
 }

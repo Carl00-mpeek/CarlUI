@@ -248,6 +248,11 @@ impl Dock {
 
     pub(super) fn pin_from_entry(&self, i: usize) -> Pinned {
         let e = &self.entries[i];
+        // Açık pencereden: Windows'un seçtiği kısayol (başlatıcı), yardımcı süreç değil.
+        if let Some(p) = e.windows.iter().find_map(|&w| crate::apps::pin_for_window(w)) {
+            carlui_core::info!("sabitlendi: {} → {}", p.name, p.path);
+            return p;
+        }
         let path = if !e.app.aumid.is_empty() && e.exe.is_empty() {
             format!("shell:AppsFolder\\{}", e.app.aumid)
         } else {

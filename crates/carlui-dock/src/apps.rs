@@ -116,8 +116,30 @@ pub fn window_app_id(hwnd: HWND) -> String {
                 id = process_aumid(cpid);
             }
         }
+        if id.is_empty() {
+            // Süreç düzeyinde verilmiş kimlik (Steam'in yardımcı süreci gibi):
+            // pencerede yazmaz, Windows'un çözücüsü bilir.
+            id = crate::resolver::explicit_app_id(hwnd).unwrap_or_default();
+        }
         id
     }
+}
+
+/// Açık pencereden sabitlenecek öğe, Windows görev çubuğunun yaptığı gibi:
+/// pencerenin uygulama kimliğine en uygun kısayol (Steam'de yardımcı süreç
+/// değil Steam.lnk). Kısayol bulunamazsa `None` (çağıran exe'yi kullanır).
+pub fn pin_for_window(hwnd: HWND) -> Option<Pinned> {
+    let (id, explicit) = crate::resolver::app_id(hwnd)?;
+    let item = crate::resolver::best_shortcut(&id)?;
+    let mut p = item_to_pin(&item)?;
+    if p.aumid.is_empty() && explicit {
+        p.aumid = id;
+    }
+    // Kısayolun hedefi yoksa (kaldırılmış uygulama) kullanılmaz.
+    if p.path.to_lowercase().ends_with(".lnk") && !std::path::Path::new(&expand_env(&p.exe)).exists() {
+        return None;
+    }
+    Some(p)
 }
 
 /// Pencerenin sürecinin exe yolu. Store uygulamalarında (ApplicationFrameHost

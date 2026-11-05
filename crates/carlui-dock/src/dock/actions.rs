@@ -11,6 +11,8 @@ impl Dock {
     pub fn launch(&self, i: usize) {
         let e = &self.entries[i];
         let (path, args) = match &e.pin {
+            // Kısayol silinmişse (Windows'un önbellek kısayolları temizlenebilir) hedef exe.
+            Some(p) if p.path.to_lowercase().ends_with(".lnk") && !p.exe.is_empty() && !std::path::Path::new(&expand_env(&p.path)).exists() => (expand_env(&p.exe), p.args.clone()),
             Some(p) => (expand_env(&p.path), p.args.clone()),
             None if !e.app.aumid.is_empty() && e.exe.to_lowercase().contains("\\windowsapps\\") => {
                 (format!("shell:AppsFolder\\{}", e.app.aumid), String::new())

@@ -18,6 +18,7 @@ mod jumplist;
 mod menu;
 mod popup;
 mod procs;
+mod resolver;
 mod tracker;
 
 use carlui_core::{
