@@ -1,0 +1,23 @@
+[package]
+name = "carlui-office"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+carlui-core.workspace = true
+carlui-ui.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Zip (docx/xlsx/pptx) için sıkıştırma; zip biçimini kendimiz okuyup yazıyoruz.
+miniz_oxide = "0.8"
+# Eski Excel (.xls, BIFF8) yalnızca okunur.
+calamine = { version = "0.38", default-features = false }
+encoding_rs = "0.8"
+# PDF düzenleme (not, birleştirme, ayırma). Görüntüleme Windows'un PDF motoruyla.
+lopdf = { version = "0.47", default-features = false }
+
+[dependencies.windows]
+workspace = true
+features = ["Data_Pdf", "Storage_Streams", "Graphics_Imaging"]

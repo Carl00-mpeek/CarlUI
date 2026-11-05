@@ -4,11 +4,11 @@
 //! sonda yeniden açılır), gömülü exe'ler kullanıcı klasörüne yazılır
 //! (kilitli bir exe varsa yeniden adlandırılıp yenisi yanına konur), Programlar
 //! listesine kayıt ve Başlat menüsü kısayolları eklenir. İsteğe bağlı adımlar:
-//! masaüstü kısayolu, imzalı Firefox eklentisi, CarlUI duvar kâğıdı, CPU
-//! sıcaklığı görevi (UAC).
+//! masaüstü kısayolu, imzalı Firefox eklentisi, CarlUI duvar kâğıdı, Carl
+//! Office (dosya türleriyle), CPU sıcaklığı görevi (UAC).
 //! Başlangıç kaydını CarlUI'nin kendisi, açıldığında kendi konumuna göre kurar.
 
-use crate::{payload, shell, WM_APP_PROGRESS};
+use crate::{office, payload, shell, WM_APP_PROGRESS};
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -29,6 +29,8 @@ pub struct Options {
     pub firefox: bool,
     /// CarlUI duvar kâğıdını masaüstü arka planı yap.
     pub wallpaper: bool,
+    /// Carl Office modülü (exe, Başlat kısayolu, dosya türü kayıtları).
+    pub office: bool,
     /// Deneme: yalnızca dosyalar yazılır; kayıt defteri, kısayol, görev yok.
     pub dry: bool,
 }
@@ -130,7 +132,7 @@ pub fn xpi_path(dir: &Path) -> PathBuf {
 fn run(o: &Options, rep: &Reporter) -> Outcome {
     let mut notes = Vec::new();
     let fail = |notes: Vec<String>| Outcome { ok: false, notes };
-    let total = (payload::FILES.len() + payload::EXTENSION.len() + 7) as f32;
+    let total = (payload::FILES.len() + payload::EXTENSION.len() + 8) as f32;
     let mut n = 0.0f32;
     let mut tick = |rep: &Reporter, s: &str| {
         n += 1.0;
@@ -154,7 +156,10 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
 
     let since = Instant::now();
     for (name, bytes) in payload::FILES {
-        tick(rep, &format!("{} · {name}", t!("Kopyalanıyor", "Copying")));
+        if *name == office::EXE && !o.office {
+            continue;
+        }
+        tick(rep,&format!("{} · {name}", t!("Kopyalanıyor", "Copying")));
         if let Err(e) = place(&o.dir.join(name), bytes, since) {
             if *name == "carlui.exe" {
                 return fail(vec![t!(format!("{name} yazılamadı: {e}"), format!("Couldn't write {name}: {e}"))]);
@@ -232,6 +237,16 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
             }
         }
         None => notes.push(t!("Başlat menüsü klasörü bulunamadı", "Start menu folder not found").into()),
+    }
+    office::remember(o.office);
+    if o.office {
+        tick(rep, t!("Carl Office dosya türleri kaydediliyor", "Registering Carl Office file types"));
+        let link = shell::menu_dir().is_some_and(|m| shell::shortcut(&m.join(office::LINK), &o.dir.join(office::EXE), "", t!("Excel, Word, PowerPoint ve PDF dosyalarını açar", "Opens Excel, Word, PowerPoint and PDF files")));
+        if !(office::register(&o.dir) && link) {
+            notes.push(t!("Carl Office dosya türlerinin bir kısmı kaydedilemedi", "Some Carl Office file types couldn't be registered").into());
+        }
+    } else {
+        office::remove(&o.dir);
     }
     if o.desktop && !shell::desktop_link().is_some_and(|l| shell::shortcut(&l, &exe, "", t!("CarlUI kabuğunu başlatır", "Starts the CarlUI shell"))) {
         notes.push(t!("Masaüstü kısayolu oluşturulamadı", "Couldn't create the desktop shortcut").into());

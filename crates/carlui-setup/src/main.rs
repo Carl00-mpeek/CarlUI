@@ -1,5 +1,5 @@
 //! Bu modül CarlUI'nin tek dosyalık kurucusu (`CarlUI-Setup.exe`). Sorun:
-//! CarlUI dokuz ayrı exe, bir tarayıcı eklentisi ve isteğe bağlı bir sensör
+//! CarlUI on ayrı exe, bir tarayıcı eklentisi ve isteğe bağlı bir sensör
 //! görevinden oluşuyor; elle kopyalamak, kısayol açmak ve kaldırmak zahmetli
 //! ve hataya açık. Çözüm: hepsi bu exe'nin içine gömülü (`payload`); ayarlar
 //! penceresiyle aynı cam pencerede konum ve seçenekler seçilir, kurulum
@@ -25,6 +25,7 @@
 extern crate carlui_core;
 
 mod install;
+mod office;
 mod payload;
 mod shell;
 mod uninstall;
@@ -79,6 +80,7 @@ pub enum Opt {
     Sensors,
     Firefox,
     Wallpaper,
+    Office,
     Purge,
 }
 
@@ -179,7 +181,7 @@ impl App {
             accent: glassmenu::accent(),
             mode,
             page: if mode == Mode::Install { Page::Welcome } else { Page::Confirm },
-            opts: install::Options { dir, desktop: true, launch: true, sensors: pawnio, firefox: payload::XPI.is_some(), wallpaper: false, dry },
+            opts: install::Options { dir, desktop: true, launch: true, sensors: pawnio, firefox: payload::XPI.is_some(), wallpaper: false, office: office::wanted(), dry },
             purge: false,
             pawnio,
             installed_before,
@@ -229,6 +231,7 @@ impl App {
                     Opt::Sensors => &mut self.opts.sensors,
                     Opt::Firefox => &mut self.opts.firefox,
                     Opt::Wallpaper => &mut self.opts.wallpaper,
+                    Opt::Office => &mut self.opts.office,
                     Opt::Purge => &mut self.purge,
                 };
                 *v = !*v;
@@ -515,7 +518,7 @@ fn main() -> Result<()> {
         return snapshot(page, out, args.mode, dir);
     }
     if args.headless && args.dry {
-        let opts = install::Options { dir, desktop: false, launch: false, sensors: false, firefox: false, wallpaper: false, dry: true };
+        let opts = install::Options { dir, desktop: false, launch: false, sensors: false, firefox: false, wallpaper: false, office: true, dry: true };
         headless(args.mode, opts, false);
         return Ok(());
     }
@@ -526,7 +529,7 @@ fn main() -> Result<()> {
         let firefox = payload::XPI.is_some() && shell::reg_get(windows::Win32::System::Registry::HKEY_CURRENT_USER, shell::FIREFOX_KEY, shell::EXT_ID).is_some();
         let desktop = shell::desktop_link().is_some_and(|l| l.exists());
         let exe = dir.join("carlui.exe");
-        let opts = install::Options { dir, desktop, launch: true, sensors: false, firefox, wallpaper: false, dry: false };
+        let opts = install::Options { dir, desktop, launch: true, sensors: false, firefox, wallpaper: false, office: office::wanted(), dry: false };
         headless(Mode::Install, opts, false);
         // Kurulum yarıda kaldıysa da kullanıcı CarlUI'siz kalmasın.
         if !shell::carlui_running() && exe.exists() {
@@ -539,7 +542,7 @@ fn main() -> Result<()> {
     }
     if args.headless && args.mode == Mode::Install {
         // Sessiz gerçek kurulum: penceredeki varsayılan seçeneklerle.
-        let opts = install::Options { dir, desktop: true, launch: true, sensors: shell::pawnio_installed(), firefox: payload::XPI.is_some(), wallpaper: args.wallpaper, dry: false };
+        let opts = install::Options { dir, desktop: true, launch: true, sensors: shell::pawnio_installed(), firefox: payload::XPI.is_some(), wallpaper: args.wallpaper, office: office::wanted(), dry: false };
         headless(args.mode, opts, false);
         return Ok(());
     }

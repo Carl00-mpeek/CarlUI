@@ -13,7 +13,7 @@ use windows::Win32::Graphics::Direct2D::{Common::D2D_RECT_F, ID2D1Bitmap, D2D1_B
 pub type P<'a> = Painter<'a, Act>;
 
 pub const W: f32 = 600.0;
-pub const H: f32 = 562.0;
+pub const H: f32 = 614.0;
 const PAD: f32 = 32.0;
 
 /// Vurgu renginde ana düğme (Kur / Kaldır / Kapat).
@@ -81,15 +81,16 @@ impl App {
 
         let y = y + 88.0;
         p.text(t!("Seçenekler", "Options"), R::new(PAD + 2.0, y, cw, 20.0), 12.0, true, TEXT, 0.6, Align::Left);
-        let card = R::new(PAD, y + 24.0, cw, 52.0 * 5.0);
+        let card = R::new(PAD, y + 24.0, cw, 52.0 * 6.0);
         p.card(card);
         let pawn = self.pawnio;
         let xpi = payload::XPI.is_some();
-        let rows: [(&str, &str, bool, bool, Opt); 5] = [
+        let rows: [(&str, &str, bool, bool, Opt); 6] = [
             (t!("Masaüstü kısayolu", "Desktop shortcut"), t!("Başlat menüsüne her durumda eklenir", "Always added to the Start menu"), self.opts.desktop, true, Opt::Desktop),
             (t!("Kurulunca CarlUI'yi başlat", "Start CarlUI after install"), t!("Açılışta başlama kaydı bu konuma taşınır", "The startup entry points to this location"), self.opts.launch, true, Opt::Launch),
             (t!("CPU sıcaklığı", "CPU temperature"), if pawn { t!("Yönetici izni ister · açılışta çalışan küçük bir görev kurar", "Needs admin · sets up a small task that runs at sign-in") } else { t!("PawnIO sürücüsü kurulu değil", "PawnIO driver not installed") }, self.opts.sensors, pawn, Opt::Sensors),
             (t!("Firefox eklentisi", "Firefox extension"), if xpi { t!("İmzalı eklenti Firefox'a otomatik tanıtılır", "The signed extension is registered with Firefox") } else { t!("İmzalı paket yok · kurulumdan sonra elle yüklenir", "No signed package · load it manually after install") }, self.opts.firefox, xpi, Opt::Firefox),
+            (t!("Carl Office", "Carl Office"), t!("Excel, Word, PowerPoint ve PDF dosyalarını açar · kapalıyken arka planda çalışmaz", "Opens Excel, Word, PowerPoint and PDF files · nothing runs in the background"), self.opts.office, true, Opt::Office),
             (t!("CarlUI duvar kâğıdı", "CarlUI wallpaper"), t!("Siyah zeminde CarlUI yazısı · masaüstü arka planı olur", "CarlUI lettering on black · set as desktop background"), self.opts.wallpaper, true, Opt::Wallpaper),
         ];
         for (i, (t, d, on, en, opt)) in rows.into_iter().enumerate() {

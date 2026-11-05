@@ -8,7 +8,7 @@
 
 use crate::{
     install::{ext_dir, xpi_path, Outcome, Reporter},
-    payload, shell,
+    office, payload, shell,
 };
 use std::{
     path::{Path, PathBuf},
@@ -79,7 +79,7 @@ fn run(dir: &Path, purge: bool, dry: bool, rep: &Reporter) -> Outcome {
     rep.step(t!("Kısayollar ve kayıtlar kaldırılıyor", "Removing shortcuts and registry entries"), 0.55);
     if let Some(m) = shell::menu_dir() {
         // Kurulum hangi dilde yapıldıysa o adlar; ikisi de denenir.
-        for n in ["CarlUI.lnk", "CarlUI Ayarları.lnk", "CarlUI'yi kaldır.lnk", "CarlUI Settings.lnk", "Uninstall CarlUI.lnk", "Carl Vault.lnk"] {
+        for n in ["CarlUI.lnk", "CarlUI Ayarları.lnk", "CarlUI'yi kaldır.lnk", "CarlUI Settings.lnk", "Uninstall CarlUI.lnk", "Carl Vault.lnk", office::LINK] {
             let _ = std::fs::remove_file(m.join(n));
         }
         let _ = std::fs::remove_dir(&m);
@@ -92,6 +92,7 @@ fn run(dir: &Path, purge: bool, dry: bool, rep: &Reporter) -> Outcome {
     if shell::reg_get(windows::Win32::System::Registry::HKEY_CURRENT_USER, shell::FIREFOX_KEY, shell::EXT_ID).is_some_and(|v| points_into(&v, dir)) {
         shell::reg_delete_value(shell::FIREFOX_KEY, shell::EXT_ID);
     }
+    office::unregister();
     shell::reg_delete_key(shell::UNINSTALL_KEY);
 
     rep.step(t!("Dosyalar Geri Dönüşüm Kutusu'na taşınıyor", "Moving files to the Recycle Bin"), 0.75);
