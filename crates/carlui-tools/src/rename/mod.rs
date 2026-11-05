@@ -352,6 +352,6 @@ pub fn run(fg: windows::Win32::Foundation::HWND) -> windows::core::Result<()> {
     unsafe {
         let _ = windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut pt);
     }
-    view::run(Rename::new(paths, cfg), Opts { title: t!("Yeniden adlandır", "Rename").into(), w: 620.0, h: 482.0, at: Some((pt.x - 60, pt.y - 40)), resizable: false, popup: true })?;
+    view::run(Rename::new(paths, cfg), Opts { title: t!("Yeniden adlandır", "Rename").into(), w: 620.0, h: 482.0, at: Some((pt.x - 60, pt.y - 40)), resizable: false, popup: true, ..Default::default() })?;
     Ok(())
 }

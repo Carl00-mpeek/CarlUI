@@ -2,12 +2,13 @@
 //! çözüyor: anlık tekrar. Açıkken ekran ve bilgisayarın sesi arka planda
 //! sürekli kaydedilir, yalnızca son N dakika (1–30, varsayılan 5) diskte
 //! tutulur; kısayola (varsayılan Alt+F10) basınca o süre tek bir MP4 olarak
-//! Videolar\CarlUI'ya kaydedilir ve adada bildirim çıkar.
+//! Videolar\CarlUI'ya kaydedilir ve adada bildirim çıkar. Panel kısayolu
+//! (varsayılan Alt+F8) ya da `--panel` küçük denetim panelini açar/kapatır.
 //!
 //! Hafif kalması için: görüntü DXGI masaüstü çoğaltma ile GPU'da alınır,
-//! ekran kartının donanım kodlayıcısında H.264'e çevrilir (CPU'ya inmez);
-//! kaydederken yeniden kodlama yapılmaz. Pencere açılmaz, odak alınmaz;
-//! özel tam ekran oyunlarda da çalışır. Fare imleci kayda girmez.
+//! ekran kartının donanım kodlayıcısında H.264/H.265'e çevrilir (CPU'ya
+//! inmez); kaydederken yeniden kodlama yapılmaz. Odak hiç alınmaz (panel de
+//! etkinleşmez); özel tam ekran oyunlarda da çalışır. Fare imleci kayda girmez.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -16,23 +17,27 @@ extern crate carlui_core;
 
 mod audio;
 mod capture;
+mod mixer;
+mod panel;
 mod remux;
 mod ring;
 mod writer;
 
 use carlui_core::{
     bus::{BusClient, Event},
-    config::{self, Config, ReplayConfig},
+    config::{self, Codec, Config, ReplayConfig, Resolution},
     log,
 };
+use mixer::Flags;
 use ring::Ring;
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        atomic::{AtomicBool, AtomicIsize, Ordering},
+        Arc, Mutex, OnceLock,
     },
     thread::JoinHandle,
+    time::Instant,
 };
 use windows::{
     core::*,
@@ -46,10 +51,46 @@ use windows::{
 };
 
 const WM_APP_RELOAD: u32 = WM_APP + 1;
+/// Panelden: son süreyi kaydet.
+const WM_APP_SAVE: u32 = WM_APP + 2;
+/// İkinci örnekten ya da kısayoldan: paneli aç/kapat.
+const WM_APP_PANEL: u32 = WM_APP + 3;
 const HOTKEY: i32 = 1;
+const HOTKEY_PANEL: i32 = 2;
+const MSG_CLASS: PCWSTR = w!("CarlUI.Replay.Msg");
 
 static PENDING: Mutex<Option<Config>> = Mutex::new(None);
-static SAVING: AtomicBool = AtomicBool::new(false);
+pub static SAVING: AtomicBool = AtomicBool::new(false);
+/// Komutların gönderildiği gizli mesaj penceresi.
+static MSG_HWND: AtomicIsize = AtomicIsize::new(0);
+
+/// Panelin gösterdiği durum (ana iş parçacığı günceller).
+#[derive(Clone, Default)]
+pub struct Status {
+    pub cfg: ReplayConfig,
+    pub save_key: String,
+    pub panel_key: String,
+    /// Kaydın başladığı an (kayıt yoksa None).
+    pub started: Option<Instant>,
+    /// Kayıt boyutu ve sıkıştırma (ör. "1920×1080 · H.265").
+    pub info: String,
+}
+
+pub static STATUS: Mutex<Option<Status>> = Mutex::new(None);
+
+/// Ana iş parçacığına komut gönderir (panelden).
+fn post(msg: u32) {
+    let h = MSG_HWND.load(Ordering::SeqCst);
+    if h != 0 {
+        unsafe {
+            let _ = PostMessageW(HWND(h as _), msg, WPARAM(0), LPARAM(0));
+        }
+    }
+}
+
+pub fn post_save() {
+    post(WM_APP_SAVE);
+}
 
 type Current = Arc<Mutex<Option<Arc<Ring>>>>;
 
@@ -58,7 +99,27 @@ struct Session {
     cfg: ReplayConfig,
     stop: Arc<AtomicBool>,
     ring: Current,
+    flags: Arc<Flags>,
+    started: Instant,
     threads: Vec<JoinHandle<()>>,
+}
+
+/// Bu ekran kartı H.265'i donanımda kodlayabiliyor mu (bir kez denenir).
+unsafe fn hevc_ok(fmt: &writer::Format, dm: &IMFDXGIDeviceManager) -> bool {
+    static OK: OnceLock<bool> = OnceLock::new();
+    *OK.get_or_init(|| {
+        let p = temp_dir().join(format!("probe-{}.mp4", std::process::id()));
+        let r = writer::Writer::open(&p, fmt, dm);
+        let ok = r.is_ok();
+        if let Ok(w) = r {
+            let _ = w.finish();
+        }
+        let _ = std::fs::remove_file(&p);
+        if !ok {
+            warn!("H.265 donanım kodlayıcısı yok; H.264 kullanılıyor");
+        }
+        ok
+    })
 }
 
 fn temp_dir() -> PathBuf {
@@ -101,7 +162,13 @@ unsafe fn video_loop(cfg: ReplayConfig, stop: Arc<AtomicBool>, cur: Current) {
     const POOL: usize = 6;
     'outer: while !stop.load(Ordering::SeqCst) {
         let (w, h) = (screen.w & !1, screen.h & !1);
-        let fmt = writer::Format { w, h, fps, bitrate: cfg.bitrate(w, h), audio: cfg.audio };
+        let (ow, oh) = cfg.out_size(w, h);
+        let mut fmt = writer::Format { w, h, ow, oh, hevc: cfg.codec == config::Codec::Hevc, fps, bitrate: cfg.bitrate(ow, oh), audio: true };
+        if fmt.hevc && !hevc_ok(&fmt, &dm) {
+            fmt.hevc = false;
+            fmt.bitrate = ReplayConfig { codec: config::Codec::H264, ..cfg.clone() }.bitrate(ow, oh);
+        }
+        set_info(&fmt);
         let make = || -> Option<(ID3D11Texture2D, Vec<ID3D11Texture2D>)> {
             let p = screen.texture().ok()?;
             let pool = (0..POOL).map(|_| screen.texture().ok()).collect::<Option<Vec<_>>>()?;
@@ -113,7 +180,7 @@ unsafe fn video_loop(cfg: ReplayConfig, stop: Arc<AtomicBool>, cur: Current) {
         };
         let r = Ring::new(fmt, dm.clone(), temp_dir(), cfg.minutes());
         *cur.lock().unwrap_or_else(|e| e.into_inner()) = Some(r.clone());
-        info!("anlık tekrar kaydı başladı: {w}x{h} {fps} fps, {} Mbps, {} dk", fmt.bitrate / 1_000_000, cfg.minutes());
+        info!("anlık tekrar kaydı başladı: {w}x{h} → {ow}x{oh} {} {fps} fps, {} Mbps, {} dk", if fmt.hevc { "H.265" } else { "H.264" }, fmt.bitrate / 1_000_000, cfg.minutes());
         let mut next = ring::now();
         let mut have = false;
         let mut fresh = false;
@@ -159,55 +226,9 @@ unsafe fn video_loop(cfg: ReplayConfig, stop: Arc<AtomicBool>, cur: Current) {
     }
 }
 
-unsafe fn audio_loop(stop: Arc<AtomicBool>, cur: Current) {
-    let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    let mut lb: Option<audio::Loopback> = None;
-    let mut checked = std::time::Instant::now();
-    while !stop.load(Ordering::SeqCst) {
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        let ring = cur.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        if lb.is_none() {
-            match audio::Loopback::open() {
-                Ok(l) => {
-                    info!("ses yakalama açık");
-                    lb = Some(l);
-                }
-                Err(e) => {
-                    if checked.elapsed().as_secs() >= 3 {
-                        warn!("ses yakalama açılamadı: {e}");
-                        checked = std::time::Instant::now();
-                    }
-                    if let Some(r) = &ring {
-                        r.audio_idle(ring::now());
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                    continue;
-                }
-            }
-        }
-        let l = lb.as_mut().unwrap();
-        let got = l.read(|pcm, t| {
-            if let Some(r) = &ring {
-                r.audio(pcm, t);
-            }
-        });
-        match got {
-            Ok(false) => {
-                if let Some(r) = &ring {
-                    r.audio_idle(ring::now());
-                }
-            }
-            Ok(true) => {}
-            Err(_) => lb = None,
-        }
-        // Varsayılan çıkış aygıtı değiştiyse yenisine geç.
-        if checked.elapsed().as_secs() >= 3 {
-            checked = std::time::Instant::now();
-            if lb.as_ref().is_some_and(|l| audio::default_id().is_some_and(|id| id != l.id)) {
-                info!("varsayılan ses aygıtı değişti");
-                lb = None;
-            }
-        }
+fn set_info(f: &writer::Format) {
+    if let Some(s) = STATUS.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        s.info = format!("{}×{} · {} fps · {}", f.ow, f.oh, f.fps, if f.hevc { "H.265" } else { "H.264" });
     }
 }
 
@@ -220,13 +241,15 @@ impl Session {
         if let Ok(h) = std::thread::Builder::new().name("replay-video".into()).spawn(move || unsafe { video_loop(c, s, r) }) {
             threads.push(h);
         }
-        if cfg.audio {
-            let (s, r) = (stop.clone(), ring.clone());
-            if let Ok(h) = std::thread::Builder::new().name("replay-audio".into()).spawn(move || unsafe { audio_loop(s, r) }) {
-                threads.push(h);
-            }
+        let flags = Arc::new(Flags::default());
+        flags.audio.store(cfg.audio, Ordering::SeqCst);
+        flags.mic.store(cfg.mic, Ordering::SeqCst);
+        // Ses izi hep vardır: ses/mikrofon kayıt sürerken açılıp kapatılabilir.
+        let (s, r, f) = (stop.clone(), ring.clone(), flags.clone());
+        if let Ok(h) = std::thread::Builder::new().name("replay-audio".into()).spawn(move || unsafe { mixer::run(s, r, f) }) {
+            threads.push(h);
         }
-        Self { cfg: cfg.clone(), stop, ring, threads }
+        Self { cfg: cfg.clone(), stop, ring, flags, started: Instant::now(), threads }
     }
 
     fn stop(self) {
@@ -237,9 +260,9 @@ impl Session {
         info!("anlık tekrar kaydı durdu");
     }
 
-    /// Ayar değişince baştan kurmak gerekiyor mu (süre değişimi kurmaz).
+    /// Ayar değişince baştan kurmak gerekiyor mu (süre ve ses değişimi kurmaz).
     fn same(&self, c: &ReplayConfig) -> bool {
-        self.cfg.fps() == c.fps() && self.cfg.quality == c.quality && self.cfg.audio == c.audio
+        self.cfg.fps() == c.fps() && self.cfg.quality == c.quality && self.cfg.resolution == c.resolution && self.cfg.codec == c.codec
     }
 }
 
@@ -269,7 +292,15 @@ unsafe fn self_test() -> bool {
         return false;
     };
     let folder = PathBuf::from(std::env::var("CARLUI_REPLAY_OUT").unwrap_or_else(|_| ".".into()));
-    let rc = ReplayConfig { enabled: true, minutes: 1, ..Default::default() };
+    let env = |k: &str| std::env::var(k).unwrap_or_default();
+    let resolution = match env("CARLUI_REPLAY_RES").as_str() {
+        "720" => Resolution::P720,
+        "1080" => Resolution::P1080,
+        "1440" => Resolution::P1440,
+        _ => Resolution::Native,
+    };
+    let codec = if env("CARLUI_REPLAY_CODEC") == "hevc" { Codec::Hevc } else { Codec::H264 };
+    let rc = ReplayConfig { enabled: true, minutes: 1, resolution, codec, mic: env("CARLUI_REPLAY_MIC") == "1", ..Default::default() };
     let s = Session::start(&rc);
     std::thread::sleep(std::time::Duration::from_secs(secs));
     let ring = s.ring.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -306,21 +337,24 @@ fn save(ring: Arc<Ring>, folder: PathBuf) {
     });
 }
 
-unsafe fn register(cfg: &Config) {
-    let _ = UnregisterHotKey(None, HOTKEY);
-    if !cfg.replay.enabled {
-        return;
-    }
-    let Some(c) = cfg.shortcuts.replay_combo() else { return };
+unsafe fn hotkey(id: i32, c: Option<carlui_core::keys::Combo>, name: &str) {
+    let _ = UnregisterHotKey(None, id);
+    let Some(c) = c else { return };
     let mut mods = MOD_NOREPEAT;
     for (on, m) in [(c.mods.ctrl, MOD_CONTROL), (c.mods.alt, MOD_ALT), (c.mods.shift, MOD_SHIFT), (c.mods.win, MOD_WIN)] {
         if on {
             mods |= m;
         }
     }
-    if let Err(e) = RegisterHotKey(None, HOTKEY, mods, c.vk) {
-        warn!("anlık tekrar kısayolu {} kaydedilemedi (başka bir uygulama kullanıyor olabilir): {e}", cfg.shortcuts.replay);
+    if let Err(e) = RegisterHotKey(None, id, mods, c.vk) {
+        warn!("{name} kısayolu kaydedilemedi (başka bir uygulama kullanıyor olabilir): {e}");
     }
+}
+
+unsafe fn register(cfg: &Config) {
+    hotkey(HOTKEY, cfg.shortcuts.replay_combo().filter(|_| cfg.replay.enabled), "anlık tekrar");
+    // Panel kısayolu kayıt kapalıyken de çalışır (paneli açıp kaydı başlatmak için).
+    hotkey(HOTKEY_PANEL, cfg.shortcuts.replay_panel_combo(), "anlık tekrar paneli");
 }
 
 /// Ayarlara göre kaydı başlatır, durdurur ya da süresini günceller.
@@ -336,6 +370,8 @@ fn apply(sess: &mut Option<Session>, cfg: &Config) {
                     r.set_keep(rc.minutes());
                 }
             }
+            s.flags.audio.store(rc.audio, Ordering::SeqCst);
+            s.flags.mic.store(rc.mic, Ordering::SeqCst);
             s.cfg = rc.clone();
         }
         None => {}
@@ -343,14 +379,27 @@ fn apply(sess: &mut Option<Session>, cfg: &Config) {
     if rc.enabled && sess.is_none() {
         *sess = Some(Session::start(rc));
     }
+    {
+        let mut st = STATUS.lock().unwrap_or_else(|e| e.into_inner());
+        let info = st.as_ref().map(|s| s.info.clone()).unwrap_or_default();
+        *st = Some(Status { cfg: rc.clone(), save_key: cfg.shortcuts.replay.clone(), panel_key: cfg.shortcuts.replay_panel.clone(), started: sess.as_ref().map(|s| s.started), info });
+    }
+    panel::refresh();
     unsafe { register(cfg) };
 }
 
 fn main() -> Result<()> {
     log::init("replay");
     unsafe {
+        let want_panel = std::env::args().any(|a| a == "--panel");
         let _mutex = CreateMutexW(None, true, w!("Local\\CarlUI.Replay"))?;
         if GetLastError() == ERROR_ALREADY_EXISTS {
+            // Zaten çalışıyor: `--panel` ise ona paneli açtır.
+            if want_panel {
+                if let Ok(h) = FindWindowExW(HWND_MESSAGE, None, MSG_CLASS, None) {
+                    let _ = PostMessageW(h, WM_APP_PANEL, WPARAM(0), LPARAM(0));
+                }
+            }
             return Ok(());
         }
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -364,6 +413,12 @@ fn main() -> Result<()> {
             return Ok(());
         }
 
+        let inst = windows::Win32::System::LibraryLoader::GetModuleHandleW(None)?;
+        let wc = WNDCLASSW { lpfnWndProc: Some(msg_proc), hInstance: inst.into(), lpszClassName: MSG_CLASS, ..Default::default() };
+        RegisterClassW(&wc);
+        let mw = CreateWindowExW(WINDOW_EX_STYLE(0), MSG_CLASS, w!(""), WINDOW_STYLE(0), 0, 0, 0, 0, HWND_MESSAGE, None, inst, None)?;
+        MSG_HWND.store(mw.0 as isize, Ordering::SeqCst);
+
         let mut cfg = config::load();
         let mut sess = None;
         apply(&mut sess, &cfg);
@@ -374,13 +429,25 @@ fn main() -> Result<()> {
             let _ = PostThreadMessageW(tid, WM_APP_RELOAD, WPARAM(0), LPARAM(0));
         });
 
+        if want_panel {
+            panel::toggle();
+        }
+
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             match msg.message {
+                WM_APP_PANEL => panel::toggle(),
+                WM_HOTKEY if msg.wParam.0 as i32 == HOTKEY_PANEL => panel::toggle(),
                 WM_APP_RELOAD => {
                     if let Some(c) = PENDING.lock().unwrap_or_else(|e| e.into_inner()).take() {
                         apply(&mut sess, &c);
                         cfg = c;
+                    }
+                }
+                WM_APP_SAVE => {
+                    let ring = sess.as_ref().and_then(|s| s.ring.lock().unwrap_or_else(|e| e.into_inner()).clone());
+                    if let Some(r) = ring {
+                        save(r, cfg.replay.folder());
                     }
                 }
                 WM_HOTKEY if msg.wParam.0 as i32 == HOTKEY => {
@@ -390,13 +457,20 @@ fn main() -> Result<()> {
                         None => note(t!("Anlık tekrar", "Instant replay"), t!("Kayıt henüz başlamadı.", "Recording has not started yet.")),
                     }
                 }
-                _ => {}
+                _ => {
+                    DispatchMessageW(&msg);
+                }
             }
         }
+        panel::close();
         if let Some(s) = sess.take() {
             s.stop();
         }
         let _ = MFShutdown();
     }
     Ok(())
+}
+
+unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    DefWindowProcW(hwnd, msg, wp, lp)
 }

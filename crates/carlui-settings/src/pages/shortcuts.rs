@@ -27,10 +27,11 @@ pub enum Key {
     Rename,
     Disk,
     Replay,
+    ReplayPanel,
 }
 
 impl Key {
-    const COMBOS: [Key; 8] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk, Key::Replay];
+    const COMBOS: [Key; 9] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk, Key::Replay, Key::ReplayPanel];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -44,6 +45,7 @@ impl Key {
             Key::Rename => t!("Toplu yeniden adlandırma", "Batch rename"),
             Key::Disk => t!("Disk analizörü", "Disk analyzer"),
             Key::Replay => t!("Anlık tekrarı kaydet", "Save instant replay"),
+            Key::ReplayPanel => t!("Anlık tekrar paneli", "Instant replay panel"),
         }
     }
 
@@ -59,6 +61,7 @@ impl Key {
             Key::Rename => t!("Gezgin'de seçili dosyalar için.", "For files selected in Explorer."),
             Key::Disk => t!("Diskte yer kaplayanları gösterir.", "Shows what takes up disk space."),
             Key::Replay => t!("Son dakikaları video olarak kaydeder (oyun içinde de).", "Saves the last minutes as a video (in games too)."),
+            Key::ReplayPanel => t!("Kaydı başlatma, mikrofon ve kalite paneli; oyunun odağını almaz.", "Panel for recording, microphone and quality; never takes focus from the game."),
         }
     }
 
@@ -80,6 +83,7 @@ impl Key {
             Key::Rename => s.rename.clone(),
             Key::Disk => s.disk.clone(),
             Key::Replay => s.replay.clone(),
+            Key::ReplayPanel => s.replay_panel.clone(),
         }
     }
 
@@ -96,6 +100,7 @@ impl Key {
             Key::Rename => s.rename = v,
             Key::Disk => s.disk = v,
             Key::Replay => s.replay = v,
+            Key::ReplayPanel => s.replay_panel = v,
         }
     }
 
@@ -210,6 +215,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     key_row(app, p, f, Key::Rename);
     key_row(app, p, f, Key::Disk);
     key_row(app, p, f, Key::Replay);
+    key_row(app, p, f, Key::ReplayPanel);
     f.section(p, "Dock");
     key_row(app, p, f, Key::AppNumbers);
     f.y += 6.0;

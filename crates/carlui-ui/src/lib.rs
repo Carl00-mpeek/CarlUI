@@ -11,3 +11,4 @@ pub mod motion;
 pub mod paint;
 pub mod text;
 pub mod tween;
+pub mod view;

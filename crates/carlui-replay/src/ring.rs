@@ -4,8 +4,9 @@
 //! kullanmaz). Bir sonraki segmentin yazıcısı önceden arka planda açılır;
 //! geçiş anında kare kaçmaz. Biten segment ayrı bir iş parçacığında kapatılır.
 //!
-//! Ses görüntüyle aynı saatten (QPC) zaman damgası alır. Sessizlikte Windows
-//! paket göndermez; boşluklar sessizlikle doldurulur ki ses kaymasın.
+//! Ses görüntüyle aynı saatten (QPC) zaman damgası alır ama karıştırıcıdan
+//! ~100 ms geç gelir; bu yüzden biten segment hemen kapatılmaz, sesi
+//! yetişene kadar "kuyruk" olarak açık kalır (geçişlerde ses kesilmez).
 
 use crate::writer::{frames_to_100ns, Format, Writer, AUDIO_CH, AUDIO_RATE};
 use carlui_core::{info, warn};
@@ -50,6 +51,8 @@ pub struct Ring {
     /// Tutulacak süre (100 ns).
     keep: AtomicU64,
     live: Mutex<Option<Live>>,
+    /// Görüntüsü biten ama sesi henüz yetişmemiş segment ve bitiş anı.
+    tail: Mutex<Option<(Live, i64)>>,
     next: Mutex<Option<(Writer, PathBuf)>>,
     done: Mutex<VecDeque<Segment>>,
     /// Kaydetme sürerken eski segmentler silinmez.
@@ -72,6 +75,7 @@ impl Ring {
             dir,
             keep: AtomicU64::new(keep_minutes as u64 * 60 * 10_000_000),
             live: Mutex::new(None),
+            tail: Mutex::new(None),
             next: Mutex::new(None),
             done: Mutex::new(VecDeque::new()),
             holds: AtomicUsize::new(0),
@@ -186,10 +190,15 @@ impl Ring {
             if switch && self.next.lock().unwrap_or_else(|e| e.into_inner()).is_none() && now - live.as_ref().unwrap().start < SEG * 2 {
             } else if let Some((w, path)) = self.take_next() {
                 if let Some(old) = live.replace(Live { w, path, start: now, audio: 0 }) {
-                    self.send(Job::Finish(old, now, None));
+                    let mut tail = self.tail.lock().unwrap_or_else(|e| e.into_inner());
+                    if let Some((t, end)) = tail.replace((old, now)) {
+                        self.send(Job::Finish(t, end, None));
+                    }
                 }
             }
         }
+        // Sesi hiç gelmeyen kuyruk sonsuza dek beklemesin.
+        self.flush_tail(|end| now - end > 500 * MS);
         let Some(l) = live.as_mut() else { return };
         if let Err(e) = l.w.video(tex, now - l.start, dur) {
             warn!("kare yazılamadı: {e}");
@@ -214,6 +223,18 @@ impl Ring {
     pub unsafe fn audio(&self, pcm: &[i16], t: i64) {
         let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
         let Some(l) = live.as_mut() else { return };
+        if t < l.start {
+            // Önceki segmentin sonuna ait ses.
+            if let Some((tl, _)) = self.tail.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+                Self::put(tl, pcm, t);
+            }
+        } else {
+            self.flush_tail(|_| true);
+        }
+        Self::put(l, pcm, t);
+    }
+
+    unsafe fn put(l: &mut Live, pcm: &[i16], t: i64) {
         let rel = t - l.start;
         let frames = (pcm.len() / AUDIO_CH as usize) as u64;
         if rel + frames_to_100ns(frames) <= 0 {
@@ -228,14 +249,12 @@ impl Ring {
         l.audio += frames_to_100ns(frames);
     }
 
-    /// Ses gelmiyorsa (sessizlik) boşluğu doldurur.
-    pub unsafe fn audio_idle(&self, now: i64) {
-        let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(l) = live.as_mut() {
-            let until = now - l.start - 60 * MS;
-            if until - l.audio > 100 * MS {
-                Self::silence(l, until);
-            }
+    /// Kuyruktaki segmenti (`when` doğruysa) kapatmaya gönderir.
+    fn flush_tail(&self, when: impl Fn(i64) -> bool) {
+        let mut tail = self.tail.lock().unwrap_or_else(|e| e.into_inner());
+        if tail.as_ref().is_some_and(|(_, end)| when(*end)) {
+            let (t, end) = tail.take().unwrap();
+            self.send(Job::Finish(t, end, None));
         }
     }
 
@@ -260,7 +279,11 @@ impl Ring {
     pub fn cut(self: &Arc<Self>, now: i64) -> Vec<Segment> {
         self.holds.fetch_add(1, Ordering::SeqCst);
         let (tx, rx) = mpsc::channel();
-        let old = self.live.lock().unwrap_or_else(|e| e.into_inner()).take();
+        let old = {
+            let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
+            self.flush_tail(|_| true);
+            live.take()
+        };
         match old {
             Some(l) => self.send(Job::Finish(l, now, Some(tx))),
             None => {
@@ -291,7 +314,11 @@ impl Ring {
 
     /// Kaydı bitirir ve tüm geçici dosyaları siler.
     pub fn stop(&self) {
-        let live = self.live.lock().unwrap_or_else(|e| e.into_inner()).take();
+        let live = {
+            let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
+            self.flush_tail(|_| true);
+            live.take()
+        };
         let (tx, rx) = mpsc::channel();
         if let Some(l) = live {
             self.send(Job::Finish(l, 0, Some(tx)));

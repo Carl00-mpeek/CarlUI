@@ -15,7 +15,7 @@ use windows::Win32::{
 };
 
 pub use crate::theme::Palette;
-pub use crate::replay::{Quality, ReplayConfig};
+pub use crate::replay::{Codec, Quality, ReplayConfig, Resolution};
 pub use crate::tools::{CaseKind, ColorFormat, RenameConfig, RenameMode, Snippet, ToolsConfig};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -243,6 +243,8 @@ pub struct ShortcutsConfig {
     pub disk: String,
     /// Anlık tekrar: son N dakikayı kaydet, ör. "Alt+F10".
     pub replay: String,
+    /// Anlık tekrar panelini aç/kapat (kayıt, mikrofon, kalite), ör. "Alt+F8".
+    pub replay_panel: String,
 }
 
 impl Default for ShortcutsConfig {
@@ -259,6 +261,7 @@ impl Default for ShortcutsConfig {
             rename: "Ctrl+Shift+R".into(),
             disk: String::new(),
             replay: "Alt+F10".into(),
+            replay_panel: "Alt+F8".into(),
         }
     }
 }

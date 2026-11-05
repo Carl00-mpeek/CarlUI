@@ -2,7 +2,8 @@
 //! Media Foundation `IMFSinkWriter` ile kısa bir MP4 segmenti. Kareler GPU
 //! dokusu olarak verilir; D3D yöneticisi ve donanım dönüşümleri açık olduğu
 //! için BGRA→NV12 dönüşümü ve H.264 kodlama ekran kartında yapılır (NVENC,
-//! AMF, Quick Sync). Ses 48 kHz 16 bit stereo PCM verilir, AAC'ye kodlanır.
+//! AMF, Quick Sync); kayıt çözünürlüğü ekrandan küçükse ölçekleme de orada
+//! yapılır. H.265 seçilirse aynı kalite daha az yer kaplar. Ses 48 kHz 16 bit stereo PCM verilir, AAC'ye kodlanır.
 
 use windows::{
     core::*,
@@ -19,8 +20,13 @@ pub const AUDIO_CH: u32 = 2;
 /// kaydederken yeniden kodlamadan birleştirilebilirler.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Format {
+    /// Ekran (kaynak) boyutu.
     pub w: u32,
     pub h: u32,
+    /// Kaydın boyutu (ölçeklenmiş).
+    pub ow: u32,
+    pub oh: u32,
+    pub hevc: bool,
     pub fps: u32,
     pub bitrate: u32,
     pub audio: bool,
@@ -36,12 +42,12 @@ fn pair(a: u32, b: u32) -> u64 {
     ((a as u64) << 32) | b as u64
 }
 
-unsafe fn video_type(f: &Format, sub: &GUID) -> Result<IMFMediaType> {
+unsafe fn video_type(f: &Format, sub: &GUID, (w, h): (u32, u32)) -> Result<IMFMediaType> {
     let t = MFCreateMediaType()?;
     t.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
     t.SetGUID(&MF_MT_SUBTYPE, sub)?;
     t.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)?;
-    t.SetUINT64(&MF_MT_FRAME_SIZE, pair(f.w, f.h))?;
+    t.SetUINT64(&MF_MT_FRAME_SIZE, pair(w, h))?;
     t.SetUINT64(&MF_MT_FRAME_RATE, pair(f.fps, 1))?;
     t.SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, pair(1, 1))?;
     Ok(t)
@@ -78,11 +84,18 @@ impl Writer {
         a.SetUINT32(&MF_LOW_LATENCY, 1)?;
         let sink = MFCreateSinkWriterFromURL(&HSTRING::from(path.as_os_str()), None, &a)?;
 
-        let out = video_type(f, &MFVideoFormat_H264)?;
+        let out = if f.hevc {
+            let t = video_type(f, &MFVideoFormat_HEVC, (f.ow, f.oh))?;
+            t.SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH265VProfile_Main_420_8.0 as u32)?;
+            t
+        } else {
+            let t = video_type(f, &MFVideoFormat_H264, (f.ow, f.oh))?;
+            t.SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High.0 as u32)?;
+            t
+        };
         out.SetUINT32(&MF_MT_AVG_BITRATE, f.bitrate)?;
-        out.SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High.0 as u32)?;
         let video = sink.AddStream(&out)?;
-        let inp = video_type(f, &MFVideoFormat_ARGB32)?;
+        let inp = video_type(f, &MFVideoFormat_ARGB32, (f.w, f.h))?;
         // Pozitif adım: üstten alta (DXGI dokuları böyledir).
         inp.SetUINT32(&MF_MT_DEFAULT_STRIDE, f.w * 4)?;
         inp.SetUINT32(&MF_MT_ALL_SAMPLES_INDEPENDENT, 1)?;

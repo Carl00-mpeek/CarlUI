@@ -3,7 +3,7 @@
 //! çıkış aygıtına giden karışım okunur, 48 kHz 16 bit stereoya çevrilir. Aygıt
 //! değişince (kulaklık takıldı, varsayılan değişti) yakalama yeniden kurulur.
 //! Ses aygıtı hiç çalmıyorsa Windows paket göndermez; boşluğu kaydedici
-//! sessizlikle doldurur.
+//! sessizlikle doldurur. Aynı kod `mic` ile varsayılan mikrofonu da okur.
 
 use crate::writer::AUDIO_RATE;
 use windows::{
@@ -70,9 +70,17 @@ pub struct Loopback {
     tmp: Vec<f32>,
 }
 
-pub unsafe fn default_id() -> Option<String> {
+fn flow(mic: bool) -> EDataFlow {
+    if mic {
+        eCapture
+    } else {
+        eRender
+    }
+}
+
+pub unsafe fn default_id(mic: bool) -> Option<String> {
     let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
-    let dev = en.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+    let dev = en.GetDefaultAudioEndpoint(flow(mic), eConsole).ok()?;
     let p = dev.GetId().ok()?;
     let s = p.to_string().ok();
     CoTaskMemFree(Some(p.0 as _));
@@ -80,9 +88,10 @@ pub unsafe fn default_id() -> Option<String> {
 }
 
 impl Loopback {
-    pub unsafe fn open() -> Result<Self> {
+    /// `mic`: varsayılan mikrofon; değilse varsayılan çıkışın geri döngüsü.
+    pub unsafe fn open(mic: bool) -> Result<Self> {
         let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-        let dev = en.GetDefaultAudioEndpoint(eRender, eConsole)?;
+        let dev = en.GetDefaultAudioEndpoint(flow(mic), eConsole)?;
         let id = {
             let p = dev.GetId()?;
             let s = p.to_string().unwrap_or_default();
@@ -108,7 +117,7 @@ impl Loopback {
             _ => None,
         };
         // 200 ms tampon; 10 ms'de bir okunur.
-        let r = client.Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK, 2_000_000, 0, wf, None);
+        let r = client.Initialize(AUDCLNT_SHAREMODE_SHARED, if mic { 0 } else { AUDCLNT_STREAMFLAGS_LOOPBACK }, 2_000_000, 0, wf, None);
         CoTaskMemFree(Some(wf as _));
         r?;
         let Some(kind) = kind.filter(|_| ch > 0) else {

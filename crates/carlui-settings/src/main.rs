@@ -68,6 +68,7 @@ pub enum Act {
     Tool(&'static str),
     /// Anlık tekrar kayıtlarının klasörünü Gezgin'de aç.
     ReplayFolder,
+    ReplayPanel,
     /// İçerik alanı (tekerlek kaydırma hedefi).
     Scroll,
     /// Metin formu: 0 arama motoru formunu aç, 5 kısaltma formunu aç, 1/2 alan, 3 ekle, 4 vazgeç.
@@ -168,6 +169,9 @@ impl App {
                 let _ = std::fs::create_dir_all(&dir);
                 ShellExecuteW(HWND::default(), w!("open"), &HSTRING::from(dir.as_os_str()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
             },
+            Act::ReplayPanel => {
+                let _ = std::process::Command::new(carlui_core::paths::sibling_exe("carlui-replay.exe")).arg("--panel").spawn();
+            }
             Act::Tool(arg) => unsafe {
                 ShellExecuteW(HWND::default(), w!("open"), &HSTRING::from(carlui_core::paths::sibling_exe("carlui-tools.exe").as_os_str()), &HSTRING::from(arg), PCWSTR::null(), SW_SHOWNORMAL);
             },

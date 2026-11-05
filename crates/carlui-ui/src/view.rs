@@ -3,8 +3,11 @@
 //! yalnızca `View` özelliğini uygular; pencere, koyu akrilik zemin, DPI,
 //! Direct2D çizimi, tıklama/klavye/tekerlek yönlendirmesi buradadır. Çizim
 //! Ayarlar penceresindeki anlık modlu `Painter` ile yapılır.
+//!
+//! `noactivate` pencereler (anlık tekrar paneli) tıklanınca bile etkinleşmez:
+//! öndeki oyun odağı kaybetmez, tam ekrandan düşmez.
 
-use carlui_ui::{
+use crate::{
     glassmenu,
     paint::{Fonts, Painter, R},
     tween,
@@ -61,8 +64,11 @@ pub trait View: 'static {
     fn animating(&self) -> bool {
         false
     }
+    /// Pencere oluşturuldu (gösterilmeden hemen önce).
+    fn opened(&mut self, _hwnd: HWND) {}
 }
 
+#[derive(Default)]
 pub struct Opts {
     pub title: String,
     pub w: f32,
@@ -72,6 +78,11 @@ pub struct Opts {
     pub resizable: bool,
     /// Görev çubuğunda görünmeyen küçük araç penceresi; odak kaybolunca kapanır.
     pub popup: bool,
+    /// Hiç etkinleşmeyen, her zaman üstte duran kaplama (odak öndeki
+    /// uygulamada kalır); `popup` ile birlikte kullanılır, odak kaybında kapanmaz.
+    pub noactivate: bool,
+    /// > 0 ise bu aralıkla `View::tick` çağrılır (ms).
+    pub timer_ms: u32,
 }
 
 struct Host<V: View> {
@@ -84,6 +95,7 @@ struct Host<V: View> {
     hits: Vec<(R, V::A)>,
     accent: u32,
     popup: bool,
+    noactivate: bool,
 }
 
 thread_local! {
@@ -252,9 +264,14 @@ unsafe extern "system" fn wnd_proc<V: View>(hwnd: HWND, msg: u32, wp: WPARAM, lp
             after(hwnd, ctx);
             LRESULT(0)
         }
+        // Kaplama: tıklama pencereyi etkinleştirmez, öndeki oyun odağı tutar.
+        WM_MOUSEACTIVATE if with::<V, _>(|h| h.noactivate).unwrap_or(false) => LRESULT(MA_NOACTIVATE as isize),
+        // Akrilik zemin etkin pencerelerde çizilir: çerçeveyi hep etkin göster
+        // (yalnızca görünüş; pencere gerçekten etkinleşmez).
+        WM_NCACTIVATE if with::<V, _>(|h| h.noactivate).unwrap_or(false) => DefWindowProcW(hwnd, msg, WPARAM(1), lp),
         WM_ACTIVATE => {
             // Küçük açılır araç: başka yere tıklanınca kapanır.
-            if (wp.0 & 0xFFFF) as u32 == WA_INACTIVE && with::<V, _>(|h| h.popup).unwrap_or(false) && lp.0 == 0 {
+            if (wp.0 & 0xFFFF) as u32 == WA_INACTIVE && with::<V, _>(|h| h.popup && !h.noactivate).unwrap_or(false) && lp.0 == 0 {
                 let _ = DestroyWindow(hwnd);
             }
             DefWindowProcW(hwnd, msg, wp, lp)
@@ -299,7 +316,9 @@ pub fn run<V: View>(view: V, o: Opts) -> Result<V> {
             Some((x, y)) => (x.clamp(wa.left, (wa.right - ww).max(wa.left)), y.clamp(wa.top, (wa.bottom - wh).max(wa.top))),
             None => (wa.left + (wa.right - wa.left - ww) / 2, wa.top + (wa.bottom - wa.top - wh) / 2),
         };
-        let (style, ex) = if o.popup {
+        let (style, ex) = if o.noactivate {
+            (WS_POPUP | WS_THICKFRAME, WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE)
+        } else if o.popup {
             (WS_POPUP | WS_THICKFRAME, WS_EX_TOOLWINDOW | WS_EX_TOPMOST)
         } else if o.resizable {
             (WS_OVERLAPPEDWINDOW, WINDOW_EX_STYLE(0))
@@ -315,7 +334,8 @@ pub fn run<V: View>(view: V, o: Opts) -> Result<V> {
             mouse: (-1.0, -1.0),
             hits: Vec::new(),
             accent: glassmenu::accent(),
-            popup: o.popup,
+            popup: o.popup || o.noactivate,
+            noactivate: o.noactivate,
         };
         HOST.with(|h| *h.borrow_mut() = Some(Box::new(host)));
         let hwnd = CreateWindowExW(ex, class, &HSTRING::from(o.title.as_str()), style, x, y, ww, wh, None, None, inst, None)?;
@@ -326,13 +346,22 @@ pub fn run<V: View>(view: V, o: Opts) -> Result<V> {
         let corner = DWMWCP_ROUND;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner as *const _ as _, 4);
         let _ = DwmExtendFrameIntoClientArea(hwnd, &MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
-        if o.popup {
+        if o.popup || o.noactivate {
             // Kenarlıksız açılır pencere: çerçeve yalnızca akrilik ve gölge için.
-            let _ = SetWindowPos(hwnd, None, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+            let _ = SetWindowPos(hwnd, None, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
+        if o.timer_ms > 0 {
+            SetTimer(hwnd, 1, o.timer_ms, None);
+        }
+        with::<V, _>(|h| h.view.opened(hwnd));
         tween::enable();
-        let _ = ShowWindow(hwnd, SW_SHOW);
-        let _ = SetForegroundWindow(hwnd);
+        if o.noactivate {
+            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+            let _ = SendMessageW(hwnd, WM_NCACTIVATE, WPARAM(1), LPARAM(0));
+        } else {
+            let _ = ShowWindow(hwnd, SW_SHOW);
+            let _ = SetForegroundWindow(hwnd);
+        }
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             let _ = TranslateMessage(&msg);

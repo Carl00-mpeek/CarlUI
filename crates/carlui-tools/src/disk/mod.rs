@@ -471,7 +471,7 @@ impl View for Disk {
 }
 
 pub fn run(target: Option<String>) -> Result<()> {
-    let d = view::run(Disk::new(target), Opts { title: t!("CarlUI Disk analizörü", "CarlUI Disk analyzer").into(), w: 1180.0, h: 760.0, at: None, resizable: true, popup: false })?;
+    let d = view::run(Disk::new(target), Opts { title: t!("CarlUI Disk analizörü", "CarlUI Disk analyzer").into(), w: 1180.0, h: 760.0, at: None, resizable: true, popup: false, ..Default::default() })?;
     if let Some(s) = &d.scanning {
         s.prog.cancel.store(true, Ordering::Relaxed);
     }

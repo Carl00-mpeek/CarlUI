@@ -291,6 +291,7 @@ name = "carlui-replay"
 version = "0.3.1"
 dependencies = [
  "carlui-core",
+ "carlui-ui",
  "serde_json",
  "windows",
 ]

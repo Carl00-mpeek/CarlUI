@@ -19,9 +19,9 @@ mod note;
 mod picker;
 mod rename;
 mod select;
-mod view;
 
 use carlui_core::log;
+use carlui_ui::view;
 use windows::Win32::{
     Foundation::HWND,
     System::Com::*,
