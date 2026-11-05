@@ -10,6 +10,7 @@
 
 use crate::{
     dock::{Entry, Kind},
+    iconcache,
     jumplist::Group,
 };
 use carlui_ui::glassmenu::{self, Icon, Row};
@@ -18,11 +19,7 @@ use windows::{
     core::*,
     Win32::{
         Foundation::*,
-        Graphics::Imaging::*,
-        System::{
-            Com::*,
-            LibraryLoader::{GetProcAddress, LoadLibraryW},
-        },
+        System::LibraryLoader::{GetProcAddress, LoadLibraryW},
         UI::{Shell::SHDefExtractIconW, WindowsAndMessaging::*},
     },
 };
@@ -92,12 +89,8 @@ pub fn enable_dark_menus() {
     }
 }
 
-fn wic() -> Option<IWICImagingFactory> {
-    unsafe { CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER).ok() }
-}
-
 /// Uygulamanın kendi logosu (Store uygulamasında AUMID, değilse exe).
-fn app_icon(wic: &IWICImagingFactory, e: &Entry) -> Icon {
+fn app_icon(e: &Entry) -> Icon {
     let src = if !e.app.aumid.is_empty() {
         format!("shell:AppsFolder\\{}", e.app.aumid)
     } else if !e.exe.is_empty() {
@@ -105,33 +98,35 @@ fn app_icon(wic: &IWICImagingFactory, e: &Entry) -> Icon {
     } else {
         e.app.exe.clone()
     };
-    carlui_ui::icons::shell_icon(wic, &src, 24).map(Icon::Image).unwrap_or(Icon::None)
+    iconcache::shell(&src, 24).map(Icon::Image).unwrap_or(Icon::None)
 }
 
 /// Görevin kendi simgesi: kısayolda yazan simge dosyası, yoksa hedefinki.
-fn jump_icon(wic: &IWICImagingFactory, icon: &(String, i32), target: &str) -> Option<Icon> {
+/// Bir kez çıkarılıp saklanır; yavaş sürücülerdekiler atlanır (logo kullanılır).
+fn jump_icon(icon: &(String, i32), target: &str) -> Option<Icon> {
     let path = expand_env(&icon.0);
-    if !path.is_empty() && !path.starts_with("ms-appx") {
-        let mut h = HICON::default();
-        unsafe {
-            if SHDefExtractIconW(&HSTRING::from(path.as_str()), icon.1, 0, Some(&mut h), None, 32).is_ok() && !h.is_invalid() {
-                let img = carlui_ui::icons::hicon_bitmap(wic, h);
-                let _ = DestroyIcon(h);
-                if let Ok(img) = img {
-                    return Some(Icon::Image(img));
-                }
+    if !path.is_empty() && !path.starts_with("ms-appx") && !iconcache::slow_path(&path) {
+        let img = iconcache::get(&format!("x{}|{path}", icon.1), |wic| unsafe {
+            let mut h = HICON::default();
+            if SHDefExtractIconW(&HSTRING::from(path.as_str()), icon.1, 0, Some(&mut h), None, 32).is_err() || h.is_invalid() {
+                return None;
             }
+            let img = carlui_ui::icons::hicon_bitmap(wic, h).ok();
+            let _ = DestroyIcon(h);
+            img
+        });
+        if let Some(img) = img {
+            return Some(Icon::Image(img));
         }
     }
-    (!target.is_empty()).then(|| carlui_ui::icons::shell_icon(wic, target, 24).ok().map(Icon::Image)).flatten()
+    iconcache::shell(target, 24).map(Icon::Image)
 }
 
 /// `suspended`: uygulamanın çalışan süreci varsa durdurulmuş mu (yoksa `None`).
 /// `jump`: uygulamanın kendi görevleri (Firefox: gizli pencere vb.).
 /// `cfg`: başlık rengi ayarı (`dock.menu_accent`).
 pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Option<bool>, jump: &[Group], at: (i32, i32)) -> Cmd {
-    let wic = wic();
-    let item = |id: usize, text: &str, icon: Icon| Row::Item { id, text: text.to_string(), icon };
+    let item =|id: usize, text: &str, icon: Icon| Row::Item { id, text: text.to_string(), icon };
     let glyph = |c: char| Icon::Glyph(c, None);
     let mut rows = Vec::new();
     let app = entry.filter(|e| e.kind == Kind::App);
@@ -145,18 +140,19 @@ pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Opti
         rows.push(item(10, t!("Ayarlar", "Settings"), glyph(G_SETTINGS)));
     }
     if let Some(e) = app {
-        let logo = |w: &Option<IWICImagingFactory>| w.as_ref().map(|w| app_icon(w, e)).unwrap_or(Icon::None);
+        // Logo bir kez okunur (eskiden simgesiz her görev satırı için yeniden).
+        let logo = app_icon(e);
         let mut n = 0;
         for g in jump {
             rows.push(Row::Header(if g.title.is_empty() { t!("Görevler", "Tasks").into() } else { g.title.clone() }));
             for it in &g.items {
-                let icon = wic.as_ref().and_then(|w| jump_icon(w, &it.icon, &it.target)).unwrap_or_else(|| logo(&wic));
+                let icon = jump_icon(&it.icon, &it.target).unwrap_or_else(|| logo.clone());
                 rows.push(item(JUMP_BASE + n, &it.title, icon));
                 n += 1;
             }
             rows.push(Row::Sep);
         }
-        rows.push(Row::Label(e.name.clone(), logo(&wic)));
+        rows.push(Row::Label(e.name.clone(), logo));
         rows.push(item(1, t!("Yeni pencere", "New window"), glyph(G_NEW_WINDOW)));
         // Açık Explorer'a "sabitle" önerilmez; ama sabitlenmişse kaldırılabilmeli.
         if e.pin.is_some() {

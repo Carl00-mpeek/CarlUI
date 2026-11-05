@@ -8,12 +8,14 @@
 
 use super::*;
 use carlui_ui::glassmenu::{self, Icon, Row};
-use std::path::PathBuf;
-use windows::Win32::{
-    Graphics::Imaging::{CLSID_WICImagingFactory, IWICImagingFactory},
-    System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER},
-    UI::Shell::{SHEmptyRecycleBinW, SHQueryRecycleBinW, SHQUERYRBINFO},
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Condvar, Mutex,
+    },
 };
+use windows::Win32::UI::Shell::{SHEmptyRecycleBinW, SHQueryRecycleBinW, SHQUERYRBINFO};
 
 pub const RECYCLE_BIN: &str = "::{645FF040-5081-101B-9F08-00AA002F954E}";
 const MAX: usize = 12;
@@ -46,10 +48,48 @@ fn recent_downloads(dir: &std::path::Path) -> Vec<PathBuf> {
     v.into_iter().take(MAX).map(|(_, p)| p).collect()
 }
 
-/// Çöp kutusunda öğe sayısı.
+/// Çöp kutusunda öğe sayısı. Doğrudan çağrılmaz: Windows bunu her sürücünün
+/// çöp klasörünü tarayarak bulur; dolu kutuda, uyuyan diskte ya da ağ
+/// sürücüsünde saniyeler sürebiliyor ve dock her 3 sn'de bir donuyordu.
 fn trash_count() -> i64 {
     let mut info = SHQUERYRBINFO { cbSize: std::mem::size_of::<SHQUERYRBINFO>() as u32, ..Default::default() };
     unsafe { SHQueryRecycleBinW(PCWSTR::null(), &mut info) }.map(|_| info.i64NumItems).unwrap_or(0)
+}
+
+/// Arka planda yoklanan son sayı (-1: henüz bilinmiyor).
+static TRASH_N: AtomicI64 = AtomicI64::new(-1);
+static TRASH_WAKE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
+static TRASH_STARTED: std::sync::Once = std::sync::Once::new();
+
+/// Yoklayıcıyı (bir kez) başlatır; sayı değişince dock'a TIMER_TRASH
+/// gönderilir ki simge beklemeden güncellensin.
+fn trash_watch(hwnd: HWND) {
+    let raw = hwnd.0 as isize;
+    TRASH_STARTED.call_once(|| {
+        let _ = std::thread::Builder::new().name("trash".into()).spawn(move || loop {
+            let n = trash_count();
+            if TRASH_N.swap(n, Ordering::SeqCst) != n {
+                unsafe {
+                    let _ = PostMessageW(HWND(raw as _), WM_TIMER, WPARAM(TIMER_TRASH), LPARAM(0));
+                }
+            }
+            let (m, cv) = &TRASH_WAKE;
+            let Ok(mut woke) = m.lock() else { return };
+            if !*woke {
+                woke = cv.wait_timeout(woke, std::time::Duration::from_secs(3)).map(|r| r.0).unwrap_or_else(|e| e.into_inner().0);
+            }
+            *woke = false;
+        });
+    });
+}
+
+/// Yoklayıcıya "hemen yeniden say" der (boşaltmadan sonra).
+fn trash_poke() {
+    let (m, cv) = &TRASH_WAKE;
+    if let Ok(mut w) = m.lock() {
+        *w = true;
+        cv.notify_one();
+    }
 }
 
 impl Dock {
@@ -59,7 +99,13 @@ impl Dock {
         if !self.cfg.dock.recycle_bin {
             return;
         }
-        let full = trash_count() > 0;
+        // Sayım arka planda; burada yalnızca son sonuç okunur.
+        trash_watch(self.hwnd);
+        let n = TRASH_N.load(Ordering::SeqCst);
+        if n < 0 {
+            return;
+        }
+        let full = n > 0;
         if !force && self.trash_full == Some(full) {
             return;
         }
@@ -95,8 +141,8 @@ impl Dock {
     pub fn stack_menu(&mut self, i: usize) {
         let Some(dir) = win::downloads_dir() else { return };
         let files = recent_downloads(&dir);
-        let wic: Option<IWICImagingFactory> = unsafe { CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER).ok() };
-        let icon = |p: &str| wic.as_ref().and_then(|w| icons::shell_icon(w, p, 24).ok()).map(Icon::Image).unwrap_or(Icon::None);
+        // Simgeler saklanır; USB/ağdaki İndirilenler menüyü bekletmez.
+        let icon = |p: &str| crate::iconcache::shell(p, 24).map(Icon::Image).unwrap_or(Icon::None);
         let mut rows = vec![Row::Item { id: 1, text: t!("İndirilenler klasörünü aç", "Open Downloads folder").into(), icon: Icon::Glyph('\u{E838}', None) }];
         if files.is_empty() {
             rows.push(Row::Sep);
@@ -122,7 +168,10 @@ impl Dock {
 
     /// Çöp kutusu sağ tık menüsü: aç / boşalt.
     pub fn trash_menu(&mut self, i: usize) {
-        let n = trash_count();
+        let n = match TRASH_N.load(Ordering::SeqCst) {
+            -1 => trash_count(),
+            n => n,
+        };
         let mut rows = vec![Row::Item { id: 1, text: t!("Aç", "Open").into(), icon: Icon::Glyph('\u{E8E5}', None) }];
         if n > 0 {
             rows.push(Row::Item { id: 2, text: t!(format!("Boşalt ({n} öğe)"), format!("Empty ({n} items)")), icon: Icon::Glyph('\u{E74D}', Some(0xFF6B6B)) });
@@ -136,8 +185,8 @@ impl Dock {
                 if let Err(e) = SHEmptyRecycleBinW(self.hwnd, PCWSTR::null(), 0) {
                     carlui_core::info!("çöp kutusu boşaltılmadı: {e}");
                 }
-                // Simge hemen boşa dönsün.
-                SetTimer(self.hwnd, TIMER_TRASH, 200, None);
+                // Simge hemen boşa dönsün: yoklayıcı yeniden sayar, değişince haber verir.
+                trash_poke();
             },
             _ => {}
         }

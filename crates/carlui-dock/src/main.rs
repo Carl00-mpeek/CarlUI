@@ -12,6 +12,7 @@ extern crate carlui_core;
 
 mod apps;
 mod dock;
+mod iconcache;
 mod input;
 mod jumplist;
 mod menu;

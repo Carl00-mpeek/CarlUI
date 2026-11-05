@@ -51,6 +51,8 @@ use windows::{
 };
 
 const WM_APP_APPS: u32 = WM_APP + 1;
+/// Gizliyken simgeleri parça parça önceden oku.
+const WM_APP_WARM: u32 = WM_APP + 7;
 const WM_APP_FRAME: u32 = WM_APP + 2;
 const OPEN_MS: f32 = 420.0;
 const CLOSE_MS: f32 = 200.0;
@@ -174,6 +176,8 @@ impl App {
                 }));
             }
         }
+        // Liste yalnızca süzgeç / görünüm / dizin değişince kurulur (eskiden her karede).
+        self.refresh_list();
         self.invalidate();
     }
 
@@ -605,6 +609,7 @@ impl App {
                 } else if let View::Add(_) = self.view {
                     self.filter.pop();
                     self.scroll = 0.0;
+                    self.refresh_list();
                 }
             }
             c if c >= 0x20 => {
@@ -616,6 +621,7 @@ impl App {
                 } else if let View::Add(_) = self.view {
                     self.filter.push(ch);
                     self.scroll = 0.0;
+                    self.refresh_list();
                 } else {
                     // Menüdeyken yazmaya başlamak: arama, ilk harfiyle birlikte.
                     self.hide();
@@ -655,7 +661,8 @@ impl App {
                 rt.Resize(&D2D_SIZE_U { width: pw, height: ph })?;
             }
         }
-        self.refresh_list();
+        // Görünürken kare başına az simge (akıcılık), gizli ısıtmada daha çok.
+        self.icons.borrow_mut().frame(if self.visible { 4 } else { 12 });
         let s = self.scale;
         let mut hits = std::mem::take(&mut self.hits);
         hits.clear();
@@ -681,7 +688,24 @@ impl App {
                 self.rt = None;
             }
         }
+        // Okunamayan simgeler bir sonraki karede (gizliyken WM_PAINT gelmez).
+        if self.icons.borrow().missed {
+            if self.visible {
+                self.invalidate();
+            } else {
+                unsafe {
+                    let _ = PostMessageW(self.hwnd, WM_APP_WARM, WPARAM(0), LPARAM(0));
+                }
+            }
+        }
         Ok(())
+    }
+
+    /// Simgeleri menü gizliyken önceden okur: ilk açılış beklemesin.
+    fn warm(&mut self) {
+        if !self.visible {
+            let _ = self.paint();
+        }
     }
 
     fn hit_at(&self, pt: (f32, f32)) -> Option<Act> {
@@ -726,7 +750,14 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             LRESULT(0)
         }
         WM_APP_APPS => {
-            with_app(|a| a.invalidate());
+            with_app(|a| {
+                a.refresh_list();
+                a.invalidate();
+            });
+            LRESULT(0)
+        }
+        WM_APP_WARM => {
+            with_app(|a| a.warm());
             LRESULT(0)
         }
         WM_APP_FRAME => {
@@ -924,6 +955,7 @@ fn main() -> Result<()> {
         };
         APP.with(|a| *a.borrow_mut() = Some(app));
         info!("Win menüsü hazır");
+        let _ = PostMessageW(hwnd, WM_APP_WARM, WPARAM(0), LPARAM(0));
         if std::env::args().any(|a| a == "--show") {
             with_app(|a| a.show());
         }

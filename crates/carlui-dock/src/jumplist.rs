@@ -25,12 +25,14 @@ const FOOTER: u32 = 0xBABF_FBAB;
 /// Bir özel kategoriden en fazla bu kadar öğe gösterilir.
 const PER_CATEGORY: usize = 6;
 
+#[derive(Clone)]
 pub struct Group {
     /// Boşsa uygulamanın "Görevler" bölümü.
     pub title: String,
     pub items: Vec<Item>,
 }
 
+#[derive(Clone)]
 pub struct Item {
     pub title: String,
     /// Kısayolda yazan simge (dosya, sıra); boş olabilir.
@@ -172,7 +174,33 @@ fn title_of(link: &IShellLinkW) -> Option<String> {
 /// Uygulamanın görev listesi (yoksa boş).
 pub fn load(e: &Entry) -> Vec<Group> {
     let Some(path) = file_for(e) else { return Vec::new() };
-    let Ok(bytes) = std::fs::read(&path) else { return Vec::new() };
+    // Dosya değişmediyse önceki okuma kullanılır: her sağ tıkta kısayolları
+    // yeniden çözmek (COM nesnesi, dolaylı metin) zayıf makinede menüyü bekletiyordu.
+    let stamp = std::fs::metadata(&path).ok().map(|m| (m.len(), m.modified().ok()));
+    if let Some(hit) = CACHE.with(|c| c.borrow().get(&path).filter(|(s, _)| Some(s) == stamp.as_ref()).map(|(_, g)| g.clone())) {
+        return hit;
+    }
+    let out = parse(&path);
+    if let Some(stamp) = stamp {
+        CACHE.with(|c| {
+            let mut c = c.borrow_mut();
+            if c.len() > 64 {
+                c.clear();
+            }
+            c.insert(path, (stamp, out.clone()));
+        });
+    }
+    out
+}
+
+type Stamp = (u64, Option<std::time::SystemTime>);
+
+thread_local! {
+    static CACHE: std::cell::RefCell<std::collections::HashMap<std::path::PathBuf, (Stamp, Vec<Group>)>> = Default::default();
+}
+
+fn parse(path: &std::path::Path) -> Vec<Group> {
+    let Ok(bytes) = std::fs::read(path) else { return Vec::new() };
     let mut r = Reader { b: &bytes, at: 0 };
     let mut out = Vec::new();
     (|| -> Option<()> {

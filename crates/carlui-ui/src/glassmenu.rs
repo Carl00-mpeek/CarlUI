@@ -27,6 +27,7 @@ use windows::{
     },
 };
 
+#[derive(Clone)]
 pub enum Icon {
     None,
     /// Segoe Fluent Icons glifi ve isteğe bağlı renk (0xRRGGBB).
