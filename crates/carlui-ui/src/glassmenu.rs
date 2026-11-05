@@ -94,7 +94,7 @@ fn text_format(dw: &IDWriteFactory, size: f32, weight: DWRITE_FONT_WEIGHT) -> Re
     unsafe {
         let f = dw.CreateTextFormat(w!("Segoe UI Variable Text"), None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr")).or_else(|_| dw.CreateTextFormat(w!("Segoe UI"), None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr")))?;
         f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
-        f.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)?;
+        f.SetWordWrapping(DWRITE_WORD_WRAPPING_EMERGENCY_BREAK)?;
         let trim = DWRITE_TRIMMING { granularity: DWRITE_TRIMMING_GRANULARITY_CHARACTER, delimiter: 0, delimiterCount: 0 };
         let _ = f.SetTrimming(&trim, None);
         Ok(f)
@@ -110,6 +110,19 @@ fn text_width(dw: &IDWriteFactory, fmt: &IDWriteTextFormat, s: &str) -> f32 {
                 l.GetMetrics(&mut m).map(|_| m.widthIncludingTrailingWhitespace)
             })
             .unwrap_or(s.chars().count() as f32 * 7.5)
+    }
+}
+
+/// `max` genişliğe satır kırılarak sığdırılan metnin yüksekliği.
+fn text_height(dw: &IDWriteFactory, fmt: &IDWriteTextFormat, s: &str, max: f32) -> f32 {
+    let w: Vec<u16> = s.encode_utf16().collect();
+    unsafe {
+        dw.CreateTextLayout(&w, fmt, max, 4000.0)
+            .and_then(|l| {
+                let mut m = DWRITE_TEXT_METRICS::default();
+                l.GetMetrics(&mut m).map(|_| m.height)
+            })
+            .unwrap_or(18.0)
     }
 }
 
@@ -203,6 +216,8 @@ impl State {
             for (i, r) in self.rows.iter().enumerate() {
                 let (y0, y1) = (self.tops[i], self.tops[i + 1]);
                 let mid = (y0 + y1) / 2.0;
+                // Çok satırlı satırda simge ilk satırın hizasında durur.
+                let imid = y0 + ITEM_H.min(y1 - y0) / 2.0;
                 let draw_text = |s: &str, x: f32, fmt: &IDWriteTextFormat, b: &ID2D1SolidColorBrush| {
                     let t: Vec<u16> = s.encode_utf16().collect();
                     rt.DrawText(&t, fmt, &D2D_RECT_F { left: x, top: y0, right: w - 12.0, bottom: y1 }, b, D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
@@ -211,12 +226,12 @@ impl State {
                     Icon::Glyph(c, col) => {
                         let t: Vec<u16> = c.to_string().encode_utf16().collect();
                         let b = col.map(|c| brush(rgb(c, 1.0)).ok()).flatten();
-                        rt.DrawText(&t, &glyphs, &D2D_RECT_F { left: 12.0, top: y0, right: 12.0 + ICON + 6.0, bottom: y1 }, b.as_ref().unwrap_or(&white), D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                        rt.DrawText(&t, &glyphs, &D2D_RECT_F { left: 12.0, top: imid - ITEM_H / 2.0, right: 12.0 + ICON + 6.0, bottom: imid + ITEM_H / 2.0 }, b.as_ref().unwrap_or(&white), D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
                     }
                     Icon::Image(_) => {
                         if let Some(Some(bmp)) = self.bitmaps.get(i) {
                             let x = 15.0;
-                            rt.DrawBitmap(bmp, Some(&D2D_RECT_F { left: x, top: mid - ICON / 2.0, right: x + ICON, bottom: mid + ICON / 2.0 }), 1.0, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, None);
+                            rt.DrawBitmap(bmp, Some(&D2D_RECT_F { left: x, top: imid - ICON / 2.0, right: x + ICON, bottom: imid + ICON / 2.0 }), 1.0, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, None);
                         }
                     }
                     Icon::None => {}
@@ -335,16 +350,24 @@ pub fn run(owner: HWND, rows: Vec<Row>, accent: Option<u32>, at: (i32, i32)) -> 
     let scale = unsafe { GetDpiForWindow(owner) }.max(96) as f32 / 96.0;
     let body = text_format(&dw, 13.5, DWRITE_FONT_WEIGHT_NORMAL).ok()?;
     let mut width: f32 = MIN_W;
-    let mut tops = vec![PAD];
     for r in &rows {
         let tw = match r {
             Row::Item { text, .. } | Row::Label(text, _) | Row::Header(text) => text_width(&dw, &body, text) + 44.0 + 22.0,
             Row::Sep => 0.0,
         };
         width = width.max(tw);
-        tops.push(tops.last().unwrap() + State::row_h(r));
     }
     let width = width.min(MAX_W).ceil();
+    // Sığmayan yazı kesilmez, alt satıra iner; satır yazının boyu kadar uzar.
+    let room = width - 44.0 - 12.0;
+    let mut tops = vec![PAD];
+    for r in &rows {
+        let h = match r {
+            Row::Item { text, .. } | Row::Label(text, _) => State::row_h(r).max(text_height(&dw, &body, text, room) + 14.0),
+            _ => State::row_h(r),
+        };
+        tops.push(tops.last().unwrap() + h);
+    }
     let st = State { rows, tops, width, scale, hover: None, result: None, done: false, accent: accent.map(|c| rgb(c, 1.0)).unwrap_or(rgb(0xFFFFFF, 0.55)), factory, dw, rt: None, bitmaps: Vec::new() };
     let (pw, ph) = ((st.width * scale).ceil() as i32, (st.height() * scale).ceil() as i32);
     // Ekrana sığdır.
