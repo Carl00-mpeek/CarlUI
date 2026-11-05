@@ -28,6 +28,9 @@ Yapay zekâ'da açılır (varsayılan kapalı); modeli ilk kullanımda iner.
 kesilmeden alt satıra iniyor. Cam menülerde uzun satırlar da alt satıra iniyor.
 Görev yöneticisi fare hareketinde boşuna çizim yapmıyor.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`523d2af31cad43005974cce7133fdfe23adf98ab2f7236d9351d370035d4a408`
+
 ## v0.2.0 — Carl Vault (2026-11-04)
 
 **Yeni: Carl Vault**, CarlUI'nin şifreli parola ve 2FA kasası.
