@@ -43,7 +43,7 @@ static OPENING: AtomicBool = AtomicBool::new(false);
 
 const W: f32 = 340.0;
 const H_MAIN: f32 = 248.0;
-const H_SETTINGS: f32 = 536.0;
+const H_SETTINGS: f32 = 578.0;
 const PAD: f32 = 16.0;
 
 /// Paneli açar; açıksa kapatır.
@@ -159,11 +159,12 @@ impl Src {
     }
 }
 
-/// Sürgü: kaynak düzeyi ya da kare hızı.
+/// Sürgü: kaynak düzeyi, kare hızı ya da gürültü engelleme gücü.
 #[derive(Clone, Copy, PartialEq)]
 enum Slot {
     Vol(Src),
     Fps,
+    Denoise,
 }
 
 #[derive(Clone, PartialEq)]
@@ -252,6 +253,10 @@ impl Panel {
                 k.gain().store(v, Ordering::SeqCst);
             }
             Slot::Fps => self.st.cfg.fps = v,
+            Slot::Denoise => {
+                self.st.cfg.denoise_level = v;
+                crate::denoise::LEVEL.store(v, Ordering::SeqCst);
+            }
         }
         self.hold = Some(Instant::now());
     }
@@ -260,6 +265,7 @@ impl Panel {
         match s {
             Slot::Vol(k) => k.get(&self.st.cfg),
             Slot::Fps => self.st.cfg.fps(),
+            Slot::Denoise => self.st.cfg.denoise_level(),
         }
     }
 
@@ -268,6 +274,7 @@ impl Panel {
         match s {
             Slot::Vol(k) => self.edit(|c| k.set(c, v)),
             Slot::Fps => self.edit(|c| c.fps = v),
+            Slot::Denoise => self.edit(|c| c.denoise_level = v),
         }
     }
 
@@ -285,6 +292,7 @@ impl Panel {
                 }
             }
             Slot::Fps => ReplayConfig::FPS[(f * (ReplayConfig::FPS.len() - 1) as f32).round() as usize],
+            Slot::Denoise => (10.0 + f * 90.0).round() as u32 / 5 * 5,
         })
     }
 
@@ -297,6 +305,7 @@ impl Panel {
                 let i = fps.iter().position(|&f| f == self.st.cfg.fps()).unwrap_or(2) as i32;
                 fps[(i + d).clamp(0, fps.len() as i32 - 1) as usize]
             }
+            Slot::Denoise => (self.st.cfg.denoise_level() as i32 + d * 5).clamp(10, 100) as u32,
         };
         if v != self.slot_value(s) {
             self.set_slot(s, v);

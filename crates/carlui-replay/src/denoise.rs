@@ -4,17 +4,21 @@
 //! geçirilir. RNNoise sürekli gürültüyü siler; konuşma yokken gelen klavye
 //! tıkırtısı gibi kısa sesler için ayrıca konuşma olasılığına bağlı yumuşak
 //! bir kapı vardır: konuşma yoksa ses kısılır, konuşma başlayınca hemen açılır.
+//! Güç ayarı (yüzde) temiz sesle ham sesi karıştırır ve kapının ne kadar
+//! kısacağını belirler: mikrofonun kendi engellemesi olanlar düşük tutar.
 //! İşlem yaklaşık 10 ms gecikme ekler; zaman damgası buna göre düzeltilir.
 
 use crate::writer::frames_to_100ns;
 use nnnoiseless::DenoiseState;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 /// Açık mı? Ayardan ve panelden yazılır, ses iş parçacıkları okur.
 pub static ON: AtomicBool = AtomicBool::new(false);
+/// Güç, yüzde (0 = ham ses, 100 = tam temizlik).
+pub static LEVEL: AtomicU32 = AtomicU32::new(70);
 
 const N: usize = DenoiseState::FRAME_SIZE;
-/// Konuşma yokken kalan düzey (tamamen susmasın, doğal dursun).
+/// Tam güçte konuşma yokken kalan düzey (tamamen susmasın, doğal dursun).
 const FLOOR: f32 = 0.08;
 /// Kapıyı açan konuşma olasılığı; düşük tutulursa klavye sesi de "konuşma"
 /// sayılır (RNNoise hışırtıya 0,4–0,7 verir, konuşmaya 0,9 üstü).
@@ -27,6 +31,9 @@ pub struct Denoiser {
     /// Bekleyen ilk örneğin zamanı.
     t: i64,
     out: [f32; N],
+    /// Bir önceki ham kare: RNNoise çıkışı tam bir kare geriden gelir,
+    /// karışım için ham ses de o kadar geciktirilir.
+    dry: [f32; N],
     pcm: Vec<i16>,
     gate: f32,
     /// Konuşma bittikten sonra kapının açık kalacağı kare sayısı.
@@ -36,7 +43,7 @@ pub struct Denoiser {
 
 impl Default for Denoiser {
     fn default() -> Self {
-        Self { st: DenoiseState::new(), inp: Vec::with_capacity(N), t: 0, out: [0.0; N], pcm: Vec::new(), gate: 1.0, hold: 0, warm: false }
+        Self { st: DenoiseState::new(), inp: Vec::with_capacity(N), t: 0, out: [0.0; N], dry: [0.0; N], pcm: Vec::new(), gate: 1.0, hold: 0, warm: false }
     }
 }
 
@@ -54,6 +61,11 @@ impl Denoiser {
                 continue;
             }
             let vad = self.st.process_frame(&mut self.out, &self.inp);
+            let s = LEVEL.load(Ordering::Relaxed).min(100) as f32 / 100.0;
+            for (o, d) in self.out.iter_mut().zip(self.dry.iter()) {
+                *o = *o * s + *d * (1.0 - s);
+            }
+            self.dry.copy_from_slice(&self.inp);
             self.inp.clear();
             // İlk kare ağın ısınmasıdır, sessiz geçer.
             if !self.warm {
@@ -66,7 +78,7 @@ impl Denoiser {
             } else if self.hold > 0 {
                 self.hold -= 1;
             }
-            let target = if self.hold > 0 { 1.0 } else { FLOOR };
+            let target = if self.hold > 0 { 1.0 } else { 1.0 - s * (1.0 - FLOOR) };
             let k = if target > self.gate { 0.6 } else { 0.12 };
             let g0 = self.gate;
             self.gate += (target - self.gate) * k;
@@ -103,22 +115,43 @@ mod tests {
         assert_eq!(got, vec![(N * 2, 1_100_000)]);
     }
 
-    #[test]
-    fn steady_noise_is_reduced() {
-        let mut d = Denoiser::default();
-        // Sahte rastgele "hışırtı", 1 sn.
+    /// Sahte rastgele "hışırtı", 1 sn, iki kanal aynı.
+    fn noise() -> Vec<i16> {
         let mut x: u32 = 12345;
-        let pcm: Vec<i16> = (0..48_000 * 2)
-            .map(|_| {
+        (0..48_000)
+            .flat_map(|_| {
                 x = x.wrapping_mul(1_103_515_245).wrapping_add(12345);
-                ((x >> 16) as i16) / 64
+                let v = ((x >> 16) as i16) / 64;
+                [v, v]
             })
-            .collect();
+            .collect()
+    }
+
+    fn energy_ratio(level: u32) -> f64 {
+        LEVEL.store(level, Ordering::SeqCst);
+        let pcm = noise();
+        let mut d = Denoiser::default();
         let mut out = Vec::new();
         d.process(&pcm, 0, |p, _| out.extend_from_slice(p));
         let e = |s: &[i16]| s.iter().map(|&v| (v as f64).powi(2)).sum::<f64>();
         let half = out.len() / 2;
-        let r = e(&out[half..]) / e(&pcm[pcm.len() - (out.len() - half)..]);
-        assert!(r < 0.1, "oran {r}");
+        e(&out[half..]) / e(&pcm[pcm.len() - (out.len() - half)..])
+    }
+
+    // Güç ortak bir sayaç olduğundan tek testte sırayla denenir.
+    #[test]
+    fn strength_scales_reduction() {
+        let full = energy_ratio(100);
+        assert!(full < 0.1, "tam güç {full}");
+        let mid = energy_ratio(40);
+        assert!(mid > full && mid < 0.8, "orta {mid}");
+        // 0: ses bir kare gecikmeyle olduğu gibi geçer.
+        LEVEL.store(0, Ordering::SeqCst);
+        let pcm = noise();
+        let mut d = Denoiser::default();
+        let mut out = Vec::new();
+        d.process(&pcm, 0, |p, _| out.extend_from_slice(p));
+        assert_eq!(&out[4 * N..10 * N], &pcm[2 * N..8 * N]);
+        LEVEL.store(70, Ordering::SeqCst);
     }
 }

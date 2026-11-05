@@ -246,7 +246,7 @@ impl Panel {
 
         // Ses düzeyi kartı.
         let y = 316.0;
-        let card = R::new(x0, y, cw, 164.0);
+        let card = R::new(x0, y, cw, 206.0);
         p.card(card);
         let srcs = [(Src::Sys, '\u{E767}', t!("Bilgisayar sesi", "System audio")), (Src::Mic, '\u{E720}', t!("Mikrofon", "Microphone"))];
         for (i, (src, g, name)) in srcs.into_iter().enumerate() {
@@ -285,16 +285,27 @@ impl Panel {
         let n0 = self.nav.len();
         self.mark(p, s0, 9);
         self.nav.truncate(n0 + 1);
+        // Güç: mikrofonun kendi engellemesi varsa düşük tutulur.
+        let ry = y + 164.0;
+        let lv = cfg.denoise_level();
+        let k = if cfg.denoise { 1.0 } else { 0.45 };
+        p.text(t!("Güç", "Strength"), R::new(card.x + 36.0, ry, 60.0, 18.0), 11.5, false, TEXT, 0.7 * k, Align::Left);
+        p.text(t!("Hafif", "Light"), R::new(card.x + 80.0, ry, 60.0, 18.0), 10.5, false, TEXT, 0.45 * k, Align::Left);
+        p.text(t!("Güçlü", "Strong"), R::new(card.right() - 120.0, ry, 54.0, 18.0), 10.5, false, TEXT, 0.45 * k, Align::Right);
+        p.text(&pct(lv), R::new(card.right() - 60.0, ry, 48.0, 18.0), 12.0, true, TEXT, 0.9 * k, Align::Right);
+        let s0 = p.hits.len();
+        self.slider(p, R::new(card.x + 18.0, ry + 18.0, card.w - 36.0, 20.0), (lv - 10) as f32 / 90.0, Slot::Denoise, 0);
+        self.mark(p, s0, 10);
         if !meter::on() && !self.recording() {
             p.text(t!("Düzeyi görmek için Test et'e basın", "Press Test to see the level"), R::new(card.x, card.bottom() + 2.0, card.w, 14.0), 10.5, false, TEXT, 0.45, Align::Center);
         }
 
         // Alt düğmeler.
-        let y = 496.0;
+        let y = 538.0;
         let half = (cw - 8.0) / 2.0;
         let s0 = p.hits.len();
         p.button(R::new(x0, y, half, 30.0), Some('\u{E8B7}'), t!("Klasör", "Folder"), A::Folder, true, false);
         p.button(R::new(x0 + half + 8.0, y, half, 30.0), Some('\u{E713}'), t!("Tüm ayarlar", "All settings"), A::AllSettings, true, false);
-        self.mark(p, s0, 10);
+        self.mark(p, s0, 11);
     }
 }

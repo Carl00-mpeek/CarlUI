@@ -140,6 +140,19 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         c.denoise,
         |c| c.replay.denoise ^= true,
     );
+    if c.denoise {
+        f.slider(
+            p,
+            t!("Gürültü engelleme gücü", "Noise suppression strength"),
+            t!("Mikrofonunuzun kendi engellemesi varsa düşük tutun; iki işlem üst üste sesi bozabilir.", "Keep it low if your mic already suppresses noise; doing it twice can distort your voice."),
+            c.denoise_level() as f32,
+            10.0,
+            100.0,
+            5.0,
+            |v| t!(format!("%{v:.0}"), format!("{v:.0}%")),
+            |c, v| c.replay.denoise_level = v as u32,
+        );
+    }
     f.slider(
         p,
         t!("Bilgisayar sesi düzeyi", "Computer audio level"),

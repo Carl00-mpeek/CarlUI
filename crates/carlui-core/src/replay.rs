@@ -59,13 +59,16 @@ pub struct ReplayConfig {
     pub mic_volume: u32,
     /// Mikrofonda gürültü engelleme (klavye, fan, uğultu).
     pub denoise: bool,
+    /// Gürültü engelleme gücü (yüzde, 10–100). Mikrofonun kendi engellemesi
+    /// varsa düşük tutulur; üst üste iki işlem sesi bozabilir.
+    pub denoise_level: u32,
     /// Kayıtların klasörü; boşsa Videolar\CarlUI.
     pub folder: String,
 }
 
 impl Default for ReplayConfig {
     fn default() -> Self {
-        Self { enabled: false, minutes: 5, fps: 60, quality: Quality::Medium, resolution: Resolution::Native, codec: Codec::H264, audio: true, mic: false, audio_volume: 100, mic_volume: 100, denoise: true, folder: String::new() }
+        Self { enabled: false, minutes: 5, fps: 60, quality: Quality::Medium, resolution: Resolution::Native, codec: Codec::H264, audio: true, mic: false, audio_volume: 100, mic_volume: 100, denoise: true, denoise_level: 70, folder: String::new() }
     }
 }
 
@@ -79,6 +82,11 @@ impl ReplayConfig {
 
     /// Seçilebilen kare hızları; ayardaki değer en yakınına yuvarlanır.
     pub const FPS: [u32; 6] = [30, 45, 60, 90, 120, 144];
+
+    /// Gürültü engelleme gücü, 10–100 arası.
+    pub fn denoise_level(&self) -> u32 {
+        self.denoise_level.clamp(10, 100)
+    }
 
     pub fn fps(&self) -> u32 {
         *Self::FPS.iter().min_by_key(|&&f| f.abs_diff(self.fps)).unwrap()

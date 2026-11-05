@@ -302,7 +302,9 @@ unsafe fn self_test() -> bool {
     };
     let codec = if env("CARLUI_REPLAY_CODEC") == "hevc" { Codec::Hevc } else { Codec::H264 };
     let rc = ReplayConfig { enabled: true, minutes: 1, resolution, codec, mic: env("CARLUI_REPLAY_MIC") == "1", ..Default::default() };
-    denoise::ON.store(env("CARLUI_REPLAY_DENOISE") != "0", Ordering::SeqCst);
+    let dn = env("CARLUI_REPLAY_DENOISE");
+    denoise::ON.store(dn != "0", Ordering::SeqCst);
+    denoise::LEVEL.store(dn.parse().unwrap_or(70), Ordering::SeqCst);
     let s = Session::start(&rc);
     std::thread::sleep(std::time::Duration::from_secs(secs));
     let ring = s.ring.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -381,6 +383,7 @@ fn apply(sess: &mut Option<Session>, cfg: &Config) {
     mixer::GAIN_SYS.store(rc.audio_volume.min(ReplayConfig::MAX_VOLUME), Ordering::SeqCst);
     mixer::GAIN_MIC.store(rc.mic_volume.min(ReplayConfig::MAX_VOLUME), Ordering::SeqCst);
     denoise::ON.store(rc.denoise, Ordering::SeqCst);
+    denoise::LEVEL.store(rc.denoise_level(), Ordering::SeqCst);
     if rc.enabled && sess.is_none() {
         *sess = Some(Session::start(rc));
     }
