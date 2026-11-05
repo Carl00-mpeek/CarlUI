@@ -15,7 +15,13 @@ use carlui_ai::{
     whisper::{self, Whisper},
     Image,
 };
-use std::{path::PathBuf, sync::atomic::Ordering};
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 /// Büyütülmüş resim en fazla bu kadar piksel olabilir (bellek sınırı).
 const MAX_OUT_PIXELS: u64 = 120_000_000;
@@ -135,7 +141,7 @@ fn enc_ext(dst: &str) -> String {
 }
 
 /// Ses/videodan 16 kHz tek kanal örnekler (WAV doğrudan, diğerleri FFmpeg ile).
-fn load_pcm(w: &Shared, src: &str, ff: Option<&PathBuf>, prog: &dyn Fn(f32)) -> Result<Vec<f32>, String> {
+pub fn load_pcm(cancel: &Arc<AtomicBool>, src: &str, ff: Option<&PathBuf>, prog: &dyn Fn(f32)) -> Result<Vec<f32>, String> {
     if readable_without_ffmpeg(src) {
         if let Ok(p) = std::fs::read(src).map_err(|e| e.to_string()).and_then(|b| audio::read_wav(&b)) {
             return Ok(p);
@@ -145,7 +151,7 @@ fn load_pcm(w: &Shared, src: &str, ff: Option<&PathBuf>, prog: &dyn Fn(f32)) -> 
     let tmp = std::env::temp_dir().join(format!("carlui-asr-{}.wav", std::process::id()));
     let tmp_s = tmp.to_string_lossy().to_string();
     let args: Vec<String> = ["-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le"].iter().map(|s| s.to_string()).collect();
-    let r = ffmpeg::run(ff, src, &args, &tmp_s, &w.cancel, prog).and_then(|_| std::fs::read(&tmp).map_err(|e| e.to_string())).and_then(|b| audio::read_wav(&b));
+    let r = ffmpeg::run(ff, src, &args, &tmp_s, cancel, prog).and_then(|_| std::fs::read(&tmp).map_err(|e| e.to_string())).and_then(|b| audio::read_wav(&b));
     let _ = std::fs::remove_file(&tmp);
     r
 }
@@ -248,7 +254,7 @@ pub fn run_all(w: &Shared, op: Op, files: &[String], ff: Option<&PathBuf>) {
         let prog = |f: f32| w.update(|s| s.frac = (i as f32 + f) / n as f32);
         let dst = output_path(op, src, m);
         let r = match &mut eng {
-            Eng::Asr(wh) => load_pcm(w, src, ff, &|f| prog(f * 0.1)).and_then(|pcm| {
+            Eng::Asr(wh) => load_pcm(&w.cancel, src, ff, &|f| prog(f * 0.1)).and_then(|pcm| {
                 let (segs, l) = wh.transcribe(&pcm, lang, op == Op::Subtitles, &cancel, &|f| prog(0.1 + f * 0.9))?;
                 carlui_core::info!("yazıya dökme: {} parça, dil {l}", segs.len());
                 if segs.is_empty() {

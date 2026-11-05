@@ -69,6 +69,8 @@ pub enum Act {
     /// Anlık tekrar kayıtlarının klasörünü Gezgin'de aç.
     ReplayFolder,
     ReplayPanel,
+    /// Ses stüdyosunu (`carlui-convert --studio`) aç.
+    Studio,
     /// Ayarları dosyaya aktar (true) ya da dosyadan al (false).
     Backup(bool),
     /// Yapay zekâ modelini indir (true) ya da sil (false).
@@ -194,6 +196,9 @@ impl App {
             }
             Act::ReplayPanel => {
                 let _ = std::process::Command::new(carlui_core::paths::sibling_exe("carlui-replay.exe")).arg("--panel").spawn();
+            }
+            Act::Studio => {
+                let _ = std::process::Command::new(carlui_core::paths::sibling_exe("carlui-convert.exe")).arg("--studio").spawn();
             }
             Act::Tool(arg) => unsafe {
                 ShellExecuteW(HWND::default(), w!("open"), &HSTRING::from(carlui_core::paths::sibling_exe("carlui-tools.exe").as_os_str()), &HSTRING::from(arg), PCWSTR::null(), SW_SHOWNORMAL);

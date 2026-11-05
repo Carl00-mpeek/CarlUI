@@ -10,6 +10,7 @@
 //! Test/elle kullanım: `carlui-convert.exe dosya1 dosya2 …` (seçim yerine).
 //! `--dictate`: sesle yazma (bkz. `dictate`); ana süreç kısayolla başlatır.
 //! `--speak`: seçili metni sesli okur (bkz. `speak`); ana süreç kısayolla başlatır.
+//! `--studio`: Ses stüdyosu (metinden sese, sesten metne; bkz. `studio`).
 //! `--translate <dosya>`: ekran çevirisi (bkz. `translate`); ada başlatır.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -26,6 +27,7 @@ mod kinds;
 mod progress;
 mod select;
 mod speak;
+mod studio;
 mod translate;
 
 use carlui_core::{info, log};
@@ -144,6 +146,9 @@ fn main() -> Result<()> {
         let accent = carlui_core::config::load().dock.menu_accent_color(glassmenu::accent);
         let owner = unsafe { CreateWindowExW(WS_EX_TOOLWINDOW, w!("Static"), w!(""), WS_POPUP, 0, 0, 0, 0, None, None, None, None)? };
         return speak::run(owner, accent, fg.unwrap_or_else(|| unsafe { GetForegroundWindow() }));
+    }
+    if args.iter().any(|a| a == "--studio") {
+        return studio::run(carlui_core::config::load().dock.menu_accent_color(glassmenu::accent));
     }
     // `--fetch <model>`: Ayarlar → Yapay zekâ'daki "İndir" düğmesi.
     if let Some(m) = args.iter().position(|a| a == "--fetch").and_then(|i| args.get(i + 1)).and_then(|id| carlui_ai::catalog::get(id)) {
@@ -282,20 +287,23 @@ pub fn ask_model(owner: HWND, accent: Option<u32>, m: &carlui_ai::catalog::Model
     if !carlui_ai::store::accepted(m) {
         return license::ask(owner, accent, m, Some(need));
     }
-    let rows = vec![
+    let mut rows = vec![
         Row::Label(t!(format!("{} modeli kurulu değil", m.name), format!("The {} model isn't installed", m.name)), Icon::Glyph('\u{E946}', None)),
         Row::Label(format!("{} · {}", m.license, m.about()), Icon::Glyph('\u{E946}', None)),
+    ];
+    rows.extend(license::hw_rows(m));
+    rows.extend([
         Row::Item { id: 1, text: t!(format!("İndir ({}, bir kez)", ai::mb(need)), format!("Download ({}, once)", ai::mb(need))), icon: Icon::Glyph('\u{E896}', None) },
         Row::Item { id: 2, text: t!("Vazgeç", "Cancel").into(), icon: Icon::Glyph('\u{E711}', None) },
-    ];
+    ]);
     glassmenu::run(owner, rows, accent, cursor()) == Some(1)
 }
 
 /// FFmpeg eksikken indirilsin mi diye sorar.
-fn ask_ffmpeg(owner: HWND, accent: Option<u32>) -> bool {
+pub fn ask_ffmpeg(owner: HWND, accent: Option<u32>) -> bool {
     let rows = vec![
         Row::Label(t!("Bu iş için FFmpeg gerekli", "This needs FFmpeg").into(), Icon::Glyph('\u{E946}', None)),
-        Row::Item { id: 1, text: t!("FFmpeg'i indir (~110 MB, bir kez)", "Download FFmpeg (~110 MB, once)").into(), icon: Icon::Glyph('\u{E896}', None) },
+        Row::Item { id: 1, text: t!("FFmpeg'i indir (~250 MB, bir kez)", "Download FFmpeg (~250 MB, once)").into(), icon: Icon::Glyph('\u{E896}', None) },
         Row::Item { id: 2, text: t!("Vazgeç", "Cancel").into(), icon: Icon::Glyph('\u{E711}', None) },
     ];
     glassmenu::run(owner, rows, accent, cursor()) == Some(1)
@@ -305,7 +313,7 @@ fn ask_ffmpeg(owner: HWND, accent: Option<u32>) -> bool {
 fn fetch_ffmpeg(w: &progress::Shared, ff: &mut Option<PathBuf>) -> bool {
     w.update(|s| {
         s.title = t!("FFmpeg indiriliyor", "Downloading FFmpeg").into();
-        s.file = "github.com/BtbN/FFmpeg-Builds".into();
+        s.file = "github.com/GyanD/codexffmpeg".into();
     });
     match ffmpeg::download(&w.cancel) {
         Ok(p) => {

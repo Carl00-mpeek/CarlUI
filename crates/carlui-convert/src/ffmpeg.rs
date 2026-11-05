@@ -1,6 +1,6 @@
 //! FFmpeg: video, ses ve WIC'in yazamadığı resim biçimleri (WebP, AVIF,
 //! JPEG XL) için. Bilgisayarda bulunan bir ffmpeg.exe kullanılır; yoksa
-//! kullanıcı isterse resmi derlemesi (BtbN, GPL) `%LOCALAPPDATA%\CarlUI\ffmpeg`
+//! kullanıcı isterse resmi derlemesi (Gyan, GPL; sabit sürüm ve SHA-256) `%LOCALAPPDATA%\CarlUI\ffmpeg`
 //! altına indirilir. İlerleme stderr'deki "Duration:" ve "time=" satırlarından
 //! okunur; iptal edilince süreç sonlandırılır ve yarım dosya silinir.
 
@@ -17,7 +17,11 @@ use std::{
 };
 
 const NO_WINDOW: u32 = 0x0800_0000;
-pub const DOWNLOAD_URL: &str = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
+/// Sabit sürüm (Gyan, GPL tam derleme: libjxl ve libaom dahil). Güncellenirken
+/// adres, boyut ve SHA-256 birlikte değiştirilir.
+pub const DOWNLOAD_URL: &str = "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-full_build.zip";
+pub const DOWNLOAD_SIZE: u64 = 257_736_868;
+pub const DOWNLOAD_SHA256: &str = "759d0a9831c436a0eb331ad36f236c06cb04aaa0005da46571f0e9d3d9206f6b";
 
 fn own_dir() -> PathBuf {
     PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default()).join("CarlUI").join("ffmpeg")
@@ -46,34 +50,21 @@ pub fn find() -> Option<PathBuf> {
     c.into_iter().find(|p| p.is_file())
 }
 
-/// Resmi derlemeyi indirip açar (Windows'un kendi curl.exe ve tar.exe'si).
+/// Resmi derlemeyi indirip açar: sabit sürüm, boyut ve SHA-256 doğrulanır
+/// (`carlui_ai::net`), arşiv güvenlik denetiminden sonra açılır.
 pub fn download(cancel: &AtomicBool) -> Result<PathBuf, String> {
     let dir = own_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let zip = dir.join("ffmpeg.zip");
-    let mut child = Command::new("curl.exe").args(["-L", "--fail", "--silent", "-o"]).arg(&zip).arg(DOWNLOAD_URL).creation_flags(NO_WINDOW).spawn().map_err(|e| format!("{}: {e}", t!("curl başlatılamadı", "couldn't start curl")))?;
-    loop {
-        if cancel.load(Ordering::Relaxed) {
-            let _ = child.kill();
-            let _ = std::fs::remove_file(&zip);
-            return Err(t!("İndirme durduruldu", "Download stopped").into());
-        }
-        match child.try_wait() {
-            Ok(Some(s)) if s.success() => break,
-            Ok(Some(_)) | Err(_) => return Err(t!("FFmpeg indirilemedi", "Couldn't download FFmpeg").into()),
-            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(200)),
-        }
-    }
+    carlui_ai::net::fetch(DOWNLOAD_URL, &zip, DOWNLOAD_SIZE, DOWNLOAD_SHA256, cancel, &|_| {})?;
     let x = dir.join("x");
+    let _ = std::fs::remove_dir_all(&x);
     let _ = std::fs::create_dir_all(&x);
-    let ok = Command::new("tar.exe").arg("-xf").arg(&zip).arg("-C").arg(&x).creation_flags(NO_WINDOW).status().map(|s| s.success()).unwrap_or(false);
-    let _ = std::fs::remove_file(&zip);
-    if !ok {
-        return Err(t!("FFmpeg arşivi açılamadı", "Couldn't extract the FFmpeg archive").into());
-    }
-    // ffmpeg-master-latest-win64-gpl\bin\{ffmpeg,ffprobe}.exe → dir
+    carlui_ai::net::unzip(&zip, &x, None)?;
+    // ffmpeg-9.0.2-full_build\bin\{ffmpeg,ffprobe}.exe → dir
     let bin = std::fs::read_dir(&x).ok().into_iter().flatten().flatten().map(|e| e.path().join("bin")).find(|p| p.join("ffmpeg.exe").is_file()).ok_or(t!("Arşivde ffmpeg.exe yok", "ffmpeg.exe not found in the archive"))?;
     for name in ["ffmpeg.exe", "ffprobe.exe"] {
+        let _ = std::fs::remove_file(dir.join(name));
         let _ = std::fs::rename(bin.join(name), dir.join(name));
     }
     let _ = std::fs::remove_dir_all(&x);
@@ -175,5 +166,22 @@ pub fn run(exe: &PathBuf, src: &str, args: &[String], dst: &str, cancel: &Arc<At
         let _ = std::fs::remove_file(dst);
         let last = tail.iter().rev().find(|l| !l.starts_with("frame=") && !l.starts_with("size=")).cloned().unwrap_or_default();
         Err(if last.is_empty() { t!("FFmpeg hata verdi", "FFmpeg reported an error").into() } else { last })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn download_is_pinned() {
+        assert!(carlui_ai::net::allowed(super::DOWNLOAD_URL));
+        assert!(carlui_ai::net::valid_sha(super::DOWNLOAD_SHA256));
+        assert!(!super::DOWNLOAD_URL.contains("latest"));
+    }
+
+    /// Elle çalıştırılır (ağ gerekir): sabit sürümün boyutu değişmemiş mi?
+    #[test]
+    #[ignore]
+    fn link_unchanged() {
+        assert_eq!(carlui_ai::net::probe(super::DOWNLOAD_URL).0, Some(super::DOWNLOAD_SIZE));
     }
 }

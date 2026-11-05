@@ -9,6 +9,15 @@ use carlui_ai::{catalog::Model, store};
 use carlui_ui::glassmenu::{self, Icon, Row};
 use windows::Win32::Foundation::HWND;
 
+/// Önerilen sistem satırı; bu bilgisayar altındaysa turuncu "uzun sürebilir" uyarısı.
+pub fn hw_rows(m: &Model) -> Vec<Row> {
+    let mut v = vec![Row::Label(carlui_ai::hw::summary(m), Icon::Glyph('\u{E7F4}', None))];
+    if let Some(w) = carlui_ai::hw::warning(m) {
+        v.push(Row::Label(w, Icon::Glyph('\u{E7BA}', Some(0xFFB454))));
+    }
+    v
+}
+
 /// Lisans onaylı mı; değilse sorar. `need`: indirilecek bayt (biliniyorsa düğmede yazılır).
 pub fn ask(owner: HWND, accent: Option<u32>, m: &Model, need: Option<u64>) -> bool {
     if store::accepted(m) {
@@ -26,10 +35,14 @@ pub fn ask(owner: HWND, accent: Option<u32>, m: &Model, need: Option<u64>) -> bo
             Row::Label(t!(format!("Lisans: {}", m.license), format!("License: {}", m.license)), info()),
             Row::Label(t!("Kişisel kullanım serbest; para kazanılan işlerde (reklam, ücretli seslendirme, gelir getiren video) kullanılamaz.", "Personal use is fine; it can't be used for paid work (ads, paid voice-over, monetized videos).").into(), info()),
             Row::Label(t!(format!("Model resmi kaynağından iner: {}", m.source.trim_start_matches("https://")), format!("Downloaded from its official source: {}", m.source.trim_start_matches("https://"))), info()),
+        ];
+        let mut rows = rows;
+        rows.extend(hw_rows(m));
+        rows.extend([
             Row::Item { id: 1, text: accept, icon: Icon::Glyph('\u{E73E}', None) },
             Row::Item { id: 3, text: t!("Lisansı ve kaynağı tarayıcıda aç", "Open the license and source in the browser").into(), icon: Icon::Glyph('\u{E774}', None) },
             Row::Item { id: 2, text: t!("Vazgeç", "Cancel").into(), icon: Icon::Glyph('\u{E711}', None) },
-        ];
+        ]);
         match glassmenu::run(owner, rows, accent, cursor()) {
             Some(1) => {
                 if let Err(e) = store::accept(m) {

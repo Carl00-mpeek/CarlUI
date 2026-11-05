@@ -69,6 +69,13 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         let sel = catalog::chosen(c, feat).id;
         if feat == Feature::Speak {
             speak_options(c, p, f);
+            let r = f.row(
+                p,
+                t!("Ses stüdyosu", "Voice studio"),
+                t!("Metni sese çevirip WAV/MP3 kaydedin ya da sesi yazıya döküp TXT/SRT kaydedin.", "Turn text into speech and save WAV/MP3, or transcribe audio and save TXT/SRT."),
+                120.0,
+            );
+            p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E8D6}'), t!("Aç", "Open"), Act::Studio, true, false);
         }
         for m in catalog::of(feat) {
             // Çeviride iki yön de kullanılır; Türkçe ses Türkçe metinde kendiliğinden seçilir.
@@ -79,15 +86,21 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
                 format!("{} · {}", m.tier.label(), m.name)
             };
             let ctrl = if pick { 232.0 } else { 120.0 };
-            let r = if m.restricted {
-                let desc = t!(
+            let (desc, color) = if m.restricted {
+                let d = t!(
                     format!("{} · {} · Yalnızca ticari olmayan kullanım · {}", mb(m.size()), m.license, m.about()),
                     format!("{} · {} · Non-commercial use only · {}", mb(m.size()), m.license, m.about())
                 );
-                f.row_c(p, &label, &desc, ctrl, Some(ORANGE))
+                (d, Some(ORANGE))
             } else {
-                f.row(p, &label, &format!("{} · {} · {}", mb(m.size()), m.license, m.about()), ctrl)
+                (format!("{} · {} · {}", mb(m.size()), m.license, m.about()), None)
             };
+            // Önerilen sistem; bu bilgisayar altındaysa turuncu "uzun sürebilir" uyarısı.
+            let (extra, extra_color) = match carlui_ai::hw::warning(m) {
+                Some(w) => (format!("{} · {w}", carlui_ai::hw::summary(m)), Some(ORANGE)),
+                None => (carlui_ai::hw::summary(m), None),
+            };
+            let r = f.row3(p, &label, &desc, color, &extra, extra_color, ctrl);
             let y = r.y + (r.h - 32.0) / 2.0;
             let x = r.right() - 16.0 - 112.0;
             let bx = R::new(x, y, 112.0, 32.0);

@@ -51,7 +51,8 @@ pub struct File {
     /// Diskteki adı (model klasöründe)
     pub name: &'static str,
     pub size: u64,
-    /// Boşsa doğrulama yapılmaz (yalnızca küçük metin dosyaları).
+    /// Zorunlu: tutmazsa dosya kurulmaz (`net::fetch`). Adresler sabit sürüme
+    /// bağlıdır; model güncellenirse adres, boyut ve SHA birlikte değiştirilir.
     pub sha256: &'static str,
     /// Zip ise indirildikten sonra açılır.
     pub unzip: bool,
@@ -107,7 +108,7 @@ const KOKORO_TOKENIZER: File = File { url: concat!(KOKORO!(), "/tokenizer.json")
 const KOKORO_VOICE: File = File { url: concat!(KOKORO!(), "/voices/af_heart.bin"), name: "voice.bin", size: 522240, sha256: "d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b", unzip: false };
 
 macro_rules! whisper {
-    ($id:literal, $tier:expr, $repo:literal, $size:literal, $sha:literal, $vocab:literal, $tr:literal, $en:literal, $lic:literal) => {
+    ($id:literal, $tier:expr, $repo:literal, $rev:literal, $size:literal, $sha:literal, $vocab:literal, $vocab_sha:literal, $cfg:literal, $cfg_sha:literal, $tr:literal, $en:literal, $lic:literal) => {
         Model {
             id: $id,
             feature: Feature::Speech,
@@ -119,9 +120,9 @@ macro_rules! whisper {
             restricted: false,
             source: concat!("https://huggingface.co/openai/whisper-", $repo),
             files: &[
-                File { url: concat!("https://huggingface.co/openai/whisper-", $repo, "/resolve/main/model.safetensors"), name: "model.safetensors", size: $size, sha256: $sha, unzip: false },
-                File { url: concat!("https://huggingface.co/openai/whisper-", $repo, "/resolve/main/vocab.json"), name: "vocab.json", size: $vocab, sha256: "", unzip: false },
-                File { url: concat!("https://huggingface.co/openai/whisper-", $repo, "/resolve/main/config.json"), name: "config.json", size: 2000, sha256: "", unzip: false },
+                File { url: concat!("https://huggingface.co/openai/whisper-", $repo, "/resolve/", $rev, "/model.safetensors"), name: "model.safetensors", size: $size, sha256: $sha, unzip: false },
+                File { url: concat!("https://huggingface.co/openai/whisper-", $repo, "/resolve/", $rev, "/vocab.json"), name: "vocab.json", size: $vocab, sha256: $vocab_sha, unzip: false },
+                File { url: concat!("https://huggingface.co/openai/whisper-", $repo, "/resolve/", $rev, "/config.json"), name: "config.json", size: $cfg, sha256: $cfg_sha, unzip: false },
             ],
         }
     };
@@ -129,13 +130,16 @@ macro_rules! whisper {
 
 pub static MODELS: &[Model] = &[
     // ---- Konuşma → yazı (dikte ve dosya yazıya dökme)
-    whisper!("whisper-base", Tier::Small, "base", 290403936, "07cadb9f25677c8d50df603e66a98fbd842cce45047139baeb16e6219a1e807b", 835550,
+    whisper!("whisper-base", Tier::Small, "base", "e37978b90ca9030d5170a5c07aadb050351a65bb", 290403936, "07cadb9f25677c8d50df603e66a98fbd842cce45047139baeb16e6219a1e807b",
+        835550, "8f680bba319e01a653d2e8a5dbc17a9157179e0576e6ce74ce0c06356c6e24f9", 1983, "a153c53883a6799b6f056b4a8d1a515c9926d03994682ba88a7616618d7da0c1",
         "Hızlı, her bilgisayarda çalışır. Kısa dikte için yeterli; Türkçede ara sıra kelime hatası yapar.",
         "Fast, runs on any PC. Fine for short dictation; makes the odd word mistake.", "Apache-2.0 (OpenAI)"),
-    whisper!("whisper-small", Tier::Medium, "small", 966995080, "1d7734884874f1a1513ed9aa760a4f8e97aaa02fd6d93a3a85d27b2ae9ca596b", 835550,
+    whisper!("whisper-small", Tier::Medium, "small", "973afd24965f72e36ca33b3055d56a652f456b4d", 966995080, "1d7734884874f1a1513ed9aa760a4f8e97aaa02fd6d93a3a85d27b2ae9ca596b",
+        835550, "8f680bba319e01a653d2e8a5dbc17a9157179e0576e6ce74ce0c06356c6e24f9", 1967, "e6a2b489da1b5aed65a8eb8d1e7466fa867ad5643a8bc138ba708bd56b2875c4",
         "Önerilen. Türkçede belirgin şekilde daha doğru; ekran kartıyla hızlı, yalnız işlemciyle biraz bekletir.",
         "Recommended. Noticeably more accurate; fast with a graphics card, a bit slow on CPU only.", "Apache-2.0 (OpenAI)"),
-    whisper!("whisper-turbo", Tier::Large, "large-v3-turbo", 1617824864, "542566a422ae4f3fd23f1ba11add198fca01bbf82e66e6a2857b3f608b1eb9d1", 1036558,
+    whisper!("whisper-turbo", Tier::Large, "large-v3-turbo", "41f01f3fe87f28c78e2fbf8b568835947dd65ed9", 1617824864, "542566a422ae4f3fd23f1ba11add198fca01bbf82e66e6a2857b3f608b1eb9d1",
+        1036558, "e2aa043ef015641d363d8288e7c241c85e36a5c761fb303598e0710233344387", 1256, "c5b526b3e3cd64cd8940dabb45e8ba726629e22d8ed389c29b552f9140daf04a",
         "En doğru sonuç; uzun kayıtlar ve altyazı için. Ekran kartı ve 4 GB+ bellek ister.",
         "Most accurate; for long recordings and subtitles. Wants a graphics card and 4 GB+ of memory.", "MIT (OpenAI)"),
     // ---- Sesli komut
@@ -165,9 +169,9 @@ pub static MODELS: &[Model] = &[
         restricted: false,
         source: "https://huggingface.co/openai/whisper-tiny",
         files: &[
-            File { url: "https://huggingface.co/openai/whisper-tiny/resolve/main/model.safetensors", name: "model.safetensors", size: 151061672, sha256: "7ebd0e69e78190ffe1438491fa05cc1f5c1aa3a4c4db3bc1723adbb551ea2395", unzip: false },
-            File { url: "https://huggingface.co/openai/whisper-tiny/resolve/main/vocab.json", name: "vocab.json", size: 835550, sha256: "", unzip: false },
-            File { url: "https://huggingface.co/openai/whisper-tiny/resolve/main/config.json", name: "config.json", size: 2000, sha256: "", unzip: false },
+            File { url: "https://huggingface.co/openai/whisper-tiny/resolve/169d4a4341b33bc18d8881c4b69c2e104e1cc0af/model.safetensors", name: "model.safetensors", size: 151061672, sha256: "7ebd0e69e78190ffe1438491fa05cc1f5c1aa3a4c4db3bc1723adbb551ea2395", unzip: false },
+            File { url: "https://huggingface.co/openai/whisper-tiny/resolve/169d4a4341b33bc18d8881c4b69c2e104e1cc0af/vocab.json", name: "vocab.json", size: 835550, sha256: "8f680bba319e01a653d2e8a5dbc17a9157179e0576e6ce74ce0c06356c6e24f9", unzip: false },
+            File { url: "https://huggingface.co/openai/whisper-tiny/resolve/169d4a4341b33bc18d8881c4b69c2e104e1cc0af/config.json", name: "config.json", size: 1983, sha256: "ffdccec4f3211f4c63310f2b7098f309fe70f3952cedc5e4d11e43f5b2379b98", unzip: false },
         ],
     },
     Model {
@@ -280,10 +284,10 @@ pub static MODELS: &[Model] = &[
         restricted: false,
         source: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr",
         files: &[
-            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/main/pytorch_model.bin", name: "model.pth", size: 469780741, sha256: "7bc7e1973431752bcbb083c090c3c8f1e6eb3389d2e2e0faf9bf1a85d969a789", unzip: false },
-            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/main/source.spm", name: "source.spm", size: 796953, sha256: "180d3f94ddfee5585d78b702290ded0f4f9bd40f299349c8383b32a579fefad4", unzip: false },
-            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/main/vocab.json", name: "vocab.json", size: 1501287, sha256: "01ef522455d2bf22b0716416ee34688cc2b3f5fa257f742665d21b6acc450ac1", unzip: false },
-            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/main/config.json", name: "config.json", size: 1137, sha256: "d5ff17d7f5373c403a3ed253d963e5f487a2b95607abdb873429ad4de64db598", unzip: false },
+            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/e539fc16a8a1a0ea5950eb339b595bfcce990e90/pytorch_model.bin", name: "model.pth", size: 469780741, sha256: "7bc7e1973431752bcbb083c090c3c8f1e6eb3389d2e2e0faf9bf1a85d969a789", unzip: false },
+            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/e539fc16a8a1a0ea5950eb339b595bfcce990e90/source.spm", name: "source.spm", size: 796953, sha256: "180d3f94ddfee5585d78b702290ded0f4f9bd40f299349c8383b32a579fefad4", unzip: false },
+            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/e539fc16a8a1a0ea5950eb339b595bfcce990e90/vocab.json", name: "vocab.json", size: 1501287, sha256: "01ef522455d2bf22b0716416ee34688cc2b3f5fa257f742665d21b6acc450ac1", unzip: false },
+            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/e539fc16a8a1a0ea5950eb339b595bfcce990e90/config.json", name: "config.json", size: 1137, sha256: "d5ff17d7f5373c403a3ed253d963e5f487a2b95607abdb873429ad4de64db598", unzip: false },
         ],
     },
     Model {
@@ -297,10 +301,10 @@ pub static MODELS: &[Model] = &[
         restricted: false,
         source: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en",
         files: &[
-            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/main/model.safetensors", name: "model.safetensors", size: 469717280, sha256: "fbb0eb4c56cf9a6248adbda79c2bbce72cd8969b4b794fbbc434d4b7d995549d", unzip: false },
-            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/main/source.spm", name: "source.spm", size: 833378, sha256: "a6946a00a5cbd04044bb1c25b48ea798561a2fd12d872e5d1452bdc3dc076e77", unzip: false },
-            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/main/vocab.json", name: "vocab.json", size: 1501287, sha256: "01ef522455d2bf22b0716416ee34688cc2b3f5fa257f742665d21b6acc450ac1", unzip: false },
-            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/main/config.json", name: "config.json", size: 1076, sha256: "9e03c439d75b5166feb31a01eeedb2befdc01eb41b3541ce37dc8e61eebd9d93", unzip: false },
+            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/2261c8fc7b1af59caee87f8ff0ecf3fbccfe8391/model.safetensors", name: "model.safetensors", size: 469717280, sha256: "fbb0eb4c56cf9a6248adbda79c2bbce72cd8969b4b794fbbc434d4b7d995549d", unzip: false },
+            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/2261c8fc7b1af59caee87f8ff0ecf3fbccfe8391/source.spm", name: "source.spm", size: 833378, sha256: "a6946a00a5cbd04044bb1c25b48ea798561a2fd12d872e5d1452bdc3dc076e77", unzip: false },
+            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/2261c8fc7b1af59caee87f8ff0ecf3fbccfe8391/vocab.json", name: "vocab.json", size: 1501287, sha256: "01ef522455d2bf22b0716416ee34688cc2b3f5fa257f742665d21b6acc450ac1", unzip: false },
+            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/2261c8fc7b1af59caee87f8ff0ecf3fbccfe8391/config.json", name: "config.json", size: 1076, sha256: "9e03c439d75b5166feb31a01eeedb2befdc01eb41b3541ce37dc8e61eebd9d93", unzip: false },
         ],
     },
     // ---- Sesli okuma (metin → ses)
@@ -442,9 +446,17 @@ mod tests {
         }
         for (i, m) in MODELS.iter().enumerate() {
             assert!(MODELS[..i].iter().all(|o| o.id != m.id), "aynı kimlik: {}", m.id);
+            assert!(!m.files.is_empty() || get("whisper-base").is_some() && m.id == "cmd-whisper-base", "dosyasız model: {}", m.id);
             for f in m.files {
-                assert!(f.url.starts_with("https://"));
-                assert!(f.sha256.is_empty() || f.sha256.len() == 64);
+                assert!(crate::net::allowed(f.url), "izinsiz adres: {}", f.url);
+                assert!(!f.url.contains("/resolve/main/") && !f.url.contains("/latest/"), "sürüme bağlı değil: {}", f.url);
+                if f.url.contains("huggingface.co") {
+                    let rev = f.url.split("/resolve/").nth(1).and_then(|r| r.split('/').next()).unwrap_or("");
+                    assert!(rev.len() == 40 && rev.bytes().all(|b| b.is_ascii_hexdigit()), "commit'e bağlı değil: {}", f.url);
+                }
+                assert!(crate::net::valid_sha(f.sha256), "SHA eksik: {}", f.url);
+                assert!(crate::net::plain_name(f.name), "dosya adı: {}", f.name);
+                assert!(f.size > 0);
             }
             assert_eq!(m.license.contains("NC"), m.restricted, "lisans işareti yanlış: {}", m.id);
         }

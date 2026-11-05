@@ -12,8 +12,9 @@ use std::{
 };
 
 pub const ORT_VERSION: &str = "1.24.4";
-const ORT_URL: &str = "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime.directml/1.24.4/microsoft.ml.onnxruntime.directml.1.24.4.nupkg";
-const ORT_SIZE: u64 = 12_400_000;
+pub(crate) const ORT_URL: &str = "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime.directml/1.24.4/microsoft.ml.onnxruntime.directml.1.24.4.nupkg";
+pub(crate) const ORT_SIZE: u64 = 12_458_649;
+pub(crate) const ORT_SHA256: &str = "57e9f11b73437bef7a309496135d4c1f96b1a8e9ddba60013fa27bfc1d788681";
 
 pub fn dll() -> PathBuf {
     crate::store::root().join("onnxruntime").join("onnxruntime.dll")
@@ -31,14 +32,14 @@ pub fn install(cancel: &AtomicBool, progress: &dyn Fn(f32)) -> Result<(), String
     let d = dll().parent().unwrap().to_path_buf();
     std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
     let pkg = d.join("ort.zip");
-    crate::store::fetch(ORT_URL, &pkg, cancel, &|n| progress((n as f32 / ORT_SIZE as f32).min(0.99)))?;
+    crate::net::fetch(ORT_URL, &pkg, ORT_SIZE, ORT_SHA256, cancel, &|n| progress((n as f32 / ORT_SIZE as f32).min(0.99)))?;
     let x = d.join("x");
     let _ = std::fs::create_dir_all(&x);
-    use std::os::windows::process::CommandExt;
-    let ok = std::process::Command::new("tar.exe").arg("-xf").arg(&pkg).arg("-C").arg(&x).arg("runtimes/win-x64/native/onnxruntime.dll").creation_flags(0x0800_0000).status().map(|s| s.success()).unwrap_or(false);
-    let _ = std::fs::remove_file(&pkg);
+    let ok = crate::net::unzip(&pkg, &x, Some("runtimes/win-x64/native/onnxruntime.dll"));
     let src = x.join("runtimes").join("win-x64").join("native").join("onnxruntime.dll");
-    let r = if ok && src.is_file() { std::fs::rename(&src, dll()).map_err(|e| e.to_string()) } else { Err(t!("ONNX Runtime açılamadı", "Couldn't extract ONNX Runtime").into()) };
+    let r = if let Err(e) = ok {
+        Err(e)
+    } else if src.is_file() { std::fs::rename(&src, dll()).map_err(|e| e.to_string()) } else { Err(t!("ONNX Runtime açılamadı", "Couldn't extract ONNX Runtime").into()) };
     let _ = std::fs::remove_dir_all(&x);
     progress(1.0);
     r

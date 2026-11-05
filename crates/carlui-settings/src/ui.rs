@@ -54,6 +54,21 @@ impl Flow {
         r
     }
 
+    /// `row_c` gibi; altında üçüncü bir satır (ör. önerilen sistem) ve kendi rengi.
+    pub fn row3(&mut self, p: &P, label: &str, desc: &str, color: Option<u32>, extra: &str, extra_color: Option<u32>, ctrl: f32) -> R {
+        let h = 82.0;
+        let r = R::new(self.x, self.y, self.w, h);
+        p.card(r);
+        let tw = r.w - ctrl - 48.0;
+        p.text(label, R::new(r.x + 16.0, r.y + 10.0, tw, 22.0), 14.0, false, TEXT, 0.95, Align::Left);
+        let (c, a) = color.map(|c| (c, 0.95)).unwrap_or((TEXT, 0.55));
+        p.text(desc, R::new(r.x + 16.0, r.y + 33.0, tw, 20.0), 12.0, false, c, a, Align::Left);
+        let (c, a) = extra_color.map(|c| (c, 0.95)).unwrap_or((TEXT, 0.55));
+        p.text(extra, R::new(r.x + 16.0, r.y + 52.0, tw, 20.0), 12.0, false, c, a, Align::Left);
+        self.y += h + 6.0;
+        r
+    }
+
     /// Açık/kapalı ayar; satırın tamamı tıklanabilir.
     pub fn toggle(&mut self, p: &mut P, label: &str, desc: &str, on: bool, f: impl Fn(&mut Config) + 'static) {
         let r = self.row(p, label, desc, 60.0);

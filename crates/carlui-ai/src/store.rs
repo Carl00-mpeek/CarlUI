@@ -1,21 +1,16 @@
 //! Bu modül "modeller nereye iner, nasıl doğrulanır, nasıl silinir?"
 //! sorusunu çözüyor. Her model `%LOCALAPPDATA%\CarlUI\models\<id>` altında
-//! durur; indirme Windows'un kendi curl.exe'siyle yapılır (yeniden deneme,
-//! yönlendirme, HTTPS hazır). İlerleme `.part` dosyasının boyutundan okunur.
-//! Bitince SHA-256 doğrulanır, zip'ler tar.exe ile açılır ve klasöre `.ok`
+//! durur; indirme `net` modülüyle yapılır (yalnızca HTTPS ve izinli sunucular).
+//! İlerleme `.part` dosyasının boyutundan okunur. Boyut ve SHA-256 tutmadan
+//! dosya yerine konmaz, zip'ler güvenlik denetiminden sonra açılır ve klasöre `.ok`
 //! yazılır; `.ok` yoksa model kurulu sayılmaz.
 
 use crate::catalog::Model;
 use std::{
     io::Read,
-    os::windows::process::CommandExt,
     path::{Path, PathBuf},
-    process::Command,
-    sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
+    sync::atomic::AtomicBool,
 };
-
-const NO_WINDOW: u32 = 0x0800_0000;
 
 pub fn root() -> PathBuf {
     carlui_core::paths::data_dir().join("models")
@@ -105,47 +100,6 @@ pub fn sha256_file(p: &Path) -> Result<String, String> {
     res
 }
 
-/// Tek bir adresi `dst`'ye indirir. `tick(indirilen bayt)` sık sık çağrılır.
-pub fn fetch(url: &str, dst: &Path, cancel: &AtomicBool, tick: &dyn Fn(u64)) -> Result<(), String> {
-    let part = dst.with_extension("part");
-    let _ = std::fs::remove_file(&part);
-    let mut child = Command::new("curl.exe")
-        .args(["-L", "--fail", "--silent", "--retry", "3", "--connect-timeout", "20", "-o"])
-        .arg(&part)
-        .arg(url)
-        .creation_flags(NO_WINDOW)
-        .spawn()
-        .map_err(|e| format!("{}: {e}", t!("curl başlatılamadı", "couldn't start curl")))?;
-    loop {
-        if cancel.load(Ordering::Relaxed) {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = std::fs::remove_file(&part);
-            return Err(t!("İndirme durduruldu", "Download stopped").into());
-        }
-        tick(std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0));
-        match child.try_wait() {
-            Ok(Some(s)) if s.success() => break,
-            Ok(Some(_)) | Err(_) => {
-                let _ = std::fs::remove_file(&part);
-                return Err(t!(format!("İndirilemedi: {url}"), format!("Couldn't download: {url}")));
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(250)),
-        }
-    }
-    std::fs::rename(&part, dst).map_err(|e| e.to_string())
-}
-
-fn unzip(zip: &Path, into: &Path) -> Result<(), String> {
-    let ok = Command::new("tar.exe").arg("-xf").arg(zip).arg("-C").arg(into).creation_flags(NO_WINDOW).status().map(|s| s.success()).unwrap_or(false);
-    let _ = std::fs::remove_file(zip);
-    if ok {
-        Ok(())
-    } else {
-        Err(t!("Arşiv açılamadı", "Couldn't extract the archive").into())
-    }
-}
-
 /// Modeli indirir, doğrular ve kurar. `progress(0..1)`.
 pub fn install(m: &Model, cancel: &AtomicBool, progress: &dyn Fn(f32)) -> Result<(), String> {
     if real_id(m.id) != m.id {
@@ -161,19 +115,14 @@ pub fn install(m: &Model, cancel: &AtomicBool, progress: &dyn Fn(f32)) -> Result
     let total = m.size().max(1) as f64;
     let mut done = 0u64;
     for f in m.files {
+        if !crate::net::plain_name(f.name) {
+            return Err(t!("Model dosya adı geçersiz.", "Invalid model file name.").into());
+        }
         let dst = d.join(f.name);
         let base = done;
-        fetch(f.url, &dst, cancel, &|n| progress(((base + n.min(f.size)) as f64 / total).min(0.99) as f32))?;
-        if !f.sha256.is_empty() {
-            let got = sha256_file(&dst)?;
-            if got != f.sha256 {
-                let _ = std::fs::remove_file(&dst);
-                carlui_core::warn!("model {}: SHA uyuşmuyor ({got} ≠ {})", m.id, f.sha256);
-                return Err(t!("İndirilen dosya doğrulanamadı; tekrar deneyin.", "The downloaded file failed verification; try again.").into());
-            }
-        }
+        crate::net::fetch(f.url, &dst, f.size, f.sha256, cancel, &|n| progress(((base + n.min(f.size)) as f64 / total).min(0.99) as f32))?;
         if f.unzip {
-            unzip(&dst, &d)?;
+            crate::net::unzip(&dst, &d, None)?;
         }
         done += f.size;
     }
