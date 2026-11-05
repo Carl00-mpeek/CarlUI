@@ -571,8 +571,15 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         WM_MOUSEMOVE => {
             with_app(|a| {
                 let (x, y) = xy(lp);
-                a.mouse = (x / a.scale, y / a.scale);
-                a.invalidate();
+                let pt = (x / a.scale, y / a.scale);
+                // Her fare hareketinde bütün pencereyi (yüzlerce satır + akrilik)
+                // yeniden çizmek zayıf ekran kartlarında %15'e varan GPU yiyordu.
+                // Vurgu yalnızca imlecin altındaki öğe değişince değişir; o zaman çizilir.
+                let changed = a.hits.iter().any(|(r, _)| r.contains(pt) != r.contains(a.mouse));
+                a.mouse = pt;
+                if changed {
+                    a.invalidate();
+                }
             });
             LRESULT(0)
         }
