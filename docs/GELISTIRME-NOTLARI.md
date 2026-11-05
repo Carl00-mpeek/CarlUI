@@ -60,6 +60,54 @@ ana süreç çökeni yeniden başlatır. Modüller birbirleriyle olay yolu (name
 .\target\release\carlui.exe --restore-taskbar
 ```
 
+## Performans kuralları (yeni modül yazarken)
+
+CarlUI'yi yazan bilgisayar hızlı. Kullananınki eski bir HDD'li dizüstü, ağ
+sürücüsü takılı bir ofis makinesi ya da uyuyan bir harici disk olabilir.
+Aşağıdakiler v0.6.1'de bulunan menü donmalarından çıkarıldı. Yeni bir modül,
+menü ya da panel eklerken her birini kontrol et.
+
+1. **Arayüz iş parçacığında bekleyen çağrı yok.** Kabuk (`SHGetFileInfo`,
+   `IShellItemImageFactory`, `SHQueryRecycleBinW`, sık kullanılanlar/jump list),
+   disk taraması, ağ, WMI, süreç listesi bunlara girer. Hızlı makinede 5 ms
+   süren çağrı yavaş makinede saniyeler sürebilir ve o sırada menü çizilmez.
+   Böyle bir işi arka plan iş parçacığına ver; sonuç gelince pencereye mesaj
+   gönder (`PostMessageW` / `WM_APP+n`) ya da atomik bir değere yaz, arayüz
+   bir sonraki çizimde okusun.
+   *Örnek:* Çöp kutusu sayısı (`dock/places.rs`: `trash_watch`). Önceden 3 sn'de
+   bir arayüzde sayılıyordu.
+2. **Aynı şeyi iki kez üretme, önbelleğe al.** İkonlar, ayrıştırılan dosyalar,
+   uygulama listeleri her menü açılışında yeniden üretilmez. Önbellek anahtarı
+   değişimi yakalamalı (yol + boyut + değişme zamanı). Önbelleğin bir üst sınırı
+   olsun.
+   *Örnek:* `carlui-dock/src/iconcache.rs` (en çok 400 ikon), `jumplist.rs`
+   (dosya boyutu + mtime ile).
+3. **Yavaş sürücüye dokunma.** Ağ (UNC, `\\sunucu\…`), çıkarılabilir disk ve
+   CD sürücüsündeki dosyadan ikon/küçük resim çıkarma arayüzü dakikalarca
+   kilitleyebilir. `GetDriveTypeW` ile yalnızca sabit disk (3) ve RAM disk (6)
+   için gerçek ikonu iste, diğerlerinde genel ikonu göster
+   (`iconcache::slow_path`).
+4. **Bir karede yapılan işi sınırla.** Uzun listede (Win menüsü, arama sonuçları)
+   tüm ikonları ilk çizimde yükleme. Kare başına bütçe ver (görünürken 4,
+   gizliyken 12); bütçe bitince kalanı sonraki kareye bırak
+   (`carlui-start/src/icons.rs`: `frame`, `missed`).
+5. **Gizliyken ısın.** Açılışı hızlı olması gereken pencereleri gizliyken
+   hazırla (Win menüsü `WM_APP_WARM` ile ikonları önceden yükler). Böylece ilk
+   açılış da sonrakiler kadar hızlı olur.
+6. **Çizim kodunda veri kurma.** `paint()` yalnızca çizer. Liste süzme, sıralama,
+   arama gibi işler veri değişince yapılır (tuşa basılınca, liste güncellenince),
+   her karede değil.
+7. **Fare hareketinde boşuna çizme.** Vurgu ya da hover değişmediyse yeniden
+   çizme (bkz. görev yöneticisi ve Ayarlar).
+8. **Yoklama arka planda olsun.** Bir şeyi sürekli kontrol etmek gerekiyorsa
+   (durum, sayı, dosya) arka plan iş parçacığında yap ve yalnızca değer
+   değişince arayüzü uyandır. Mümkünse yoklama yerine Windows bildirimi kullan
+   (`SHChangeNotifyRegister`, `ReadDirectoryChangesW`, `RegNotifyChangeKeyValue`).
+9. **Zayıf makinede dene.** Görev Yöneticisi'nde CPU'yu kısmak ya da ağ
+   sürücüsündeki bir kısayolu dock'a sabitlemek, bu sorunları hızlı makinede
+   de görünür kılar. Log'a uzun süren işlerin süresini yaz
+   (`carlui_core::info!`).
+
 ## Modül 1 — Çekirdek ve görev çubuğu yönetimi: test adımları
 
 | # | Ne yap | Beklenen |

@@ -1,5 +1,33 @@
 # Sürüm notları
 
+## v0.6.1 — Performans (2026-11-06)
+
+**Menüler artık donmadan açılıyor.** Özellikle zayıf bilgisayarlarda ve ağ ya da
+harici disk takılıyken görülen gecikmeler giderildi.
+- **Dock sağ tık menüsü:** Uygulama ve jump list ikonları önbellekte tutulur.
+  Jump list her açılışta yeniden okunmaz.
+- **Klasör yığınları:** Ağ sürücüsü, USB ve CD'deki dosyaların ikonu çıkarılırken
+  menü artık beklemez.
+- **Çöp kutusu:** Doluluk arka planda izlenir. Dock artık 3 saniyede bir
+  takılmaz.
+- **Win menüsü:** İlk açılış da hızlı, çünkü ikonlar gizliyken önceden yüklenir.
+  Kaydırırken ikonlar kademeli gelir. Uygulama listesi her karede değil, yalnızca
+  değişince yeniden kurulur.
+
+**Düzeltme:** Açık bir uygulamayı dock'a sabitleyince artık başlatıcısı kaydedilir
+(Windows görev çubuğunun yaptığı gibi). Örneğin Steam "Steam WebHelper" olarak
+kaydediliyor ve sabitlenen ikondan açılmıyordu. Eski hatalı sabitlemeyi bir kez
+kaldırıp yeniden sabitleyin.
+
+**Yeni: Sesli asistan.** **Ctrl+Alt+A** basılı tutulur, komut söylenir, tuş
+bırakılır. Örneğin "YouTube'u aç", "YouTube'da lofi ara", "sesi 30 yap",
+"Spotify'ı kapat". Kısayolun kendisi ayarlanabilir. Kurucuda ve Ayarlar →
+Yapay zekâ'da açılır (varsayılan kapalı); modeli ilk kullanımda iner.
+
+**Diğer:** Ayarlar'da sekme değişince anahtarlar kaymıyor, uzun yazılar
+kesilmeden alt satıra iniyor. Cam menülerde uzun satırlar da alt satıra iniyor.
+Görev yöneticisi fare hareketinde boşuna çizim yapmıyor.
+
 ## v0.2.0 — Carl Vault (2026-11-04)
 
 **Yeni: Carl Vault**, CarlUI'nin şifreli parola ve 2FA kasası.
