@@ -1,10 +1,11 @@
 //! Bu modül "yeni sürüm çıktığını nereden bileceğim, nasıl kuracağım?"
 //! sorununu çözüyor: açılıştan bir dakika sonra ve sonra günde bir kez
 //! GitHub'daki son sürüm (`releases/latest`) sorulur. Kurulu sürümden yeniyse
-//! adada "Güncellemek için tıkla" bildirimi çıkar (aynı sürüm için bir kez).
-//! Tıklanınca `CarlUI-Setup.exe` indirilir, SHA-256'sı GitHub'ın bildirdiğiyle
-//! karşılaştırılır ve kurucu `--update` ile sessizce çalıştırılır: CarlUI'yi
-//! kapatır, dosyaları yeniler, ayarlara dokunmadan CarlUI'yi yeniden açar.
+//! adada Güncelle / Sonra düğmeli bildirim çıkar (aynı sürüm için bir kez).
+//! Güncelle'ye basınca `CarlUI-Setup.exe` indirilir, SHA-256'sı GitHub'ın
+//! bildirdiğiyle karşılaştırılır ve kurucu `--update` ile açılır: penceresinde
+//! ilerleme görünür, CarlUI'yi kapatır, dosyaları yeniler, ayarlara dokunmadan
+//! CarlUI'yi yeniden açar ve sonunda Yenilikler'i gösterir.
 //! Kendiliğinden hiçbir şey kurulmaz. Ayarlar → Genel → Güncellemeler'den
 //! denetim kapatılabilir.
 
@@ -122,7 +123,7 @@ fn check(hwnd: isize, msg: u32, notes: &Mutex<VecDeque<Note>>) {
         Note {
             app: "CarlUI".into(),
             title: t!(format!("CarlUI {ver} çıktı"), format!("CarlUI {ver} is out")),
-            body: if ready { t!("Güncellemek için tıkla", "Click to update") } else { t!("İndirme sayfasını açmak için tıkla", "Click to open the download page") }.into(),
+            body: if ready { t!("Yeni sürüm kurulmaya hazır", "A new version is ready to install") } else { t!("İndirme sayfasını açmak için tıkla", "Click to open the download page") }.into(),
             file: (!ready).then(|| r.page.clone()),
             update: ready.then_some(r),
             ..Default::default()
@@ -189,7 +190,7 @@ fn install(r: &Release) -> Result<(), String> {
     Ok(())
 }
 
-/// Bildirime tıklanınca: arka planda indirip sessiz kurulumu başlatır.
+/// Güncelle'ye basınca: arka planda indirip kurucuyu güncelleme kipinde açar.
 pub fn apply(hwnd: isize, msg: u32, notes: Arc<Mutex<VecDeque<Note>>>, r: Release) {
     let ver = r.tag.trim_start_matches(['v', 'V']).to_string();
     push(hwnd, msg, &notes, Note { app: "CarlUI".into(), title: t!(format!("CarlUI {ver} indiriliyor"), format!("Downloading CarlUI {ver}")), body: t!("Kurulunca CarlUI yeniden açılacak", "CarlUI will restart when it's installed").into(), ..Default::default() });

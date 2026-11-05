@@ -610,7 +610,8 @@ impl Island {
                 let ipx = (40.0 * s).round();
                 let has_body = !n.body.is_empty();
                 let head = if has_body { (74.0 * s).round() } else { (62.0 * s).round() };
-                let open = m.note_open && n.shot.is_some();
+                // Güncelleme bildiriminin düğmeleri hep açık; ekran görüntüsününkiler tıklayınca.
+                let open = (m.note_open && n.shot.is_some()) || n.update.is_some();
                 let h = if open { head + (34.0 * s).round() } else { head };
                 let icon: Visual = match n.logo.as_ref().map(|b| self.art(gfx, b, ipx, 10.0 * s)) {
                     Some(Ok(Some(v))) => v.cast()?,
@@ -646,7 +647,12 @@ impl Island {
                 if open {
                     let py = head - 4.0 * s;
                     let mut px = tx;
-                    for (k, (label, danger)) in [(t!("Aç", "Open"), false), (t!("Düzenle", "Edit"), false), (t!("Sil", "Delete"), true)].into_iter().enumerate() {
+                    let buttons: &[(&str, bool)] = if n.update.is_some() {
+                        &[(t!("Güncelle", "Update"), false), (t!("Sonra", "Later"), false)]
+                    } else {
+                        &[(t!("Aç", "Open"), false), (t!("Düzenle", "Edit"), false), (t!("Sil", "Delete"), true)]
+                    };
+                    for (k, &(label, danger)) in buttons.iter().enumerate() {
                         let pw = self.hub_pill(gfx, &kids, label, px, py, danger)?;
                         self.hits.push((Hit::BannerAct(k as u8), RECT { left: px as i32, top: py as i32, right: (px + pw) as i32, bottom: (py + 24.0 * s) as i32 }));
                         px += pw + 6.0 * s;

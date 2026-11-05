@@ -64,7 +64,7 @@ pub struct Note {
     pub clip_id: Option<String>,
     /// İndirme bildirimi: tıklanınca açılacak dosya.
     pub file: Option<String>,
-    /// Yeni sürüm bildirimi: tıklanınca indirilip sessizce kurulur.
+    /// Yeni sürüm bildirimi: Güncelle'ye basınca indirilip kurucuda kurulur.
     pub update: Option<crate::update::Release>,
 }
 

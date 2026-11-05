@@ -15,10 +15,12 @@
 //!   --headless             pencere açmadan çalış: --test ile deneme, tek başına
 //!                          varsayılan seçeneklerle sessiz kurulum
 //!   --wallpaper            sessiz kurulumda CarlUI duvar kâğıdını da uygula
-//!   --update               adadan güncelleme: mevcut kurulumun üstüne sessizce
-//!                          kurar, yalnızca var olan kısayolları yeniler, yönetici
-//!                          izni istemez, sonunda CarlUI'yi yeniden açar
-//!   --snapshot <sayfa> <png>  sayfayı pencere açmadan PNG'ye çiz (welcome, work, done, confirm)
+//!   --update               adadan güncelleme: pencere açılır ve doğrudan
+//!                          kurulum başlar (önceki seçimlerle, yalnızca var olan
+//!                          kısayollar yenilenir, yönetici izni istemez); sonunda
+//!                          CarlUI yeniden açılır ve sürüm notundan Yenilikler
+//!                          gösterilir. --headless ile birlikte pencere açılmaz.
+//!   --snapshot <sayfa> <png>  sayfayı pencere açmadan PNG'ye çiz (welcome, work, done, update, confirm)
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -26,6 +28,7 @@
 extern crate carlui_core;
 
 mod install;
+mod notes;
 mod office;
 mod payload;
 mod shell;
@@ -38,7 +41,11 @@ use carlui_ui::{
     paint::{Fonts, Painter, R},
     tween,
 };
-use std::{cell::RefCell, path::PathBuf, sync::Arc};
+use std::{
+    cell::{Cell, OnceCell, RefCell},
+    path::PathBuf,
+    sync::Arc,
+};
 use windows::{
     core::*,
     Foundation::Numerics::Matrix3x2,
@@ -124,6 +131,13 @@ pub struct App {
     pub progress: install::Shared,
     pub firefox: Option<String>,
     pub chrome: Option<Chromium>,
+    /// Adadan gelen güncelleme (sonuçta Yenilikler gösterilir).
+    pub update: bool,
+    /// Yenilikler kartının kaydırma konumu ve en büyük değeri (çizimde bulunur).
+    pub scroll: f32,
+    pub scroll_max: Cell<f32>,
+    /// Kaydırılmış Yenilikler satırları (ilk çizimde bir kez hesaplanır).
+    pub laid: OnceCell<Vec<(notes::Kind, String)>>,
 }
 
 thread_local! {
@@ -196,6 +210,10 @@ impl App {
             progress: Arc::default(),
             firefox: shell::app_path("firefox.exe"),
             chrome: chromium(),
+            update: false,
+            scroll: 0.0,
+            scroll_max: Cell::new(0.0),
+            laid: OnceCell::new(),
         })
     }
 
@@ -269,6 +287,9 @@ impl App {
         let done = self.progress.lock().map(|p| p.done.is_some()).unwrap_or(false);
         if done && self.page == Page::Work {
             self.go(Page::Done);
+            if self.update {
+                relaunch_carlui(&self.opts.dir);
+            }
         }
         self.invalidate();
     }
@@ -357,13 +378,20 @@ fn snapshot(page: &str, out: &PathBuf, mode: Mode, dir: PathBuf) -> Result<()> {
     app.page = match page {
         "work" => Page::Work,
         "done" => Page::Done,
+        "update" => {
+            app.installed_before = true;
+            app.update = true;
+            Page::Done
+        }
         "confirm" => Page::Confirm,
         _ => Page::Welcome,
     };
     if let Ok(mut p) = app.progress.lock() {
         p.step = t!("Kopyalanıyor · carlui-dock.exe", "Copying · carlui-dock.exe").into();
         p.frac = 0.42;
-        if app.page == Page::Done {
+        if app.update {
+            p.done = Some(install::Outcome { ok: true, notes: vec![] });
+        } else if app.page == Page::Done {
             p.done = Some(install::Outcome { ok: true, notes: vec![t!("Firefox bir sonraki açılışta eklentiyi etkinleştirmek için onay isteyecek", "Firefox will ask to enable the extension next time it starts").into()] });
         }
     }
@@ -453,6 +481,14 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             });
             LRESULT(0)
         }
+        WM_MOUSEWHEEL => {
+            with_app(|a| {
+                let d = ((wp.0 >> 16) & 0xFFFF) as i16 as f32 / 120.0;
+                a.scroll = (a.scroll - d * 48.0).clamp(0.0, a.scroll_max.get());
+                a.invalidate();
+            });
+            LRESULT(0)
+        }
         WM_APP_PROGRESS => {
             with_app(|a| a.progressed());
             LRESULT(0)
@@ -494,6 +530,27 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         }
         _ => DefWindowProcW(hwnd, msg, wp, lp),
     }
+}
+
+/// Güncelleme bittiğinde CarlUI açılmadıysa (kurulum yarıda kaldıysa da)
+/// kullanıcı kabuksuz kalmasın.
+fn relaunch_carlui(dir: &std::path::Path) {
+    let exe = dir.join("carlui.exe");
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        if !shell::carlui_running() && exe.exists() {
+            shell::open(&exe.display().to_string(), "");
+        }
+    });
+}
+
+/// Güncellemede kullanıcının önceki seçimleri korunur: silinmiş masaüstü
+/// kısayolu geri gelmez, sıcaklık görevi zaten kurulu (UAC sorulmaz), Firefox
+/// kaydı yalnızca önceden varsa yenilenir.
+fn update_opts(dir: PathBuf) -> install::Options {
+    let firefox = payload::XPI.is_some() && shell::reg_get(windows::Win32::System::Registry::HKEY_CURRENT_USER, shell::FIREFOX_KEY, shell::EXT_ID).is_some();
+    let desktop = shell::desktop_link().is_some_and(|l| l.exists());
+    install::Options { dir, desktop, launch: true, sensors: false, firefox, wallpaper: false, office: office::wanted(), dry: false }
 }
 
 /// Kaldırıcı kurulum klasöründen çalışıyorsa kendini kilitlememek için
@@ -543,15 +600,9 @@ fn main() -> Result<()> {
         headless(args.mode, opts, false);
         return Ok(());
     }
-    if args.update {
-        // Kullanıcının önceki seçimleri korunur: silinmiş masaüstü kısayolu geri
-        // gelmez, sıcaklık görevi zaten kurulu (UAC sorulmaz), Firefox kaydı yalnızca
-        // önceden varsa yenilenir.
-        let firefox = payload::XPI.is_some() && shell::reg_get(windows::Win32::System::Registry::HKEY_CURRENT_USER, shell::FIREFOX_KEY, shell::EXT_ID).is_some();
-        let desktop = shell::desktop_link().is_some_and(|l| l.exists());
+    if args.update && args.headless {
         let exe = dir.join("carlui.exe");
-        let opts = install::Options { dir, desktop, launch: true, sensors: false, firefox, wallpaper: false, office: office::wanted(), dry: false };
-        headless(Mode::Install, opts, false);
+        headless(Mode::Install, update_opts(dir), false);
         // Kurulum yarıda kaldıysa da kullanıcı CarlUI'siz kalmasın.
         if !shell::carlui_running() && exe.exists() {
             std::thread::sleep(std::time::Duration::from_secs(2));
@@ -606,8 +657,15 @@ fn main() -> Result<()> {
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
         let _ = DwmExtendFrameIntoClientArea(hwnd, &MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
 
-        let mut app = App::new(hwnd, args.mode, dir, args.dry)?;
+        let mut app = App::new(hwnd, args.mode, dir.clone(), args.dry)?;
         app.scale = GetDpiForWindow(hwnd).max(96) as f32 / 96.0;
+        if args.update {
+            // Seçenek sayfası atlanır: kurulum pencere açılır açılmaz başlar.
+            app.update = true;
+            app.opts = update_opts(dir);
+            app.page = Page::Work;
+            install::start(app.opts.clone(), app.reporter());
+        }
         tween::enable();
         APP.with(|a| *a.borrow_mut() = Some(app));
         let _ = ShowWindow(hwnd, SW_SHOW);

@@ -15,7 +15,7 @@ use windows::Win32::{
 
 pub const EXE: &str = "carlui-office.exe";
 pub const LINK: &str = "Carl Office.lnk";
-/// Seçimin hatırlandığı değer (Programlar kaydında): sessiz güncelleme bozmasın.
+/// Seçimin hatırlandığı değer (Programlar kaydında): güncelleme (--update) seçimi bozmasın.
 const CHOICE: &str = "OfficeModule";
 const CAPS: &str = r"Software\CarlUI\Office\Capabilities";
 const REGISTERED: &str = r"Software\RegisteredApplications";

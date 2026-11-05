@@ -1,14 +1,15 @@
 //! Bu modül kurucu penceresinin sayfalarını çiziyor: hoş geldin (konum +
-//! seçenekler), ilerleme, sonuç ve kaldırma onayı. Ayarlar penceresiyle aynı
+//! seçenekler), ilerleme, sonuç (güncellemede kaydırılabilir Yenilikler
+//! kartıyla) ve kaldırma onayı. Ayarlar penceresiyle aynı
 //! cam görünüm ve parçalar (`carlui_ui::paint`) kullanılır; her kare baştan
 //! çizilir, tıklanabilir alanlar çizilirken kaydedilir.
 
-use crate::{install, payload, space, Act, App, Mode, Opt, Page};
+use crate::{install, notes, payload, space, Act, App, Mode, Opt, Page};
 use carlui_ui::{
     paint::{mix, Align, Painter, GREEN, ORANGE, R, RED, TEXT},
     tween,
 };
-use windows::Win32::Graphics::Direct2D::{Common::D2D_RECT_F, ID2D1Bitmap, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR};
+use windows::Win32::Graphics::Direct2D::{Common::D2D_RECT_F, ID2D1Bitmap, D2D1_ANTIALIAS_MODE_ALIASED, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR};
 
 pub type P<'a> = Painter<'a, Act>;
 
@@ -202,8 +203,13 @@ impl App {
             ny += 26.0;
         }
 
-        // Eklenti Firefox'a tanıtılmadıysa elle yükleme yolları.
-        if self.mode == Mode::Install && out.ok && !(self.opts.firefox && payload::XPI.is_some()) {
+        let news = self.mode == Mode::Install && out.ok && self.installed_before && !payload::NOTES.trim().is_empty();
+        if news {
+            self.whats_new(p, R::new(PAD, ny + 6.0, cw, H - 76.0 - (ny + 6.0)));
+        }
+        // Eklenti Firefox'a tanıtılmadıysa elle yükleme yolları (güncellemede
+        // kullanıcı bunu zaten seçmiştir; yerine Yenilikler gösterilir).
+        if self.mode == Mode::Install && out.ok && !news && !(self.opts.firefox && payload::XPI.is_some()) {
             let card = R::new(PAD, (ny + 12.0).max(y + 150.0), cw, 98.0);
             p.card(card);
             p.text(t!("Tarayıcı eklentisi (isteğe bağlı)", "Browser extension (optional)"), R::new(card.x + 16.0, card.y + 10.0, card.w - 32.0, 22.0), 13.5, false, TEXT, 0.95, Align::Left);
@@ -225,5 +231,64 @@ impl App {
             p.text(t!("Silinenleri geri almak için Geri Dönüşüm Kutusu'nu açabilirsiniz.", "Open the Recycle Bin to restore removed files."), R::new(PAD, ny + 6.0, cw, 20.0), 12.0, false, TEXT, 0.5, Align::Left);
         }
         primary(p, R::new(W - PAD - 120.0, H - 58.0, 120.0, 34.0), t!("Kapat", "Close"), Act::Close, p.accent);
+    }
+
+    /// Sürüm notunun kullanıcının dilindeki bölümü; fare tekerleğiyle kayar.
+    fn whats_new(&self, p: &P, card: R) {
+        p.card(card);
+        p.text(t!("Yenilikler", "What's new"), R::new(card.x + 16.0, card.y + 10.0, card.w - 32.0, 22.0), 13.5, true, TEXT, 0.95, Align::Left);
+        let area = R::new(card.x + 4.0, card.y + 38.0, card.w - 8.0, card.h - 46.0);
+        let tw = area.w - 40.0;
+        let laid = self.laid.get_or_init(|| {
+            let mut v = Vec::new();
+            for (kind, text) in notes::parse(payload::NOTES, carlui_core::lang::is_tr()) {
+                let (size, bold) = if kind == notes::Kind::Head { (13.0, true) } else { (12.5, false) };
+                let max = if kind == notes::Kind::Bullet { tw - 14.0 } else { tw };
+                for (i, l) in notes::wrap(&text, max, |s| p.fonts.width(s, size, bold)).into_iter().enumerate() {
+                    // Maddenin devam satırı imsiz, madde hizasında çizilir.
+                    let k = if kind == notes::Kind::Bullet && i > 0 { notes::Kind::More } else { kind };
+                    v.push((k, l));
+                }
+            }
+            v
+        });
+        // Satır yükseklikleri: başlıktan önce boşluk.
+        let mut rows = Vec::with_capacity(laid.len());
+        let mut y = 0.0;
+        for (i, (k, _)) in laid.iter().enumerate() {
+            if *k == notes::Kind::Head && i > 0 {
+                y += 10.0;
+            }
+            rows.push(y);
+            y += if *k == notes::Kind::Head { 24.0 } else { 19.0 };
+        }
+        let max = (y - area.h + 6.0).max(0.0);
+        self.scroll_max.set(max);
+        let off = self.scroll.min(max);
+        unsafe { p.rt.PushAxisAlignedClip(&area.d2d(), D2D1_ANTIALIAS_MODE_ALIASED) };
+        for ((k, text), ry) in laid.iter().zip(rows) {
+            let ty = area.y + ry - off;
+            if ty + 24.0 < area.y || ty > area.bottom() {
+                continue;
+            }
+            let x = area.x + 12.0;
+            match k {
+                notes::Kind::Head => p.text(text, R::new(x, ty, tw, 24.0), 13.0, true, p.accent, 0.95, Align::Left),
+                notes::Kind::Bullet => {
+                    p.text("•", R::new(x + 1.0, ty, 12.0, 19.0), 12.5, false, TEXT, 0.6, Align::Left);
+                    p.text(text, R::new(x + 14.0, ty, tw - 14.0, 19.0), 12.5, false, TEXT, 0.85, Align::Left);
+                }
+                notes::Kind::More => p.text(text, R::new(x + 14.0, ty, tw - 14.0, 19.0), 12.5, false, TEXT, 0.85, Align::Left),
+                notes::Kind::Para => p.text(text, R::new(x, ty, tw, 19.0), 12.5, false, TEXT, 0.85, Align::Left),
+            }
+        }
+        unsafe { p.rt.PopAxisAlignedClip() };
+        // Kaydırma çubuğu (içerik sığmıyorsa).
+        if max > 0.0 {
+            let track = R::new(area.right() - 8.0, area.y + 2.0, 3.0, area.h - 4.0);
+            let th = (track.h * area.h / y).max(24.0);
+            let tyy = track.y + (track.h - th) * off / max;
+            p.round(R::new(track.x, tyy, track.w, th), 1.5, TEXT, 0.25);
+        }
     }
 }

@@ -99,7 +99,17 @@ fn payload(root: &Path, out: &Path) {
     code += &format!("static PACKED: &[u8] = include_bytes!(r\"{}\");\n", plain(&blob));
     let logo = root.join(r"assets\icons\carlui.png");
     code += &format!("pub static LOGO: &[u8] = include_bytes!(r\"{}\");\n", plain(&logo));
+    code += &format!("pub static NOTES: &str = {:?};\n", if names_only { String::new() } else { notes(root) });
     std::fs::write(out.join("payload.rs"), code).unwrap();
+}
+
+/// Sürüm notu (Yenilikler ekranı için): `CARLUI_NOTES` ya da dist\release-notes.md.
+/// GitHub sürüm notuyla aynı biçim: "## Türkçe" … "---" … "## English" ….
+fn notes(root: &Path) -> String {
+    println!("cargo:rerun-if-env-changed=CARLUI_NOTES");
+    let path = std::env::var_os("CARLUI_NOTES").map(PathBuf::from).unwrap_or_else(|| root.join(r"dist\release-notes.md"));
+    println!("cargo:rerun-if-changed={}", plain(&path));
+    std::fs::read_to_string(&path).unwrap_or_default()
 }
 
 fn resources(root: &Path, manifest_dir: &Path, out: &Path) {

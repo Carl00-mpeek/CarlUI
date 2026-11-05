@@ -721,7 +721,10 @@ impl App {
                     return;
                 }
                 if let Some(n) = self.note.take() {
-                    if let Some(r) = &n.update {
+                    if n.update.is_some() && h == Hit::BannerAct(1) {
+                        // Sonra: adada saklanır, oradan tıklayınca da güncellenir.
+                        self.archive(n);
+                    } else if let Some(r) = &n.update {
                         update::apply(self.island.hwnd.0 as isize, WM_APP_NOTE, self.notes_in.clone(), r.clone());
                     } else {
                         if let Some(f) = &n.file {
