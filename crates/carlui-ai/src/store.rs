@@ -53,6 +53,24 @@ pub fn used(m: &Model) -> u64 {
     }
 }
 
+fn consent_file(m: &Model) -> PathBuf {
+    root().join(".licenses").join(m.id)
+}
+
+/// Kısıtlı lisanslı modelde kullanıcı lisansı onayladı mı (kısıtsızsa her zaman evet).
+/// Onay model silinse de kalır; aynı soru ikinci kez sorulmaz.
+pub fn accepted(m: &Model) -> bool {
+    !m.restricted || consent_file(m).is_file()
+}
+
+/// Lisans onayını kaydeder (tarih ve lisans adıyla).
+pub fn accept(m: &Model) -> Result<(), String> {
+    let f = consent_file(m);
+    std::fs::create_dir_all(f.parent().unwrap()).map_err(|e| e.to_string())?;
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    std::fs::write(&f, format!("{}\n{}\n{}\n{secs}\n", m.id, m.license, m.source)).map_err(|e| e.to_string())
+}
+
 pub fn remove(m: &Model) -> Result<(), String> {
     if real_id(m.id) != m.id {
         return Ok(());
@@ -133,6 +151,9 @@ pub fn install(m: &Model, cancel: &AtomicBool, progress: &dyn Fn(f32)) -> Result
     if real_id(m.id) != m.id {
         let base = crate::catalog::get(real_id(m.id)).ok_or("?")?;
         return install(base, cancel, progress);
+    }
+    if !accepted(m) {
+        return Err(t!("Bu modelin lisansı onaylanmadı.", "This model's license hasn't been accepted.").into());
     }
     let d = dir(m);
     std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;

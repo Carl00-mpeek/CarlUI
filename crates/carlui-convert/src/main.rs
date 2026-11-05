@@ -9,6 +9,7 @@
 //!
 //! Test/elle kullanım: `carlui-convert.exe dosya1 dosya2 …` (seçim yerine).
 //! `--dictate`: sesle yazma (bkz. `dictate`); ana süreç kısayolla başlatır.
+//! `--speak`: seçili metni sesli okur (bkz. `speak`); ana süreç kısayolla başlatır.
 //! `--translate <dosya>`: ekran çevirisi (bkz. `translate`); ada başlatır.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -18,11 +19,13 @@ extern crate carlui_core;
 
 mod ai;
 mod dictate;
+mod license;
 mod ffmpeg;
 mod image;
 mod kinds;
 mod progress;
 mod select;
+mod speak;
 mod translate;
 
 use carlui_core::{info, log};
@@ -137,9 +140,18 @@ fn main() -> Result<()> {
         let owner = unsafe { CreateWindowExW(WS_EX_TOOLWINDOW, w!("Static"), w!(""), WS_POPUP, 0, 0, 0, 0, None, None, None, None)? };
         return dictate::run(owner, accent, fg.unwrap_or_else(|| unsafe { GetForegroundWindow() }));
     }
+    if args.iter().any(|a| a == "--speak") {
+        let accent = carlui_core::config::load().dock.menu_accent_color(glassmenu::accent);
+        let owner = unsafe { CreateWindowExW(WS_EX_TOOLWINDOW, w!("Static"), w!(""), WS_POPUP, 0, 0, 0, 0, None, None, None, None)? };
+        return speak::run(owner, accent, fg.unwrap_or_else(|| unsafe { GetForegroundWindow() }));
+    }
     // `--fetch <model>`: Ayarlar → Yapay zekâ'daki "İndir" düğmesi.
     if let Some(m) = args.iter().position(|a| a == "--fetch").and_then(|i| args.get(i + 1)).and_then(|id| carlui_ai::catalog::get(id)) {
         let accent = carlui_core::config::load().dock.menu_accent_color(glassmenu::accent);
+        let owner = unsafe { CreateWindowExW(WS_EX_TOOLWINDOW, w!("Static"), w!(""), WS_POPUP, 0, 0, 0, 0, None, None, None, None)? };
+        if !license::ask(owner, accent, m, None) {
+            return Ok(());
+        }
         let shared = progress::Shared::new();
         shared.update(|s| s.title = t!("Hazırlanıyor", "Preparing").into());
         let worker = shared.clone();
@@ -267,6 +279,9 @@ fn run_ai(owner: HWND, accent: Option<u32>, op: ai::Op, list: Vec<String>, yes: 
 
 /// Model (ve motor) eksikken indirilsin mi diye sorar; lisans ve kaynak görünür.
 pub fn ask_model(owner: HWND, accent: Option<u32>, m: &carlui_ai::catalog::Model, need: u64) -> bool {
+    if !carlui_ai::store::accepted(m) {
+        return license::ask(owner, accent, m, Some(need));
+    }
     let rows = vec![
         Row::Label(t!(format!("{} modeli kurulu değil", m.name), format!("The {} model isn't installed", m.name)), Icon::Glyph('\u{E946}', None)),
         Row::Label(format!("{} · {}", m.license, m.about()), Icon::Glyph('\u{E946}', None)),
@@ -308,7 +323,7 @@ fn fetch_ffmpeg(w: &progress::Shared, ff: &mut Option<PathBuf>) -> bool {
     }
 }
 
-fn cursor() -> (i32, i32) {
+pub fn cursor() -> (i32, i32) {
     let mut pt = POINT::default();
     unsafe {
         let _ = GetCursorPos(&mut pt);

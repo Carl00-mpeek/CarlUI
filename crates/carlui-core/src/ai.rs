@@ -25,11 +25,15 @@ pub struct AiConfig {
     /// Sesli komutla anlık tekrar kaydı ("son iki dakikayı kaydet"). Mikrofon
     /// sürekli dinlendiği için varsayılan kapalı; ses hiçbir yere gitmez.
     pub voice_command: bool,
+    /// Sesli okuma (İngilizce ses) modeli; Türkçe metin her zaman Türkçe sesle okunur.
+    pub speak: String,
+    /// Okuma hızı (1.0 normal; 0.5–2.0).
+    pub speak_speed: f32,
 }
 
 impl Default for AiConfig {
     fn default() -> Self {
-        Self { gpu: true, upscale: String::new(), background: String::new(), speech: String::new(), command: String::new(), translate: String::new(), speech_lang: String::new(), voice_command: false }
+        Self { gpu: true, upscale: String::new(), background: String::new(), speech: String::new(), command: String::new(), translate: String::new(), speech_lang: String::new(), voice_command: false, speak: String::new(), speak_speed: 1.0 }
     }
 }
 
@@ -42,6 +46,7 @@ impl AiConfig {
             "speech" => &self.speech,
             "command" => &self.command,
             "translate" => &self.translate,
+            "speak" => &self.speak,
             _ => "",
         }
     }
@@ -53,6 +58,7 @@ impl AiConfig {
             "speech" => &mut self.speech,
             "command" => &mut self.command,
             "translate" => &mut self.translate,
+            "speak" => &mut self.speak,
             _ => return,
         };
         *s = id.to_string();
@@ -69,6 +75,19 @@ impl crate::config::ShortcutsConfig {
             .or_else(|e| {
                 crate::warn!("dikte kısayolu '{}' kullanılamaz: {e}; varsayılan (Ctrl+Alt+D) kullanılıyor", self.dictate);
                 crate::keys::parse_combo(&Self::default().dictate)
+            })
+            .ok()
+    }
+
+    /// Sesli okuma kısayolu (boşsa kapalı; geçersizse varsayılan Ctrl+Alt+S).
+    pub fn speak_combo(&self) -> Option<crate::keys::Combo> {
+        if self.speak.trim().is_empty() {
+            return None;
+        }
+        crate::keys::parse_combo(&self.speak)
+            .or_else(|e| {
+                crate::warn!("sesli okuma kısayolu '{}' kullanılamaz: {e}; varsayılan (Ctrl+Alt+S) kullanılıyor", self.speak);
+                crate::keys::parse_combo(&Self::default().speak)
             })
             .ok()
     }

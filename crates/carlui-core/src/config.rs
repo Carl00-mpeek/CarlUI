@@ -323,6 +323,8 @@ pub struct ShortcutsConfig {
     pub replay_panel: String,
     /// Sesle yazma (dikte): bas, konuş, yeniden bas; metin imlecin olduğu yere yazılır.
     pub dictate: String,
+    /// Sesli okuma: seçili metni (yoksa panodakini) okur; yeniden basınca susar.
+    pub speak: String,
 }
 
 impl Default for ShortcutsConfig {
@@ -341,6 +343,7 @@ impl Default for ShortcutsConfig {
             replay: "Alt+F10".into(),
             replay_panel: "Alt+F8".into(),
             dictate: "Ctrl+Alt+D".into(),
+            speak: "Ctrl+Alt+S".into(),
         }
     }
 }

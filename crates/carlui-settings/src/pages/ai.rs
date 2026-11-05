@@ -67,16 +67,27 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         f.section(p, feat.title());
         let rec = catalog::recommended(feat).id;
         let sel = catalog::chosen(c, feat).id;
-        // Çeviride iki yön de kullanılır; seçim yok, yalnızca indirme.
-        let pick = feat != Feature::Translate;
+        if feat == Feature::Speak {
+            speak_options(c, p, f);
+        }
         for m in catalog::of(feat) {
+            // Çeviride iki yön de kullanılır; Türkçe ses Türkçe metinde kendiliğinden seçilir.
+            let pick = catalog::selectable(m);
             let label = if m.id == rec {
                 format!("{} · {}  {}", m.tier.label(), m.name, t!("(önerilen)", "(recommended)"))
             } else {
                 format!("{} · {}", m.tier.label(), m.name)
             };
-            let desc = format!("{} · {} · {}", mb(m.size()), m.license, m.about());
-            let r = f.row(p, &label, &desc, if pick { 232.0 } else { 120.0 });
+            let ctrl = if pick { 232.0 } else { 120.0 };
+            let r = if m.restricted {
+                let desc = t!(
+                    format!("{} · {} · Yalnızca ticari olmayan kullanım · {}", mb(m.size()), m.license, m.about()),
+                    format!("{} · {} · Non-commercial use only · {}", mb(m.size()), m.license, m.about())
+                );
+                f.row_c(p, &label, &desc, ctrl, Some(ORANGE))
+            } else {
+                f.row(p, &label, &format!("{} · {} · {}", mb(m.size()), m.license, m.about()), ctrl)
+            };
             let y = r.y + (r.h - 32.0) / 2.0;
             let x = r.right() - 16.0 - 112.0;
             let bx = R::new(x, y, 112.0, 32.0);
@@ -99,8 +110,27 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
             }
         }
     }
-    f.note(p, t!("Modeller yalnızca resmi kaynaklarından indirilir ve doğrulanır; hepsi ticari kullanıma açık lisanslıdır.", "Models are downloaded only from their official sources and verified; all have licenses that allow commercial use."));
+    f.note(p, t!("Modeller kurulumla gelmez; yalnızca resmi kaynaklarından indirilir ve doğrulanır.", "Models don't ship with the installer; they're downloaded only from their official sources and verified."));
+    f.note(p, t!("Turuncu lisanslar ticari kullanımı yasaklar; bunlar ilk indirmede ayrıca onayınızı ister.", "Orange licenses forbid commercial use; those ask for your consent before the first download."));
     f.note(p, &format!("{} {}", t!("Klasör:", "Folder:"), store::root().display()));
+}
+
+fn speak_options(c: &carlui_core::ai::AiConfig, p: &mut P, f: &mut Flow) {
+    const SPEEDS: [f32; 4] = [0.8, 1.0, 1.25, 1.5];
+    let cur = SPEEDS.iter().position(|s| (s - c.speak_speed).abs() < 0.01).unwrap_or(1);
+    f.choice(
+        p,
+        t!("Okuma hızı", "Reading speed"),
+        t!("Kısayol: seçili metni (yoksa panodakini) okur; yeniden basınca susar. Türkçe metin Türkçe sesle okunur.", "Shortcut reads the selected text (or the clipboard); press again to stop. Turkish text uses the Turkish voice."),
+        &[
+            (t!("0,8×", "0.8×"), edit(|c| c.ai.speak_speed = 0.8)),
+            ("1×", edit(|c| c.ai.speak_speed = 1.0)),
+            (t!("1,25×", "1.25×"), edit(|c| c.ai.speak_speed = 1.25)),
+            (t!("1,5×", "1.5×"), edit(|c| c.ai.speak_speed = 1.5)),
+        ],
+        cur,
+        64.0,
+    );
 }
 
 /// Modeli ayrı süreçte indirir; bitince sayfayı yeniden çizdirir.
