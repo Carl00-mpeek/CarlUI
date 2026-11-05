@@ -15,15 +15,23 @@ $target = Join-Path $root 'target\dist'
 $crates = 'carlui', 'carlui-dock', 'carlui-tray', 'carlui-island', 'carlui-start', 'carlui-settings', 'carlui-taskmgr', 'carlui-convert', 'carlui-sensors', 'carlui-vault', 'carlui-office'
 $pkgs = $crates | ForEach-Object { '-p'; $_ }
 
-Write-Host '1/2  CarlUI exe dosyaları derleniyor…'
+Write-Host '1/3  CarlUI exe dosyaları derleniyor…'
 cargo build --release --target-dir $target @pkgs
 if ($LASTEXITCODE -ne 0) { throw 'exe derlemesi başarısız' }
-
-Write-Host '2/2  Kurucu derleniyor…'
 $env:CARLUI_PAYLOAD_DIR = Join-Path $target 'release'
+
+# Kaldırıcı: kurucunun dosya gömmeyen küçük derlemesi (yalnızca kaldırır).
+Write-Host '2/3  Kaldırıcı derleniyor…'
+cargo build --release --target-dir $target -p carlui-setup --features uninstaller
+if ($LASTEXITCODE -ne 0) { throw 'kaldırıcı derlemesi başarısız' }
+$uninstaller = Join-Path $target 'CarlUI-Uninstall.exe'
+Copy-Item (Join-Path $target 'release\CarlUI-Setup.exe') $uninstaller -Force
+
+Write-Host '3/3  Kurucu derleniyor (dosyalar sıkıştırılıyor)…'
+$env:CARLUI_UNINSTALLER = $uninstaller
 cargo build --release --target-dir $target -p carlui-setup
 if ($LASTEXITCODE -ne 0) { throw 'kurucu derlemesi başarısız' }
-Remove-Item Env:CARLUI_PAYLOAD_DIR
+Remove-Item Env:CARLUI_PAYLOAD_DIR, Env:CARLUI_UNINSTALLER
 
 $dist = Join-Path $root 'dist'
 New-Item -ItemType Directory -Force $dist | Out-Null

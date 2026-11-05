@@ -108,6 +108,19 @@ fn main() {
     }
 }
 
+/// Güncelleme sırasında kilitli olduğu için kenara alınan eski exe'ler
+/// (`*.exe.old`; örn. yönetici görevi olarak çalışan sensör). Açılışta artık
+/// serbest olanlar silinir; hâlâ kullanılan sessizce kalır.
+fn sweep_old() {
+    let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())) else { return };
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    for e in rd.flatten() {
+        if e.file_name().to_string_lossy().to_lowercase().ends_with(".exe.old") && std::fs::remove_file(e.path()).is_ok() {
+            info!("eski dosya silindi: {}", e.file_name().to_string_lossy());
+        }
+    }
+}
+
 const HOST_MUTEX: PCWSTR = w!("Local\\CarlUI.Host");
 const QUIT_EVENT: PCWSTR = w!("Local\\CarlUI.Quit");
 
@@ -400,7 +413,13 @@ fn run() -> Result<()> {
 
         let cfg = config::load();
         let auto = cfg.general.start_with_windows;
-        std::thread::Builder::new().name("autostart".into()).spawn(move || autostart::apply(auto)).ok();
+        std::thread::Builder::new()
+            .name("autostart".into())
+            .spawn(move || {
+                autostart::apply(auto);
+                sweep_old();
+            })
+            .ok();
         let instance = GetModuleHandleW(None)?;
         RegisterClassW(&WNDCLASSW {
             lpfnWndProc: Some(wndproc),

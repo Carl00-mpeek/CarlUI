@@ -32,7 +32,7 @@ fn points_into(s: &str, dir: &Path) -> bool {
 
 /// Kurulumun bu klasöre koyduğu dosyalar.
 pub fn installed_files(dir: &Path) -> Vec<PathBuf> {
-    let mut v: Vec<PathBuf> = payload::FILES.iter().map(|(n, _)| dir.join(n)).collect();
+    let mut v: Vec<PathBuf> = payload::FILES.iter().map(|e| dir.join(e.name)).collect();
     v.push(dir.join(shell::UNINSTALLER));
     v.push(ext_dir(dir));
     v.push(xpi_path(dir));

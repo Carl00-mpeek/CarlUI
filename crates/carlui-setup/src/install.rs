@@ -149,13 +149,25 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
     // Carl Vault açıksa kapatılır (kilitlenir) ve kurulumdan sonra yeni sürümü,
     // kilitli olarak, yeniden açılır.
     let vault_was_open = !o.dry && shell::quit_vault(Duration::from_secs(5));
+    if !o.dry {
+        let need = crate::space::needed(o, crate::space::installed_now(&o.dir));
+        if let Some(free) = crate::space::free_bytes(&o.dir).filter(|f| *f < need) {
+            return fail(vec![t!(format!("Diskte yeterli yer yok: {} gerekli, {} boş", payload::mb(need), payload::mb(free)), format!("Not enough disk space: {} needed, {} free", payload::mb(need), payload::mb(free)))]);
+        }
+    }
     if let Err(e) = std::fs::create_dir_all(&o.dir) {
         return fail(vec![t!(format!("Klasör oluşturulamadı: {} ({e})", o.dir.display()), format!("Couldn't create folder: {} ({e})", o.dir.display()))]);
     }
     clean_old(&o.dir);
 
+    tick(rep, t!("Dosyalar açılıyor", "Unpacking files"));
+    if payload::embedded() && payload::unpack().is_empty() {
+        return fail(vec![t!("Kurucu bozuk: gömülü dosyalar açılamadı. Kurucuyu yeniden indirin.", "The installer is damaged: its files couldn't be unpacked. Download it again.").into()]);
+    }
+
     let since = Instant::now();
-    for (name, bytes) in payload::FILES {
+    for e in payload::FILES {
+        let (name, bytes) = (&e.name, e.bytes());
         if *name == office::EXE && !o.office {
             continue;
         }
@@ -169,21 +181,22 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
     }
     tick(rep, t!("Kaldırıcı ekleniyor", "Adding uninstaller"));
     let uninstaller = o.dir.join(shell::UNINSTALLER);
-    match std::env::current_exe() {
-        Ok(me) if me != uninstaller => match std::fs::read(&me) {
-            Ok(b) => {
-                if let Err(e) = place(&uninstaller, &b, since) {
-                    notes.push(t!(format!("Kaldırıcı yazılamadı: {e}"), format!("Couldn't write the uninstaller: {e}")));
-                }
-            }
-            Err(e) => notes.push(t!(format!("Kaldırıcı yazılamadı: {e}"), format!("Couldn't write the uninstaller: {e}"))),
-        },
-        _ => {}
+    // Gömülü küçük kaldırıcı; yoksa (geliştirme derlemesi) kurucunun kendisi.
+    let small = payload::UNINSTALLER.as_ref().map(|u| u.bytes()).filter(|b| !b.is_empty());
+    let bytes = match small {
+        Some(b) => Some(Ok(std::borrow::Cow::Borrowed(b))),
+        None => std::env::current_exe().ok().filter(|me| *me != uninstaller).map(|me| std::fs::read(me).map(std::borrow::Cow::Owned)),
+    };
+    if let Some(r) = bytes {
+        if let Err(e) = r.and_then(|b| place(&uninstaller, &b, since)) {
+            notes.push(t!(format!("Kaldırıcı yazılamadı: {e}"), format!("Couldn't write the uninstaller: {e}")));
+        }
     }
 
     let ext = ext_dir(&o.dir);
     let _ = std::fs::create_dir_all(&ext);
-    for (name, bytes) in payload::EXTENSION {
+    for e in payload::EXTENSION {
+        let (name, bytes) = (e.name, e.bytes());
         tick(rep, &format!("{} · {name}", t!("Eklenti", "Extension")));
         let to = ext.join(name);
         if let Some(d) = to.parent() {
@@ -193,8 +206,8 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
             notes.push(t!(format!("Eklenti dosyası yazılamadı ({name}): {e}"), format!("Couldn't write extension file ({name}): {e}")));
         }
     }
-    if let Some(x) = payload::XPI {
-        let _ = std::fs::write(xpi_path(&o.dir), x);
+    if let Some(x) = &payload::XPI {
+        let _ = std::fs::write(xpi_path(&o.dir), x.bytes());
     }
 
     if o.dry {
@@ -264,7 +277,7 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
     if o.wallpaper {
         tick(rep, t!("Duvar kâğıdı uygulanıyor", "Applying wallpaper"));
         let path = o.dir.join(r"wallpaper\carlui.png");
-        let ok = path.parent().is_some_and(|d| std::fs::create_dir_all(d).is_ok()) && std::fs::write(&path, payload::WALLPAPER).is_ok() && shell::set_wallpaper(&path);
+        let ok = path.parent().is_some_and(|d| std::fs::create_dir_all(d).is_ok()) && payload::WALLPAPER.as_ref().is_some_and(|w| std::fs::write(&path, w.bytes()).is_ok()) && shell::set_wallpaper(&path);
         if !ok {
             notes.push(t!("Duvar kâğıdı uygulanamadı", "Couldn't apply the wallpaper").into());
         }
@@ -283,6 +296,10 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
         tick(rep, t!("CarlUI başlatılıyor", "Starting CarlUI"));
         shell::open(&exe.display().to_string(), "");
     }
+    // Bu kurulumda kilitli olduğu için kenara alınan eski exe'ler: modüller
+    // yeni sürümle açıldıysa artık serbesttir.
+    std::thread::sleep(Duration::from_millis(800));
+    clean_old(&o.dir);
     if vault_was_open {
         shell::open(&o.dir.join("carlui-vault.exe").display().to_string(), "");
     }

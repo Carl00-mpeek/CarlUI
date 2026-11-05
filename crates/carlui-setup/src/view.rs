@@ -3,7 +3,7 @@
 //! cam görünüm ve parçalar (`carlui_ui::paint`) kullanılır; her kare baştan
 //! çizilir, tıklanabilir alanlar çizilirken kaydedilir.
 
-use crate::{install, payload, Act, App, Mode, Opt, Page};
+use crate::{install, payload, space, Act, App, Mode, Opt, Page};
 use carlui_ui::{
     paint::{mix, Align, Painter, GREEN, ORANGE, R, RED, TEXT},
     tween,
@@ -63,6 +63,18 @@ fn footer_left(p: &P, s: &str) {
     p.text(s, R::new(PAD, H - 58.0, 300.0, 34.0), 12.0, false, TEXT, 0.45, Align::Left);
 }
 
+/// İki satırlık alt bilgi: üstte kurulacak boyut, altta güncelleme farkı ya da uyarı.
+fn footer_two(p: &P, top: &str, bottom: &str, color: u32, alpha: f32) {
+    p.text(top, R::new(PAD, H - 62.0, 300.0, 20.0), 12.0, false, TEXT, 0.45, Align::Left);
+    p.text(bottom, R::new(PAD, H - 43.0, 300.0, 20.0), 11.5, false, color, alpha, Align::Left);
+}
+
+/// Basılamayan ana düğme (yer yetmediğinde).
+fn primary_off(p: &P, r: R, label: &str) {
+    p.round(r, 6.0, 0xFFFFFF, 0.08);
+    p.text(label, r, 13.5, true, TEXT, 0.35, Align::Center);
+}
+
 impl App {
     pub fn draw(&self, p: &mut P, logo: Option<&ID2D1Bitmap>) {
         let sub = match self.mode {
@@ -111,9 +123,26 @@ impl App {
             option(p, rr, row);
         }
 
-        footer_left(p, &format!("{}: {} · {}", t!("Kurulacak", "To install"), payload::mb(payload::installed_bytes(&self.opts)), t!("yönetici izni gerekmez", "no admin rights needed")));
+        let total = payload::installed_bytes(&self.opts);
+        let top = format!("{}: {} · {}", t!("Kurulacak", "To install"), payload::mb(total), t!("yönetici izni gerekmez", "no admin rights needed"));
+        let ok = self.space_ok();
+        if !ok {
+            let (need, free) = (space::needed(&self.opts, self.now_bytes), self.free.unwrap_or(0));
+            footer_two(p, &top, &t!(format!("Diskte yer yok: {} gerekli, {} boş", payload::mb(need), payload::mb(free)), format!("Not enough space: {} needed, {} free", payload::mb(need), payload::mb(free))), RED, 0.95);
+        } else if self.installed_before && self.now_bytes > 0 {
+            let d = space::diff(total, self.now_bytes);
+            footer_two(p, &top, &t!(format!("Bu güncelleme {d} · şu an {}", payload::mb(self.now_bytes)), format!("This update {d} · now {}", payload::mb(self.now_bytes))), TEXT, 0.6);
+        } else {
+            footer_left(p, &top);
+        }
         p.button(R::new(W - PAD - 120.0 - 12.0 - 100.0, H - 58.0, 100.0, 34.0), None, t!("Vazgeç", "Cancel"), Act::Close, true, false);
-        primary(p, R::new(W - PAD - 120.0, H - 58.0, 120.0, 34.0), if self.installed_before { t!("Güncelle", "Update") } else { t!("Kur", "Install") }, Act::Install, p.accent);
+        let label = if self.installed_before { t!("Güncelle", "Update") } else { t!("Kur", "Install") };
+        let r = R::new(W - PAD - 120.0, H - 58.0, 120.0, 34.0);
+        if ok {
+            primary(p, r, label, Act::Install, p.accent);
+        } else {
+            primary_off(p, r, label);
+        }
     }
 
     fn confirm(&self, p: &mut P, y: f32) {

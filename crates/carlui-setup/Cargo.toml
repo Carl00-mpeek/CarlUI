@@ -13,3 +13,11 @@ path = "src/main.rs"
 carlui-core.workspace = true
 carlui-ui.workspace = true
 windows.workspace = true
+ruzstd = { version = "0.9", default-features = false, features = ["std"] }
+
+[build-dependencies]
+zstd = { version = "0.14", default-features = false, features = ["zstdmt"] }
+
+# Yalnızca kaldırıcıyı (CarlUI-Uninstall.exe) üretir: payload gömülmez.
+[features]
+uninstaller = []

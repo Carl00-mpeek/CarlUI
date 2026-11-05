@@ -4,8 +4,9 @@
 //! ve hataya açık. Çözüm: hepsi bu exe'nin içine gömülü (`payload`); ayarlar
 //! penceresiyle aynı cam pencerede konum ve seçenekler seçilir, kurulum
 //! yönetici izni istemeden `%LOCALAPPDATA%\Programs\CarlUI`'ye yapılır.
-//! Kurucu kendini kaldırıcı olarak kurulum klasörüne de koyar
-//! (`CarlUI-Uninstall.exe --uninstall`).
+//! Gömülü dosyalar tek bir zstd akışında sıkıştırılmış durur. Kurulum
+//! klasörüne aynı kodun dosyasız küçük derlemesi (`uninstaller` özelliği)
+//! kaldırıcı olarak konur (`CarlUI-Uninstall.exe --uninstall`).
 //!
 //! Komut satırı:
 //!   --uninstall            kaldırma penceresi
@@ -28,6 +29,7 @@ mod install;
 mod office;
 mod payload;
 mod shell;
+mod space;
 mod uninstall;
 mod view;
 
@@ -115,6 +117,10 @@ pub struct App {
     pub purge: bool,
     pub pawnio: bool,
     pub installed_before: bool,
+    /// Hedef sürücüdeki boş yer (ölçülemezse None).
+    pub free: Option<u64>,
+    /// Mevcut kurulumun diskte tuttuğu yer.
+    pub now_bytes: u64,
     pub progress: install::Shared,
     pub firefox: Option<String>,
     pub chrome: Option<Chromium>,
@@ -181,10 +187,12 @@ impl App {
             accent: glassmenu::accent(),
             mode,
             page: if mode == Mode::Install { Page::Welcome } else { Page::Confirm },
-            opts: install::Options { dir, desktop: true, launch: true, sensors: pawnio, firefox: payload::XPI.is_some(), wallpaper: false, office: office::wanted(), dry },
+            opts: install::Options { dir: dir.clone(), desktop: true, launch: true, sensors: pawnio, firefox: payload::XPI.is_some(), wallpaper: false, office: office::wanted(), dry },
             purge: false,
             pawnio,
             installed_before,
+            free: space::free_bytes(&dir),
+            now_bytes: space::installed_now(&dir),
             progress: Arc::default(),
             firefox: shell::app_path("firefox.exe"),
             chrome: chromium(),
@@ -208,8 +216,14 @@ impl App {
         self.page = page;
     }
 
+    /// Seçilen sürücüde kurulum için yeterli yer var mı (ölçülemezse var sayılır).
+    pub fn space_ok(&self) -> bool {
+        self.free.is_none_or(|f| f >= space::needed(&self.opts, self.now_bytes))
+    }
+
     fn act(&mut self, a: Act) {
         match a {
+            Act::Install if !self.space_ok() => {}
             Act::Install => {
                 self.go(Page::Work);
                 install::start(self.opts.clone(), self.reporter());
@@ -449,6 +463,8 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 if let Some(dir) = shell::pick_folder(hwnd, &start) {
                     with_app(|a| {
                         a.installed_before = dir.join("carlui.exe").exists();
+                        a.free = space::free_bytes(&dir);
+                        a.now_bytes = space::installed_now(&dir);
                         a.opts.dir = dir;
                         a.invalidate();
                     });
@@ -492,7 +508,12 @@ fn relaunch_from_temp(dir: &PathBuf) -> bool {
 }
 
 fn main() -> Result<()> {
-    let args = parse_args();
+    let mut args = parse_args();
+    // Kurulum klasöründeki küçük kaldırıcı yalnızca kaldırır; içinde kurulacak dosya yok.
+    if cfg!(feature = "uninstaller") {
+        args.mode = Mode::Uninstall;
+        args.update = false;
+    }
     // Kurulu CarlUI varsa (güncelleme, kaldırma) Ayarlar'da seçilen dil
     // kullanılır; ilk kurulumda Windows'un dili.
     if carlui_core::paths::config_file().exists() {

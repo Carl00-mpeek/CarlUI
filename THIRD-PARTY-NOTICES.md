@@ -39,6 +39,8 @@ All of the following are used under the MIT license (most are dual-licensed
 | hashbrown | MIT OR Apache-2.0 | https://github.com/rust-lang/hashbrown |
 | itoa, zmij | MIT OR Apache-2.0 / MIT | https://github.com/dtolnay |
 | memchr | Unlicense OR MIT | https://github.com/BurntSushi/memchr |
+| ruzstd (setup only) | MIT | https://github.com/KillingSpark/zstd-rs |
+| zstd, zstd-safe, zstd-sys (build time only, compresses the setup payload) | MIT / BSD-3-Clause | https://github.com/gyscos/zstd-rs |
 | proc-macro2, quote, syn, unicode-ident (build time only) | MIT OR Apache-2.0 (unicode-ident also Unicode-3.0) | https://github.com/dtolnay |
 
 ### MIT License (applies to the crates above)
