@@ -69,13 +69,18 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         let sel = catalog::chosen(c, feat).id;
         if feat == Feature::Speak {
             speak_options(c, p, f);
-            let r = f.row(
-                p,
-                t!("Ses stüdyosu", "Voice studio"),
-                t!("Metni sese çevirip WAV/MP3 kaydedin ya da sesi yazıya döküp TXT/SRT kaydedin.", "Turn text into speech and save WAV/MP3, or transcribe audio and save TXT/SRT."),
-                120.0,
+        }
+        // Ses ve yazıya dökme modelleri Ses stüdyosunda seçilip indirilir.
+        if matches!(feat, Feature::Speak | Feature::Speech) {
+            let m = catalog::chosen(c, feat);
+            let label = t!(format!("Model: {}", m.name), format!("Model: {}", m.name));
+            let desc = t!(
+                "Küçük, orta, büyük modeller Ses stüdyosunda seçilip indirilir; kayıt da oradan yapılır.",
+                "Small, medium and large models are picked and downloaded in the Voice studio, where you can also record."
             );
-            p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E8D6}'), t!("Aç", "Open"), Act::Studio, true, false);
+            let r = f.row(p, &label, desc, 160.0);
+            p.button(R::new(r.right() - 16.0 - 150.0, r.y + (r.h - 32.0) / 2.0, 150.0, 32.0), Some('\u{E8D6}'), t!("Ses stüdyosu", "Voice studio"), Act::Studio, true, false);
+            continue;
         }
         for m in catalog::of(feat) {
             // Çeviride iki yön de kullanılır; Türkçe ses Türkçe metinde kendiliğinden seçilir.

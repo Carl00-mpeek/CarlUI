@@ -9,6 +9,7 @@
 mod dialog;
 mod hear;
 mod job;
+mod models;
 mod speak;
 
 use carlui_ai::{catalog, catalog::Feature, catalog::Model, whisper, whisper::Segment};
@@ -28,7 +29,6 @@ const PAD: f32 = 20.0;
 #[derive(Clone, PartialEq)]
 enum Act {
     Mode(usize),
-    Voice(usize),
     Speed(usize),
     Lang(usize),
     Play,
@@ -39,6 +39,11 @@ enum Act {
     Cancel,
     Reveal,
     Area,
+    /// Model seçme ekranını aç (true) / kapat.
+    Models(bool),
+    Choose(Option<&'static str>),
+    Fetch(&'static str),
+    Remove(&'static str),
 }
 
 struct Studio {
@@ -53,6 +58,11 @@ struct Studio {
     job: Arc<Job>,
     hwnd: HWND,
     accent: Option<u32>,
+    /// Model seçme ekranı açık mı.
+    picker: bool,
+    fetching: Option<&'static str>,
+    list_scroll: f32,
+    list_max: f32,
 }
 
 pub fn run(accent: Option<u32>) -> Result<()> {
@@ -65,19 +75,9 @@ pub fn run(accent: Option<u32>) -> Result<()> {
     let mut tts = TextArea::new(t!("Seslendirilecek metni buraya yaz ya da yapıştır…", "Type or paste the text to speak here…"));
     tts.max = 50_000;
     let stt = TextArea::new(t!("Kayıt ya da dosya yazıya döküldüğünde metin burada görünür; düzenleyebilirsin.", "The transcript appears here; you can edit it."));
-    let s = Studio { mode: 0, tts, stt, voices, voice: 0, speed, lang, segs: Vec::new(), job: Job::new(), hwnd: HWND::default(), accent };
+    let s = Studio { mode: 0, tts, stt, voices, voice: 0, speed, lang, segs: Vec::new(), job: Job::new(), hwnd: HWND::default(), accent, picker: false, fetching: None, list_scroll: 0.0, list_max: 0.0 };
     view::run(s, Opts { title: t!("Ses stüdyosu", "Voice studio").into(), w: 820.0, h: 620.0, resizable: true, ..Default::default() })?;
     Ok(())
-}
-
-fn voice_label(m: Option<&Model>) -> String {
-    match m.map(|m| m.id) {
-        None => t!("Otomatik", "Automatic").into(),
-        Some(catalog::TURKISH_VOICE) => t!("Türkçe", "Turkish").into(),
-        Some("kokoro-q8") => "Kokoro".into(),
-        Some("kokoro-fp32") => "Kokoro HQ".into(),
-        Some(_) => m.map(|m| m.name.split(" (").next().unwrap_or(m.name).trim_start_matches("Piper ").to_string()).unwrap_or_default(),
-    }
 }
 
 impl Studio {
@@ -233,105 +233,93 @@ impl Studio {
         }
     }
 
-    fn label(p: &mut Painter<Act>, s: &str, x: f32, y: f32) {
-        p.text(s, R::new(x, y, 60.0, 32.0), 13.0, false, TEXT, 0.6, Align::Left);
+    /// Üst sağdaki model düğmesi: seçili model; tıklayınca model ekranı.
+    fn model_chip(&self, p: &mut Painter<Act>, w: f32, enabled: bool) {
+        let (name, nc) = if self.mode == 0 {
+            let m = self.voices[self.voice];
+            (m.map(|m| m.name.to_string()).unwrap_or_else(|| t!("Otomatik ses", "Automatic voice").into()), self.tts_model().restricted)
+        } else {
+            (self.stt_model().name.to_string(), false)
+        };
+        let label = format!("{name}  ▾");
+        let cw = (p.fonts.width(&label, 13.0, false) + 56.0).clamp(160.0, (w - 2.0 * PAD - 320.0).max(160.0));
+        let r = R::new(w - PAD - cw, 16.0, cw, 34.0);
+        if nc {
+            // Ticari olmayan lisanslı ses kullanılacaksa küçük turuncu uyarı.
+            p.glyph('\u{E7BA}', R::new(r.x - 24.0, r.y, 18.0, r.h), 13.0, ORANGE, 0.95);
+        }
+        p.button(r, Some('\u{E8D6}'), &label, Act::Models(true), enabled, false);
     }
 
     fn paint_tts(&mut self, p: &mut Painter<Act>, w: f32, h: f32, work: Work) {
-        let lw = 46.0;
-        Self::label(p, t!("Ses", "Voice"), PAD, 62.0);
-        let labels: Vec<String> = self.voices.iter().map(|m| voice_label(*m)).collect();
-        let items: Vec<(&str, Act)> = labels.iter().enumerate().map(|(i, l)| (l.as_str(), Act::Voice(i))).collect();
-        let vw = (w - 2.0 * PAD - lw).min(110.0 * items.len() as f32);
-        p.segments(R::new(PAD + lw, 62.0, vw, 32.0), &items, self.voice);
-
-        Self::label(p, t!("Hız", "Speed"), PAD, 102.0);
-        let sl = ["0,8×", "1×", "1,25×", "1,5×"];
-        let sitems: Vec<(&str, Act)> = sl.iter().enumerate().map(|(i, l)| (*l, Act::Speed(i))).collect();
-        p.segments(R::new(PAD + lw, 102.0, 260.0, 32.0), &sitems, self.speed);
-        // Ticari olmayan lisanslı ses seçiliyse (ya da otomatik seçilecekse) uyarı.
-        let m = self.tts_model();
-        let info = format!("{} · {}", m.name, m.license);
-        let nc = m.license.contains("NC");
-        let ix = PAD + lw + 276.0;
-        if w - ix - PAD > 80.0 {
-            if nc {
-                p.glyph('\u{E7BA}', R::new(ix, 102.0, 18.0, 32.0), 13.0, ORANGE, 0.95);
-            }
-            let tx = ix + if nc { 22.0 } else { 0.0 };
-            p.text(&info, R::new(tx, 102.0, w - tx - PAD, 32.0), 12.0, false, if nc { ORANGE } else { TEXT }, if nc { 0.95 } else { 0.55 }, Align::Left);
-        }
-
-        let area = R::new(PAD, 146.0, w - 2.0 * PAD, (h - 146.0 - 70.0).max(60.0));
+        let area = R::new(PAD, 66.0, w - 2.0 * PAD, (h - 66.0 - 78.0).max(60.0));
         self.tts.paint(p, area, Act::Area);
+        // Karakter sayısı metin alanının altında, sağda, soluk.
+        if !self.tts.is_empty() {
+            p.text(&format!("{} {}", self.tts.len(), t!("karakter", "chars")), R::new(area.x, area.bottom() + 2.0, area.w, 16.0), 11.0, false, TEXT, 0.4, Align::Right);
+        }
 
         let by = h - 54.0;
         let playing = work == Work::Playing;
         let idle = work == Work::Idle;
-        Self::primary(p, R::new(PAD, by, 132.0, 36.0), if playing { '\u{E71A}' } else { '\u{E768}' }, if playing { t!("Durdur", "Stop") } else { t!("Dinle", "Listen") }, Act::Play, idle || playing);
-        p.button(R::new(PAD + 142.0, by, 132.0, 36.0), Some('\u{E74E}'), t!("Kaydet…", "Save…"), Act::Save, idle, false);
-        self.status(p, PAD + 290.0, by, w, Some(format!("{} {}", self.tts.len(), t!("karakter", "chars"))));
+        Self::primary(p, R::new(PAD, by, 124.0, 36.0), if playing { '\u{E71A}' } else { '\u{E768}' }, if playing { t!("Durdur", "Stop") } else { t!("Dinle", "Listen") }, Act::Play, idle || playing);
+        p.button(R::new(PAD + 134.0, by, 124.0, 36.0), Some('\u{E74E}'), t!("Kaydet…", "Save…"), Act::Save, idle, false);
+        // Okuma hızı: sağ altta küçük seçici.
+        let sl = ["0,8×", "1×", "1,25×", "1,5×"];
+        let sitems: Vec<(&str, Act)> = sl.iter().enumerate().map(|(i, l)| (*l, Act::Speed(i))).collect();
+        let sw = 204.0;
+        let sx = w - PAD - sw;
+        p.segments(R::new(sx, by + 2.0, sw, 32.0), &sitems, self.speed);
+        self.status(p, PAD + 274.0, by, sx - 12.0);
     }
 
     fn paint_stt(&mut self, p: &mut Painter<Act>, w: f32, h: f32, work: Work) {
         let recording = work == Work::Recording;
         let idle = work == Work::Idle;
-        let rl = if recording { t!("Kaydı bitir", "Stop recording") } else { t!("Kayda başla", "Start recording") };
-        Self::primary(p, R::new(PAD, 62.0, 160.0, 34.0), if recording { '\u{E71A}' } else { '\u{E720}' }, rl, Act::Record, idle || recording);
-        p.button(R::new(PAD + 170.0, 62.0, 150.0, 34.0), Some('\u{E8E5}'), t!("Dosya aç…", "Open file…"), Act::Open, idle, false);
-        if recording {
-            let (level, secs) = self.job.state.lock().map(|s| (s.level, s.seconds)).unwrap_or_default();
-            let x = PAD + 336.0;
-            p.round(R::new(x, 75.0, 10.0, 10.0), 5.0, RED, 0.9);
-            let t = secs as u32;
-            p.text(&format!("{:02}:{:02}", t / 60, t % 60), R::new(x + 18.0, 62.0, 56.0, 34.0), 13.0, true, TEXT, 0.9, Align::Left);
-            let mw = (w - x - 84.0 - PAD).clamp(0.0, 220.0);
-            if mw > 20.0 {
-                p.bar(R::new(x + 80.0, 76.0, mw, 6.0), (level * 4.0).sqrt().min(1.0), GREEN);
-            }
-        }
-
-        Self::label(p, t!("Dil", "Language"), PAD, 106.0);
-        let items = [(t!("Otomatik", "Automatic"), Act::Lang(0)), ("Türkçe", Act::Lang(1)), ("English", Act::Lang(2))];
-        p.segments(R::new(PAD + 66.0, 106.0, 300.0, 32.0), &items, self.lang);
-        let m = self.stt_model();
-        let ix = PAD + 382.0;
-        if w - ix - PAD > 80.0 {
-            p.text(&format!("{} · {}", m.name, m.license), R::new(ix, 106.0, w - ix - PAD, 32.0), 12.0, false, TEXT, 0.55, Align::Left);
-        }
-
-        let area = R::new(PAD, 150.0, w - 2.0 * PAD, (h - 150.0 - 70.0).max(60.0));
+        let area = R::new(PAD, 66.0, w - 2.0 * PAD, (h - 66.0 - 78.0).max(60.0));
         self.stt.paint(p, area, Act::Area);
 
         let by = h - 54.0;
+        let rl = if recording { t!("Kaydı bitir", "Stop") } else { t!("Kayda başla", "Record") };
+        Self::primary(p, R::new(PAD, by, 140.0, 36.0), if recording { '\u{E71A}' } else { '\u{E720}' }, rl, Act::Record, idle || recording);
+        p.button(R::new(PAD + 150.0, by, 124.0, 36.0), Some('\u{E8E5}'), t!("Dosya aç…", "Open file…"), Act::Open, idle, false);
         let has = !self.stt.is_empty();
-        p.button(R::new(PAD, by, 120.0, 36.0), Some('\u{E8C8}'), t!("Kopyala", "Copy"), Act::Copy, has, false);
-        p.button(R::new(PAD + 130.0, by, 132.0, 36.0), Some('\u{E74E}'), t!("Kaydet…", "Save…"), Act::Save, has && idle, false);
-        self.status(p, PAD + 278.0, by, w, None);
+        let end = w - PAD;
+        p.button(R::new(end - 124.0, by, 124.0, 36.0), Some('\u{E74E}'), t!("Kaydet…", "Save…"), Act::Save, has && idle, false);
+        p.button(R::new(end - 124.0 - 10.0 - 44.0, by, 44.0, 36.0), Some('\u{E8C8}'), "", Act::Copy, has, false);
+        let mut x = PAD + 290.0;
+        let stop = end - 124.0 - 10.0 - 44.0 - 12.0;
+        if recording {
+            let (level, secs) = self.job.state.lock().map(|s| (s.level, s.seconds)).unwrap_or_default();
+            p.round(R::new(x, by + 13.0, 10.0, 10.0), 5.0, RED, 0.9);
+            let t = secs as u32;
+            p.text(&format!("{:02}:{:02}", t / 60, t % 60), R::new(x + 18.0, by, 56.0, 36.0), 13.0, true, TEXT, 0.9, Align::Left);
+            let mw = (stop - x - 80.0 - 108.0).clamp(0.0, 160.0);
+            if mw > 20.0 {
+                p.bar(R::new(x + 80.0, by + 15.0, mw, 6.0), (level * 4.0).sqrt().min(1.0), GREEN);
+            }
+            x += 80.0 + mw + 12.0;
+        }
+        self.status(p, x, by, stop);
     }
 
-    /// Alt satırdaki durum: ilerleme, iptal, hata ya da "Klasörde göster".
-    fn status(&self, p: &mut Painter<Act>, x: f32, y: f32, w: f32, right: Option<String>) {
+    /// Alt satırdaki durum (x..end): ilerleme, iptal, hata ya da "Klasörde göster".
+    fn status(&self, p: &mut Painter<Act>, x: f32, y: f32, mut end: f32) {
         let Ok(s) = self.job.state.lock() else { return };
-        let mut end = w - PAD;
-        if let Some(r) = right.filter(|_| s.work == Work::Idle && s.note.is_empty()) {
-            p.text(&r, R::new(x, y, end - x, 36.0), 12.0, false, TEXT, 0.5, Align::Right);
-            return;
-        }
-        if s.work != Work::Idle && s.work != Work::Recording {
+        if s.work != Work::Idle {
             p.button(R::new(end - 96.0, y, 96.0, 36.0), Some('\u{E711}'), t!("Vazgeç", "Cancel"), Act::Cancel, true, false);
             end -= 108.0;
-            if s.frac > 0.0 {
+            if s.frac > 0.0 && s.work != Work::Recording {
                 p.bar(R::new(x, y + 30.0, (end - x).max(0.0), 4.0), s.frac, p.accent);
             }
-        } else if s.work == Work::Recording {
-            p.button(R::new(end - 96.0, y, 96.0, 36.0), Some('\u{E711}'), t!("Vazgeç", "Cancel"), Act::Cancel, true, false);
-            end -= 108.0;
         } else if s.saved.is_some() {
             p.button(R::new(end - 150.0, y, 150.0, 36.0), Some('\u{E838}'), t!("Klasörde göster", "Show in folder"), Act::Reveal, true, false);
             end -= 162.0;
         }
-        let (c, a) = if s.failed { (RED, 0.95) } else { (TEXT, 0.75) };
+        if s.work == Work::Recording {
+            return;
+        }
+        let (c, a) = if s.failed { (RED, 0.95) } else { (TEXT, 0.7) };
         p.text(&s.note, R::new(x, y, (end - x).max(0.0), if s.frac > 0.0 && s.work != Work::Idle { 28.0 } else { 36.0 }), 12.5, false, c, a, Align::Left);
     }
 }
@@ -358,7 +346,11 @@ impl View for Studio {
         }
         let work = self.job.work();
         let modes = [(t!("Metinden sese", "Text to speech"), Act::Mode(0)), (t!("Sesten metne", "Speech to text"), Act::Mode(1))];
-        p.segments(R::new(PAD, 16.0, 340.0, 34.0), &modes, self.mode);
+        if self.picker {
+            return self.paint_models(p, w, h, work);
+        }
+        p.segments(R::new(PAD, 16.0, 300.0, 34.0), &modes, self.mode);
+        self.model_chip(p, w, work == Work::Idle);
         if self.mode == 0 {
             self.paint_tts(p, w, h, work);
         } else {
@@ -380,7 +372,6 @@ impl View for Studio {
                 });
             }
             Act::Mode(_) => {}
-            Act::Voice(i) => self.voice = i,
             Act::Speed(i) => self.speed = i,
             Act::Lang(i) => self.lang = i,
             Act::Play => self.play(),
@@ -402,10 +393,24 @@ impl View for Studio {
                 }
             }
             Act::Area => {}
+            Act::Models(open) => {
+                self.picker = open;
+                self.list_scroll = 0.0;
+            }
+            Act::Choose(id) => self.choose(id),
+            Act::Fetch(id) => self.fetch(id),
+            Act::Remove(id) => self.remove(id),
         }
     }
 
     fn key(&mut self, vk: u16, _ctx: &mut Ctx) -> bool {
+        if self.picker {
+            // Esc: model ekranından çık.
+            if vk == 0x1B {
+                self.picker = false;
+            }
+            return true;
+        }
         // Ctrl+Enter: dinle / durdur.
         if vk == 0x0D && view::ctrl() && self.mode == 0 {
             self.play();
@@ -415,6 +420,9 @@ impl View for Studio {
     }
 
     fn char(&mut self, c: char, _ctx: &mut Ctx) {
+        if self.picker {
+            return;
+        }
         self.area().char(c);
     }
 
@@ -431,6 +439,9 @@ impl View for Studio {
     }
 
     fn wheel(&mut self, delta: f32, at: (f32, f32), _ctx: &mut Ctx) {
+        if self.picker {
+            return self.models_wheel(delta);
+        }
         self.area().wheel(delta, at);
     }
 
