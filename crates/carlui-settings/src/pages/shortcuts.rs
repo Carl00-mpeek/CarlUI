@@ -30,10 +30,11 @@ pub enum Key {
     ReplayPanel,
     Dictate,
     Speak,
+    Assist,
 }
 
 impl Key {
-    const COMBOS: [Key; 11] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk, Key::Replay, Key::ReplayPanel, Key::Dictate, Key::Speak];
+    const COMBOS: [Key; 12] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk, Key::Replay, Key::ReplayPanel, Key::Dictate, Key::Speak, Key::Assist];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -50,6 +51,7 @@ impl Key {
             Key::ReplayPanel => t!("Anlık tekrar paneli", "Instant replay panel"),
             Key::Dictate => t!("Sesle yazma", "Voice typing"),
             Key::Speak => t!("Sesli okuma", "Read aloud"),
+            Key::Assist => t!("Sesli asistan", "Voice assistant"),
         }
     }
 
@@ -68,6 +70,7 @@ impl Key {
             Key::ReplayPanel => t!("Kaydı başlatma, mikrofon ve kalite paneli; oyunun odağını almaz.", "Panel for recording, microphone and quality; never takes focus from the game."),
             Key::Dictate => t!("Bas, konuş, yeniden bas; söylediğin imlecin olduğu yere yazılır (yerel, buluta gitmez).", "Press, speak, press again; what you said is typed at the cursor (local, never sent to the cloud)."),
             Key::Speak => t!("Seçili metni (yoksa panodakini) yerel sesle okur; yeniden basınca susar.", "Reads the selected text (or the clipboard) with a local voice; press again to stop."),
+            Key::Assist => t!("Basılı tutup komutu söyleyin, bırakın (\"YouTube'u aç\"). Yapay zekâ ayarlarından açılır.", "Hold, say a command, release (\"open YouTube\"). Turn it on in AI settings."),
         }
     }
 
@@ -92,6 +95,7 @@ impl Key {
             Key::ReplayPanel => s.replay_panel.clone(),
             Key::Dictate => s.dictate.clone(),
             Key::Speak => s.speak.clone(),
+            Key::Assist => s.assist.clone(),
         }
     }
 
@@ -111,6 +115,7 @@ impl Key {
             Key::ReplayPanel => s.replay_panel = v,
             Key::Dictate => s.dictate = v,
             Key::Speak => s.speak = v,
+            Key::Assist => s.assist = v,
         }
     }
 
@@ -228,6 +233,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     key_row(app, p, f, Key::ReplayPanel);
     key_row(app, p, f, Key::Dictate);
     key_row(app, p, f, Key::Speak);
+    key_row(app, p, f, Key::Assist);
     f.section(p, "Dock");
     key_row(app, p, f, Key::AppNumbers);
     f.y += 6.0;

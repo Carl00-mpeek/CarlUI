@@ -160,13 +160,13 @@ fn work(w: &Arc<Shared>, m: &'static catalog::Model, key: &str, lang: &str, stop
 }
 
 /// 100 ms'lik pencerelerin en yüksek RMS'i bunun altındaysa kayıt sessiz sayılır.
-const SILENCE: f32 = 0.006;
+pub(crate) const SILENCE: f32 = 0.006;
 
-fn loudest(pcm: &[f32]) -> f32 {
+pub(crate) fn loudest(pcm: &[f32]) -> f32 {
     pcm.chunks(whisper::SR / 10).map(|c| (c.iter().map(|v| v * v).sum::<f32>() / c.len() as f32).sqrt()).fold(0.0, f32::max)
 }
 
-fn short(s: &str, n: usize) -> String {
+pub(crate) fn short(s: &str, n: usize) -> String {
     if s.chars().count() <= n {
         s.to_string()
     } else {
@@ -176,7 +176,7 @@ fn short(s: &str, n: usize) -> String {
 
 /// Kısayolun Ctrl/Alt/Shift/Win'i hâlâ basılıysa harfler kısayol olarak gider;
 /// bırakılana dek (en fazla 3 sn) bekle.
-fn wait_modifiers_up() {
+pub(crate) fn wait_modifiers_up() {
     let t0 = Instant::now();
     let held = || [VK_CONTROL, VK_MENU, VK_SHIFT, VK_LWIN, VK_RWIN].iter().any(|k| unsafe { GetAsyncKeyState(k.0 as i32) } as u16 & 0x8000 != 0);
     while held() && t0.elapsed() < Duration::from_secs(3) {

@@ -325,6 +325,8 @@ pub struct ShortcutsConfig {
     pub dictate: String,
     /// Sesli okuma: seçili metni (yoksa panodakini) okur; yeniden basınca susar.
     pub speak: String,
+    /// Sesli asistan: basılı tut, komutu söyle, bırak ("YouTube'u aç", "sesi 30 yap").
+    pub assist: String,
 }
 
 impl Default for ShortcutsConfig {
@@ -344,6 +346,7 @@ impl Default for ShortcutsConfig {
             replay_panel: "Alt+F8".into(),
             dictate: "Ctrl+Alt+D".into(),
             speak: "Ctrl+Alt+S".into(),
+            assist: "Ctrl+Alt+A".into(),
         }
     }
 }

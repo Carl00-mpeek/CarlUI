@@ -14,7 +14,9 @@ use windows::Win32::Graphics::Direct2D::{Common::D2D_RECT_F, ID2D1Bitmap, D2D1_A
 pub type P<'a> = Painter<'a, Act>;
 
 pub const W: f32 = 600.0;
-pub const H: f32 = 614.0;
+pub const H: f32 = 624.0;
+/// Seçenek satırının yüksekliği.
+const ROW: f32 = 46.0;
 const PAD: f32 = 32.0;
 
 /// Vurgu renginde ana düğme (Kur / Kaldır / Kapat).
@@ -48,8 +50,8 @@ fn option(p: &mut P, r: R, Row(title, desc, on, enabled, opt, size): Row) {
     }
     let a = if enabled { 1.0 } else { 0.45 };
     let right = if size.is_some() { 160.0 } else { 90.0 };
-    p.text(title, R::new(r.x + 16.0, r.y + 8.0, r.w - right, 22.0), 13.5, false, TEXT, 0.95 * a, Align::Left);
-    p.text(desc, R::new(r.x + 16.0, r.y + 29.0, r.w - right, 18.0), 11.5, false, TEXT, 0.55 * a, Align::Left);
+    p.text(title, R::new(r.x + 16.0, r.y + 4.0, r.w - right, 22.0), 13.5, false, TEXT, 0.95 * a, Align::Left);
+    p.text(desc, R::new(r.x + 16.0, r.y + 24.0, r.w - right, 18.0), 11.5, false, TEXT, 0.55 * a, Align::Left);
     if let Some(b) = size {
         let on = on && enabled;
         p.text(&format!("+{}", payload::mb(b)), R::new(r.right() - 16.0 - 34.0 - 12.0 - 80.0, r.y, 80.0, r.h), 12.0, on, TEXT, if on { 0.85 } else { 0.4 } * a, Align::Right);
@@ -107,7 +109,7 @@ impl App {
 
         let y = y + 88.0;
         p.text(t!("Seçenekler", "Options"), R::new(PAD + 2.0, y, cw, 20.0), 12.0, true, TEXT, 0.6, Align::Left);
-        let card = R::new(PAD, y + 24.0, cw, 52.0 * 6.0);
+        let card = R::new(PAD, y + 24.0, cw, ROW * 7.0);
         p.card(card);
         let pawn = self.pawnio;
         let xpi = payload::XPI.is_some();
@@ -117,10 +119,11 @@ impl App {
             Row(t!("CPU sıcaklığı", "CPU temperature"), if pawn { t!("Yönetici izni ister · açılışta çalışan küçük bir görev kurar", "Needs admin · sets up a small task that runs at sign-in") } else { t!("PawnIO sürücüsü kurulu değil", "PawnIO driver not installed") }, self.opts.sensors, pawn, Opt::Sensors, None),
             Row(t!("Firefox eklentisi", "Firefox extension"), if xpi { t!("İmzalı eklenti Firefox'a otomatik tanıtılır", "The signed extension is registered with Firefox") } else { t!("İmzalı paket yok · kurulumdan sonra elle yüklenir", "No signed package · load it manually after install") }, self.opts.firefox, xpi, Opt::Firefox, None),
             Row(t!("Carl Office", "Carl Office"), t!("Excel, Word, PowerPoint ve PDF açar · arka planda çalışmaz", "Opens Excel, Word, PowerPoint and PDF · no background process"), self.opts.office, true, Opt::Office, Some(payload::office_bytes())),
+            Row(t!("Sesli asistan", "Voice assistant"), t!("Ctrl+Alt+A basılıyken komut söyleyin · model ilk kullanımda indirilir", "Hold Ctrl+Alt+A and speak a command · model downloads on first use"), self.opts.assistant, true, Opt::Assistant, None),
             Row(t!("CarlUI duvar kâğıdı", "CarlUI wallpaper"), t!("Siyah zeminde CarlUI yazısı · masaüstü arka planı olur", "CarlUI lettering on black · set as desktop background"), self.opts.wallpaper, true, Opt::Wallpaper, Some(payload::wallpaper_bytes())),
         ];
         for (i, row) in rows.into_iter().enumerate() {
-            let rr = R::new(card.x, card.y + 52.0 * i as f32, card.w, 52.0);
+            let rr = R::new(card.x, card.y + ROW * i as f32, card.w, ROW);
             if i > 0 {
                 p.fill(R::new(rr.x + 16.0, rr.y, rr.w - 32.0, 1.0), 0xFFFFFF, 0.06);
             }

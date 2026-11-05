@@ -233,6 +233,7 @@ dependencies = [
  "carlui-ai",
  "carlui-clip",
  "carlui-core",
+ "carlui-launcher",
  "carlui-ui",
  "serde_json",
  "windows",

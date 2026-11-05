@@ -31,6 +31,8 @@ pub struct Options {
     pub wallpaper: bool,
     /// Carl Office modülü (exe, Başlat kısayolu, dosya türü kayıtları).
     pub office: bool,
+    /// Sesli asistanı aç (`ai.assistant`); model ilk kullanımda indirilir.
+    pub assistant: bool,
     /// Deneme: yalnızca dosyalar yazılır; kayıt defteri, kısayol, görev yok.
     pub dry: bool,
 }
@@ -250,6 +252,17 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
             }
         }
         None => notes.push(t!("Başlat menüsü klasörü bulunamadı", "Start menu folder not found").into()),
+    }
+    // Sesli asistan: yalnızca ayar; modeli ilk kullanımda (lisans onayıyla) indirilir.
+    // Okunamayan ayar dosyasının üzerine varsayılanlar yazılmasın.
+    let path = carlui_core::paths::config_file();
+    let cfg = match std::fs::read_to_string(&path) {
+        Ok(text) => carlui_core::config::from_text(&text).ok(),
+        Err(_) => Some(carlui_core::config::Config::default()),
+    };
+    if let Some(mut cfg) = cfg.filter(|c| c.ai.assistant != o.assistant) {
+        cfg.ai.assistant = o.assistant;
+        carlui_core::config::save(&cfg);
     }
     office::remember(o.office);
     if o.office {

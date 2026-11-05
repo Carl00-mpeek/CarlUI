@@ -9,6 +9,7 @@
 //!
 //! Test/elle kullanım: `carlui-convert.exe dosya1 dosya2 …` (seçim yerine).
 //! `--dictate`: sesle yazma (bkz. `dictate`); ana süreç kısayolla başlatır.
+//! `--assist`: sesli asistan (bkz. `assist`); ana süreç kısayolla başlatır.
 //! `--speak`: seçili metni sesli okur (bkz. `speak`); ana süreç kısayolla başlatır.
 //! `--studio`: Ses stüdyosu (metinden sese, sesten metne; bkz. `studio`).
 //! `--translate <dosya>`: ekran çevirisi (bkz. `translate`); ada başlatır.
@@ -19,6 +20,7 @@
 extern crate carlui_core;
 
 mod ai;
+mod assist;
 mod dictate;
 mod license;
 mod ffmpeg;
@@ -141,6 +143,11 @@ fn main() -> Result<()> {
         let accent = cfg.dock.menu_accent_color(glassmenu::accent);
         let owner = unsafe { CreateWindowExW(WS_EX_TOOLWINDOW, w!("Static"), w!(""), WS_POPUP, 0, 0, 0, 0, None, None, None, None)? };
         return dictate::run(owner, accent, fg.unwrap_or_else(|| unsafe { GetForegroundWindow() }));
+    }
+    if args.iter().any(|a| a == "--assist") {
+        let accent = carlui_core::config::load().dock.menu_accent_color(glassmenu::accent);
+        let owner = unsafe { CreateWindowExW(WS_EX_TOOLWINDOW, w!("Static"), w!(""), WS_POPUP, 0, 0, 0, 0, None, None, None, None)? };
+        return assist::run(owner, accent);
     }
     if args.iter().any(|a| a == "--speak") {
         let accent = carlui_core::config::load().dock.menu_accent_color(glassmenu::accent);

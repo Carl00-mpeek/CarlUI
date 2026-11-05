@@ -29,11 +29,13 @@ pub struct AiConfig {
     pub speak: String,
     /// Okuma hızı (1.0 normal; 0.5–2.0).
     pub speak_speed: f32,
+    /// Sesli asistan (bas-konuş komutları). Model ilk kullanımda indirilir.
+    pub assistant: bool,
 }
 
 impl Default for AiConfig {
     fn default() -> Self {
-        Self { gpu: true, upscale: String::new(), background: String::new(), speech: String::new(), command: String::new(), translate: String::new(), speech_lang: String::new(), voice_command: false, speak: String::new(), speak_speed: 1.0 }
+        Self { gpu: true, upscale: String::new(), background: String::new(), speech: String::new(), command: String::new(), translate: String::new(), speech_lang: String::new(), voice_command: false, speak: String::new(), speak_speed: 1.0, assistant: false }
     }
 }
 
@@ -88,6 +90,19 @@ impl crate::config::ShortcutsConfig {
             .or_else(|e| {
                 crate::warn!("sesli okuma kısayolu '{}' kullanılamaz: {e}; varsayılan (Ctrl+Alt+S) kullanılıyor", self.speak);
                 crate::keys::parse_combo(&Self::default().speak)
+            })
+            .ok()
+    }
+
+    /// Sesli asistan kısayolu (boşsa kapalı; geçersizse varsayılan Ctrl+Alt+A).
+    pub fn assist_combo(&self) -> Option<crate::keys::Combo> {
+        if self.assist.trim().is_empty() {
+            return None;
+        }
+        crate::keys::parse_combo(&self.assist)
+            .or_else(|e| {
+                crate::warn!("sesli asistan kısayolu '{}' kullanılamaz: {e}; varsayılan (Ctrl+Alt+A) kullanılıyor", self.assist);
+                crate::keys::parse_combo(&Self::default().assist)
             })
             .ok()
     }

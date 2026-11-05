@@ -58,6 +58,17 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         c.voice_command,
         |c| c.ai.voice_command ^= true,
     );
+    let key = if app.cfg.shortcuts.assist.trim().is_empty() { t!("kısayol", "the shortcut").to_string() } else { app.cfg.shortcuts.assist.clone() };
+    f.toggle(
+        p,
+        t!("Sesli asistan", "Voice assistant"),
+        &t!(
+            format!("{key} basılıyken söyleyin, bırakın: \"YouTube'u aç\", \"YouTube'da lofi ara\", \"sesi 30 yap\". Sesli komut modelini (Whisper) ilk kullanımda indirir."),
+            format!("Hold {key}, speak, release: \"open YouTube\", \"search lofi on YouTube\", \"volume 30\". Downloads the voice command model (Whisper) on first use.")
+        ),
+        c.assistant,
+        |c| c.ai.assistant ^= true,
+    );
     if let Some(e) = &app.ai_error {
         f.row_c(p, t!("Model silinemedi", "Couldn't remove the model"), e, 0.0, Some(ORANGE));
     }

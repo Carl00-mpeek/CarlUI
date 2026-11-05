@@ -67,7 +67,27 @@ pub(crate) fn matches(q: &str) -> Vec<(i32, Item)> {
 
 /// Komutu arka planda uygular.
 pub fn run(q: Quick) {
-    std::thread::spawn(move || {
+    std::thread::spawn(move || apply(q));
+}
+
+/// Sesli komut: metinde bir hızlı ayar ifadesi geçiyor mu ("wifi'yi kapat",
+/// "turn on bluetooth", "karanlık moda geç")? İfadenin her kelimesi sırayla
+/// bir kelimenin başı olmalı. `words` normalleştirilmiş kelimeler.
+pub fn spoken(words: &[&str]) -> Option<(String, Quick)> {
+    CMDS.iter().find_map(|(title, en, phrases, _, cmd)| {
+        phrases
+            .iter()
+            .any(|p| {
+                let mut it = words.iter();
+                p.split(' ').all(|pw| it.any(|w| w.starts_with(&pw.replace('-', ""))))
+            })
+            .then(|| (t!(title, en).to_string(), *cmd))
+    })
+}
+
+/// Komutu bu iş parçacığında uygular (bitene dek bekler).
+pub fn apply(q: Quick) {
+    {
         use windows::Win32::System::{Com::*, WinRT::*};
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -102,7 +122,7 @@ pub fn run(q: Quick) {
                 }
             }
         }
-    });
+    }
 }
 
 #[cfg(test)]

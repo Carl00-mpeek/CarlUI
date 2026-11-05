@@ -115,6 +115,11 @@ fn cache_file() -> PathBuf {
     paths::data_dir().join("launcher-apps.json")
 }
 
+/// Aramanın son kaydettiği uygulama listesi (diskten; yoksa boş).
+pub fn cached() -> Vec<App> {
+    std::fs::read(cache_file()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+}
+
 pub struct Index {
     pub apps: Arc<Mutex<Arc<Vec<App>>>>,
     dirty: Arc<Mutex<(bool, Instant)>>,

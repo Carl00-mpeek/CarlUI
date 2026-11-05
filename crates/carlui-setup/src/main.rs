@@ -90,6 +90,7 @@ pub enum Opt {
     Firefox,
     Wallpaper,
     Office,
+    Assistant,
     Purge,
 }
 
@@ -177,6 +178,11 @@ fn parse_args() -> Args {
 }
 
 /// Önceki kurulumun yeri (Programlar listesindeki kayıt), yoksa varsayılan.
+/// Sesli asistan seçeneği: ilk kurulumda kapalı, güncellemede ayardaki değer.
+fn assistant_on() -> bool {
+    std::fs::read_to_string(carlui_core::paths::config_file()).ok().and_then(|t| carlui_core::config::from_text(&t).ok()).is_some_and(|c| c.ai.assistant)
+}
+
 fn existing_dir() -> PathBuf {
     shell::reg_get(windows::Win32::System::Registry::HKEY_CURRENT_USER, shell::UNINSTALL_KEY, "InstallLocation").map(PathBuf::from).filter(|p| p.exists()).unwrap_or_else(shell::default_dir)
 }
@@ -201,7 +207,7 @@ impl App {
             accent: glassmenu::accent(),
             mode,
             page: if mode == Mode::Install { Page::Welcome } else { Page::Confirm },
-            opts: install::Options { dir: dir.clone(), desktop: true, launch: true, sensors: pawnio, firefox: payload::XPI.is_some(), wallpaper: false, office: office::wanted(), dry },
+            opts: install::Options { dir: dir.clone(), desktop: true, launch: true, sensors: pawnio, firefox: payload::XPI.is_some(), wallpaper: false, office: office::wanted(), assistant: assistant_on(), dry },
             purge: false,
             pawnio,
             installed_before,
@@ -264,6 +270,7 @@ impl App {
                     Opt::Firefox => &mut self.opts.firefox,
                     Opt::Wallpaper => &mut self.opts.wallpaper,
                     Opt::Office => &mut self.opts.office,
+                    Opt::Assistant => &mut self.opts.assistant,
                     Opt::Purge => &mut self.purge,
                 };
                 *v = !*v;
@@ -555,7 +562,7 @@ fn relaunch_carlui(dir: &std::path::Path) {
 fn update_opts(dir: PathBuf) -> install::Options {
     let firefox = payload::XPI.is_some() && shell::reg_get(windows::Win32::System::Registry::HKEY_CURRENT_USER, shell::FIREFOX_KEY, shell::EXT_ID).is_some();
     let desktop = shell::desktop_link().is_some_and(|l| l.exists());
-    install::Options { dir, desktop, launch: true, sensors: false, firefox, wallpaper: false, office: office::wanted(), dry: false }
+    install::Options { dir, desktop, launch: true, sensors: false, firefox, wallpaper: false, office: office::wanted(), assistant: assistant_on(), dry: false }
 }
 
 /// Kaldırıcı kurulum klasöründen çalışıyorsa kendini kilitlememek için
@@ -601,7 +608,7 @@ fn main() -> Result<()> {
         return snapshot(page, out, args.mode, dir);
     }
     if args.headless && args.dry {
-        let opts = install::Options { dir, desktop: false, launch: false, sensors: false, firefox: false, wallpaper: false, office: true, dry: true };
+        let opts = install::Options { dir, desktop: false, launch: false, sensors: false, firefox: false, wallpaper: false, office: true, assistant: false, dry: true };
         headless(args.mode, opts, false);
         return Ok(());
     }
@@ -619,7 +626,7 @@ fn main() -> Result<()> {
     }
     if args.headless && args.mode == Mode::Install {
         // Sessiz gerçek kurulum: penceredeki varsayılan seçeneklerle.
-        let opts = install::Options { dir, desktop: true, launch: true, sensors: shell::pawnio_installed(), firefox: payload::XPI.is_some(), wallpaper: args.wallpaper, office: office::wanted(), dry: false };
+        let opts = install::Options { dir, desktop: true, launch: true, sensors: shell::pawnio_installed(), firefox: payload::XPI.is_some(), wallpaper: args.wallpaper, office: office::wanted(), assistant: assistant_on(), dry: false };
         headless(args.mode, opts, false);
         return Ok(());
     }

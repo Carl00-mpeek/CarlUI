@@ -22,6 +22,7 @@ pub const DISK: i32 = 3;
 pub const RENAME: i32 = 4;
 pub const DICTATE: i32 = 5;
 pub const SPEAK: i32 = 6;
+pub const ASSIST: i32 = 7;
 
 static RENAME_ON: AtomicBool = AtomicBool::new(false);
 
@@ -42,7 +43,7 @@ fn reg(hwnd: HWND, id: i32, c: Option<Combo>, name: &str, text: &str) {
 
 pub fn register(hwnd: HWND, cfg: &Config) {
     unsafe {
-        for id in [VAULT, PICKER, DISK, RENAME, DICTATE, SPEAK] {
+        for id in [VAULT, PICKER, DISK, RENAME, DICTATE, SPEAK, ASSIST] {
             let _ = UnregisterHotKey(hwnd, id);
         }
     }
@@ -52,6 +53,9 @@ pub fn register(hwnd: HWND, cfg: &Config) {
     reg(hwnd, PICKER, s.color_picker_combo(), "Renk seçici", &s.color_picker);
     reg(hwnd, DICTATE, s.dictate_combo(), "Dikte", &s.dictate);
     reg(hwnd, SPEAK, s.speak_combo(), "Sesli okuma", &s.speak);
+    if cfg.ai.assistant {
+        reg(hwnd, ASSIST, s.assist_combo(), "Sesli asistan", &s.assist);
+    }
     if cfg.tools.disk_enabled {
         reg(hwnd, DISK, s.disk_combo(), "Disk analizörü", &s.disk);
     }
@@ -97,6 +101,7 @@ pub fn tool(id: i32) {
         RENAME => format!("--rename --hwnd {}", unsafe { GetForegroundWindow() }.0 as isize),
         DICTATE => return convert("--dictate"),
         SPEAK => return convert("--speak"),
+        ASSIST => return convert("--assist"),
         _ => return,
     };
     let exe = paths::sibling_exe("carlui-tools.exe");
@@ -115,7 +120,13 @@ fn convert(mode: &str) {
     let exe = paths::sibling_exe("carlui-convert.exe");
     let fg = unsafe { GetForegroundWindow() }.0 as isize;
     match std::process::Command::new(&exe).args([mode, "--hwnd", &fg.to_string()]).spawn() {
-        Ok(_) => info!("kısayol: {mode}"),
+        Ok(child) => {
+            // Asistan açtığı uygulamayı öne getirebilsin (kısayolu alan süreç biziz).
+            unsafe {
+                let _ = windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(child.id());
+            }
+            info!("kısayol: {mode}")
+        }
         Err(e) => warn!("{} açılamadı: {e}", exe.display()),
     }
 }

@@ -9,6 +9,7 @@ authors.workspace = true
 carlui-ai = { path = "../carlui-ai" }
 carlui-clip = { path = "../carlui-clip" }
 carlui-core.workspace = true
+carlui-launcher = { path = "../carlui-launcher" }
 carlui-ui.workspace = true
 serde_json.workspace = true
 windows.workspace = true
