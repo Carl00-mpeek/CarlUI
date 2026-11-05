@@ -4,7 +4,11 @@
 //! düzeyle çarpılmış) karıştırıcının kullandığı göstergelere yazar. Kayda
 //! hiçbir şey yazılmaz; panel kapanınca ya da test bitince aygıtlar bırakılır.
 
-use crate::{audio::Loopback, mixer};
+use crate::{
+    audio::Loopback,
+    denoise::{self, Denoiser},
+    mixer,
+};
 use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
@@ -24,6 +28,7 @@ pub fn start() {
     }
     let _ = std::thread::Builder::new().name("replay-meter".into()).spawn(|| unsafe {
         let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED);
+        let mut dn: Option<Denoiser> = None;
         let mut src: [(bool, Option<Loopback>, Instant); 2] = [(false, None, Instant::now() - Duration::from_secs(5)), (true, None, Instant::now() - Duration::from_secs(5))];
         while RUN.load(Ordering::SeqCst) {
             for (mic, cap, retry) in src.iter_mut() {
@@ -34,8 +39,19 @@ pub fn start() {
                 let (gain, level) = if *mic { (&mixer::GAIN_MIC, &mixer::LEVEL_MIC) } else { (&mixer::GAIN_SYS, &mixer::LEVEL_SYS) };
                 if let Some(c) = cap.as_mut() {
                     let g = mixer::gain(gain);
-                    if c.read(|pcm, _| {
-                        level.fetch_max(mixer::peak(pcm, g), Ordering::Relaxed);
+                    // Mikrofon, kayıttaki gibi gürültü engellemeden geçmiş düzeyle gösterilir.
+                    let want_dn = *mic && denoise::ON.load(Ordering::Relaxed);
+                    if *mic && want_dn != dn.is_some() {
+                        dn = want_dn.then(Denoiser::default);
+                    }
+                    let mut d = if *mic { dn.as_mut() } else { None };
+                    if c.read(|pcm, t| match d.as_deref_mut() {
+                        Some(d) => d.process(pcm, t, |p, _| {
+                            level.fetch_max(mixer::peak(p, g), Ordering::Relaxed);
+                        }),
+                        None => {
+                            level.fetch_max(mixer::peak(pcm, g), Ordering::Relaxed);
+                        }
                     })
                     .is_err()
                     {

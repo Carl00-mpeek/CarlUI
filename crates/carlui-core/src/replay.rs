@@ -57,13 +57,15 @@ pub struct ReplayConfig {
     pub audio_volume: u32,
     /// Mikrofonun kayıttaki düzeyi (yüzde, 0–200).
     pub mic_volume: u32,
+    /// Mikrofonda gürültü engelleme (klavye, fan, uğultu).
+    pub denoise: bool,
     /// Kayıtların klasörü; boşsa Videolar\CarlUI.
     pub folder: String,
 }
 
 impl Default for ReplayConfig {
     fn default() -> Self {
-        Self { enabled: false, minutes: 5, fps: 60, quality: Quality::Medium, resolution: Resolution::Native, codec: Codec::H264, audio: true, mic: false, audio_volume: 100, mic_volume: 100, folder: String::new() }
+        Self { enabled: false, minutes: 5, fps: 60, quality: Quality::Medium, resolution: Resolution::Native, codec: Codec::H264, audio: true, mic: false, audio_volume: 100, mic_volume: 100, denoise: true, folder: String::new() }
     }
 }
 

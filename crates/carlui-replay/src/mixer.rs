@@ -8,6 +8,7 @@
 
 use crate::{
     audio::Loopback,
+    denoise::{self, Denoiser},
     ring::{self, Ring},
     writer::{frames_to_100ns, AUDIO_CH, AUDIO_RATE},
 };
@@ -133,12 +134,14 @@ struct Source {
     retry: Instant,
     checked: Instant,
     track: Track,
+    /// Yalnızca mikrofonda, gürültü engelleme açıksa kullanılır.
+    dn: Option<Denoiser>,
 }
 
 impl Source {
     fn new(mic: bool) -> Self {
         let past = Instant::now() - Duration::from_secs(10);
-        Self { mic, cap: None, retry: past, checked: Instant::now(), track: Track::default() }
+        Self { mic, cap: None, retry: past, checked: Instant::now(), track: Track::default(), dn: None }
     }
 
     unsafe fn poll(&mut self, want: bool) {
@@ -147,6 +150,7 @@ impl Source {
                 info!("{} kaydı kapandı", self.name());
             }
             self.track.clear();
+            self.dn = None;
             return;
         }
         if self.cap.is_none() {
@@ -166,10 +170,20 @@ impl Source {
                 }
             }
         }
+        // Gürültü engelleme açılıp kapanınca süzgeç baştan kurulur.
+        let want_dn = self.mic && denoise::ON.load(Ordering::Relaxed);
+        if want_dn != self.dn.is_some() {
+            self.dn = want_dn.then(Denoiser::default);
+        }
         let track = &mut self.track;
-        let ok = self.cap.as_mut().unwrap().read(|pcm, t| track.push(pcm, t));
+        let dn = &mut self.dn;
+        let ok = self.cap.as_mut().unwrap().read(|pcm, t| match dn {
+            Some(d) => d.process(pcm, t, |p, t| track.push(p, t)),
+            None => track.push(pcm, t),
+        });
         if ok.is_err() {
             self.cap = None;
+            self.dn = None;
             return;
         }
         // Varsayılan aygıt değiştiyse (kulaklık takıldı) yenisine geç.

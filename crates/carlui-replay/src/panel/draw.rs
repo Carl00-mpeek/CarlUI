@@ -246,7 +246,7 @@ impl Panel {
 
         // Ses düzeyi kartı.
         let y = 316.0;
-        let card = R::new(x0, y, cw, 128.0);
+        let card = R::new(x0, y, cw, 164.0);
         p.card(card);
         let srcs = [(Src::Sys, '\u{E767}', t!("Bilgisayar sesi", "System audio")), (Src::Mic, '\u{E720}', t!("Mikrofon", "Microphone"))];
         for (i, (src, g, name)) in srcs.into_iter().enumerate() {
@@ -271,12 +271,26 @@ impl Panel {
             self.mark(p, s0, 6 + i as u32 * 2);
             Self::meter(p, R::new(card.x + 18.0, ry + 48.0, card.w - 36.0, 3.0), self.levels[i]);
         }
+        // Gürültü engelleme: klavye, fan, uğultu mikrofondan süzülür.
+        let row = R::new(card.x + 4.0, y + 126.0, card.w - 8.0, 34.0);
+        if p.hover(row) {
+            p.round(row, 6.0, 0xFFFFFF, 0.04);
+        }
+        p.glyph('', R::new(card.x + 10.0, row.y, 20.0, row.h), 13.0, TEXT, 0.85);
+        p.text(t!("Gürültü engelleme", "Noise suppression"), R::new(card.x + 36.0, row.y + 1.0, 200.0, 18.0), 12.5, false, TEXT, 0.9, Align::Left);
+        p.text(t!("Klavye, fan sesini mikrofondan siler", "Removes keyboard and fan noise from the mic"), R::new(card.x + 36.0, row.y + 17.0, 220.0, 15.0), 10.5, false, TEXT, 0.5, Align::Left);
+        let s0 = p.hits.len();
+        p.switch(card.right() - 46.0, row.y + 8.0, cfg.denoise, true, A::Denoise);
+        p.hit(R::new(row.x, row.y, row.w - 52.0, row.h), A::Denoise);
+        let n0 = self.nav.len();
+        self.mark(p, s0, 9);
+        self.nav.truncate(n0 + 1);
         if !meter::on() && !self.recording() {
             p.text(t!("Düzeyi görmek için Test et'e basın", "Press Test to see the level"), R::new(card.x, card.bottom() + 2.0, card.w, 14.0), 10.5, false, TEXT, 0.45, Align::Center);
         }
 
         // Alt düğmeler.
-        let y = 460.0;
+        let y = 496.0;
         let half = (cw - 8.0) / 2.0;
         let s0 = p.hits.len();
         p.button(R::new(x0, y, half, 30.0), Some('\u{E8B7}'), t!("Klasör", "Folder"), A::Folder, true, false);

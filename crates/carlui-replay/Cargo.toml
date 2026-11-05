@@ -8,5 +8,6 @@ authors.workspace = true
 [dependencies]
 carlui-core.workspace = true
 carlui-ui.workspace = true
+nnnoiseless = { version = "0.5.2", default-features = false }
 serde_json.workspace = true
 windows.workspace = true

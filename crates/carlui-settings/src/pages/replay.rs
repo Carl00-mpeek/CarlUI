@@ -133,6 +133,13 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.section(p, t!("Ses", "Audio"));
     f.toggle(p, t!("Bilgisayarın sesini kaydet", "Record computer audio"), t!("Hoparlör ya da kulaklıktan çıkan ses.", "What plays through the speakers or headphones."), c.audio, |c| c.replay.audio ^= true);
     f.toggle(p, t!("Mikrofonu kaydet", "Record microphone"), t!("Varsayılan mikrofon; bilgisayar sesiyle aynı ize karıştırılır.", "The default microphone, mixed into the same track as computer audio."), c.mic, |c| c.replay.mic ^= true);
+    f.toggle(
+        p,
+        t!("Mikrofonda gürültü engelleme", "Microphone noise suppression"),
+        t!("Klavye, fan ve uğultu sesini siler; konuşma yokken mikrofonu kısar.", "Removes keyboard, fan and hum; turns the mic down when you're not talking."),
+        c.denoise,
+        |c| c.replay.denoise ^= true,
+    );
     f.slider(
         p,
         t!("Bilgisayar sesi düzeyi", "Computer audio level"),

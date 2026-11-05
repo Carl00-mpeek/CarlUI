@@ -43,7 +43,7 @@ static OPENING: AtomicBool = AtomicBool::new(false);
 
 const W: f32 = 340.0;
 const H_MAIN: f32 = 248.0;
-const H_SETTINGS: f32 = 500.0;
+const H_SETTINGS: f32 = 536.0;
 const PAD: f32 = 16.0;
 
 /// Paneli açar; açıksa kapatır.
@@ -172,6 +172,7 @@ enum A {
     Save,
     Audio,
     Mic,
+    Denoise,
     Minutes(u32),
     Res(Resolution),
     Quality(Quality),
@@ -448,6 +449,11 @@ impl View for Panel {
             A::Mic => {
                 let on = !self.st.cfg.mic;
                 self.edit(|c| c.mic = on);
+            }
+            A::Denoise => {
+                let on = !self.st.cfg.denoise;
+                crate::denoise::ON.store(on, Ordering::SeqCst);
+                self.edit(|c| c.denoise = on);
             }
             A::Minutes(m) => self.edit(|c| c.minutes = m),
             A::Res(r) => self.edit(|c| c.resolution = r),
