@@ -11,7 +11,8 @@ use windows::{
 };
 
 pub fn color(c: Rgba) -> Color {
-    Color { A: c.3, R: c.0, G: c.1, B: c.2 }
+    let (r, g, b) = crate::tone::rgb8(c.0, c.1, c.2);
+    Color { A: c.3, R: r, G: g, B: b }
 }
 
 pub fn v2(x: f32, y: f32) -> Vector2 {

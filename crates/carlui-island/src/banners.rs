@@ -108,3 +108,30 @@ pub fn sync(hide: bool) {
         info!("Windows bildirim balonları: {} anahtarda {}", changed, if hide { "kapatıldı" } else { "geri açıldı" });
     }
 }
+
+const SOUND: &str = "NOC_GLOBAL_SETTING_ALLOW_NOTIFICATION_SOUND";
+const SOUND_MARK: &str = "CarlUISound";
+
+/// Bildirim sesi ayarı: `mute` ise Windows'un bildirim seslerini kapatır
+/// (Ayarlar → Bildirimler → "Bildirimlerin ses çalmasına izin ver"). Kapatmayı
+/// biz yaptıysak işaretlenir; `mute` false olunca yalnızca o zaman geri açılır.
+pub fn sync_sound(mute: bool) {
+    let root = wide(ROOT);
+    let mut h = HKEY::default();
+    if unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, PCWSTR(root.as_ptr()), 0, KEY_READ | KEY_SET_VALUE, &mut h) } != ERROR_SUCCESS {
+        return;
+    }
+    let ours = read_dword(h, SOUND_MARK) == Some(1);
+    if mute && read_dword(h, SOUND) != Some(0) {
+        if write_dword(h, SOUND, 0) && write_dword(h, SOUND_MARK, 1) {
+            info!("Windows bildirim sesleri kapatıldı");
+        }
+    } else if !mute && ours {
+        delete(h, SOUND);
+        delete(h, SOUND_MARK);
+        info!("Windows bildirim sesleri geri açıldı");
+    }
+    unsafe {
+        let _ = RegCloseKey(h);
+    }
+}

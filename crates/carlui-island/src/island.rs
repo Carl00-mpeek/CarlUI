@@ -132,11 +132,36 @@ const DAYS: [&str; 7] = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe
 const MONTHS_EN: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS_EN: [&str; 7] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+/// Tarih biçimi (0 uzun, 1 kısa, 2 gizli); ayar değişince `set_date_format` ile güncellenir.
+static DATE_FORMAT: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+pub fn set_date_format(f: carlui_core::config::DateFormat) {
+    use carlui_core::config::DateFormat as F;
+    let v = match f {
+        F::Long => 0,
+        F::Short => 1,
+        F::Hidden => 2,
+    };
+    DATE_FORMAT.store(v, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Tarih gizli mi (saate tıklayınca tarih görünümü açılmaz).
+pub fn date_hidden() -> bool {
+    DATE_FORMAT.load(std::sync::atomic::Ordering::Relaxed) == 2
+}
+
 pub fn now_hm() -> (u16, u16, String, String) {
     let t = unsafe { GetLocalTime() };
     let time = format!("{:02}:{:02}", t.wHour, t.wMinute);
     let (m, d) = ((t.wMonth as usize).clamp(1, 12) - 1, t.wDayOfWeek as usize % 7);
-    let date = t!(format!("{} {} {}", t.wDay, MONTHS[m], DAYS[d]), format!("{}, {} {}", DAYS_EN[d], MONTHS_EN[m], t.wDay));
+    let date = match DATE_FORMAT.load(std::sync::atomic::Ordering::Relaxed) {
+        1 => {
+            let short = |s: &str| s.chars().take(3).collect::<String>();
+            t!(format!("{} {:02}.{:02}", short(DAYS[d]), t.wDay, t.wMonth), format!("{} {:02}/{:02}", short(DAYS_EN[d]), t.wMonth, t.wDay))
+        }
+        2 => String::new(),
+        _ => t!(format!("{} {} {}", t.wDay, MONTHS[m], DAYS[d]), format!("{}, {} {}", DAYS_EN[d], MONTHS_EN[m], t.wDay)),
+    };
     (t.wMinute, t.wSecond, time, date)
 }
 

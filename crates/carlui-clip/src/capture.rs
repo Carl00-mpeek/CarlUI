@@ -25,8 +25,20 @@ const CF_UNICODETEXT: u32 = 13;
 const CF_DIB: u32 = 8;
 const CF_DIBV5: u32 = 17;
 const CF_HDROP: u32 = 15;
-/// 25 MB'tan büyük resimler geçmişe alınmaz.
-const MAX_IMAGE: usize = 25 * 1024 * 1024;
+/// Ayarlar: resimler alınsın mı, en büyük resim (bayt), hariç tutulan uygulamalar.
+static IMAGES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+static MAX_IMAGE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(25 * 1024 * 1024);
+static EXCLUDED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+/// Pano ayarlarını uygular (ayar değişince yeniden çağrılır).
+pub fn set_options(images: bool, max_image_mb: u32, excluded: &[String]) {
+    use std::sync::atomic::Ordering;
+    IMAGES.store(images, Ordering::Relaxed);
+    MAX_IMAGE.store(max_image_mb.clamp(1, 200) as usize * 1024 * 1024, Ordering::Relaxed);
+    if let Ok(mut e) = EXCLUDED.lock() {
+        *e = excluded.to_vec();
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Content {
@@ -128,7 +140,11 @@ fn html_image(html: &str) -> Option<Vec<u8>> {
 }
 
 fn img(wic: &windows::Win32::Graphics::Imaging::IWICImagingFactory, raw: Vec<u8>, from: &str) -> Option<Content> {
-    if raw.len() > MAX_IMAGE {
+    if !IMAGES.load(std::sync::atomic::Ordering::Relaxed) {
+        info!("pano: resim kaydı kapalı, {from} resmi atlandı");
+        return None;
+    }
+    if raw.len() > MAX_IMAGE.load(std::sync::atomic::Ordering::Relaxed) {
         warn!("pano: resim çok büyük ({} MB), geçmişe alınmadı", raw.len() / 1024 / 1024);
         return None;
     }
@@ -191,6 +207,16 @@ unsafe fn read_open() -> Option<Content> {
     let no_history = reg("CanIncludeInClipboardHistory");
     if has(exclude) || (has(no_history) && bytes_of(no_history).is_some_and(|b| b.iter().all(|&x| x == 0))) {
         info!("pano: uygulama bu kopyanın geçmişe alınmamasını istedi");
+        return None;
+    }
+    // Kullanıcının hariç tuttuğu uygulamalar (panoyu koyan pencerenin exe'si).
+    let skip = EXCLUDED.lock().map(|e| !e.is_empty() && {
+        let owner = GetClipboardOwner().unwrap_or_default();
+        let exe = if owner.0.is_null() { String::new() } else { carlui_core::win::window_exe(owner) };
+        carlui_core::config::exe_listed(&e, &exe)
+    });
+    if skip.unwrap_or(false) {
+        info!("pano: hariç tutulan uygulamanın kopyası geçmişe alınmadı");
         return None;
     }
     let names: Vec<String> = formats.iter().map(|&f| format_name(f)).collect();

@@ -56,6 +56,7 @@ pub enum Align {
 }
 
 pub fn rgb(c: u32, a: f32) -> D2D1_COLOR_F {
+    let c = crate::tone::hex(c);
     D2D1_COLOR_F { r: ((c >> 16) & 0xFF) as f32 / 255.0, g: ((c >> 8) & 0xFF) as f32 / 255.0, b: (c & 0xFF) as f32 / 255.0, a }
 }
 

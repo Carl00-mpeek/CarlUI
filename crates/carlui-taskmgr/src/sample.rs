@@ -1,18 +1,27 @@
-//! Saniyede bir ölçüm ve son 60 saniyenin geçmişi (grafikler için). Disk
+//! Saniyede bir ölçüm ve son 60 saniye / 5 dakikanın geçmişi (grafikler için). Disk
 //! listesi (model, sıcaklık, sağlık) cihazları açtığı için 10 saniyede bir
 //! yenilenir; etkinlik ve hızlar her saniye.
 
 use carlui_sys::{cpu, disk, gpu, ram, temp};
 use std::collections::VecDeque;
 
-pub const LEN: usize = 60;
+/// Grafik geçmişi uzunluğu (örnek sayısı = saniye); ayardan gelir.
+static LEN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(60);
+
+pub fn len() -> usize {
+    LEN.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub fn set_len(secs: u32) {
+    LEN.store((secs as usize).clamp(30, 600), std::sync::atomic::Ordering::Relaxed);
+}
 
 #[derive(Clone, Default)]
 pub struct History(pub VecDeque<f32>);
 
 impl History {
     pub fn push(&mut self, v: f32) {
-        if self.0.len() >= LEN {
+        while self.0.len() >= len() {
             self.0.pop_front();
         }
         self.0.push_back(v);
@@ -97,5 +106,15 @@ impl Sampler {
         ids.dedup();
         let pos = ids.iter().position(|&c| c == core)?;
         self.temps.as_ref().and_then(|t| t.cores.get(pos).copied()).filter(|t| *t > 0.0)
+    }
+}
+
+/// Grafiğin üstündeki süre yazısı ("60 saniye", "5 dakika").
+pub fn span_label() -> String {
+    let n = len();
+    if n % 60 == 0 && n >= 120 {
+        t!(format!("{} dakika", n / 60), format!("{} minutes", n / 60))
+    } else {
+        t!(format!("{n} saniye"), format!("{n} seconds"))
     }
 }

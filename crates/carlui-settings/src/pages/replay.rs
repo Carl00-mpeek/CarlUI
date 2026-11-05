@@ -7,7 +7,7 @@ use crate::{
     ui::{edit, Flow, P},
     Act, App,
 };
-use carlui_core::config::{Codec, Quality, ReplayConfig, Resolution};
+use carlui_core::config::{Cleanup, Codec, Quality, ReplayConfig, Resolution, SaveSignal};
 use carlui_ui::paint::{Align, R, TEXT, YELLOW};
 use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
 
@@ -179,6 +179,47 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.section(p, t!("Kayıtlar", "Recordings"));
     let r = f.row(p, t!("Kayıt klasörü", "Recordings folder"), &c.folder().display().to_string(), 120.0);
     p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E838}'), t!("Aç", "Open"), Act::ReplayFolder, true, false);
+    let sel = match c.on_save {
+        SaveSignal::Note => 0,
+        SaveSignal::Sound => 1,
+        SaveSignal::Both => 2,
+        SaveSignal::None => 3,
+    };
+    f.choice(
+        p,
+        t!("Klip kaydedilince", "When a clip is saved"),
+        t!("Kaydedilemezse her zaman bildirim gelir.", "You're always notified if saving fails."),
+        &[
+            (t!("Bildirim", "Notice"), edit(|c| c.replay.on_save = SaveSignal::Note)),
+            (t!("Ses", "Sound"), edit(|c| c.replay.on_save = SaveSignal::Sound)),
+            (t!("İkisi", "Both"), edit(|c| c.replay.on_save = SaveSignal::Both)),
+            (t!("Hiçbiri", "None"), edit(|c| c.replay.on_save = SaveSignal::None)),
+        ],
+        sel,
+        76.0,
+    );
+    let sel = match c.cleanup {
+        Cleanup::Off => 0,
+        Cleanup::Size => 1,
+        Cleanup::Age => 2,
+    };
+    f.choice(
+        p,
+        t!("Eski klipleri sil", "Delete old clips"),
+        t!("Yalnızca CarlUI'nin Replay_ ile başlayan videoları silinir; kalıcıdır (Geri Dönüşüm Kutusu'na gitmez).", "Only CarlUI's Replay_ videos are deleted, permanently (not to the Recycle Bin)."),
+        &[
+            (t!("Kapalı", "Off"), edit(|c| c.replay.cleanup = Cleanup::Off)),
+            (t!("Boyuta göre", "By size"), edit(|c| c.replay.cleanup = Cleanup::Size)),
+            (t!("Yaşa göre", "By age"), edit(|c| c.replay.cleanup = Cleanup::Age)),
+        ],
+        sel,
+        96.0,
+    );
+    match c.cleanup {
+        Cleanup::Size => f.slider(p, t!("Klasör sınırı", "Folder limit"), t!("Toplam bunu geçince en eski klipler silinir.", "The oldest clips are deleted above this total."), c.max_gb as f32, 1.0, 500.0, 1.0, |v| format!("{v:.0} GB"), |c, v| c.replay.max_gb = v as u32),
+        Cleanup::Age => f.slider(p, t!("En fazla yaş", "Maximum age"), t!("Bundan eski klipler silinir (açılışta ve her kayıtta bakılır).", "Older clips are deleted (checked at startup and on every save)."), c.max_days as f32, 1.0, 365.0, 1.0, |v| t!(format!("{v:.0} gün"), format!("{v:.0} days")), |c, v| c.replay.max_days = v as u32),
+        Cleanup::Off => {}
+    }
     f.y += 6.0;
     f.note(p, t!("Birincil monitör kaydedilir; fare imleci videoda görünmez. Oyunun odağını almaz, özel tam ekranda da çalışır.", "The primary monitor is recorded; the mouse cursor isn't shown. It never takes focus from the game and works in exclusive fullscreen."));
 }

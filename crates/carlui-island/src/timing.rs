@@ -6,7 +6,7 @@
 //! yalnızca küçük hap yeniden çizilir.
 
 use crate::*;
-use windows::Win32::Media::Audio::{PlaySoundW, SND_ALIAS, SND_ASYNC};
+use windows::Win32::Media::Audio::{PlaySoundW, SND_ALIAS, SND_ASYNC, SND_FILENAME, SND_NODEFAULT};
 
 pub(crate) const TIMER_COUNT: usize = 30;
 
@@ -96,6 +96,18 @@ impl App {
         // Arama/pano açıkken hap görünmüyor; boşuna yeniden kurma.
         if matches!(self.island.view, View::Clock | View::Media | View::Date) {
             self.refresh(true);
+        }
+    }
+}
+
+/// Bildirim sesi olarak seçilen .wav dosyasını çalar; dosya yoksa sistem bildirim sesi.
+pub(crate) fn play_file(path: &str) {
+    let path = carlui_core::config::expand_env(path.trim());
+    unsafe {
+        if !path.is_empty() && std::path::Path::new(&path).is_file() {
+            let _ = PlaySoundW(&windows::core::HSTRING::from(path.as_str()), None, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+        } else {
+            let _ = PlaySoundW(w!("SystemNotification"), None, SND_ALIAS | SND_ASYNC);
         }
     }
 }

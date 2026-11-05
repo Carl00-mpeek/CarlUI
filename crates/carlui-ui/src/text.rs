@@ -106,7 +106,8 @@ impl Text {
             let h = m.height.ceil().clamp(1.0, max);
             let surface = gfx.surface(w, h, |dc| {
                 dc.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
-                let brush = dc.CreateSolidColorBrush(&D2D1_COLOR_F { r: 1.0, g: 1.0, b: 1.0, a: alpha }, None)?;
+                let (r, g, b) = crate::tone::unit(1.0, 1.0, 1.0);
+                let brush = dc.CreateSolidColorBrush(&D2D1_COLOR_F { r, g, b, a: alpha }, None)?;
                 dc.DrawTextLayout(D2D_POINT_2F { x: 0.0, y: 0.0 }, &layout, &brush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
                 Ok(())
             })?;
@@ -146,7 +147,8 @@ impl Text {
             let h = (shown as f32 * line_h).max(1.0);
             let surface = gfx.surface(w, h, |dc| {
                 dc.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
-                let brush = dc.CreateSolidColorBrush(&D2D1_COLOR_F { r: 1.0, g: 1.0, b: 1.0, a: alpha }, None)?;
+                let (r, g, b) = crate::tone::unit(1.0, 1.0, 1.0);
+                let brush = dc.CreateSolidColorBrush(&D2D1_COLOR_F { r, g, b, a: alpha }, None)?;
                 dc.DrawTextLayout(D2D_POINT_2F { x: 0.0, y: -dy }, &layout, &brush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
                 Ok(())
             })?;
@@ -160,7 +162,8 @@ impl Text {
         let (sw, sh) = (w.max(1.0), h.max(1.0));
         let surface = gfx.surface(sw, sh, |dc| unsafe {
             dc.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
-            let brush = dc.CreateSolidColorBrush(&D2D1_COLOR_F { r: 1.0, g: 1.0, b: 1.0, a: alpha }, None)?;
+            let (r, g, b) = crate::tone::unit(1.0, 1.0, 1.0);
+                let brush = dc.CreateSolidColorBrush(&D2D1_COLOR_F { r, g, b, a: alpha }, None)?;
             dc.DrawTextLayout(D2D_POINT_2F { x: 0.0, y: 0.0 }, &layout, &brush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
             Ok(())
         })?;

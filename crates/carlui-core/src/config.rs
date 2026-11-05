@@ -14,9 +14,9 @@ use windows::Win32::{
     System::Threading::{WaitForSingleObject, INFINITE},
 };
 
-pub use crate::theme::Palette;
-pub use crate::replay::{Codec, Quality, ReplayConfig, Resolution};
-pub use crate::tools::{CaseKind, ColorFormat, RenameConfig, RenameMode, Snippet, ToolsConfig};
+pub use crate::theme::{Palette, ThemeMode};
+pub use crate::replay::{Cleanup, Clip, Codec, Quality, ReplayConfig, Resolution, SaveSignal};
+pub use crate::tools::{exe_listed, CaseKind, ColorFormat, ExpandTrigger, RenameConfig, RenameMode, Snippet, ToolsConfig};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default)]
@@ -38,6 +38,61 @@ pub struct Config {
     pub vault: VaultConfig,
     pub tools: ToolsConfig,
     pub replay: ReplayConfig,
+    pub taskmgr: TaskmgrConfig,
+    pub shots: ShotsConfig,
+}
+
+/// Ekran görüntüsü (adadaki düzenleyici; kısayol: `shortcuts.screenshot`).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(default)]
+pub struct ShotsConfig {
+    /// Enter'a basınca (ve özel tam ekran oyunda) ne yapılır.
+    pub action: ShotAction,
+    /// Dosya adı şablonu; `{tarih}`/`{date}` ve `{saat}`/`{time}` yer tutucuları. Boşsa "Ekran görüntüsü {tarih} {saat}".
+    pub name: String,
+    pub format: ShotFormat,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ShotAction {
+    #[default]
+    Copy,
+    Save,
+    Both,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ShotFormat {
+    #[default]
+    Png,
+    Jpg,
+}
+
+impl ShotsConfig {
+    /// Şablondan dosya adı (uzantısız); dosya adında geçersiz karakterler `_` olur.
+    pub fn file_name(&self, date: &str, time: &str) -> String {
+        let tpl = if self.name.trim().is_empty() { crate::t!("Ekran görüntüsü {tarih} {saat}", "Screenshot {date} {time}") } else { self.name.trim() };
+        let s = tpl.replace("{tarih}", date).replace("{date}", date).replace("{saat}", time).replace("{time}", time);
+        let s: String = s.chars().map(|c| if matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || c.is_control() { '_' } else { c }).collect();
+        let s = s.trim().trim_end_matches('.').to_string();
+        if s.is_empty() { "Screenshot".into() } else { s }
+    }
+}
+
+/// Görev yöneticisi (`carlui-taskmgr.exe`).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct TaskmgrConfig {
+    /// Grafiklerin gösterdiği süre (saniye; 60 ya da 300). Saniyede bir örnek alınır.
+    pub history_secs: u32,
+}
+
+impl Default for TaskmgrConfig {
+    fn default() -> Self {
+        Self { history_secs: 60 }
+    }
 }
 
 /// Carl Vault (yerel şifreli kasa, `carlui-vault.exe`; kısayol: `shortcuts.vault`).
@@ -59,11 +114,20 @@ pub struct VaultConfig {
     /// Tarayıcı eklentisi giriş sayfalarını kasadan doldurabilsin (kullanıcı
     /// eklentide kaydı seçince; yalnızca adresi uyan kayıtlar).
     pub browser_fill: bool,
+    /// Pano belirtecinin geçerlilik süresi (saniye, 15-300).
+    pub token_seconds: u32,
+}
+
+impl VaultConfig {
+    /// Belirteç ömrü milisaniye; ayar dosyasındaki uç değerler sınırlanır.
+    pub fn token_ms(&self) -> i64 {
+        self.token_seconds.clamp(15, 300) as i64 * 1000
+    }
 }
 
 impl Default for VaultConfig {
     fn default() -> Self {
-        Self { auto_lock_minutes: 5, lock_on_sleep: true, clear_clipboard_seconds: 30, hide_from_capture: true, token_paste: true, browser_fill: true }
+        Self { auto_lock_minutes: 5, lock_on_sleep: true, clear_clipboard_seconds: 30, hide_from_capture: true, token_paste: true, browser_fill: true, token_seconds: 60 }
     }
 }
 
@@ -207,11 +271,21 @@ pub struct ClipboardConfig {
     /// Şifre/anahtar gibi görünen kopyalar bu kadar saniye sonra geçmişten
     /// silinir (sabitlenenler kalır). 0 = silinmez, yalnızca maskelenir.
     pub secret_seconds: u64,
+    /// Kopyalanan görseller de geçmişe kaydedilsin.
+    pub images: bool,
+    /// Bundan büyük görseller (MB) kaydedilmez.
+    pub max_image_mb: u32,
+    /// Bu uygulamalardan (exe adı) kopyalananlar geçmişe girmez.
+    pub excluded_apps: Vec<String>,
+    /// Kartın üstünde bu kadar durunca önizleme açılır (ms).
+    pub hover_ms: u32,
+    /// Silinen kaydı geri alma süresi (ms).
+    pub undo_ms: u32,
 }
 
 impl Default for ClipboardConfig {
     fn default() -> Self {
-        Self { enabled: true, max_items: 200, paste_on_enter: true, secret_seconds: 60 }
+        Self { enabled: true, max_items: 200, paste_on_enter: true, secret_seconds: 60, images: true, max_image_mb: 25, excluded_apps: Vec::new(), hover_ms: 550, undo_ms: 6000 }
     }
 }
 
@@ -406,11 +480,24 @@ pub struct ThemeConfig {
     pub corner_radius: f32,
     /// Animasyon hızı çarpanı (1.0 = varsayılan, 2.0 = iki kat hızlı).
     pub animation_speed: f32,
+    /// Koyu, açık ya da Windows'u izle.
+    pub mode: ThemeMode,
+}
+
+impl ThemeConfig {
+    /// Açık tema mı kullanılmalı (Sistem seçiliyse Windows uygulama temasına bakar).
+    pub fn is_light(&self) -> bool {
+        match self.mode {
+            ThemeMode::Dark => false,
+            ThemeMode::Light => true,
+            ThemeMode::System => !crate::quick::dark_mode(),
+        }
+    }
 }
 
 impl Default for ThemeConfig {
     fn default() -> Self {
-        Self { palette: Palette::BluePurple, glass_density: 0.5, corner_radius: 1.0, animation_speed: 1.0 }
+        Self { palette: Palette::BluePurple, glass_density: 0.5, corner_radius: 1.0, animation_speed: 1.0, mode: ThemeMode::Dark }
     }
 }
 
@@ -532,6 +619,20 @@ pub enum ClockMode {
 #[serde(default)]
 pub struct ClockConfig {
     pub mode: ClockMode,
+    /// Adada saate tıklayınca ve merkezde görünen tarihin biçimi.
+    pub date: DateFormat,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum DateFormat {
+    /// "5 Kasım Perşembe"
+    #[default]
+    Long,
+    /// "Per 05.11"
+    Short,
+    /// Tarih gösterilmez.
+    Hidden,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -565,11 +666,37 @@ pub struct NotifyConfig {
     /// Bildirimler adada gösterilirken Windows'un sağ alttaki balonlarını kapat
     /// (Bildirim Merkezi'ne düşmeye devam ederler).
     pub hide_windows_banners: bool,
+    /// Bildirim gelince çalan ses.
+    pub sound: NotifySound,
+    /// `sound = "file"` iken çalınacak .wav dosyası.
+    pub sound_file: String,
+    /// Bu uygulamaların bildirimleri adada gösterilmez (ad, büyük/küçük harf duyarsız).
+    pub blocked_apps: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum NotifySound {
+    /// Windows'un kendi davranışı (değiştirilmez).
+    #[default]
+    Windows,
+    /// Bildirim sesleri kapalı.
+    Silent,
+    /// Windows sesleri kapalı; ada her bildirimde `sound_file`'ı çalar.
+    File,
+}
+
+impl NotifyConfig {
+    /// Uygulama engelli mi (ad ya da kimlik eşleşmesi).
+    pub fn is_blocked(&self, app: &str, aumid: &str) -> bool {
+        let (app, aumid) = (app.trim().to_lowercase(), aumid.trim().to_lowercase());
+        self.blocked_apps.iter().map(|b| b.trim().to_lowercase()).filter(|b| !b.is_empty()).any(|b| b == app || (!aumid.is_empty() && b == aumid))
+    }
 }
 
 impl Default for NotifyConfig {
     fn default() -> Self {
-        Self { enabled: true, media_bar: true, volume_osd: true, duration_ms: 2500, over_maximized: false, hide_windows_banners: true }
+        Self { enabled: true, media_bar: true, volume_osd: true, duration_ms: 2500, over_maximized: false, hide_windows_banners: true, sound: NotifySound::Windows, sound_file: String::new(), blocked_apps: Vec::new() }
     }
 }
 
@@ -636,6 +763,16 @@ fn read() -> Config {
             cfg
         }
     }
+}
+
+/// Ayarları TOML metnine çevirir (dışa aktarma için).
+pub fn to_text(cfg: &Config) -> Option<String> {
+    toml::to_string_pretty(cfg).ok()
+}
+
+/// Dışa aktarılmış ayar metnini okur; bozuksa hatayı döner (mevcut ayar korunur).
+pub fn from_text(text: &str) -> Result<Config, String> {
+    toml::from_str(text.trim_start_matches('\u{feff}')).map_err(|e| e.to_string())
 }
 
 pub fn save(cfg: &Config) {

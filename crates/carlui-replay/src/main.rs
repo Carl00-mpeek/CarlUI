@@ -26,7 +26,7 @@ mod writer;
 
 use carlui_core::{
     bus::{BusClient, Event},
-    config::{self, Codec, Config, ReplayConfig, Resolution},
+    config::{self, Codec, Config, ReplayConfig, Resolution, SaveSignal},
     log,
 };
 use mixer::Flags;
@@ -319,7 +319,8 @@ unsafe fn self_test() -> bool {
     true
 }
 
-fn save(ring: Arc<Ring>, folder: PathBuf) {
+fn save(ring: Arc<Ring>, rc: ReplayConfig) {
+    let folder = rc.folder();
     if SAVING.swap(true, Ordering::SeqCst) {
         return;
     }
@@ -329,7 +330,13 @@ fn save(ring: Arc<Ring>, folder: PathBuf) {
         match res {
             Ok(secs) => {
                 let len = if secs >= 60.0 { format!("{}:{:02}", secs as u32 / 60, secs as u32 % 60) } else { format!("{secs:.0} sn") };
-                note(t!("Tekrar kaydedildi", "Replay saved"), &format!("{len} · {}", out.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
+                if matches!(rc.on_save, SaveSignal::Note | SaveSignal::Both) {
+                    note(t!("Tekrar kaydedildi", "Replay saved"), &format!("{len} · {}", out.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
+                }
+                if matches!(rc.on_save, SaveSignal::Sound | SaveSignal::Both) {
+                    let _ = windows::Win32::Media::Audio::PlaySoundW(w!("SystemNotification"), None, windows::Win32::Media::Audio::SND_ALIAS);
+                }
+                cleanup(&rc, &folder, &out);
             }
             Err(e) => {
                 warn!("tekrar kaydedilemedi: {e}");
@@ -428,8 +435,12 @@ fn main() -> Result<()> {
         MSG_HWND.store(mw.0 as isize, Ordering::SeqCst);
 
         let mut cfg = config::load();
+        carlui_ui::tone::follow(&cfg.theme);
         let mut sess = None;
         apply(&mut sess, &cfg);
+        // Açılışta da eski klipler temizlensin (yaş sınırı kayıt olmadan da dolar).
+        let rc = cfg.replay.clone();
+        let _ = std::thread::Builder::new().name("replay-cleanup".into()).spawn(move || cleanup(&rc, &rc.folder(), std::path::Path::new("")));
 
         let tid = GetCurrentThreadId();
         config::watch(move |c| {
@@ -448,6 +459,7 @@ fn main() -> Result<()> {
                 WM_HOTKEY if msg.wParam.0 as i32 == HOTKEY_PANEL => panel::toggle(),
                 WM_APP_RELOAD => {
                     if let Some(c) = PENDING.lock().unwrap_or_else(|e| e.into_inner()).take() {
+                        carlui_ui::tone::follow(&c.theme);
                         apply(&mut sess, &c);
                         cfg = c;
                     }
@@ -455,13 +467,13 @@ fn main() -> Result<()> {
                 WM_APP_SAVE => {
                     let ring = sess.as_ref().and_then(|s| s.ring.lock().unwrap_or_else(|e| e.into_inner()).clone());
                     if let Some(r) = ring {
-                        save(r, cfg.replay.folder());
+                        save(r, cfg.replay.clone());
                     }
                 }
                 WM_HOTKEY if msg.wParam.0 as i32 == HOTKEY => {
                     let ring = sess.as_ref().and_then(|s| s.ring.lock().unwrap_or_else(|e| e.into_inner()).clone());
                     match ring {
-                        Some(r) => save(r, cfg.replay.folder()),
+                        Some(r) => save(r, cfg.replay.clone()),
                         None => note(t!("Anlık tekrar", "Instant replay"), t!("Kayıt henüz başlamadı.", "Recording has not started yet.")),
                     }
                 }
@@ -481,4 +493,35 @@ fn main() -> Result<()> {
 
 unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     DefWindowProcW(hwnd, msg, wp, lp)
+}
+
+/// Ayara göre eski klipleri siler (yalnızca `Replay_*.mp4`; yeni kaydedilen hariç).
+fn cleanup(rc: &ReplayConfig, folder: &std::path::Path, keep: &std::path::Path) {
+    if rc.cleanup == config::Cleanup::Off {
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(folder) else { return };
+    let now = std::time::SystemTime::now();
+    let mut clips: Vec<_> = rd
+        .flatten()
+        .filter(|e| ReplayConfig::is_clip(&e.file_name().to_string_lossy()) && e.path() != keep)
+        .filter_map(|e| {
+            let m = e.metadata().ok().filter(|m| m.is_file())?;
+            let age = now.duration_since(m.modified().ok()?).map(|d| d.as_secs()).unwrap_or(0);
+            Some(config::Clip { path: e.path(), size: m.len(), age_secs: age })
+        })
+        .collect();
+    // Boyut sınırına yeni klip de sayılır (en yeni olduğu için kendisi silinmez).
+    if let Ok(m) = std::fs::metadata(keep) {
+        clips.push(config::Clip { path: keep.to_path_buf(), size: m.len(), age_secs: 0 });
+    }
+    for p in rc.to_delete(clips) {
+        if p == keep {
+            continue;
+        }
+        match std::fs::remove_file(&p) {
+            Ok(()) => info!("eski klip silindi: {}", p.display()),
+            Err(e) => warn!("eski klip silinemedi: {} ({e})", p.display()),
+        }
+    }
 }

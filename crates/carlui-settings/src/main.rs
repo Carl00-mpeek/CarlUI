@@ -69,9 +69,11 @@ pub enum Act {
     /// Anlık tekrar kayıtlarının klasörünü Gezgin'de aç.
     ReplayFolder,
     ReplayPanel,
+    /// Ayarları dosyaya aktar (true) ya da dosyadan al (false).
+    Backup(bool),
     /// İçerik alanı (tekerlek kaydırma hedefi).
     Scroll,
-    /// Metin formu: 0 arama motoru formunu aç, 5 kısaltma formunu aç, 1/2 alan, 3 ekle, 4 vazgeç.
+    /// Metin formu: 0 arama motoru, 5 kısaltma, 6 bildirim engeli, 7 pano hariç, 8 genişletici hariç formunu aç; 1/2 alan, 3 ekle, 4 vazgeç.
     Input(u8),
 }
 
@@ -88,6 +90,8 @@ pub struct App {
     pub page: Page,
     pub recording: Option<Key>,
     pub error: Option<(Key, String)>,
+    /// İçe/dışa aktarma sonucu (Genel sayfasında gösterilir).
+    pub notice: Option<String>,
     scroll: HashMap<Page, f32>,
     max_scroll: HashMap<Page, f32>,
     drag: Option<(Rc<dyn Fn(&mut Config, f32)>, R)>,
@@ -114,6 +118,7 @@ impl App {
 
     fn save(&mut self) {
         config::save(&self.cfg);
+        carlui_ui::tone::follow_window(&self.cfg.theme, self.hwnd);
         self.saved = Some(Instant::now());
         unsafe {
             SetTimer(self.hwnd, 1, 1600, None);
@@ -169,6 +174,18 @@ impl App {
                 let _ = std::fs::create_dir_all(&dir);
                 ShellExecuteW(HWND::default(), w!("open"), &HSTRING::from(dir.as_os_str()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
             },
+            Act::Backup(export) => {
+                let r = if export { pages::backup::export(&self.cfg) } else { pages::backup::import(&mut self.cfg) };
+                match r {
+                    Ok(false) => {}
+                    Ok(true) if !export => {
+                        self.notice = Some(t!("Ayarlar içe aktarıldı.", "Settings imported.").into());
+                        self.save();
+                    }
+                    Ok(true) => self.notice = Some(t!("Ayarlar dışa aktarıldı.", "Settings exported.").into()),
+                    Err(e) => self.notice = Some(e),
+                }
+            }
             Act::ReplayPanel => {
                 let _ = std::process::Command::new(carlui_core::paths::sibling_exe("carlui-replay.exe")).arg("--panel").spawn();
             }
@@ -192,6 +209,14 @@ impl App {
             Act::Input(k) => match k {
                 0 => self.input = Some(input::Input::new(input::Form::Engine)),
                 5 => self.input = Some(input::Input::new(input::Form::Snippet)),
+                6 => self.input = Some(input::Input::new(input::Form::NotifyApp)),
+                7 => self.input = Some(input::Input::new(input::Form::ClipApp)),
+                8 => self.input = Some(input::Input::new(input::Form::ExpandApp)),
+                9 => {
+                    let mut i = input::Input::new(input::Form::ShotName);
+                    i.name = self.cfg.shots.name.clone();
+                    self.input = Some(i);
+                }
                 1 | 2 => {
                     if let Some(i) = self.input.as_mut() {
                         i.field = k - 1;
@@ -477,6 +502,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 if a.drag.is_none() {
                     if let Some(c) = a.reload.lock().ok().and_then(|mut s| s.take()) {
                         a.cfg = c;
+                        carlui_ui::tone::follow_window(&a.cfg.theme, a.hwnd);
                         a.invalidate();
                     }
                 }
@@ -520,6 +546,7 @@ fn main() -> Result<()> {
     log::init("settings");
     // Pencere başlığı da doğru dilde çıksın diye ayar en başta okunur.
     let cfg = config::load();
+    carlui_ui::tone::follow(&cfg.theme);
     let page = std::env::args().skip_while(|a| a != "--page").nth(1).and_then(|s| Page::from_arg(&s)).unwrap_or(Page::General);
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -549,7 +576,7 @@ fn main() -> Result<()> {
         let sw = GetSystemMetrics(SM_CXSCREEN);
         let sh = GetSystemMetrics(SM_CYSCREEN);
         let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), CLASS, &HSTRING::from(carlui_core::t!("CarlUI Ayarları", "CarlUI Settings")), WS_OVERLAPPEDWINDOW, (sw - ww) / 2, (sh - wh) / 2, ww, wh, None, None, inst, None)?;
-        let on: i32 = 1;
+        let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let backdrop = DWMSBT_TRANSIENTWINDOW;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
@@ -579,6 +606,7 @@ fn main() -> Result<()> {
             page,
             recording: None,
             error: None,
+            notice: None,
             scroll: HashMap::new(),
             max_scroll: HashMap::new(),
             drag: None,

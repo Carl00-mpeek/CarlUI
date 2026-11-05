@@ -26,10 +26,23 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.toggle(
         p,
         t!("Panoya değer yerine belirteç koy", "Put a token on the clipboard, not the value"),
-        t!("Kopyalanan alan Win+V'de kasa kaydı olarak görünür; seçince hedef pencereye kasa yazar. Gerçek değer panoya girmez, 60 sn sonra geçersiz olur.", "The copied field shows up in Win+V as a vault item; picking it makes the vault type it into the target window. The real value never enters the clipboard and expires after 60 s."),
+        t!("Kopyalanan alan Win+V'de kasa kaydı olarak görünür; seçince hedef pencereye kasa yazar. Gerçek değer panoya girmez.", "The copied field shows up in Win+V as a vault item; picking it makes the vault type it into the target window. The real value never enters the clipboard."),
         c.token_paste,
         |c| c.vault.token_paste ^= true,
     );
+    if c.token_paste {
+        f.slider(
+            p,
+            t!("Belirteç süresi", "Token lifetime"),
+            t!("Belirteç bu süre içinde Win+V'den seçilmezse geçersiz olur.", "The token expires if it isn't picked from Win+V within this time."),
+            c.token_seconds.clamp(15, 300) as f32,
+            15.0,
+            300.0,
+            15.0,
+            |v| t!(format!("{v:.0} sn"), format!("{v:.0} s")),
+            |c, v| c.vault.token_seconds = v as u32,
+        );
+    }
     f.toggle(
         p,
         t!("Tarayıcıda doldurma", "Fill in the browser"),

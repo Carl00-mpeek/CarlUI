@@ -39,9 +39,9 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
     if !app.cpu_detail {
         let g = R::new(area.x, area.y + 50.0, area.w, (area.h - 50.0 - 190.0).max(150.0));
         p.text(&format!("{} {}", t!("Kullanım", "Usage"), carlui_core::lang::pct(sm.now.usage)), R::new(g.x, g.y - 2.0, 200.0, 22.0), 12.0, false, TEXT, 0.6, Align::Left);
-        p.text(t!("60 saniye", "60 seconds"), R::new(g.right() - 200.0, g.y - 2.0, 200.0, 22.0), 12.0, false, TEXT, 0.45, Align::Right);
+        p.text(&crate::sample::span_label(), R::new(g.right() - 200.0, g.y - 2.0, 200.0, 22.0), 12.0, false, TEXT, 0.45, Align::Right);
         let g = R::new(g.x, g.y + 22.0, g.w, g.h - 22.0);
-        p.graph(crate::sample::LEN, g, &sm.cpu_hist.0, p.accent);
+        p.graph(crate::sample::len(), g, &sm.cpu_hist.0, p.accent);
         let cards = stat_row(area, g.bottom() + 14.0, 3, 82.0);
         stat(p, cards[0], t!("Kullanım", "Usage"), &carlui_core::lang::pct(sm.now.usage), "", None);
         stat(p, cards[1], t!("Hız", "Speed"), &format!("{:.2} GHz", sm.now.mhz / 1000.0), "", None);
@@ -78,7 +78,7 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
         p.text(&carlui_core::lang::pct(c.usage), R::new(r.x + 10.0, r.y + 6.0, r.w - 20.0, 24.0), 13.0, true, TEXT, 0.95, Align::Right);
         let g = R::new(r.x + 10.0, r.y + 32.0, r.w - 20.0, r.h - 62.0);
         if let Some(h) = sm.core_hist.get(i) {
-            p.graph(crate::sample::LEN, g, &h.0, kc);
+            p.graph(crate::sample::len(), g, &h.0, kc);
         }
         p.text(&format!("{:.2} GHz", c.mhz / 1000.0), R::new(r.x + 10.0, r.bottom() - 28.0, r.w - 20.0, 24.0), 12.0, false, TEXT, 0.6, Align::Left);
         match sm.core_temp(c.core) {

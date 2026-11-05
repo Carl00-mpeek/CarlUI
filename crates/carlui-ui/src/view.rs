@@ -390,7 +390,7 @@ pub fn run<V: View>(view: V, o: Opts) -> Result<V> {
         };
         HOST.with(|h| *h.borrow_mut() = Some(Box::new(host)));
         let hwnd = CreateWindowExW(ex, class, &HSTRING::from(o.title.as_str()), style, x, y, ww, wh, None, None, inst, None)?;
-        let on: i32 = 1;
+        let on = i32::from(!crate::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let backdrop = DWMSBT_TRANSIENTWINDOW;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);

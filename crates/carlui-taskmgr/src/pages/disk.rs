@@ -34,7 +34,7 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
         p.text(&format!("{} {}", t!("Etkinlik", "Activity"), carlui_core::lang::pct(d.active)), R::new(g.x, g.y - 22.0, 200.0, 20.0), 12.0, false, TEXT, 0.6, Align::Left);
         p.text(&t!(format!("Okuma {} · Yazma {}", speed(d.read_bps), speed(d.write_bps)), format!("Read {} · Write {}", speed(d.read_bps), speed(d.write_bps))), R::new(g.right() - 300.0, g.y - 22.0, 300.0, 20.0), 12.0, false, TEXT, 0.7, Align::Right);
         if let Some(h) = sm.disk_hist.get(i) {
-            p.graph(crate::sample::LEN, g, &h.0, 0x5FD3C6);
+            p.graph(crate::sample::len(), g, &h.0, 0x5FD3C6);
         }
         // Sağ: bilgiler.
         let x = g.right() + 24.0;

@@ -24,6 +24,12 @@ const CF_UNICODETEXT: u32 = 13;
 pub enum Form {
     Engine,
     Snippet,
+    /// Tek alanlı uygulama listeleri: bildirim engeli, pano ve genişletici hariç tutma.
+    NotifyApp,
+    ClipApp,
+    ExpandApp,
+    /// Ekran görüntüsü dosya adı şablonu (tek alan; boş = varsayılan).
+    ShotName,
 }
 
 pub struct Input {
@@ -55,7 +61,7 @@ impl Input {
             0x08 => {
                 self.cur().pop();
             }
-            0x09 => self.field ^= 1,
+            0x09 if !self.kind.single() => self.field ^= 1,
             0x16 => {
                 if let Some(t) = clipboard(hwnd) {
                     // Kısaltma metninde satır sonları kalır.
@@ -79,6 +85,9 @@ impl Input {
 
     /// Ayara ekler; olmazsa hatayı yazar ve false döner.
     pub fn apply(&mut self, cfg: &mut Config) -> bool {
+        if self.kind.single() {
+            return self.apply_app(cfg);
+        }
         if self.kind == Form::Snippet {
             return self.apply_snippet(cfg);
         }
@@ -192,5 +201,36 @@ mod tests {
         assert!(i.apply(&mut c));
         assert_eq!(c.tools.snippets.len(), n + 1);
         assert_eq!(c.tools.snippets.last().unwrap().text, "y");
+    }
+}
+
+impl Form {
+    /// Tek alanlı form mu (yalnızca ad).
+    pub fn single(self) -> bool {
+        matches!(self, Form::NotifyApp | Form::ClipApp | Form::ExpandApp | Form::ShotName)
+    }
+}
+
+impl Input {
+    /// Uygulama adını ilgili listeye ekler (aynısı varsa eklemez).
+    fn apply_app(&mut self, cfg: &mut Config) -> bool {
+        if self.kind == Form::ShotName {
+            cfg.shots.name = self.name.trim().to_string();
+            return true;
+        }
+        let name = self.name.trim().trim_matches('"').to_string();
+        if name.is_empty() {
+            self.error = Some(carlui_core::t!("Bir uygulama adı yazın.", "Enter an app name.").into());
+            return false;
+        }
+        let list = match self.kind {
+            Form::NotifyApp => &mut cfg.notify.blocked_apps,
+            Form::ClipApp => &mut cfg.clipboard.excluded_apps,
+            _ => &mut cfg.tools.expand_excluded,
+        };
+        if !list.iter().any(|a| a.eq_ignore_ascii_case(&name)) {
+            list.push(name);
+        }
+        true
     }
 }

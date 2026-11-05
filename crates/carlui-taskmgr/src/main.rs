@@ -665,7 +665,9 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
 fn main() -> Result<()> {
     log::init("taskmgr");
     // Ayarı okumak arayüz dilini de uygular.
-    let _ = carlui_core::config::load();
+    let cfg = carlui_core::config::load();
+    sample::set_len(cfg.taskmgr.history_secs);
+    carlui_ui::tone::follow(&cfg.theme);
     // Yönetici izni gereken başlangıç değişikliği için kendini UAC ile açtığında.
     let argv: Vec<String> = std::env::args().collect();
     if let Some(i) = argv.iter().position(|a| a == "--startup-set") {
@@ -715,14 +717,16 @@ fn main() -> Result<()> {
         // başlık ve sayfa hemen yeni dile geçer.
         {
             let h = hwnd.0 as isize;
-            carlui_core::config::watch(move |_| {
+            carlui_core::config::watch(move |cfg| {
+                sample::set_len(cfg.taskmgr.history_secs);
                 let hwnd = HWND(h as _);
+                carlui_ui::tone::follow_window(&cfg.theme, hwnd);
                 let title = if admin { t!("Görev Yöneticisi (Yönetici)", "Task Manager (Administrator)") } else { t!("Görev Yöneticisi", "Task Manager") };
                 let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowTextW(hwnd, &HSTRING::from(title));
                 let _ = InvalidateRect(hwnd, None, false);
             });
         }
-        let on: i32 = 1;
+        let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let backdrop = DWMSBT_TRANSIENTWINDOW;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);

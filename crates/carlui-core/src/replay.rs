@@ -62,13 +62,82 @@ pub struct ReplayConfig {
     /// Gürültü engelleme gücü (yüzde, 10–100). Mikrofonun kendi engellemesi
     /// varsa düşük tutulur; üst üste iki işlem sesi bozabilir.
     pub denoise_level: u32,
+    /// Klip kaydedilince: bildirim, ses, ikisi ya da hiçbiri (hata her zaman bildirilir).
+    pub on_save: SaveSignal,
+    /// Eski klipleri kendiliğinden sil (yalnızca CarlUI'nin `Replay_*.mp4` dosyaları).
+    pub cleanup: Cleanup,
+    /// `cleanup = "size"`: klasördeki kliplerin toplamı bu kadar GB'ı geçmesin.
+    pub max_gb: u32,
+    /// `cleanup = "age"`: bu kadar günden eski klipler silinir.
+    pub max_days: u32,
     /// Kayıtların klasörü; boşsa Videolar\CarlUI.
     pub folder: String,
 }
 
+/// Klip kaydedilince ne olsun.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SaveSignal {
+    #[default]
+    Note,
+    Sound,
+    Both,
+    None,
+}
+
+/// Eski kliplerin temizliği.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Cleanup {
+    #[default]
+    Off,
+    Size,
+    Age,
+}
+
+/// Klasördeki bir klip: yol, boyut (bayt), yaşı (sn).
+pub struct Clip {
+    pub path: std::path::PathBuf,
+    pub size: u64,
+    pub age_secs: u64,
+}
+
+impl ReplayConfig {
+    /// CarlUI'nin kaydettiği bir klip mi (başka dosyalara asla dokunulmaz).
+    pub fn is_clip(name: &str) -> bool {
+        let n = name.to_ascii_lowercase();
+        n.starts_with("replay_") && n.ends_with(".mp4")
+    }
+
+    /// Ayara göre silinecek klipler (en eskiden başlayarak).
+    pub fn to_delete(&self, mut clips: Vec<Clip>) -> Vec<std::path::PathBuf> {
+        clips.sort_by(|a, b| b.age_secs.cmp(&a.age_secs));
+        match self.cleanup {
+            Cleanup::Off => Vec::new(),
+            Cleanup::Age => {
+                let max = self.max_days.max(1) as u64 * 86_400;
+                clips.into_iter().filter(|c| c.age_secs > max).map(|c| c.path).collect()
+            }
+            Cleanup::Size => {
+                let max = self.max_gb.max(1) as u64 * 1024 * 1024 * 1024;
+                let mut total: u64 = clips.iter().map(|c| c.size).sum();
+                let mut out = Vec::new();
+                for c in clips {
+                    if total <= max {
+                        break;
+                    }
+                    total -= c.size;
+                    out.push(c.path);
+                }
+                out
+            }
+        }
+    }
+}
+
 impl Default for ReplayConfig {
     fn default() -> Self {
-        Self { enabled: false, minutes: 5, fps: 60, quality: Quality::Medium, resolution: Resolution::Native, codec: Codec::H264, audio: true, mic: false, audio_volume: 100, mic_volume: 100, denoise: true, denoise_level: 70, folder: String::new() }
+        Self { enabled: false, minutes: 5, fps: 60, quality: Quality::Medium, resolution: Resolution::Native, codec: Codec::H264, audio: true, mic: false, audio_volume: 100, mic_volume: 100, denoise: true, denoise_level: 70, on_save: SaveSignal::Note, cleanup: Cleanup::Off, max_gb: 20, max_days: 30, folder: String::new() }
     }
 }
 
@@ -205,5 +274,22 @@ mod tests {
         // Eski ayar dosyası (yeni alanlar yok) varsayılanlarla okunur.
         let old: ReplayConfig = toml::from_str("enabled = true\nminutes = 3").unwrap();
         assert_eq!((old.minutes, old.mic, old.codec), (3, false, Codec::H264));
+    }
+
+    #[test]
+    fn cleanup() {
+        let clip = |n: &str, gb: u64, days: u64| Clip { path: n.into(), size: gb << 30, age_secs: days * 86_400 + 5 };
+        let all = || vec![clip("a", 4, 1), clip("b", 4, 10), clip("c", 4, 40)];
+        let mut r = ReplayConfig::default();
+        assert!(r.to_delete(all()).is_empty());
+        r.cleanup = Cleanup::Age;
+        r.max_days = 7;
+        assert_eq!(r.to_delete(all()), vec![std::path::PathBuf::from("b"), "c".into()].into_iter().rev().collect::<Vec<_>>());
+        r.cleanup = Cleanup::Size;
+        r.max_gb = 5;
+        // 12 GB → en eski ikisi silinir (4 GB kalır).
+        assert_eq!(r.to_delete(all()), vec![std::path::PathBuf::from("c"), "b".into()]);
+        assert!(ReplayConfig::is_clip("Replay_2026-11-05_14-00-00.mp4"));
+        assert!(!ReplayConfig::is_clip("tatil.mp4"));
     }
 }

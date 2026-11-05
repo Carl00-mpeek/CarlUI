@@ -53,6 +53,8 @@ pub enum Out {
     None,
     Cancel,
     Copy,
+    /// Enter: ayardaki varsayılan eylem (kopyala / kaydet / ikisi).
+    Enter,
     Ocr,
     Save,
     Qr(usize, qr::Act),
@@ -319,7 +321,8 @@ impl Overlay {
         }
         match (vk, ctrl) {
             (0x1B, _) => return Out::Cancel,
-            (0x0D, _) | (0x43, true) if self.has_selection() => return Out::Copy,
+            (0x0D, _) if self.has_selection() => return Out::Enter,
+            (0x43, true) if self.has_selection() => return Out::Copy,
             (0x53, true) if self.has_selection() => return Out::Save,
             (0x54, true) if self.has_selection() => return Out::Ocr,
             (0x5A, true) | (0x2E, false) => {
@@ -674,7 +677,7 @@ impl Overlay {
                 Btn::Tool(Tool::Select) => t!("Alan seç / kırp (C)", "Select / crop (C)"),
                 Btn::Undo => t!("Geri al (Ctrl+Z)", "Undo (Ctrl+Z)"),
                 Btn::Color(_) => t!("Renk", "Color"),
-                Btn::Copy => t!("Kopyala (Enter)", "Copy (Enter)"),
+                Btn::Copy => t!("Kopyala (Ctrl+C)", "Copy (Ctrl+C)"),
                 Btn::Ocr => t!("Yazıyı kopyala (Ctrl+T)", "Copy text (Ctrl+T)"),
                 Btn::Save => if self.editing.is_some() { t!("Kaydet (Ctrl+S)", "Save (Ctrl+S)") } else { t!("Masaüstüne kaydet (Ctrl+S)", "Save to desktop (Ctrl+S)") },
                 Btn::Close => t!("Kapat (Esc)", "Close (Esc)"),

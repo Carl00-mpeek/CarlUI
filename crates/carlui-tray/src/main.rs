@@ -395,7 +395,8 @@ fn main() -> Result<()> {
         let cfg = config::load();
         // Ayar değişince yeniden okunur; bu, seçilen arayüz dilini de uygular
         // (panel her açılışta metinlerini yeni dille kurar).
-        config::watch(|_| {});
+        carlui_ui::tone::follow(&cfg.theme);
+        config::watch(|c| carlui_ui::tone::restart_on_change(&c.theme));
         let theme = Theme::from_config(&cfg.theme);
         let gfx = Gfx::new()?;
         let panel_hwnd = create_panel_window()?;

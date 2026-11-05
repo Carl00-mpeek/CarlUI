@@ -4,7 +4,9 @@ use crate::{
     ui::{edit, Flow, P},
     App,
 };
-use carlui_core::config::ClockMode;
+use crate::input::Form;
+use carlui_core::config::{ClockMode, DateFormat, NotifySound};
+use carlui_ui::paint::R;
 
 pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     let cfg = &app.cfg;
@@ -22,6 +24,23 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
             (t!("Her zaman", "Always"), edit(|c| c.clock.mode = ClockMode::Always)),
             (t!("Uygulamada", "In apps"), edit(|c| c.clock.mode = ClockMode::WhenAppActive)),
             (t!("Gizli", "Hidden"), edit(|c| c.clock.mode = ClockMode::Never)),
+        ],
+        sel,
+        104.0,
+    );
+    let sel = match cfg.clock.date {
+        DateFormat::Long => 0,
+        DateFormat::Short => 1,
+        DateFormat::Hidden => 2,
+    };
+    f.choice(
+        p,
+        t!("Tarih", "Date"),
+        t!("Saate tıklayınca ve merkezde görünen tarih.", "The date shown when you click the clock and in the hub."),
+        &[
+            (t!("Uzun", "Long"), edit(|c| c.clock.date = DateFormat::Long)),
+            (t!("Kısa", "Short"), edit(|c| c.clock.date = DateFormat::Short)),
+            (t!("Gizli", "Hidden"), edit(|c| c.clock.date = DateFormat::Hidden)),
         ],
         sel,
         104.0,
@@ -57,6 +76,52 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.slider(p, t!("Ekranda kalma süresi", "Time on screen"), "", cfg.notify.duration_ms as f32, 1000.0, 10000.0, 250.0, |v| t!(format!("{:.1} sn", v / 1000.0).replace('.', ","), format!("{:.1} s", v / 1000.0)), |c, v| c.notify.duration_ms = v as u32);
     f.toggle(p, t!("Tam ekran pencerede de göster", "Also show over maximized windows"), "", cfg.notify.over_maximized, |c| c.notify.over_maximized ^= true);
     f.toggle(p, t!("Windows bildirim balonlarını gizle", "Hide Windows notification banners"), t!("Bildirimler yalnızca adada görünür; Bildirim Merkezi'ne yine düşer.", "Notifications only show on the island; they still reach the Notification Center."), cfg.notify.hide_windows_banners, |c| c.notify.hide_windows_banners ^= true);
+    let sel = match cfg.notify.sound {
+        NotifySound::Windows => 0,
+        NotifySound::Silent => 1,
+        NotifySound::File => 2,
+    };
+    f.choice(
+        p,
+        t!("Bildirim sesi", "Notification sound"),
+        t!("Sessiz ve Dosya, Windows'un bildirim seslerini kapatır; ada kapanınca geri açılır.", "Silent and File turn off Windows notification sounds; they come back when the island closes."),
+        &[
+            ("Windows", edit(|c| c.notify.sound = NotifySound::Windows)),
+            (t!("Sessiz", "Silent"), edit(|c| c.notify.sound = NotifySound::Silent)),
+            (t!("Dosya", "File"), edit(|c| c.notify.sound = NotifySound::File)),
+        ],
+        sel,
+        84.0,
+    );
+    if cfg.notify.sound == NotifySound::File {
+        let name = std::path::Path::new(&cfg.notify.sound_file).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let desc = if name.is_empty() { t!("Dosya seçilmedi; Windows'un bildirim sesi çalar.", "No file chosen; the Windows notification sound plays.").to_string() } else { name };
+        let r = f.row(p, t!("Ses dosyası (.wav)", "Sound file (.wav)"), &desc, 120.0);
+        p.button(
+            R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0),
+            Some('\u{E8E5}'),
+            t!("Seç", "Choose"),
+            edit(|c| {
+                if let Some(path) = super::backup::pick_wav() {
+                    c.notify.sound_file = path;
+                }
+            }),
+            true,
+            false,
+        );
+    }
+    super::applist::draw(
+        app,
+        p,
+        f,
+        &cfg.notify.blocked_apps,
+        |c| &mut c.notify.blocked_apps,
+        Form::NotifyApp,
+        6,
+        t!("Engellenen uygulamalar", "Blocked apps"),
+        t!("Bu uygulamaların bildirimleri adada görünmez (bildirimdeki uygulama adı).", "Notifications from these apps don't show on the island (the app name shown in the notification)."),
+        t!("ör. Discord", "e.g. Discord"),
+    );
 
     // Sınır aşılınca adada bildirim (bkz. carlui-island/src/alerts.rs).
     f.section(p, t!("Uyarılar", "Alerts"));

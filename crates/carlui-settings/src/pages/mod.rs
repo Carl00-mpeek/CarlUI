@@ -1,6 +1,8 @@
 //! Ayar sayfaları. Her sayfa `paint(app, painter, flow)` ile satırlarını dizer;
 //! değişiklik `Act::Edit` kapanışıyla `Config`'e uygulanır ve hemen kaydedilir.
 
+pub mod backup;
+mod applist;
 mod clipboard;
 mod contacts;
 mod cursor;

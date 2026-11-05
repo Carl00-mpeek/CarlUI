@@ -16,7 +16,7 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
     p.text(&format!("{} / {} · {}", bytes(r.used), bytes(r.total), carlui_core::lang::pct(pct)), R::new(g.right() - 300.0, g.y, 300.0, 22.0), 12.0, false, TEXT, 0.8, Align::Right);
     let color = if pct >= 90.0 { RED } else if pct >= 75.0 { ORANGE } else { 0xB98CFF };
     let gr = R::new(g.x, g.y + 22.0, g.w, g.h - 22.0);
-    p.graph(crate::sample::LEN, gr, &sm.ram_hist.0, color);
+    p.graph(crate::sample::len(), gr, &sm.ram_hist.0, color);
 
     // Bileşim çubuğu: kullanılan | önbellek | boş.
     let br = R::new(area.x, gr.bottom() + 12.0, area.w, 14.0);

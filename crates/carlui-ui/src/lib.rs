@@ -10,5 +10,6 @@ pub mod icons;
 pub mod motion;
 pub mod paint;
 pub mod text;
+pub mod tone;
 pub mod tween;
 pub mod view;

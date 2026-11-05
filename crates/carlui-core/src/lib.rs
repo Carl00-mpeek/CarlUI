@@ -21,3 +21,7 @@ pub mod tools;
 pub mod vaultlink;
 pub mod vcard;
 pub mod win;
+
+/// Modül bu kodla çıkarsa gözetmen onu çöküş saymadan hemen yeniden açar
+/// (ör. açık/koyu tema değişince cam yüzeyler baştan kurulsun diye).
+pub const RELOAD_EXIT: i32 = 75;

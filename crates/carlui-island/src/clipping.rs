@@ -27,7 +27,7 @@ const TIMER_PASTE: usize = 9;
 const TIMER_CARD: usize = 11;
 /// Resim önizlemesinin üstünde bu kadar bekleyince resim büyür.
 const TIMER_HOVER: usize = 12;
-const HOVER_MS: u32 = 550;
+pub(crate) static HOVER_MS: AtomicU32 = AtomicU32::new(550);
 /// Görüntüleyici kapandıktan sonra fare önizlemeden çıkana dek tekrar açma.
 static HOVER_BLOCK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 /// Pano penceresinin üstündeki boşluk (kart panelin üstüne taşabilsin).
@@ -37,7 +37,7 @@ pub(crate) const POP_MARGIN: f32 = 30.0;
 pub(crate) static SECRET_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(60);
 /// "Silindi · Geri al" şeridi bu kadar açık kalır.
 const TIMER_UNDO: usize = 13;
-const UNDO_MS: u32 = 6000;
+pub(crate) static UNDO_MS: AtomicU32 = AtomicU32::new(6000);
 
 /// Kendi yazdığımız son kopyanın pano sıra numarası.
 static OWN_SEQ: AtomicU32 = AtomicU32::new(0);
@@ -154,7 +154,7 @@ impl App {
             unsafe {
                 let _ = KillTimer(self.pop.hwnd, TIMER_UNDO);
             }
-        } else if self.clip.undo_age_ms() >= UNDO_MS as u128 {
+        } else if self.clip.undo_age_ms() >= UNDO_MS.load(Ordering::Relaxed) as u128 {
             unsafe {
                 let _ = KillTimer(self.pop.hwnd, TIMER_UNDO);
             }
@@ -823,7 +823,7 @@ extern "system" fn pop_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
                     // Resmin üstünde biraz bekleyince büyüsün.
                     if h == Hit::Preview && a.pop.preview_is_image() {
                         if !HOVER_BLOCK.load(Ordering::Relaxed) && !a.viewer.is_open() {
-                            SetTimer(hwnd, TIMER_HOVER, HOVER_MS, None);
+                            SetTimer(hwnd, TIMER_HOVER, HOVER_MS.load(Ordering::Relaxed), None);
                         }
                     } else {
                         HOVER_BLOCK.store(false, Ordering::Relaxed);
@@ -927,4 +927,12 @@ extern "system" fn pop_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
             _ => DefWindowProcW(hwnd, msg, wp, lp),
         }
     }
+}
+
+/// Pano ayarlarını çalışan adaya uygular (açılışta ve ayar değişince).
+pub(crate) fn apply_cfg(c: &carlui_core::config::ClipboardConfig) {
+    SECRET_SECS.store(c.secret_seconds, Ordering::Relaxed);
+    HOVER_MS.store(c.hover_ms.clamp(100, 3000), Ordering::Relaxed);
+    UNDO_MS.store(c.undo_ms.clamp(2000, 30000), Ordering::Relaxed);
+    carlui_clip::capture::set_options(c.images, c.max_image_mb, &c.excluded_apps);
 }

@@ -8,7 +8,7 @@ use crate::{
     ui::{edit, Flow, P},
     Act, App,
 };
-use carlui_core::config::ColorFormat;
+use carlui_core::config::{ColorFormat, ExpandTrigger, ShotAction, ShotFormat};
 use carlui_ui::paint::{Align, R, TEXT};
 
 pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
@@ -45,6 +45,51 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{EDA2}'), t!("Aç", "Open"), Act::Tool("--disk"), true, false);
     }
 
+    f.section(p, t!("Ekran görüntüsü", "Screenshot"));
+    let s = &app.cfg.shots;
+    let sel = match s.action {
+        ShotAction::Copy => 0,
+        ShotAction::Save => 1,
+        ShotAction::Both => 2,
+    };
+    f.choice(
+        p,
+        t!("Enter'a basınca", "When you press Enter"),
+        t!("Özel tam ekran oyunlarda da bu yapılır. Ctrl+C kopyalar, Ctrl+S kaydeder.", "Also used in exclusive fullscreen games. Ctrl+C copies, Ctrl+S saves."),
+        &[
+            (t!("Kopyala", "Copy"), edit(|c| c.shots.action = ShotAction::Copy)),
+            (t!("Kaydet", "Save"), edit(|c| c.shots.action = ShotAction::Save)),
+            (t!("İkisi", "Both"), edit(|c| c.shots.action = ShotAction::Both)),
+        ],
+        sel,
+        84.0,
+    );
+    let sel = if s.format == ShotFormat::Jpg { 1 } else { 0 };
+    f.choice(
+        p,
+        t!("Dosya biçimi", "File format"),
+        t!("JPG daha küçüktür; PNG kayıpsızdır. Panoya her zaman PNG gider.", "JPG is smaller; PNG is lossless. The clipboard always gets PNG."),
+        &[("PNG", edit(|c| c.shots.format = ShotFormat::Png)), ("JPG", edit(|c| c.shots.format = ShotFormat::Jpg))],
+        sel,
+        72.0,
+    );
+    let ext = if s.format == ShotFormat::Jpg { "jpg" } else { "png" };
+    let sample = format!("{}.{ext}", s.file_name("2026-11-05", "14.30.00"));
+    let r = f.row(p, t!("Dosya adı şablonu", "File name template"), &t!(format!("Örnek: {sample}"), format!("Example: {sample}")), 120.0);
+    p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E70F}'), t!("Değiştir", "Change"), Act::Input(9), app.input.is_none(), false);
+    super::form::draw(app, p, f, Form::ShotName, &[(t!("Şablon — {tarih} ve {saat} yerine konur; boş bırakılırsa varsayılan", "Template — {date} and {time} are filled in; leave empty for the default"), t!("Ekran görüntüsü {tarih} {saat}", "Screenshot {date} {time}"))]);
+
+    f.section(p, t!("Görev yöneticisi", "Task manager"));
+    let sel = if app.cfg.taskmgr.history_secs >= 120 { 1 } else { 0 };
+    f.choice(
+        p,
+        t!("Grafik geçmişi", "Graph history"),
+        t!("CPU, bellek, disk ve GPU grafiklerinin gösterdiği süre.", "How far back the CPU, memory, disk and GPU graphs go."),
+        &[(t!("60 sn", "60 s"), edit(|c| c.taskmgr.history_secs = 60)), (t!("5 dk", "5 min"), edit(|c| c.taskmgr.history_secs = 300))],
+        sel,
+        80.0,
+    );
+
     f.section(p, t!("Metin genişletici", "Text expander"));
     f.toggle(
         p,
@@ -56,6 +101,27 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     if !c.expander {
         return;
     }
+    let sel = if c.expand_on == ExpandTrigger::Delimiter { 1 } else { 0 };
+    f.choice(
+        p,
+        t!("Ne zaman açılsın", "When to expand"),
+        t!("Boşluk/Tab seçilirse kısaltma ancak ardından o tuşa basınca açılır; kelime içinde yanlışlıkla tetiklenmez.", "With Space/Tab, an abbreviation expands only when you press that key after it, so it won't fire by accident mid-word."),
+        &[(t!("Hemen", "Immediately"), edit(|c| c.tools.expand_on = ExpandTrigger::Immediate)), (t!("Boşluk/Tab", "Space/Tab"), edit(|c| c.tools.expand_on = ExpandTrigger::Delimiter))],
+        sel,
+        96.0,
+    );
+    super::applist::draw(
+        app,
+        p,
+        f,
+        &c.expand_excluded,
+        |c| &mut c.tools.expand_excluded,
+        Form::ExpandApp,
+        8,
+        t!("Çalışmayacağı uygulamalar", "Apps where it's off"),
+        t!("Bu uygulamalar öndeyken kısaltmalar açılmaz (ör. terminal, oyun).", "Abbreviations don't expand while these apps are in front (e.g. terminals, games)."),
+        t!("exe adı, ör. cs2.exe", "exe name, e.g. cs2.exe"),
+    );
     for (i, s) in c.snippets.iter().enumerate() {
         let r = f.row(p, &s.key, &s.text.replace('\n', " ⏎ "), 60.0);
         let del = R::new(r.right() - 12.0 - 32.0, r.y + (r.h - 32.0) / 2.0, 32.0, 32.0);
@@ -78,5 +144,5 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     }
     let r = f.row(p, t!("Kısaltma ekle", "Add abbreviation"), t!("Aynı kısaltma yeniden eklenirse metni güncellenir.", "Adding the same abbreviation again updates its text."), 120.0);
     p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E710}'), t!("Ekle", "Add"), Act::Input(5), app.input.is_none(), false);
-    super::form::draw(app, p, f, Form::Snippet, [(t!("Kısaltma", "Abbreviation"), t!("ör. ;adres", "e.g. ;addr")), (t!("Metin", "Text"), t!("ör. Atatürk Cad. No 1, İstanbul — Ctrl+V çok satırlı metni de yapıştırır", "e.g. 1 Main St, Springfield — Ctrl+V also pastes multi-line text"))]);
+    super::form::draw(app, p, f, Form::Snippet, &[(t!("Kısaltma", "Abbreviation"), t!("ör. ;adres", "e.g. ;addr")), (t!("Metin", "Text"), t!("ör. Atatürk Cad. No 1, İstanbul — Ctrl+V çok satırlı metni de yapıştırır", "e.g. 1 Main St, Springfield — Ctrl+V also pastes multi-line text"))]);
 }

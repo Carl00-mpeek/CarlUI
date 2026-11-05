@@ -14,13 +14,13 @@ use carlui_ui::{
 };
 
 /// `kind` türündeki form açıksa (ya da kapanıyorsa) çizer.
-pub fn draw(app: &App, p: &mut P, f: &mut Flow, kind: Form, fields: [(&str, &str); 2]) {
+pub fn draw(app: &App, p: &mut P, f: &mut Flow, kind: Form, fields: &[(&str, &str)]) {
     let open = app.input.as_ref().is_some_and(|i| i.kind == kind);
     let t = tween::to(tween::key(("input-form", kind as u8)), if open { 1.0 } else { 0.0 }, 14.0);
     if t <= 0.01 {
         return;
     }
-    let full = 190.0 + if app.input.as_ref().is_some_and(|i| i.error.is_some()) { 22.0 } else { 0.0 };
+    let full = 66.0 + 62.0 * fields.len() as f32 + if app.input.as_ref().is_some_and(|i| i.error.is_some()) { 22.0 } else { 0.0 };
     let card = R::new(f.x, f.y, f.w, full * t);
     p.round(card, 8.0, 0xFFFFFF, 0.05 * t);
     p.outline(card, 8.0, p.accent, 0.35 * t);
@@ -63,5 +63,6 @@ pub fn draw(app: &App, p: &mut P, f: &mut Flow, kind: Form, fields: [(&str, &str
     let ok = R::new(card.right() - 16.0 - 104.0, y, 104.0, 32.0);
     p.button(ok, Some('\u{E73E}'), t!("Ekle", "Add"), Act::Input(3), true, false);
     p.button(R::new(ok.x - 8.0 - 104.0, y, 104.0, 32.0), None, t!("Vazgeç", "Cancel"), Act::Input(4), true, false);
-    p.text(t!("Tab: alan değiştir · Ctrl+V: yapıştır · Enter: ekle · Esc: vazgeç", "Tab: next field · Ctrl+V: paste · Enter: add · Esc: cancel"), R::new(x, y, ok.x - 8.0 - 104.0 - x - 8.0, 32.0), 11.5, false, TEXT, 0.4 * a, Align::Left);
+    let keys = if fields.len() > 1 { t!("Tab: alan değiştir · Ctrl+V: yapıştır · Enter: ekle · Esc: vazgeç", "Tab: next field · Ctrl+V: paste · Enter: add · Esc: cancel") } else { t!("Ctrl+V: yapıştır · Enter: ekle · Esc: vazgeç", "Ctrl+V: paste · Enter: add · Esc: cancel") };
+    p.text(keys, R::new(x, y, ok.x - 8.0 - 104.0 - x - 8.0, 32.0), 11.5, false, TEXT, 0.4 * a, Align::Left);
 }

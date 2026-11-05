@@ -34,7 +34,7 @@ fn engines_row(app: &App, p: &mut P, f: &mut Flow, custom: Option<String>) {
         );
     }
 
-    super::form::draw(app, p, f, Form::Engine, [(t!("Ad", "Name"), t!("ör. Wikipedia", "e.g. Wikipedia")), (t!("Arama adresi", "Search address"), t!("ör. https://tr.wikipedia.org/w/index.php?search={q}", "e.g. https://en.wikipedia.org/w/index.php?search={q}"))]);
+    super::form::draw(app, p, f, Form::Engine, &[(t!("Ad", "Name"), t!("ör. Wikipedia", "e.g. Wikipedia")), (t!("Arama adresi", "Search address"), t!("ör. https://tr.wikipedia.org/w/index.php?search={q}", "e.g. https://en.wikipedia.org/w/index.php?search={q}"))]);
 }
 
 const ENGINES: [(&str, &str); 3] = [

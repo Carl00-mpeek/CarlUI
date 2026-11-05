@@ -21,6 +21,7 @@ mod overlay;
 pub(crate) mod qr;
 
 use crate::*;
+use carlui_core::config::{ShotAction, ShotFormat};
 use overlay::{Out, Overlay};
 use zeroize::{Zeroize, Zeroizing};
 use std::{
@@ -308,17 +309,18 @@ fn desktop() -> PathBuf {
     PathBuf::from(std::env::var("USERPROFILE").unwrap_or_default()).join("Desktop")
 }
 
-fn stamp() -> String {
+/// (tarih, saat): "2026-11-05", "14.03.22".
+fn stamp() -> (String, String) {
     let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
-    format!("{}-{:02}-{:02} {:02}.{:02}.{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond)
+    (format!("{}-{:02}-{:02}", t.wYear, t.wMonth, t.wDay), format!("{:02}.{:02}.{:02}", t.wHour, t.wMinute, t.wSecond))
 }
 
 /// Aynı ada dosya varsa sonuna (2), (3) … ekler.
-fn unique(dir: &Path, base: &str) -> PathBuf {
-    let mut p = dir.join(format!("{base}.png"));
+fn unique(dir: &Path, base: &str, ext: &str) -> PathBuf {
+    let mut p = dir.join(format!("{base}.{ext}"));
     let mut i = 2;
     while p.exists() {
-        p = dir.join(format!("{base} ({i}).png"));
+        p = dir.join(format!("{base} ({i}).{ext}"));
         i += 1;
     }
     p
@@ -388,7 +390,7 @@ impl App {
             };
             info!("özel tam ekran: ekran doğrudan alındı {}×{} ({} ms)", frame.w, frame.h, t.elapsed().as_millis());
             if let Some(png) = encode(&frame) {
-                self.shot_store(png, frame.w, frame.h, Out::Copy, None);
+                self.shot_store(png, frame.w, frame.h, Out::Enter, None);
             }
             return;
         }
@@ -603,21 +605,39 @@ impl App {
 
     /// PNG'yi dosyaya (ve Kopyala'da panoya) yazar, adaya bildirim düşer.
     fn shot_store(&mut self, png: Vec<u8>, w: u32, h: u32, out: Out, editing: Option<PathBuf>) {
-        let path = match (&editing, out) {
-            (Some(p), _) => p.clone(),
-            (None, Out::Save) => unique(&desktop(), &format!("{} {}", t!("Ekran görüntüsü", "Screenshot"), stamp())),
+        // Enter (ve özel tam ekran) ayardaki varsayılan eylemi yapar.
+        let (copy, save) = match out {
+            Out::Copy => (true, false),
+            Out::Save => (false, true),
+            _ => match self.cfg.shots.action {
+                ShotAction::Copy => (true, false),
+                ShotAction::Save => (false, true),
+                ShotAction::Both => (true, true),
+            },
+        };
+        let jpg = self.cfg.shots.format == ShotFormat::Jpg;
+        let (date, time) = stamp();
+        let base = self.cfg.shots.file_name(&date, &time);
+        let ext = if jpg { "jpg" } else { "png" };
+        let path = match &editing {
+            Some(p) => p.clone(),
+            None if save => unique(&desktop(), &base, ext),
             // Yalnızca kopyalanan da bir yere yazılır ki "Aç / Düzenle" çalışsın.
-            _ => {
+            None => {
                 let dir = carlui_core::paths::data_dir().join("shots");
                 let _ = std::fs::create_dir_all(&dir);
-                unique(&dir, &format!("{} {}", t!("Ekran görüntüsü", "Screenshot"), stamp()))
+                unique(&dir, &base, ext)
             }
         };
-        if let Err(e) = std::fs::write(&path, &png) {
+        // Düzenlenen dosya kendi biçiminde kalır.
+        let as_jpg = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("jpg") || e.eq_ignore_ascii_case("jpeg"));
+        let bytes = if as_jpg { carlui_clip::image::wic().and_then(|wic| carlui_clip::image::png_to_jpg(&wic, &png)) } else { None };
+        if let Err(e) = std::fs::write(&path, bytes.as_deref().unwrap_or(&png)) {
             carlui_core::warn!("ekran görüntüsü yazılamadı: {e}");
         }
+        let out = if copy { Out::Copy } else { Out::Save };
         let mut clip_id = None;
-        if out == Out::Copy {
+        if copy {
             if carlui_clip::write::set(self.island.hwnd, carlui_clip::write::Data::Png(&png)).is_some() {
                 clip_id = Some(format!("t:{}", carlui_clip::store::now_ms()));
             }
@@ -631,6 +651,7 @@ impl App {
         self.hub.notes.retain(|n| n.shot.as_deref() != Some(p.as_str()));
         let body = match (out, editing.is_some()) {
             (Out::Copy, false) if self.exclusive => t!(format!("Oyun ekranı panoda · {w}×{h} · alan için Düzenle"), format!("Game screen on clipboard · {w}×{h} · Edit to crop")),
+            (Out::Copy, false) if save => t!(format!("Panoya kopyalandı, masaüstüne kaydedildi · {w}×{h}"), format!("Copied and saved to desktop · {w}×{h}")),
             (Out::Copy, _) => t!(format!("Panoya kopyalandı · {w}×{h}"), format!("Copied to clipboard · {w}×{h}")),
             (_, true) => t!("Düzenleme kaydedildi", "Edit saved").to_string(),
             _ => t!(format!("Masaüstüne kaydedildi · {w}×{h}"), format!("Saved to desktop · {w}×{h}")),

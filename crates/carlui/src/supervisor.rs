@@ -76,6 +76,10 @@ impl Supervisor {
                         return;
                     }
                     match status {
+                        Ok(s) if s.code() == Some(carlui_core::RELOAD_EXIT) => {
+                            info!("{name} yeniden yükleniyor");
+                            continue;
+                        }
                         Ok(s) if s.success() => {
                             info!("{name} kendi isteğiyle kapandı");
                             return;

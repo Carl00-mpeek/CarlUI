@@ -72,6 +72,7 @@ thread_local! {
 }
 
 fn rgb(c: u32, a: f32) -> D2D1_COLOR_F {
+    let c = crate::tone::hex(c);
     D2D1_COLOR_F { r: ((c >> 16) & 0xFF) as f32 / 255.0, g: ((c >> 8) & 0xFF) as f32 / 255.0, b: (c & 0xFF) as f32 / 255.0, a }
 }
 
@@ -358,7 +359,7 @@ pub fn run(owner: HWND, rows: Vec<Row>, accent: Option<u32>, at: (i32, i32)) -> 
     unsafe {
         let inst: HINSTANCE = GetModuleHandleW(None).unwrap_or_default().into();
         let hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, class, w!(""), WS_POPUP, x, y, pw, ph, owner, None, inst, None).ok()?;
-        let on: i32 = 1;
+        let on = i32::from(!crate::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let round = DWMWCP_ROUND;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &round as *const _ as _, 4);

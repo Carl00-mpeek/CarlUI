@@ -190,6 +190,7 @@ impl App {
         let s = self.scale;
         // Dock'un camının hemen üstü (dock'un ölçüleri ayarlardan hesaplanır).
         let cfg = config::load();
+        carlui_ui::tone::follow_window(&cfg.theme, self.hwnd);
         let k = cfg.dock.icon_size.clamp(20.0, 64.0) / 30.0;
         let mon = carlui_core::win::primary_monitor().map(|m| m.rect).unwrap_or_default();
         let (w, h) = ((view::W * s) as i32, (view::H * s) as i32);
@@ -883,7 +884,7 @@ fn main() -> Result<()> {
         };
         RegisterClassExW(&wc);
         let hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, START_CLASS, w!("CarlUI Menu"), WS_POPUP, 0, 0, 1, 1, None, None, inst, None)?;
-        let on: i32 = 1;
+        let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let round = DWMWCP_ROUND;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &round as *const _ as _, 4);

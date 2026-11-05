@@ -460,7 +460,7 @@ impl App {
             self.copy(value, &field);
             return;
         }
-        let issued = match self.tokens.issue(entry, slot, label, value, now_ms()) {
+        let issued = match self.tokens.issue(entry, slot, label, value, now_ms(), self.cfg.vault.token_ms()) {
             Ok(t) => t,
             Err(e) => return self.toast(e.to_string()),
         };
@@ -470,7 +470,7 @@ impl App {
             return;
         };
         self.clip_seq = Some(seq);
-        let secs = (carlui_vault::token::TTL_MS / 1000) as u32;
+        let secs = (self.cfg.vault.token_ms() / 1000) as u32;
         unsafe {
             let _ = KillTimer(self.hwnd, TIMER_CLIP);
             SetTimer(self.hwnd, TIMER_CLIP, secs * 1000, None);

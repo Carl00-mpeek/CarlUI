@@ -91,3 +91,13 @@ impl Theme {
         }
     }
 }
+
+/// Arayüz teması: koyu (varsayılan), açık ya da Windows'un uygulama teması.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ThemeMode {
+    #[default]
+    Dark,
+    Light,
+    System,
+}

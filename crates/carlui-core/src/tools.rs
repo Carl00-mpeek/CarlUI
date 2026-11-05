@@ -85,6 +85,10 @@ pub struct ToolsConfig {
     /// Metin genişletici modülü açık.
     pub expander: bool,
     pub snippets: Vec<Snippet>,
+    /// Kısaltma ne zaman açılsın: hemen ya da ardından Boşluk/Tab gelince.
+    pub expand_on: ExpandTrigger,
+    /// Bu uygulamalarda (exe adı, ör. "cs2.exe", "WindowsTerminal") genişletici çalışmaz.
+    pub expand_excluded: Vec<String>,
 }
 
 impl Default for ToolsConfig {
@@ -99,6 +103,8 @@ impl Default for ToolsConfig {
                 Snippet { key: ";tarih".into(), text: "{tarih}".into() },
                 Snippet { key: ";saat".into(), text: "{saat}".into() },
             ],
+            expand_on: ExpandTrigger::Immediate,
+            expand_excluded: vec!["WindowsTerminal.exe".into(), "cmd.exe".into(), "powershell.exe".into()],
         }
     }
 }
@@ -165,5 +171,41 @@ mod tests {
         let t = ToolsConfig::default();
         let s = toml::to_string(&t).unwrap();
         assert_eq!(toml::from_str::<ToolsConfig>(&s).unwrap(), t);
+    }
+}
+
+/// Metin genişleticinin tetiklenme anı.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExpandTrigger {
+    /// Kısaltmanın son harfi yazılınca.
+    #[default]
+    Immediate,
+    /// Kısaltmadan sonra Boşluk ya da Tab'a basılınca (o tuş da yazılır).
+    Delimiter,
+}
+
+/// `exe` adı listedeki bir adla eşleşiyor mu ("cs2" ve "cs2.exe" aynıdır; büyük/küçük harf duyarsız).
+pub fn exe_listed(list: &[String], exe: &str) -> bool {
+    let norm = |s: &str| {
+        let s = s.trim().to_lowercase();
+        let s = s.rsplit(['\\', '/']).next().unwrap_or("").to_string();
+        s.strip_suffix(".exe").map(str::to_string).unwrap_or(s)
+    };
+    let exe = norm(exe);
+    !exe.is_empty() && list.iter().any(|a| norm(a) == exe)
+}
+
+#[cfg(test)]
+mod exe_tests {
+    use super::*;
+
+    #[test]
+    fn exe_listed_matches_with_or_without_extension() {
+        let l = vec!["WindowsTerminal.exe".to_string(), "cs2".to_string()];
+        assert!(exe_listed(&l, "windowsterminal.exe"));
+        assert!(exe_listed(&l, r"C:\Games\cs2.exe"));
+        assert!(!exe_listed(&l, "notepad.exe"));
+        assert!(!exe_listed(&l, ""));
     }
 }

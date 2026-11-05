@@ -8,6 +8,8 @@
 //! eşleşme varsa işi ayrı bir gönderici iş parçacığına bırakır. Kendi
 //! gönderdiğimiz (enjekte) tuşlar sayılmaz; ön plan penceresi değişince,
 //! Ctrl/Alt/Win kısayollarında ya da yön tuşlarında tampon sıfırlanır.
+//! Ayarla kısaltma ancak ardından Boşluk/Tab gelince açılabilir; hariç
+//! tutulan uygulamalar öndeyken kanca tuşlara bakmaz.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -18,13 +20,16 @@ mod matcher;
 mod send;
 
 use carlui_core::{
-    config::{self, Config},
+    config::{self, exe_listed, Config, ExpandTrigger},
     log,
 };
 use matcher::Buffer;
 use std::{
     cell::RefCell,
-    sync::{mpsc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Mutex,
+    },
 };
 use windows::{
     core::*,
@@ -41,9 +46,15 @@ const WM_APP_RELOAD: u32 = WM_APP + 1;
 struct Active {
     keys: Vec<Vec<char>>,
     texts: Vec<String>,
+    /// Boşluk/Tab gelince mi açılsın.
+    delimiter: bool,
+    /// Genişleticinin çalışmadığı uygulamalar.
+    excluded: Vec<String>,
 }
 
 static ACTIVE: Mutex<Option<Active>> = Mutex::new(None);
+/// Ön plandaki uygulama hariç tutulanlardan mı (pencere değişince yenilenir).
+static SKIP: AtomicBool = AtomicBool::new(false);
 static PENDING: Mutex<Option<Config>> = Mutex::new(None);
 static SENDER: Mutex<Option<mpsc::Sender<(usize, String)>>> = Mutex::new(None);
 
@@ -109,11 +120,38 @@ unsafe fn on_key(k: &KBDLLHOOKSTRUCT) -> bool {
     let alt = down(VK_MENU);
     // AltGr = Ctrl+Alt; tek başına Ctrl ya da Alt bir kısayoldur.
     let shortcut = (ctrl != alt) || down(VK_LWIN) || down(VK_RWIN);
+    if SKIP.load(Ordering::Relaxed) {
+        return false;
+    }
+    let delimiter = ACTIVE.lock().ok().and_then(|a| a.as_ref().map(|a| a.delimiter)).unwrap_or(false);
+    if delimiter && !shortcut && (vk == VK_SPACE || vk == VK_TAB) {
+        // Boşluk/Tab yutulur; kısaltmanın tamamı silinir, açılımın ardından
+        // aynı ayırıcı yazılır.
+        let sep = if vk == VK_TAB { '\t' } else { ' ' };
+        let hit = BUF.with(|b| {
+            let mut b = b.borrow_mut();
+            let a = ACTIVE.lock().ok();
+            let found = a.as_ref().and_then(|a| a.as_ref()).and_then(|a| b.find(&a.keys).map(|i| (a.keys[i].len(), a.texts[i].clone())));
+            b.clear();
+            if found.is_none() && sep == ' ' {
+                b.push(' ');
+            }
+            found
+        });
+        let Some((len, mut text)) = hit else { return false };
+        text.push(sep);
+        go(len, text);
+        return true;
+    }
     let c = if shortcut { None } else { char_of(k) };
     let Some(c) = c.filter(|c| !c.is_control()) else {
         BUF.with(|b| b.borrow_mut().clear());
         return false;
     };
+    if delimiter {
+        BUF.with(|b| b.borrow_mut().push(c));
+        return false;
+    }
     let hit = BUF.with(|b| {
         let mut b = b.borrow_mut();
         b.push(c);
@@ -125,7 +163,12 @@ unsafe fn on_key(k: &KBDLLHOOKSTRUCT) -> bool {
     });
     let Some((len, text)) = hit else { return false };
     // Son harf yutulduğu için bir eksik silinir.
-    let erase = len - 1;
+    go(len - 1, text);
+    true
+}
+
+/// `erase` karakter silip açılımı yazar.
+unsafe fn go(erase: usize, text: String) {
     let slow = text.contains("{pano}") || text.contains("{clipboard}") || text.chars().count() > 150;
     if slow {
         // Pano okuması ya da uzun metin kancayı bekletmesin.
@@ -139,11 +182,24 @@ unsafe fn on_key(k: &KBDLLHOOKSTRUCT) -> bool {
         let out = matcher::expand(&text, &d, &t, || None);
         send::send(erase, &out);
     }
-    true
 }
 
 unsafe extern "system" fn on_foreground(_: HWINEVENTHOOK, _: u32, _: HWND, _: i32, _: i32, _: u32, _: u32) {
     BUF.with(|b| b.borrow_mut().clear());
+    check_foreground();
+}
+
+/// Ön plandaki uygulama hariç tutulanlardansa kanca tuşlara bakmaz.
+fn check_foreground() {
+    let skip = ACTIVE.lock().ok().and_then(|a| {
+        let a = a.as_ref()?;
+        if a.excluded.is_empty() {
+            return Some(false);
+        }
+        let exe = carlui_core::win::window_exe(unsafe { GetForegroundWindow() });
+        Some(!exe.is_empty() && exe_listed(&a.excluded, &exe))
+    });
+    SKIP.store(skip.unwrap_or(false), Ordering::Relaxed);
 }
 
 fn now() -> (String, String) {
@@ -172,8 +228,14 @@ fn sender() -> mpsc::Sender<(usize, String)> {
 unsafe fn apply(cfg: &Config) {
     let snippets: Vec<_> = cfg.tools.valid_snippets().cloned().collect();
     let on = cfg.tools.expander && !snippets.is_empty();
-    *ACTIVE.lock().unwrap_or_else(|e| e.into_inner()) = on.then(|| Active { keys: matcher::keys(&snippets), texts: snippets.into_iter().map(|s| s.text).collect() });
+    *ACTIVE.lock().unwrap_or_else(|e| e.into_inner()) = on.then(|| Active {
+        keys: matcher::keys(&snippets),
+        texts: snippets.into_iter().map(|s| s.text).collect(),
+        delimiter: cfg.tools.expand_on == ExpandTrigger::Delimiter,
+        excluded: cfg.tools.expand_excluded.clone(),
+    });
     BUF.with(|b| b.borrow_mut().clear());
+    check_foreground();
     HOOK.with(|h| {
         let mut h = h.borrow_mut();
         if on && h.0.is_null() {

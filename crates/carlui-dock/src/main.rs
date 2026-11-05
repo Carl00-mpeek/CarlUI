@@ -794,6 +794,7 @@ fn main() -> Result<()> {
         menu::enable_dark_menus();
 
         let mut cfg = config::load();
+        carlui_ui::tone::follow(&cfg.theme);
         first_run_import(&mut cfg);
 
         let hwnd = create_window(w!("CarlUI.Dock"), Some(dock_proc), w!("CarlUI Dock"))?;
@@ -817,6 +818,7 @@ fn main() -> Result<()> {
         let pending_cfg: Arc<Mutex<Option<Config>>> = Arc::default();
         let pending = pending_cfg.clone();
         config::watch(move |c| {
+            carlui_ui::tone::restart_on_change(&c.theme);
             if let Ok(mut p) = pending.lock() {
                 *p = Some(c);
             }

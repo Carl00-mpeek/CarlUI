@@ -5,7 +5,7 @@ use crate::{
     ui::{edit, Flow, P},
     App,
 };
-use carlui_core::theme::{Palette, Rgba};
+use carlui_core::theme::{Palette, Rgba, ThemeMode};
 use carlui_ui::paint::R;
 
 fn hex(c: Rgba) -> u32 {
@@ -15,6 +15,23 @@ fn hex(c: Rgba) -> u32 {
 pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     let c = &app.cfg.theme;
     f.section(p, t!("Renk", "Color"));
+    let sel = match c.mode {
+        ThemeMode::Dark => 0,
+        ThemeMode::Light => 1,
+        ThemeMode::System => 2,
+    };
+    f.choice(
+        p,
+        t!("Tema", "Theme"),
+        t!("Sistem, Windows'un açık/koyu ayarını izler. Ada, dock ve tepsi değişince kendini yeniden başlatır.", "System follows Windows' light/dark setting. The island, dock and tray restart themselves when it changes."),
+        &[
+            (t!("Koyu", "Dark"), edit(|c| c.theme.mode = ThemeMode::Dark)),
+            (t!("Açık", "Light"), edit(|c| c.theme.mode = ThemeMode::Light)),
+            (t!("Sistem", "System"), edit(|c| c.theme.mode = ThemeMode::System)),
+        ],
+        sel,
+        80.0,
+    );
     let sw = 30.0;
     let gap = 10.0;
     let n = Palette::ALL.len() as f32;

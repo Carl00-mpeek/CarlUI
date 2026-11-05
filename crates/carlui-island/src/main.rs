@@ -44,7 +44,7 @@ mod viewer;
 
 use carlui_core::{
     bus::{BusClient, Event},
-    config::{self, ClockMode, Config},
+    config::{self, ClockMode, Config, NotifySound},
     info, log, paths,
     theme::Theme,
 };
@@ -395,7 +395,7 @@ impl App {
     }
 
     fn push_note(&mut self, n: Note) {
-        if !self.cfg.notify.enabled {
+        if !self.cfg.notify.enabled || self.cfg.notify.is_blocked(&n.app, &n.aumid) {
             return;
         }
         let key = format!("{}|{}", n.title, n.body);
@@ -416,6 +416,9 @@ impl App {
             return;
         }
         info!("bildirim: {} — {}", n.app, n.title);
+        if self.cfg.notify.sound == NotifySound::File {
+            timing::play_file(&self.cfg.notify.sound_file);
+        }
         self.pending.push_back(n);
         // Arama açıkken bildirimler sıraya girer, kapanınca gösterilir.
         if self.note.is_none() && !self.spot.open && !self.clip.open {
@@ -488,6 +491,7 @@ impl App {
     }
 
     fn apply_config(&mut self, cfg: Config) {
+        island::set_date_format(cfg.clock.date);
         let theme = Theme::from_config(&cfg.theme);
         self.island.apply_theme(&theme);
         self.pop.apply_theme(&theme);
@@ -496,6 +500,10 @@ impl App {
         let banners = cfg.notify.enabled && cfg.notify.hide_windows_banners;
         if banners != (self.cfg.notify.enabled && self.cfg.notify.hide_windows_banners) {
             notify::set_hide_banners(banners);
+        }
+        let mute = cfg.notify.enabled && cfg.notify.sound != NotifySound::Windows;
+        if mute != (self.cfg.notify.enabled && self.cfg.notify.sound != NotifySound::Windows) {
+            banners::sync_sound(mute);
         }
         self.cfg = cfg;
         if monitor_changed {
@@ -510,7 +518,7 @@ impl App {
         if let Ok(mut st) = self.clip.store.lock() {
             st.max_items = self.cfg.clipboard.max_items.max(10);
         }
-        clipping::SECRET_SECS.store(self.cfg.clipboard.secret_seconds, Ordering::Relaxed);
+        clipping::apply_cfg(&self.cfg.clipboard);
         bridge::ENABLED.store(self.cfg.launcher.download_manager, Ordering::Relaxed);
         bridge::VAULT_FILL.store(self.cfg.vault.browser_fill, Ordering::Relaxed);
         self.shots.set_combo(&self.cfg);
@@ -757,6 +765,7 @@ impl App {
                 }
                 _ => self.hub_close(),
             },
+            View::Clock if island::date_hidden() => {}
             View::Clock => {
                 self.date = true;
                 unsafe {
@@ -1043,6 +1052,7 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
             WM_DESTROY => {
                 // Ada yokken bildirimler görünmez kalmasın: balonları geri aç.
                 notify::set_hide_banners(false);
+                banners::sync_sound(false);
                 PostQuitMessage(0);
                 LRESULT(0)
             }
@@ -1103,6 +1113,8 @@ fn main() -> Result<()> {
         })?;
 
         let cfg = config::load();
+        carlui_ui::tone::follow(&cfg.theme);
+        island::set_date_format(cfg.clock.date);
         let theme = Theme::from_config(&cfg.theme);
         let gfx = Gfx::new()?;
         let hwnd = create_window()?;
@@ -1126,6 +1138,7 @@ fn main() -> Result<()> {
         let cfg_slot: Arc<Mutex<Option<Config>>> = Arc::default();
         let slot = cfg_slot.clone();
         config::watch(move |c| {
+            carlui_ui::tone::restart_on_change(&c.theme);
             if let Ok(mut g) = slot.lock() {
                 *g = Some(c);
             }
@@ -1135,6 +1148,7 @@ fn main() -> Result<()> {
         media::start(hwnd_raw, WM_APP_MEDIA, media_slot.clone());
         let notes_in: Arc<Mutex<VecDeque<Note>>> = Arc::default();
         notify::set_hide_banners(cfg.notify.enabled && cfg.notify.hide_windows_banners);
+        banners::sync_sound(cfg.notify.enabled && cfg.notify.sound != NotifySound::Windows);
         notify::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
         downloads::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
         update::start(hwnd_raw, WM_APP_NOTE, notes_in.clone());
@@ -1154,7 +1168,7 @@ fn main() -> Result<()> {
 
         // Pano geçmişi: arka planda yüklenir, her kopya işçi iş parçacığında okunur.
         let store = Arc::new(Mutex::new(carlui_clip::store::Store::placeholder(cfg.clipboard.max_items)));
-        clipping::SECRET_SECS.store(cfg.clipboard.secret_seconds, Ordering::Relaxed);
+        clipping::apply_cfg(&cfg.clipboard);
         let clip_tx = clipping::start_listener(hwnd, store.clone(), cfg.clipboard.max_items);
         if let Err(e) = windows::Win32::System::DataExchange::AddClipboardFormatListener(hwnd) {
             carlui_core::warn!("pano dinlenemiyor: {e}");

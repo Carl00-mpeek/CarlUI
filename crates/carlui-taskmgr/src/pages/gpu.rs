@@ -21,7 +21,7 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
     for (label, value, hist, color) in [(t!("Etkinlik", "Activity"), carlui_core::lang::pct(g.load), &sm.gpu_hist, p.accent), (t!("Video belleği (VRAM)", "Video memory (VRAM)"), format!("{} / {} · {}", bytes(g.vram_used), bytes(g.vram_total), carlui_core::lang::pct(vram_pct)), &sm.vram_hist, GREEN)] {
         p.text(label, R::new(area.x, y, 300.0, 22.0), 12.0, false, TEXT, 0.6, Align::Left);
         p.text(&value, R::new(area.right() - 300.0, y, 300.0, 22.0), 12.0, false, TEXT, 0.8, Align::Right);
-        p.graph(crate::sample::LEN, R::new(area.x, y + 22.0, area.w, gh - 22.0), &hist.0, color);
+        p.graph(crate::sample::len(), R::new(area.x, y + 22.0, area.w, gh - 22.0), &hist.0, color);
         y += gh + 10.0;
     }
     let cards = stat_row(area, y + 4.0, 4, 82.0);

@@ -33,9 +33,23 @@ pub fn decode(wic: &IWICImagingFactory, bytes: &[u8]) -> Option<(IWICFormatConve
 
 /// Kaynağı PNG baytlarına kodlar.
 pub fn encode_png(wic: &IWICImagingFactory, src: &IWICBitmapSource) -> Option<Vec<u8>> {
+    encode(wic, src, &GUID_ContainerFormatPng)
+}
+
+/// PNG baytlarını JPG'ye çevirir (WIC'in varsayılan kalitesiyle, ~%90).
+pub fn png_to_jpg(wic: &IWICImagingFactory, png: &[u8]) -> Option<Vec<u8>> {
+    let (conv, _, _) = decode(wic, png)?;
+    unsafe {
+        let bgr = wic.CreateFormatConverter().ok()?;
+        bgr.Initialize(&conv, &GUID_WICPixelFormat24bppBGR, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeMedianCut).ok()?;
+        encode(wic, &bgr.cast().ok()?, &GUID_ContainerFormatJpeg)
+    }
+}
+
+fn encode(wic: &IWICImagingFactory, src: &IWICBitmapSource, container: &GUID) -> Option<Vec<u8>> {
     unsafe {
         let stream = SHCreateMemStream(None)?;
-        let enc = wic.CreateEncoder(&GUID_ContainerFormatPng, std::ptr::null()).ok()?;
+        let enc = wic.CreateEncoder(container, std::ptr::null()).ok()?;
         enc.Initialize(&stream, WICBitmapEncoderNoCache).ok()?;
         let mut frame = None;
         let mut props = None;

@@ -1,7 +1,7 @@
 //! Tek kullanımlık pano belirteçleri (Aşama 2). Bir alan kopyalanınca değer
 //! panoya değil bu depoya konur; panoya yalnızca 32 rastgele bayttan oluşan
 //! belirteç gider. Belirteç bir kayıt + alan çiftine bağlıdır (aynı alan
-//! yeniden kopyalanınca eskisi geçersiz olur), `TTL_MS` sonra ya da bir kez
+//! yeniden kopyalanınca eskisi geçersiz olur), ayarlanan süre (`vault.token_seconds`) sonra ya da bir kez
 //! kullanılınca silinir, kasa kilitlenince hepsi temizlenir. Değerler
 //! `Zeroizing` içinde tutulur.
 
@@ -54,14 +54,14 @@ pub struct Issued {
 
 impl Tokens {
     /// `value` için yeni belirteç verir; aynı kayıt+alanın eski belirteci silinir.
-    pub fn issue(&mut self, entry: &str, field: usize, label: &str, value: &str, now: i64) -> Result<Issued, crypto::Error> {
+    pub fn issue(&mut self, entry: &str, field: usize, label: &str, value: &str, now: i64, ttl: i64) -> Result<Issued, crypto::Error> {
         self.sweep(now);
         self.list.retain(|p| p.slot != (entry.to_string(), field));
         if self.list.len() >= MAX {
             self.list.remove(0);
         }
         let token = crypto::random::<32>()?;
-        let expires = now + TTL_MS;
+        let expires = now + ttl;
         let out = Issued { token: Zeroizing::new(hex::encode(&token)), label: label.to_string(), expires };
         self.list.push(Pending { token, slot: (entry.to_string(), field), label: label.to_string(), value: Zeroizing::new(value.to_string()), expires });
         Ok(out)
@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn single_use() {
         let mut t = Tokens::default();
-        let a = t.issue("e1", 0, "GitHub · Parola", "s3cret", 1000).unwrap();
+        let a = t.issue("e1", 0, "GitHub · Parola", "s3cret", 1000, TTL_MS).unwrap();
         assert_eq!(a.token.len(), 64);
         let (v, label) = t.take(&a.token, 2000).unwrap();
         assert_eq!(v.as_str(), "s3cret");
@@ -114,10 +114,10 @@ mod tests {
     #[test]
     fn expiry() {
         let mut t = Tokens::default();
-        let a = t.issue("e1", 0, "x", "v", 0).unwrap();
+        let a = t.issue("e1", 0, "x", "v", 0, TTL_MS).unwrap();
         assert_eq!(t.take(&a.token, TTL_MS).unwrap_err(), TokenError::Expired);
         assert!(t.is_empty());
-        let b = t.issue("e1", 0, "x", "v", 0).unwrap();
+        let b = t.issue("e1", 0, "x", "v", 0, TTL_MS).unwrap();
         t.sweep(TTL_MS + 1);
         assert_eq!(t.take(&b.token, 1).unwrap_err(), TokenError::Unknown);
     }
@@ -125,9 +125,9 @@ mod tests {
     #[test]
     fn wrong_and_replaced_tokens() {
         let mut t = Tokens::default();
-        let a = t.issue("e1", 0, "x", "old", 0).unwrap();
-        let b = t.issue("e1", 0, "x", "new", 0).unwrap();
-        let c = t.issue("e1", 1, "y", "other", 0).unwrap();
+        let a = t.issue("e1", 0, "x", "old", 0, TTL_MS).unwrap();
+        let b = t.issue("e1", 0, "x", "new", 0, TTL_MS).unwrap();
+        let c = t.issue("e1", 1, "y", "other", 0, TTL_MS).unwrap();
         assert_ne!(a.token.as_str(), b.token.as_str());
         assert_eq!(t.take(&a.token, 1).unwrap_err(), TokenError::Unknown, "aynı alanın eski belirteci geçersiz");
         assert_eq!(t.take("zz", 1).unwrap_err(), TokenError::Unknown);
@@ -136,7 +136,7 @@ mod tests {
         assert_eq!(t.take(&flipped, 1).unwrap_err(), TokenError::Unknown);
         assert_eq!(t.take(&b.token, 1).unwrap().0.as_str(), "new");
         assert_eq!(t.take(&c.token, 1).unwrap().0.as_str(), "other");
-        let d = t.issue("e2", 0, "z", "v", 0).unwrap();
+        let d = t.issue("e2", 0, "z", "v", 0, TTL_MS).unwrap();
         t.clear();
         assert_eq!(t.take(&d.token, 1).unwrap_err(), TokenError::Unknown);
     }
@@ -144,9 +144,9 @@ mod tests {
     #[test]
     fn bounded() {
         let mut t = Tokens::default();
-        let first = t.issue("e", 0, "x", "v", 0).unwrap();
+        let first = t.issue("e", 0, "x", "v", 0, TTL_MS).unwrap();
         for i in 1..40 {
-            t.issue("e", i, "x", "v", 0).unwrap();
+            t.issue("e", i, "x", "v", 0, TTL_MS).unwrap();
         }
         assert_eq!(t.len(), MAX);
         assert_eq!(t.take(&first.token, 1).unwrap_err(), TokenError::Unknown);

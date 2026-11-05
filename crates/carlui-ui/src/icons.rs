@@ -14,6 +14,7 @@ use windows::{
 };
 
 fn color(r: u8, g: u8, b: u8, a: f32) -> D2D1_COLOR_F {
+    let (r, g, b) = crate::tone::rgb8(r, g, b);
     D2D1_COLOR_F { r: r as f32 / 255.0, g: g as f32 / 255.0, b: b as f32 / 255.0, a }
 }
 
