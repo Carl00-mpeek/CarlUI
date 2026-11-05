@@ -339,7 +339,7 @@ impl App {
             let start = p.hits.len();
             let scroll = self.scroll.get(&self.page).copied().unwrap_or(0.0);
             let slide = tween::to(tween::key("page"), 0.0, 13.0);
-            let mut f = Flow { x, y: clip.y + 4.0 - scroll + slide, w: cw };
+            let mut f = Flow::new(x, clip.y + 4.0 - scroll + slide, cw);
             // Anahtarlar sayfaya ve içeriğe göre anahtarlanır: sayfa değişince ya da
             // kaydırınca önceki öğenin durumundan "açılıp kapanma" oynamaz.
             tween::place(Page::ALL.iter().position(|pg| *pg == self.page).unwrap_or(0) as u64 + 1, x, f.y);
@@ -400,12 +400,15 @@ impl App {
         // Seçili sayfanın zemini ve vurgu çizgisi sayfalar arasında kayar.
         let sel = Page::ALL.iter().position(|pg| *pg == self.page).unwrap_or(0) as f32;
         let at = tween::to(tween::key("side"), sel, 16.0);
-        let sr = R::new(10.0, 56.0 + at * 42.0, SIDEBAR - 20.0, 38.0);
+        // Alçak pencerede (ör. 1366×768) öğeler sıklaşır; alttaki düğmeyle çakışmaz.
+        let step = ((h - 56.0 - 58.0) / Page::ALL.len() as f32).clamp(30.0, 42.0);
+        let ih = step - 4.0;
+        let sr = R::new(10.0, 56.0 + at * step, SIDEBAR - 20.0, ih);
         p.round(sr, 7.0, 0xFFFFFF, 0.10);
         let stretch = ((at - sel).abs() * 10.0).min(8.0);
-        p.round(R::new(sr.x, sr.y + 10.0 - stretch, 3.0, sr.h - 20.0 + 2.0 * stretch), 1.5, self.accent, 1.0);
+        p.round(R::new(sr.x, sr.y + ih * 0.26 - stretch, 3.0, sr.h - ih * 0.52 + 2.0 * stretch), 1.5, self.accent, 1.0);
         for (i, pg) in Page::ALL.iter().enumerate() {
-            let r = R::new(10.0, 56.0 + i as f32 * 42.0, SIDEBAR - 20.0, 38.0);
+            let r = R::new(10.0, 56.0 + i as f32 * step, SIDEBAR - 20.0, ih);
             let hv = tween::to(tween::key(("side-h", i)), if self.page != *pg && p.hover(r) { 1.0 } else { 0.0 }, 18.0);
             if hv > 0.0 {
                 p.round(r, 7.0, 0xFFFFFF, 0.06 * hv);
@@ -596,10 +599,14 @@ fn main() -> Result<()> {
         };
         RegisterClassExW(&wc);
         let dpi = GetDpiForSystem().max(96) as f32 / 96.0;
-        let (ww, wh) = ((1040.0 * dpi) as i32, (740.0 * dpi) as i32);
-        let sw = GetSystemMetrics(SM_CXSCREEN);
-        let sh = GetSystemMetrics(SM_CYSCREEN);
-        let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), CLASS, &HSTRING::from(carlui_core::t!("CarlUI Ayarları", "CarlUI Settings")), WS_OVERLAPPEDWINDOW, (sw - ww) / 2, (sh - wh) / 2, ww, wh, None, None, inst, None)?;
+        // Küçük ekranda (ör. 1366×768, %125) pencere çalışma alanına sığdırılır.
+        let mut wa = windows::Win32::Foundation::RECT::default();
+        if SystemParametersInfoW(SPI_GETWORKAREA, 0, Some(&mut wa as *mut _ as _), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0)).is_err() {
+            wa = windows::Win32::Foundation::RECT { left: 0, top: 0, right: GetSystemMetrics(SM_CXSCREEN), bottom: GetSystemMetrics(SM_CYSCREEN) };
+        }
+        let (aw, ah) = (wa.right - wa.left, wa.bottom - wa.top);
+        let (ww, wh) = (((1040.0 * dpi) as i32).min(aw - 16), ((740.0 * dpi) as i32).min(ah - 16));
+        let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), CLASS, &HSTRING::from(carlui_core::t!("CarlUI Ayarları", "CarlUI Settings")), WS_OVERLAPPEDWINDOW, wa.left + (aw - ww) / 2, wa.top + (ah - wh) / 2, ww, wh, None, None, inst, None)?;
         let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let backdrop = DWMSBT_TRANSIENTWINDOW;

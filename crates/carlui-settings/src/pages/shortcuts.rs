@@ -236,6 +236,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     key_row(app, p, f, Key::Assist);
     f.section(p, "Dock");
     key_row(app, p, f, Key::AppNumbers);
+    f.flush(p);
     f.y += 6.0;
     f.note(p, t!("Fare tuşları kısayol olamaz. Değiştiricisiz tek tuş ve Windows'un temel kısayolları (Ctrl+C, Alt+Tab, Win+L …) kabul edilmez.", "Mouse buttons can't be shortcuts. A single key without modifiers and core Windows shortcuts (Ctrl+C, Alt+Tab, Win+L …) are not accepted."));
 }

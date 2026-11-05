@@ -75,6 +75,12 @@ pub struct Model {
 
 impl Model {
     pub fn size(&self) -> u64 {
+        // Dosyasız girdi (komut için Whisper base) eşinin dosyalarını kullanır.
+        if self.files.is_empty() {
+            if let Some(m) = self.id.strip_prefix("cmd-").and_then(get) {
+                return m.size();
+            }
+        }
         self.files.iter().map(|f| f.size).sum()
     }
     pub fn about(&self) -> &'static str {

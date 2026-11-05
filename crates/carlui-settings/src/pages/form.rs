@@ -20,6 +20,7 @@ pub fn draw(app: &App, p: &mut P, f: &mut Flow, kind: Form, fields: &[(&str, &st
     if t <= 0.01 {
         return;
     }
+    f.flush(p);
     let full = 66.0 + 62.0 * fields.len() as f32 + if app.input.as_ref().is_some_and(|i| i.error.is_some()) { 22.0 } else { 0.0 };
     let card = R::new(f.x, f.y, f.w, full * t);
     p.round(card, 8.0, 0xFFFFFF, 0.05 * t);

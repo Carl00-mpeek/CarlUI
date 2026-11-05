@@ -41,7 +41,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.slider(
         p,
         t!("Kaydedilecek süre", "Length to save"),
-        &t!(format!("Diskte yaklaşık {:.1} GB geçici alan kullanır.", disk_gb(c)).replace('.', ","), format!("Uses about {:.1} GB of temporary disk space.", disk_gb(c))),
+        &t!(format!("Diskte yaklaşık {} GB geçici alan kullanır.", format!("{:.1}", disk_gb(c)).replace('.', ",")), format!("Uses about {:.1} GB of temporary disk space.", disk_gb(c))),
         c.minutes() as f32,
         1.0,
         ReplayConfig::MAX_MINUTES as f32,
@@ -120,7 +120,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         )
         .to_string()
     } else {
-        t!(format!("{} dakikalık tekrar yaklaşık {:.1} GB tutar.", c.minutes(), disk_gb(c)).replace('.', ","), format!("A {}-minute replay is about {:.1} GB.", c.minutes(), disk_gb(c)))
+        t!(format!("{} dakikalık tekrar yaklaşık {} GB tutar.", c.minutes(), format!("{:.1}", disk_gb(c)).replace('.', ",")), format!("A {}-minute replay is about {:.1} GB.", c.minutes(), disk_gb(c)))
     };
     let r = f.row_c(p, t!("1 dakikalık kayıt boyutu (tahmini)", "Size of 1 minute of video (estimate)"), &desc, 150.0, heavy.then_some(YELLOW));
     let vr = R::new(r.right() - 16.0 - 130.0, r.y, 130.0, r.h);
@@ -220,6 +220,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         Cleanup::Age => f.slider(p, t!("En fazla yaş", "Maximum age"), t!("Bundan eski klipler silinir (açılışta ve her kayıtta bakılır).", "Older clips are deleted (checked at startup and on every save)."), c.max_days as f32, 1.0, 365.0, 1.0, |v| t!(format!("{v:.0} gün"), format!("{v:.0} days")), |c, v| c.replay.max_days = v as u32),
         Cleanup::Off => {}
     }
+    f.flush(p);
     f.y += 6.0;
     f.note(p, t!("Birincil monitör kaydedilir; fare imleci videoda görünmez. Oyunun odağını almaz, özel tam ekranda da çalışır.", "The primary monitor is recorded; the mouse cursor isn't shown. It never takes focus from the game and works in exclusive fullscreen."));
 }

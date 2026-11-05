@@ -33,6 +33,7 @@ pub fn draw(app: &App, p: &mut P, f: &mut Flow, list: &[String], pick: fn(&mut C
             }),
         );
     }
+    f.flush(p);
     if list.is_empty() {
         p.text(t!("Liste boş.", "The list is empty."), R::new(f.x + 4.0, f.y, f.w, 24.0), 12.5, false, TEXT, 0.5, Align::Left);
         f.y += 28.0;

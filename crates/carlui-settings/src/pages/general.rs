@@ -22,10 +22,10 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     };
     f.choice(p, t!("Arayüz dili", "Interface language"), t!("Otomatik: Windows'un diline göre seçilir.", "Auto: follows the Windows display language."), &langs, cur, 82.0);
 
-    f.section(p, t!("Başlangıç", "Startup"));
+    f.section(p, t!("Sistem", "System"));
     f.toggle(p, t!("Windows ile başlat", "Start with Windows"), t!("Oturum açılınca CarlUI hemen başlar.", "CarlUI starts as soon as you sign in."), c.start_with_windows, |c| c.general.start_with_windows ^= true);
-    f.section(p, t!("Güncellemeler", "Updates"));
     f.toggle(p, t!("Yeni sürümleri bildir", "Notify about new versions"), t!("Günde bir kez GitHub'a bakılır; yeni sürüm kendiliğinden kurulmaz.", "Checks GitHub once a day; nothing is installed automatically."), c.check_updates, |c| c.general.check_updates ^= true);
+    f.toggle(p, t!("Windows görev çubuğunu gizle", "Hide the Windows taskbar"), t!("Dock çalışırken Windows'un kendi görev çubuğu görünmez.", "The Windows taskbar stays hidden while the dock runs."), c.hide_taskbar, |c| c.general.hide_taskbar ^= true);
     f.section(p, t!("Yedekleme", "Backup"));
     let r = f.row(p, t!("Ayarları dışa / içe aktar", "Export / import settings"), t!("Tüm ayarlar tek bir .toml dosyasına yazılır; başka bilgisayarda içe aktarılabilir.", "All settings go into one .toml file you can import on another PC."), 230.0);
     let by = r.y + (r.h - 32.0) / 2.0;
@@ -34,8 +34,6 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     if let Some(n) = &app.notice {
         f.note(p, n);
     }
-    f.section(p, t!("Görev çubuğu", "Taskbar"));
-    f.toggle(p, t!("Windows görev çubuğunu gizle", "Hide the Windows taskbar"), t!("Dock çalışırken Windows'un kendi görev çubuğu görünmez.", "The Windows taskbar stays hidden while the dock runs."), c.hide_taskbar, |c| c.general.hide_taskbar ^= true);
 
     let n = unsafe { GetSystemMetrics(SM_CMONITORS) }.clamp(1, 4) as u32;
     if n > 1 {

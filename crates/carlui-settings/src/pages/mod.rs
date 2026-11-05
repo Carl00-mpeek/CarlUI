@@ -110,4 +110,5 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         Page::Replay => replay::paint(app, p, f),
         Page::Ai => ai::paint(app, p, f),
     }
+    f.flush(p);
 }

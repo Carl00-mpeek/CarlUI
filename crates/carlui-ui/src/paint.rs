@@ -129,6 +129,46 @@ impl Fonts {
     }
 }
 
+/// Metni `max` genişliğe sığan satırlara böler (sözcük sınırından). Tek başına
+/// sığmayan uzun sözcük (ör. klasör yolu) harf sınırından bölünür.
+pub fn wrap(text: &str, max: f32, width: impl Fn(&str) -> f32) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut words: Vec<String> = Vec::new();
+    for w in text.split_whitespace() {
+        if width(w) <= max {
+            words.push(w.to_string());
+            continue;
+        }
+        let mut part = String::new();
+        for ch in w.chars() {
+            part.push(ch);
+            if part.chars().count() > 1 && width(&part) > max {
+                part.pop();
+                words.push(std::mem::take(&mut part));
+                part.push(ch);
+            }
+        }
+        if !part.is_empty() {
+            words.push(part);
+        }
+    }
+    for w in &words {
+        let w = w.as_str();
+        let cand = if cur.is_empty() { w.to_string() } else { format!("{cur} {w}") };
+        if cur.is_empty() || width(&cand) <= max {
+            cur = cand;
+        } else {
+            out.push(std::mem::take(&mut cur));
+            cur = w.to_string();
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
 /// İki rengi `t` oranında karıştırır (0 = a, 1 = b).
 pub fn mix(a: u32, b: u32, t: f32) -> u32 {
     let t = t.clamp(0.0, 1.0);
@@ -352,5 +392,18 @@ impl<A: Clone> Painter<'_, A> {
             self.text(label, cell, 13.0, i == selected, mix(TEXT, 0x000000, under), 0.9, Align::Center);
             self.hit(cell, act.clone());
         }
+    }
+}
+
+#[cfg(test)]
+mod wrap_tests {
+    use super::wrap;
+
+    #[test]
+    fn wraps_words_and_breaks_long_ones() {
+        let w = |s: &str| s.chars().count() as f32;
+        assert_eq!(wrap("aa bb cc dd", 5.0, w), vec!["aa bb", "cc dd"]);
+        assert_eq!(wrap("C:/uzun/yol x", 4.0, w), vec!["C:/u", "zun/", "yol", "x"]);
+        assert!(wrap("   ", 10.0, w).is_empty());
     }
 }

@@ -138,6 +138,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
             }),
         );
     }
+    f.flush(p);
     if c.snippets.is_empty() {
         p.text(t!("Henüz kısaltma yok.", "No abbreviations yet."), R::new(f.x + 4.0, f.y, f.w, 24.0), 12.5, false, TEXT, 0.5, Align::Left);
         f.y += 28.0;

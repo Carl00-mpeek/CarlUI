@@ -62,6 +62,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         |c, v| c.vault.clear_clipboard_seconds = v as u64,
     );
     f.toggle(p, t!("Ekran görüntüsünde gizle", "Hide from screenshots"), t!("Kasa penceresi ekran görüntülerinde ve ekran paylaşımında görünmez.", "The vault window doesn't appear in screenshots or screen sharing."), c.hide_from_capture, |c| c.vault.hide_from_capture ^= true);
+    f.flush(p);
     f.y += 6.0;
     f.note(p, t!("Kasa yalnızca bu bilgisayarda, şifreli durur. Ana parola ve kurtarma anahtarı kasanın Güvenlik sayfasından değişir.", "The vault is stored encrypted only on this computer. Change the master password and recovery key on the vault's Security page."));
 }
