@@ -75,6 +75,18 @@
   bildirimler → Uyarılar** bölümünde.
 - **Oyun modu:** Tam ekranda arayüz çekilir, modüller uyku moduna geçer,
   bildirimler oyundan sonra gösterilir.
+- **Carl Office (ücretsiz):** Excel, Word, PowerPoint ve PDF dosyalarını
+  açar ve düzenler; ayrı bir ofis programı ya da abonelik gerekmez.
+  - **Excel (xlsx, xls, csv):** Hücre düzenleme, Türkçe formüller (TOPLA,
+    EĞER, DÜŞEYARA…), sayı/tarih/para biçimleri, renkler.
+  - **Word (docx):** Sayfa görünümünde yazma, kalın/italik, renk, hizalama,
+    başlık biçemleri.
+  - **PowerPoint (pptx):** Slayt ekleme, çoğaltma, silme ve taşıma, metin
+    kutuları, tam ekran sunum (F5).
+  - **PDF:** Sayfa döndürme, silme, taşıma, PDF birleştirme, sayfayı ayrı
+    kaydetme, sayfaya metin yazma.
+  - Kaydederken dokunmadığın her şey (grafik, makro, resim…) olduğu gibi
+    kalır. Arka planda çalışmaz; kurucuda isteğe bağlıdır.
 - **Görev yöneticisi, dosya dönüştürücü, ekran görüntüsü aracı** ve hepsini
   yöneten **Ayarlar** penceresi. Yetki isteyen süreçler ve başlangıç öğeleri
   için görev yöneticisinde **Yönetici olarak çalıştır** düğmesi var.
@@ -96,7 +108,8 @@ Yapay zekâ** sayfasında.
   bas; ekrandaki İngilizce yazı Türkçeye (ya da tersi) çevrilip panoya konur.
 - **Sesli komutla klip:** Anlık tekrar açıkken "son iki dakikayı kaydet" de,
   klip kaydedilsin.
-- **Arka planı sil** ve **resmi büyüt:** Dosya dönüştürücünün "Yapay zekâ"
+- **Arka planı sil** ve **resim kalitesi artırma:** Bulanık ya da küçük
+  fotoğrafları 2-4 kat netleştirir. İkisi de dosya dönüştürücünün "Yapay zekâ"
   bölümünde.
 
 **Modeller:** Kurucuda model yok. Ses stüdyosunda **Küçük / Orta / Büyük**

@@ -65,7 +65,7 @@ impl Op {
     pub fn name(self) -> String {
         match self {
             Op::Background => t!("Arka planı sil", "Remove background").into(),
-            Op::Upscale => t!(format!("Büyüt (×{})", scale(self.model())), format!("Upscale (×{})", scale(self.model()))),
+            Op::Upscale => t!(format!("Kaliteyi artır (×{})", scale(self.model())), format!("Enhance quality (×{})", scale(self.model()))),
             Op::Transcript => t!("Yazıya dök (.txt)", "Transcribe (.txt)").into(),
             Op::Subtitles => t!("Altyazı çıkar (.srt)", "Generate subtitles (.srt)").into(),
         }
@@ -242,7 +242,7 @@ pub fn run_all(w: &Shared, op: Op, files: &[String], ff: Option<&PathBuf>) {
         let name = file_name(src);
         let verb = match op {
             Op::Background => t!("Arka plan siliniyor", "Removing background"),
-            Op::Upscale => t!("Büyütülüyor", "Upscaling"),
+            Op::Upscale => t!("Kalite artırılıyor", "Enhancing quality"),
             Op::Transcript => t!("Yazıya dökülüyor", "Transcribing"),
             Op::Subtitles => t!("Altyazı çıkarılıyor", "Generating subtitles"),
         };
@@ -270,7 +270,7 @@ pub fn run_all(w: &Shared, op: Op, files: &[String], ff: Option<&PathBuf>) {
                     Eng::Up(u) => {
                         let s = u.scale as u64;
                         if img.w as u64 * img.h as u64 * s * s > MAX_OUT_PIXELS {
-                            return Err(t!("Resim büyütmek için fazla büyük", "The image is too large to upscale").into());
+                            return Err(t!("Resim kalite artırma için fazla büyük", "The image is too large to enhance").into());
                         }
                         u.upscale(&img, &cancel, &prog)?
                     }
@@ -302,7 +302,7 @@ pub fn run_all(w: &Shared, op: Op, files: &[String], ff: Option<&PathBuf>) {
         } else if errors.is_empty() || ok > 0 {
             match (op, ok) {
                 (Op::Background, 1) => t!("Arka plan silindi", "Background removed").into(),
-                (Op::Upscale, 1) => t!("Büyütüldü", "Upscaled").into(),
+                (Op::Upscale, 1) => t!("Kalitesi artırıldı", "Quality enhanced").into(),
                 (Op::Transcript, 1) => t!("Yazıya döküldü", "Transcribed").into(),
                 (Op::Subtitles, 1) => t!("Altyazı hazır", "Subtitles ready").into(),
                 _ if errors.is_empty() => t!(format!("{ok} dosya hazır"), format!("{ok} files done")),

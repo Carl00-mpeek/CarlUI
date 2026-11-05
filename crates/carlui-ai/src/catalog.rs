@@ -425,7 +425,7 @@ impl Tier {
 impl Feature {
     pub fn title(self) -> &'static str {
         match self {
-            Feature::Upscale => t!("Resim büyütme", "Image upscaling"),
+            Feature::Upscale => t!("Resim kalite artırma", "Image quality enhancement"),
             Feature::Background => t!("Arka plan silme", "Background removal"),
             Feature::Speech => t!("Konuşmayı yazıya dökme", "Speech to text"),
             Feature::Command => t!("Sesli komut", "Voice command"),

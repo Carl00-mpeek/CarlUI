@@ -75,6 +75,18 @@
   **Settings → Island and notifications → Alerts**.
 - **Game mode:** In fullscreen the UI steps aside, modules go to sleep and
   notifications wait until you're done.
+- **Carl Office (free):** Opens and edits Excel, Word, PowerPoint and PDF
+  files; no separate office suite or subscription needed.
+  - **Excel (xlsx, xls, csv):** Cell editing, formulas (SUM, IF, VLOOKUP…),
+    number/date/currency formats, colors.
+  - **Word (docx):** Typing in page view, bold/italic, color, alignment,
+    heading styles.
+  - **PowerPoint (pptx):** Add, duplicate, delete and reorder slides, text
+    boxes, fullscreen slideshow (F5).
+  - **PDF:** Rotate, delete and reorder pages, merge PDFs, save a page on its
+    own, add text to a page.
+  - Saving keeps everything you didn't touch (charts, macros, images…) as it
+    was. Nothing runs in the background; it's optional in the installer.
 - **Task manager, file converter, screenshot tool** and a **Settings** window
   that controls all of it. The task manager has a **Run as administrator**
   button for processes and startup items that need it.
@@ -98,8 +110,8 @@ Everything runs on your PC; nothing goes to the cloud. Options are in
   other way round) and copied to the clipboard.
 - **Voice-triggered clips:** With instant replay on, say "save the last two
   minutes" to save a clip.
-- **Remove background** and **upscale image:** In the file converter's "AI"
-  section.
+- **Remove background** and **image quality enhancement:** Sharpens blurry or
+  small photos 2-4×. Both are in the file converter's "AI" section.
 
 **Models:** None ship with the installer. In the Voice studio you pick the one
 you want from a **Small / Medium / Large** list; each shows its size, license
