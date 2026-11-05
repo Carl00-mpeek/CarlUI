@@ -18,7 +18,7 @@ use windows::{
             Dxgi::*,
             Imaging::*,
         },
-        System::{Com::*, WinRT::Composition::*},
+        System::{Com::*, Threading::*, WinRT::Composition::*},
     },
 };
 
@@ -53,11 +53,48 @@ fn create_d3d() -> Result<ID3D11Device> {
     Err(E_FAIL.into())
 }
 
+/// İş parçacığına geçirilen aygıt (yalnızca kayıp sorgusu yapılır; bu çağrı
+/// her iş parçacığından güvenlidir).
+struct Dev(ID3D11Device);
+unsafe impl Send for Dev {}
+
+/// Ekran kartı sürücüsü güncellenince ya da sıfırlanınca GPU aygıtı kaybolur;
+/// bir kez çizilip bırakılan yüzeyler (dock simgeleri, tepsi…) boş kalır.
+/// Bu iş parçacığı sürücü değişimini (yoksa 10 sn'de bir) bekler, aygıtın
+/// kaybolduğunu görünce süreci hata koduyla kapatır; CarlUI'nin bekçisi modülü
+/// yeni aygıtla baştan başlatır. Beklerken CPU harcamaz.
+fn watch_device(dev: &ID3D11Device) {
+    let dev = Dev(dev.clone());
+    let _ = std::thread::Builder::new().name("gpu-watch".into()).spawn(move || unsafe {
+        let dev = dev;
+        let event = CreateEventW(None, false, false, None).ok();
+        let factory: Option<IDXGIFactory7> = CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS(0)).ok();
+        if let (Some(f), Some(e)) = (&factory, event) {
+            let _ = f.RegisterAdaptersChangedEvent(e);
+        }
+        loop {
+            match event {
+                Some(e) => {
+                    WaitForSingleObject(e, 10_000);
+                }
+                None => std::thread::sleep(std::time::Duration::from_secs(10)),
+            }
+            if dev.0.GetDeviceRemovedReason().is_err() {
+                // Sürücü yerleşsin; hemen başlarsak yeni aygıt da kurulamayabilir.
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+                std::process::exit(3);
+            }
+        }
+    });
+}
+
 impl Gfx {
     pub fn new() -> Result<Self> {
         unsafe {
             let comp = Compositor::new()?;
-            let dxgi: IDXGIDevice = create_d3d()?.cast()?;
+            let d3d = create_d3d()?;
+            watch_device(&d3d);
+            let dxgi: IDXGIDevice = d3d.cast()?;
             let factory: ID2D1Factory1 = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None)?;
             let d2d = factory.CreateDevice(&dxgi)?;
             let gdev = comp.cast::<ICompositorInterop>()?.CreateGraphicsDevice(&d2d)?;
