@@ -43,6 +43,10 @@ All of the following are used under the MIT license (most are dual-licensed
 | num-complex, num-integer, num-traits | MIT OR Apache-2.0 | https://github.com/rust-num |
 | once_cell, smallvec, parking_lot, parking_lot_core, lock_api, scopeguard, cfg-if, array-init, generic_singleton | MIT OR Apache-2.0 | crates.io |
 | anymap3 | BlueOak-1.0.0 OR MIT OR Apache-2.0 | https://github.com/reivilibre/anymap3 |
+| ort, ort-sys (ONNX Runtime bindings) | MIT OR Apache-2.0 | https://github.com/pykeio/ort |
+| ndarray, matrixmultiply, rawpointer | MIT OR Apache-2.0 | https://github.com/rust-ndarray/ndarray |
+| portable-atomic, portable-atomic-util | Apache-2.0 OR MIT | https://github.com/taiki-e/portable-atomic |
+| tracing, tracing-core | MIT | https://github.com/tokio-rs/tracing |
 | ruzstd (setup only) | MIT | https://github.com/KillingSpark/zstd-rs |
 | zstd, zstd-safe, zstd-sys (build time only, compresses the setup payload) | MIT / BSD-3-Clause | https://github.com/gyscos/zstd-rs |
 | proc-macro2, quote, syn, unicode-ident (build time only) | MIT OR Apache-2.0 (unicode-ident also Unicode-3.0) | https://github.com/dtolnay |
@@ -107,6 +111,40 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
+
+## libloading — ISC
+
+`carlui-ai` loads the ONNX Runtime library with libloading.
+Source: https://github.com/nagisa/rust_libloading
+
+```
+Copyright © 2015, Simonas Kazlauskas
+
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without
+fee is hereby granted, provided that the above copyright notice and this permission notice appear
+in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS
+SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
+NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+THIS SOFTWARE.
+```
+
+## AI models and runtimes (not bundled)
+
+No AI model, ONNX Runtime or ffmpeg file ships with the installer. When the user
+turns on an AI feature, the file is downloaded from its official source (pinned
+version, SHA-256 checked) into `%LOCALAPPDATA%\CarlUI\models`. Each model's
+license and source are shown in the app before download. Models whose license
+forbids commercial use (for example the Piper dfki Turkish voice,
+CC BY-NC-SA 4.0) are marked in orange and need the user's explicit consent.
+
+Kurucuda yapay zekâ modeli, ONNX Runtime ya da ffmpeg yoktur. Kullanıcı bir
+özelliği açınca dosya resmi kaynağından (sabit sürüm, SHA-256 doğrulamalı)
+indirilir. Her modelin lisansı ve kaynağı indirmeden önce gösterilir; ticari
+kullanımı yasaklayan modeller turuncu işaretlidir ve açık onay ister.
 
 ## Fonts and icons
 

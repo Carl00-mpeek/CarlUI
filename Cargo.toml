@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/carlui-core", "crates/carlui-ui", "crates/carlui", "crates/carlui-dock", "crates/carlui-tray", "crates/carlui-island", "crates/carlui-launcher", "crates/carlui-clip", "crates/carlui-sys", "crates/carlui-sensors", "crates/carlui-taskmgr", "crates/carlui-convert", "crates/carlui-settings", "crates/carlui-start", "crates/carlui-setup", "crates/carlui-vault", "crates/carlui-office", "crates/carlui-tools", "crates/carlui-expand", "crates/carlui-replay", "crates/carlui-ai"]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 license = "MIT"
 authors = ["Demhat Dayan <maildemhat@gmail.com>"]
