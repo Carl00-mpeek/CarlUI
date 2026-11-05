@@ -9,12 +9,14 @@
 //!   doğrudan alınıp panoya kopyalanır; bildirimdeki "Düzenle" ile alan kırpılır.
 //! - Oyun öndeyse düzenleyici odak almaz: tuşlar ve tıklamalar kancadan
 //!   okunup oyuna gitmeden yutulur, böylece oyun simge durumuna düşmez.
+//! - "Yazıyı kopyala" (Ctrl+T) seçimdeki metni OCR ile okuyup panoya koyar (bkz. `ocr`).
 //! - Seçimdeki QR kodları okunup türüne ayrılır (bkz. `qr`); 2FA QR'ı tek
 //!   düğmeyle Carl Vault'a aktarılır.
 //! - Bitince adaya "Aç / Düzenle / Sil" düğmeli bir bildirim düşer. Sil
 //!   dosyayı Geri Dönüşüm Kutusu'na atar, panodaki kaydı da kaldırır.
 
 mod capture;
+mod ocr;
 mod overlay;
 pub(crate) mod qr;
 
@@ -483,6 +485,15 @@ impl App {
             }
             return;
         }
+        if out == Out::Ocr {
+            let area = o.sel_px();
+            let px = self.shots.overlay.as_mut().map(|o| (std::mem::take(&mut o.frame.px), o.frame.w, o.frame.h));
+            self.shot_close();
+            if let (Some(area), Some((px, w, h))) = (area, px) {
+                self.shot_ocr(px, w, h, area);
+            }
+            return;
+        }
         let Some((png, w, h)) = o.render_png() else {
             self.shot_close();
             return;
@@ -490,6 +501,38 @@ impl App {
         let editing = o.editing.clone();
         self.shot_close();
         self.shot_store(png, w, h, out, editing);
+    }
+
+    /// "Yazıyı kopyala": OCR arayüzü dondurmasın diye işçi iş parçacığında
+    /// çalışır; metin panoya yazılır, sonuç adaya bildirim olarak düşer.
+    fn shot_ocr(&mut self, px: Vec<u8>, w: u32, h: u32, area: (u32, u32, u32, u32)) {
+        let raw = self.island.hwnd.0 as isize;
+        let notes = self.notes_in.clone();
+        let _ = std::thread::Builder::new().name("ocr".into()).spawn(move || {
+            let res = ocr::recognize(&px, w, h, area);
+            drop(px);
+            let (title, body) = match res {
+                Ok(text) if text.is_empty() => (t!("Yazı bulunamadı", "No text found").to_string(), t!("Seçili alanda okunabilir yazı yok.", "No readable text in the selected area.").to_string()),
+                Ok(text) => {
+                    let ok = carlui_clip::write::set(HWND(raw as _), carlui_clip::write::Data::Text(&text)).is_some();
+                    let first: String = text.lines().next().unwrap_or_default().chars().take(60).collect();
+                    let n = text.lines().count();
+                    info!("OCR: {n} satır okundu");
+                    let head = if ok { t!("Yazı panoya kopyalandı", "Text copied to clipboard") } else { t!("Panoya konamadı", "Couldn't copy") };
+                    (head.to_string(), if n > 1 { t!(format!("{first} … ({n} satır)"), format!("{first} … ({n} lines)")) } else { first })
+                }
+                Err(e) => {
+                    carlui_core::warn!("OCR olmadı: {e}");
+                    (t!("Yazı okunamadı", "Couldn't read text").to_string(), e)
+                }
+            };
+            if let Ok(mut q) = notes.lock() {
+                q.push_back(Note { app: t!("Ekran görüntüsü", "Screenshot").into(), title, body, ..Default::default() });
+            }
+            unsafe {
+                let _ = PostMessageW(HWND(raw as _), WM_APP_NOTE, WPARAM(0), LPARAM(0));
+            }
+        });
     }
 
     /// QR düğmesi: (tür, okunan metin, kopyalanacak metin, başlık).

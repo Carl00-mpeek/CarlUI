@@ -40,6 +40,8 @@ pub enum Btn {
     Color(usize),
     Undo,
     Copy,
+    /// Seçimdeki yazıyı oku (OCR) ve panoya kopyala.
+    Ocr,
     Save,
     Close,
     /// Bulunan QR kodunun düğmesi: (sıra, eylem).
@@ -51,6 +53,7 @@ pub enum Out {
     None,
     Cancel,
     Copy,
+    Ocr,
     Save,
     Qr(usize, qr::Act),
 }
@@ -218,6 +221,11 @@ impl Overlay {
         self.sel.map(|(a, b, c, d)| (a.min(c), b.min(d), a.max(c), b.max(d)))
     }
 
+    /// Seçili alan, görüntü pikseli olarak (x0, y0, x1, y1).
+    pub fn sel_px(&self) -> Option<(u32, u32, u32, u32)> {
+        self.sel_norm().map(|(a, b, c, d)| (a.max(0.0) as u32, b.max(0.0) as u32, c.ceil().max(0.0) as u32, d.ceil().max(0.0) as u32))
+    }
+
     pub fn debug_sel(&self) -> Option<(f32, f32, f32, f32)> {
         self.sel
     }
@@ -313,6 +321,7 @@ impl Overlay {
             (0x1B, _) => return Out::Cancel,
             (0x0D, _) | (0x43, true) if self.has_selection() => return Out::Copy,
             (0x53, true) if self.has_selection() => return Out::Save,
+            (0x54, true) if self.has_selection() => return Out::Ocr,
             (0x5A, true) | (0x2E, false) => {
                 self.marks.pop();
             }
@@ -371,6 +380,10 @@ impl Overlay {
             Btn::Copy => {
                 self.finish_typing();
                 return Out::Copy;
+            }
+            Btn::Ocr => {
+                self.finish_typing();
+                return Out::Ocr;
             }
             Btn::Save => {
                 self.finish_typing();
@@ -584,6 +597,7 @@ impl Overlay {
             (Btn::Color(2), ' '),
             (Btn::Color(3), ' '),
             (Btn::Copy, '\u{E8C8}'),
+            (Btn::Ocr, '\u{EA37}'),
             (Btn::Save, '\u{E74E}'),
             (Btn::Close, '\u{E711}'),
         ];
@@ -661,6 +675,7 @@ impl Overlay {
                 Btn::Undo => t!("Geri al (Ctrl+Z)", "Undo (Ctrl+Z)"),
                 Btn::Color(_) => t!("Renk", "Color"),
                 Btn::Copy => t!("Kopyala (Enter)", "Copy (Enter)"),
+                Btn::Ocr => t!("Yazıyı kopyala (Ctrl+T)", "Copy text (Ctrl+T)"),
                 Btn::Save => if self.editing.is_some() { t!("Kaydet (Ctrl+S)", "Save (Ctrl+S)") } else { t!("Masaüstüne kaydet (Ctrl+S)", "Save to desktop (Ctrl+S)") },
                 Btn::Close => t!("Kapat (Esc)", "Close (Esc)"),
                 Btn::Qr(..) => "",
