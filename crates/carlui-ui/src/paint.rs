@@ -45,6 +45,7 @@ impl R {
 pub const TEXT: u32 = 0xFFFFFF;
 pub const RED: u32 = 0xFF6B6B;
 pub const ORANGE: u32 = 0xFFB454;
+pub const YELLOW: u32 = 0xFFD43B;
 pub const GREEN: u32 = 0x6CCB5F;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

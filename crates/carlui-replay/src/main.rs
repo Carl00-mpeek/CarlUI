@@ -376,6 +376,8 @@ fn apply(sess: &mut Option<Session>, cfg: &Config) {
         }
         None => {}
     }
+    mixer::GAIN_SYS.store(rc.audio_volume.min(ReplayConfig::MAX_VOLUME), Ordering::SeqCst);
+    mixer::GAIN_MIC.store(rc.mic_volume.min(ReplayConfig::MAX_VOLUME), Ordering::SeqCst);
     if rc.enabled && sess.is_none() {
         *sess = Some(Session::start(rc));
     }

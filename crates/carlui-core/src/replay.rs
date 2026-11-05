@@ -1,6 +1,6 @@
 //! Bu modül "anlık tekrar kaydının ayarları nerede durur?" sorununu çözüyor:
 //! `config.toml`'daki `[replay]` bölümü (açık/kapalı, kaç dakika geriye,
-//! kare hızı, kalite, çözünürlük, sıkıştırma, ses, mikrofon) ve kaydetme /
+//! kare hızı, kalite, çözünürlük, sıkıştırma, ses, mikrofon ve düzeyleri) ve kaydetme /
 //! panel kısayollarının (`shortcuts.replay`, `shortcuts.replay_panel`)
 //! doğrulanması. `config.rs` büyümesin diye ayrı dosyadadır.
 
@@ -44,7 +44,7 @@ pub struct ReplayConfig {
     pub enabled: bool,
     /// Kısayola basınca kaydedilecek süre (dakika, 1–30).
     pub minutes: u32,
-    /// 30 ya da 60.
+    /// 30, 45, 60, 90, 120 ya da 144.
     pub fps: u32,
     pub quality: Quality,
     pub resolution: Resolution,
@@ -53,29 +53,33 @@ pub struct ReplayConfig {
     pub audio: bool,
     /// Varsayılan mikrofonu da kaydet (bilgisayar sesiyle karıştırılır).
     pub mic: bool,
+    /// Bilgisayar sesinin kayıttaki düzeyi (yüzde, 0–200).
+    pub audio_volume: u32,
+    /// Mikrofonun kayıttaki düzeyi (yüzde, 0–200).
+    pub mic_volume: u32,
     /// Kayıtların klasörü; boşsa Videolar\CarlUI.
     pub folder: String,
 }
 
 impl Default for ReplayConfig {
     fn default() -> Self {
-        Self { enabled: false, minutes: 5, fps: 60, quality: Quality::Medium, resolution: Resolution::Native, codec: Codec::H264, audio: true, mic: false, folder: String::new() }
+        Self { enabled: false, minutes: 5, fps: 60, quality: Quality::Medium, resolution: Resolution::Native, codec: Codec::H264, audio: true, mic: false, audio_volume: 100, mic_volume: 100, folder: String::new() }
     }
 }
 
 impl ReplayConfig {
     pub const MAX_MINUTES: u32 = 30;
+    pub const MAX_VOLUME: u32 = 200;
 
     pub fn minutes(&self) -> u32 {
         self.minutes.clamp(1, Self::MAX_MINUTES)
     }
 
+    /// Seçilebilen kare hızları; ayardaki değer en yakınına yuvarlanır.
+    pub const FPS: [u32; 6] = [30, 45, 60, 90, 120, 144];
+
     pub fn fps(&self) -> u32 {
-        if self.fps <= 30 {
-            30
-        } else {
-            60
-        }
+        *Self::FPS.iter().min_by_key(|&&f| f.abs_diff(self.fps)).unwrap()
     }
 
     /// Ekran `w`x`h` iken kaydın boyutu (çift sayılar, en-boy oranı korunur).
@@ -101,8 +105,24 @@ impl ReplayConfig {
             Quality::High => 0.30,
         };
         let codec = if self.codec == Codec::Hevc { 0.65 } else { 1.0 };
-        let b = w as f64 * h as f64 * self.fps() as f64 * per_px * codec;
+        // 60 fps üstünde kareler birbirine çok benzer: bit hızı yarı eğimle artar.
+        let fps = self.fps() as f64;
+        let fps = if fps > 60.0 { 60.0 + (fps - 60.0) * 0.5 } else { fps };
+        let b = w as f64 * h as f64 * fps * per_px * codec;
         (b as u32).clamp(2_000_000, 100_000_000)
+    }
+
+    /// Ekran `w`x`h` iken bir dakikalık kaydın yaklaşık boyutu (MB), ses dahil.
+    pub fn mb_per_minute(&self, w: u32, h: u32) -> f64 {
+        let (w, h) = self.out_size(w, h);
+        let audio = if self.audio || self.mic { 192_000.0 } else { 0.0 };
+        (self.bitrate(w, h) as f64 + audio) / 8.0 * 60.0 / 1e6
+    }
+
+    /// Yüksek kare hızı (> 60) ya da 1080p üstü çözünürlük: diskte çok yer
+    /// kaplar, oyunla aynı diskteyse takılmaya yol açabilir.
+    pub fn heavy(&self, w: u32, h: u32) -> bool {
+        self.fps() > 60 || self.out_size(w, h).1 > 1080
     }
 }
 

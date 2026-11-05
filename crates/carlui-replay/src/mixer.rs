@@ -14,7 +14,7 @@ use crate::{
 use std::{
     collections::VecDeque,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
         Arc, Mutex,
     },
     time::{Duration, Instant},
@@ -30,6 +30,24 @@ const CH: usize = AUDIO_CH as usize;
 pub struct Flags {
     pub audio: AtomicBool,
     pub mic: AtomicBool,
+}
+
+/// Kaynakların kayıttaki düzeyi (yüzde, 0–200); ayardan ve panelden yazılır.
+pub static GAIN_SYS: AtomicU32 = AtomicU32::new(100);
+pub static GAIN_MIC: AtomicU32 = AtomicU32::new(100);
+/// Son okumadan beri görülen en yüksek tepe (düzey uygulanmış, 0–32767);
+/// panel `swap(0)` ile okur.
+pub static LEVEL_SYS: AtomicU32 = AtomicU32::new(0);
+pub static LEVEL_MIC: AtomicU32 = AtomicU32::new(0);
+
+pub fn gain(g: &AtomicU32) -> f32 {
+    g.load(Ordering::Relaxed).min(200) as f32 / 100.0
+}
+
+/// Örneklerin düzey uygulanmış tepe değeri.
+pub fn peak(pcm: &[i16], gain: f32) -> u32 {
+    let m = pcm.iter().map(|&v| (v as i32).unsigned_abs()).max().unwrap_or(0);
+    ((m as f32 * gain) as u32).min(32767)
 }
 
 fn frames(d: i64) -> usize {
@@ -76,26 +94,31 @@ impl Track {
     }
 
     /// `[from, from + n kare)` aralığını `out`'a ekler ve kuyruktan düşer.
-    fn take(&mut self, from: i64, out: &mut [i32]) {
+    /// Örnekler `gain` ile çarpılır; dönüş: eklenen kısmın tepe değeri.
+    fn take(&mut self, from: i64, out: &mut [i32], gain: f32) -> u32 {
         let n = out.len() / CH;
         if self.q.is_empty() {
-            return;
+            return 0;
         }
         if self.t < from {
             let d = (frames(from - self.t) * CH).min(self.q.len());
             self.q.drain(..d);
             self.t += frames_to_100ns((d / CH) as u64);
             if self.q.is_empty() {
-                return;
+                return 0;
             }
         }
         // Kuyruk `from`'dan sonra başlıyorsa baştaki kısım sessiz.
         let off = frames(self.t - from).min(n);
         let avail = (self.q.len() / CH).min(n - off);
+        let mut pk = 0u32;
         for (i, v) in self.q.drain(..avail * CH).enumerate() {
-            out[off * CH + i] += v as i32;
+            let s = (v as f32 * gain) as i32;
+            pk = pk.max(s.unsigned_abs());
+            out[off * CH + i] += s;
         }
         self.t += frames_to_100ns(avail as u64);
+        pk.min(32767)
     }
 
     fn clear(&mut self) {
@@ -193,8 +216,8 @@ pub unsafe fn run(stop: Arc<AtomicBool>, cur: Arc<Mutex<Option<Arc<Ring>>>>, fla
         }
         buf.clear();
         buf.resize(n * CH, 0);
-        sys.track.take(out_t, &mut buf);
-        mic.track.take(out_t, &mut buf);
+        LEVEL_SYS.fetch_max(sys.track.take(out_t, &mut buf, gain(&GAIN_SYS)), Ordering::Relaxed);
+        LEVEL_MIC.fetch_max(mic.track.take(out_t, &mut buf, gain(&GAIN_MIC)), Ordering::Relaxed);
         pcm.clear();
         pcm.extend(buf.iter().map(|&v| v.clamp(i16::MIN as i32, i16::MAX as i32) as i16));
         if let Some(r) = cur.lock().unwrap_or_else(|e| e.into_inner()).clone() {
@@ -215,7 +238,7 @@ mod tests {
         t.push(&vec![1; 480 * CH], 10_000_000);
         let mut out = vec![0i32; 960 * CH];
         // 5 ms önceden iste: ilk 240 kare sessiz, sonra 480 kare 1, sonra sessiz.
-        t.take(10_000_000 - 50_000, &mut out);
+        t.take(10_000_000 - 50_000, &mut out, 1.0);
         let ones = out.iter().filter(|&&v| v == 1).count() / CH;
         assert_eq!(ones, 480);
         assert_eq!(out[0], 0);
@@ -232,7 +255,7 @@ mod tests {
         assert_eq!(t.q.len() / CH, 480 + 2400 + 480);
         let mut out = vec![0i32; 480 * CH];
         // İlk 60 ms geçmişte kaldı: yalnızca son paket gelir.
-        t.take(600_000, &mut out);
+        t.take(600_000, &mut out, 1.0);
         assert!(out.iter().all(|&v| v == 3));
     }
 }

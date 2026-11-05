@@ -58,6 +58,13 @@ pub trait View: 'static {
     }
     fn char(&mut self, _c: char, _ctx: &mut Ctx) {}
     fn wheel(&mut self, _delta: f32, _at: (f32, f32), _ctx: &mut Ctx) {}
+    /// Sol tuş bir alanın üstünde basıldı; `true` = sürükleme başlasın
+    /// (bırakınca `click` yerine `release` çağrılır).
+    fn press(&mut self, _a: &Self::A, _at: (f32, f32), _ctx: &mut Ctx) -> bool {
+        false
+    }
+    fn drag(&mut self, _at: (f32, f32), _ctx: &mut Ctx) {}
+    fn release(&mut self, _at: (f32, f32), _ctx: &mut Ctx) {}
     /// `poke` ile uyandırıldı ya da zamanlayıcı.
     fn tick(&mut self, _ctx: &mut Ctx) {}
     /// Çizimden sonra hâlâ canlandırma sürüyor mu (sürekli yeniden çizim).
@@ -96,6 +103,7 @@ struct Host<V: View> {
     accent: u32,
     popup: bool,
     noactivate: bool,
+    dragging: bool,
 }
 
 thread_local! {
@@ -204,8 +212,50 @@ unsafe extern "system" fn wnd_proc<V: View>(hwnd: HWND, msg: u32, wp: WPARAM, lp
             let _ = SetWindowPos(hwnd, None, r.left, r.top, r.right - r.left, r.bottom - r.top, SWP_NOZORDER | SWP_NOACTIVATE);
             LRESULT(0)
         }
+        WM_LBUTTONDOWN => {
+            let drag = with::<V, _>(|h| {
+                let pt = h.pt(lp);
+                let a = h.hit_at(pt)?;
+                h.dragging = h.view.press(&a, pt, &mut ctx);
+                Some(h.dragging)
+            })
+            .flatten()
+            .unwrap_or(false);
+            if drag {
+                SetCapture(hwnd);
+            }
+            after(hwnd, ctx);
+            LRESULT(0)
+        }
+        WM_LBUTTONUP if with::<V, _>(|h| h.dragging).unwrap_or(false) => {
+            with::<V, _>(|h| {
+                h.dragging = false;
+                let pt = h.pt(lp);
+                h.view.release(pt, &mut ctx);
+            });
+            let _ = ReleaseCapture();
+            after(hwnd, ctx);
+            LRESULT(0)
+        }
+        WM_CAPTURECHANGED => {
+            with::<V, _>(|h| {
+                if h.dragging {
+                    h.dragging = false;
+                    let pt = h.mouse;
+                    h.view.release(pt, &mut ctx);
+                }
+            });
+            after(hwnd, ctx);
+            LRESULT(0)
+        }
         WM_MOUSEMOVE => {
-            with::<V, _>(|h| h.mouse = h.pt(lp));
+            with::<V, _>(|h| {
+                h.mouse = h.pt(lp);
+                if h.dragging {
+                    let pt = h.mouse;
+                    h.view.drag(pt, &mut ctx);
+                }
+            });
             let mut tme = TRACKMOUSEEVENT { cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32, dwFlags: TME_LEAVE, hwndTrack: hwnd, dwHoverTime: 0 };
             let _ = TrackMouseEvent(&mut tme);
             let _ = InvalidateRect(hwnd, None, false);
@@ -336,6 +386,7 @@ pub fn run<V: View>(view: V, o: Opts) -> Result<V> {
             accent: glassmenu::accent(),
             popup: o.popup || o.noactivate,
             noactivate: o.noactivate,
+            dragging: false,
         };
         HOST.with(|h| *h.borrow_mut() = Some(Box::new(host)));
         let hwnd = CreateWindowExW(ex, class, &HSTRING::from(o.title.as_str()), style, x, y, ww, wh, None, None, inst, None)?;

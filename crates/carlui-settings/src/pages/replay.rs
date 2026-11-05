@@ -8,12 +8,16 @@ use crate::{
     Act, App,
 };
 use carlui_core::config::{Codec, Quality, ReplayConfig, Resolution};
-use carlui_ui::paint::R;
+use carlui_ui::paint::{Align, R, TEXT, YELLOW};
 use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+
+fn screen() -> (u32, u32) {
+    unsafe { (GetSystemMetrics(SM_CXSCREEN).max(640) as u32, GetSystemMetrics(SM_CYSCREEN).max(480) as u32) }
+}
 
 /// Seçili ayarlarla geçici kaydın diskte kaplayacağı yaklaşık alan (GB).
 fn disk_gb(c: &ReplayConfig) -> f64 {
-    let (w, h) = unsafe { (GetSystemMetrics(SM_CXSCREEN).max(640) as u32, GetSystemMetrics(SM_CYSCREEN).max(480) as u32) };
+    let (w, h) = screen();
     let (w, h) = c.out_size(w, h);
     let bits = c.bitrate(w, h) as f64 + if c.audio { 192_000.0 } else { 0.0 };
     bits / 8.0 * (c.minutes() as f64 * 60.0 + 10.0) / 1e9
@@ -64,8 +68,18 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         res,
         70.0,
     );
-    let fps = if c.fps() == 30 { 0 } else { 1 };
-    f.choice(p, t!("Kare hızı", "Frame rate"), "", &[("30 fps", edit(|c| c.replay.fps = 30)), ("60 fps", edit(|c| c.replay.fps = 60))], fps, 80.0);
+    let fi = ReplayConfig::FPS.iter().position(|&x| x == c.fps()).unwrap_or(2);
+    f.slider(
+        p,
+        t!("Kare hızı", "Frame rate"),
+        t!("Ekranınızın yenileme hızından yükseği tekrarlanan kare olur.", "Rates above your display's refresh rate only repeat frames."),
+        fi as f32,
+        0.0,
+        (ReplayConfig::FPS.len() - 1) as f32,
+        1.0,
+        |v| format!("{} fps", ReplayConfig::FPS[(v.round() as usize).min(ReplayConfig::FPS.len() - 1)]),
+        |c, v| c.replay.fps = ReplayConfig::FPS[(v.round() as usize).min(ReplayConfig::FPS.len() - 1)],
+    );
     let q = match c.quality {
         Quality::Low => 0,
         Quality::Medium => 1,
@@ -93,9 +107,54 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         80.0,
     );
 
+    // Seçili çözünürlük, FPS, kalite ve sıkıştırmaya göre 1 dakikalık boyut.
+    let (sw, sh) = screen();
+    let mb = c.mb_per_minute(sw, sh);
+    let heavy = c.heavy(sw, sh);
+    let size = if mb >= 1000.0 { format!("≈ {:.1} GB", mb / 1000.0) } else { format!("≈ {mb:.0} MB") };
+    let size = t!(size.replace('.', ","), size);
+    let desc = if heavy {
+        t!(
+            "Yüksek FPS/çözünürlük çok yer kaplar; oyunla aynı diskteyse donma yapabilir.",
+            "High FPS/resolution takes a lot of space; on the game's disk it may stutter."
+        )
+        .to_string()
+    } else {
+        t!(format!("{} dakikalık tekrar yaklaşık {:.1} GB tutar.", c.minutes(), disk_gb(c)).replace('.', ","), format!("A {}-minute replay is about {:.1} GB.", c.minutes(), disk_gb(c)))
+    };
+    let r = f.row_c(p, t!("1 dakikalık kayıt boyutu (tahmini)", "Size of 1 minute of video (estimate)"), &desc, 150.0, heavy.then_some(YELLOW));
+    let vr = R::new(r.right() - 16.0 - 130.0, r.y, 130.0, r.h);
+    p.text(&size, vr, 14.0, true, TEXT, 0.95, Align::Right);
+    if heavy {
+        let tw = p.fonts.width(&size, 14.0, true);
+        p.glyph('', R::new(vr.right() - tw - 26.0, r.y, 20.0, r.h), 14.0, YELLOW, 1.0);
+    }
+
     f.section(p, t!("Ses", "Audio"));
     f.toggle(p, t!("Bilgisayarın sesini kaydet", "Record computer audio"), t!("Hoparlör ya da kulaklıktan çıkan ses.", "What plays through the speakers or headphones."), c.audio, |c| c.replay.audio ^= true);
     f.toggle(p, t!("Mikrofonu kaydet", "Record microphone"), t!("Varsayılan mikrofon; bilgisayar sesiyle aynı ize karıştırılır.", "The default microphone, mixed into the same track as computer audio."), c.mic, |c| c.replay.mic ^= true);
+    f.slider(
+        p,
+        t!("Bilgisayar sesi düzeyi", "Computer audio level"),
+        t!("Kayıttaki bilgisayar sesini kısar ya da yükseltir.", "Turns recorded computer audio down or up."),
+        c.audio_volume.min(ReplayConfig::MAX_VOLUME) as f32,
+        0.0,
+        ReplayConfig::MAX_VOLUME as f32,
+        5.0,
+        |v| t!(format!("%{v:.0}"), format!("{v:.0}%")),
+        |c, v| c.replay.audio_volume = v as u32,
+    );
+    f.slider(
+        p,
+        t!("Mikrofon düzeyi", "Microphone level"),
+        t!("Kayıttaki mikrofonu kısar ya da yükseltir; panelden test edebilirsiniz.", "Turns the recorded microphone down or up; test it from the panel."),
+        c.mic_volume.min(ReplayConfig::MAX_VOLUME) as f32,
+        0.0,
+        ReplayConfig::MAX_VOLUME as f32,
+        5.0,
+        |v| t!(format!("%{v:.0}"), format!("{v:.0}%")),
+        |c, v| c.replay.mic_volume = v as u32,
+    );
 
     f.section(p, t!("Kayıtlar", "Recordings"));
     let r = f.row(p, t!("Kayıt klasörü", "Recordings folder"), &c.folder().display().to_string(), 120.0);
