@@ -81,6 +81,33 @@
 - **Türkçe ve İngilizce arayüz:** Windows'un görüntü diline uyar; **Ayarlar →
   Genel → Dil** bölümünden değiştirilebilir.
 
+### Yapay zekâ
+
+Hepsi bilgisayarında çalışır, hiçbir şey buluta gitmez. Ayarlar **Ayarlar →
+Yapay zekâ** sayfasında.
+
+- **Ses stüdyosu:** Metni sese çevir (WAV/MP3 kaydet) ya da konuşmanı veya bir
+  ses/video dosyasını yazıya dök (TXT ya da SRT altyazı).
+- **Sesli okuma (Ctrl+Alt+S):** Seçili metni, yoksa panodakini okur; yeniden
+  basınca susar. Türkçe metin Türkçe sesle, İngilizce metin İngilizce sesle
+  okunur.
+- **Dikte (Ctrl+Alt+D):** Konuş, söylediklerin imlecin olduğu yere yazılsın.
+- **Ekran çevirisi:** Ekran görüntüsü aracında alan seçip **Ctrl+Shift+T**'ye
+  bas; ekrandaki İngilizce yazı Türkçeye (ya da tersi) çevrilip panoya konur.
+- **Sesli komutla klip:** Anlık tekrar açıkken "son iki dakikayı kaydet" de,
+  klip kaydedilsin.
+- **Arka planı sil** ve **resmi büyüt:** Dosya dönüştürücünün "Yapay zekâ"
+  bölümünde.
+
+**Modeller:** Kurucuda model yok. Ses stüdyosunda **Küçük / Orta / Büyük**
+listesinden istediğini seçip indirirsin; her modelde boyut, lisans ve önerilen
+sistem yazar, bilgisayarın önerilenin altındaysa turuncu uyarı çıkar. Modeller
+yalnızca resmi kaynağından iner ve SHA-256 ile doğrulanır. Ekran kartı varsa
+(DirectML) çok daha hızlı çalışır, yoksa işlemci kullanılır. Türkçe ses (Piper
+dfki) ticari olmayan lisanslıdır: kişisel kullanım serbest, para kazanılan
+işlerde (reklam, ücretli seslendirme) kullanılamaz; indirmeden önce bu açıkça
+sorulur.
+
 ## Kurulum
 
 1. [Releases](https://github.com/Carl00-mpeek/CarlUI/releases/latest) sayfasından `CarlUI-Setup.exe` dosyasını indir.
@@ -144,6 +171,7 @@ Kutusu'na taşınır. Ayarların kalmasını ya da silinmesini sen seçersin.
 | Program | `%LOCALAPPDATA%\Programs\CarlUI\` |
 | Ayarlar | `%APPDATA%\CarlUI\config.toml` (Ayarlar penceresinden değiştirilir, anında uygulanır) |
 | Pano geçmişi, önbellek | `%LOCALAPPDATA%\CarlUI\` |
+| Yapay zekâ modelleri | `%LOCALAPPDATA%\CarlUI\models\` (Ses stüdyosundan silinebilir) |
 | Loglar | `%LOCALAPPDATA%\CarlUI\logs\` (7 gün saklanır) |
 
 ## Kaynaktan derleme
@@ -183,14 +211,17 @@ imzalanması için başvuru yapıldı.
 ### Gizlilik
 
 CarlUI veri toplamaz, telemetri içermez. Yalnızca senin istediğin işlerde
-(döviz kuru, çeviri, web araması, indirmeler) ve günlük güncelleme denetiminde
-(GitHub API) internete bağlanır; denetim **Ayarlar → Genel → Güncellemeler**
-bölümünden kapatılabilir.
+(döviz kuru, çeviri, web araması, indirmeler, model indirme) ve günlük
+güncelleme denetiminde (GitHub API) internete bağlanır; denetim **Ayarlar →
+Genel → Güncellemeler** bölümünden kapatılabilir. Yapay zekâ özellikleri
+tamamen bilgisayarında çalışır; ses, metin ve görüntülerin hiçbir yere
+gönderilmez.
 
 ## Lisans
 
 MIT © 2026 Demhat Dayan. Ayrıntı: [LICENSE](LICENSE). Üçüncü taraf parçalar
-(PawnIO IntelMSR modülü — LGPL-2.1, Rust kütüphaneleri) için:
+(PawnIO IntelMSR modülü — LGPL-2.1, Rust kütüphaneleri, isteğe bağlı yapay
+zekâ modelleri ve lisansları) için:
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 Hata ve öneriler için [Issues](https://github.com/Carl00-mpeek/CarlUI/issues)

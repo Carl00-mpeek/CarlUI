@@ -81,6 +81,35 @@
 - **English and Turkish:** Follows the Windows display language; change it in
   **Settings → General → Language**.
 
+### AI
+
+Everything runs on your PC; nothing goes to the cloud. Options are in
+**Settings → AI**.
+
+- **Voice studio:** Turn text into speech (save as WAV/MP3), or transcribe your
+  voice or an audio/video file (TXT or SRT subtitles).
+- **Read aloud (Ctrl+Alt+S):** Reads the selected text, or the clipboard;
+  press again to stop. Turkish text gets a Turkish voice, English text an
+  English voice.
+- **Dictation (Ctrl+Alt+D):** Speak and your words are typed where the cursor
+  is.
+- **Screen translation:** Select an area in the screenshot tool and press
+  **Ctrl+Shift+T**; English text on screen is translated to Turkish (or the
+  other way round) and copied to the clipboard.
+- **Voice-triggered clips:** With instant replay on, say "save the last two
+  minutes" to save a clip.
+- **Remove background** and **upscale image:** In the file converter's "AI"
+  section.
+
+**Models:** None ship with the installer. In the Voice studio you pick the one
+you want from a **Small / Medium / Large** list; each shows its size, license
+and recommended system, and an orange warning appears if your PC is below the
+recommendation. Models are downloaded only from their official source and
+verified with SHA-256. With a graphics card (DirectML) they run much faster;
+otherwise the CPU is used. The Turkish voice (Piper dfki) has a non-commercial
+license: personal use is fine, but it can't be used for paid work (ads, paid
+voice-over). You're asked about this before it downloads.
+
 ## Install
 
 1. Download `CarlUI-Setup.exe` from [Releases](https://github.com/Carl00-mpeek/CarlUI/releases/latest).
@@ -143,6 +172,7 @@ the Recycle Bin. You choose whether to keep your settings.
 | Program | `%LOCALAPPDATA%\Programs\CarlUI\` |
 | Settings | `%APPDATA%\CarlUI\config.toml` (edited from the Settings window, applied instantly) |
 | Clipboard history, cache | `%LOCALAPPDATA%\CarlUI\` |
+| AI models | `%LOCALAPPDATA%\CarlUI\models\` (remove them from the Voice studio) |
 | Logs | `%LOCALAPPDATA%\CarlUI\logs\` (kept for 7 days) |
 
 ## Building from source
@@ -183,13 +213,15 @@ Windows installers are to be signed for free through
 
 CarlUI collects no data and has no telemetry. It only connects to other
 systems when you ask it to (currency rates, translation, web search,
-downloads) and for the daily update check against the GitHub API, which can be
-turned off in **Settings → General → Updates**.
+downloads, model downloads) and for the daily update check against the GitHub
+API, which can be turned off in **Settings → General → Updates**. AI features
+run entirely on your PC; your voice, text and images are never sent anywhere.
 
 ## License
 
 MIT © 2026 Demhat Dayan. See [LICENSE](LICENSE). Third-party parts (PawnIO
-IntelMSR module, LGPL-2.1, and Rust crates):
+IntelMSR module, LGPL-2.1, Rust crates, and the optional AI models and their
+licenses):
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 Bugs and ideas: [Issues](https://github.com/Carl00-mpeek/CarlUI/issues).
