@@ -244,6 +244,10 @@ pub fn parse(src: &str) -> Result<Node, String> {
                 None => root = Some(n),
             }
         } else {
+            // Ağaç üzerinde gezinme özyinelemeli: aşırı derinlik yığını taşırırdı.
+            if stack.len() >= crate::guard::XML_DEPTH {
+                return Err("XML çok derin (bozuk ya da kötü niyetli)".into());
+            }
             stack.push(n);
         }
         i = j + 1;
@@ -329,6 +333,16 @@ mod tests {
         assert_eq!(r.attr("x"), Some("b>c"));
         assert_eq!(r.child("b").unwrap().text(s), "İı");
         assert_eq!(escape("a<b&\"c\u{1}"), "a&lt;b&amp;&quot;c");
+    }
+
+    #[test]
+    fn hostile() {
+        // Çok derin iç içe öğe reddedilir; DTD varlıkları hiç açılmaz (milyar kahkaha).
+        let deep = format!("{}{}", "<a>".repeat(100_000), "</a>".repeat(100_000));
+        assert!(parse(&deep).is_err());
+        let lol = r#"<!DOCTYPE x [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;">]><x>&b;&b;</x>"#;
+        let r = parse(lol).unwrap();
+        assert_eq!(r.text(lol), "&b;&b;");
     }
 
     #[test]

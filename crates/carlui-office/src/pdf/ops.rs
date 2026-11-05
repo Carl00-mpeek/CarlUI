@@ -92,7 +92,7 @@ impl PdfView {
         if n.text.trim().is_empty() {
             return;
         }
-        let r = edit::add_text(&self.bytes, n.page, n.u, n.v, &n.text, self.note_size, self.note_color);
+        let r = crate::guard::deep(|| edit::add_text(&self.bytes, n.page, n.u, n.v, &n.text, self.note_size, self.note_color));
         self.apply(r, None);
     }
 
@@ -103,7 +103,7 @@ impl PdfView {
             Err(e) => return app::error(&e.to_string()),
         };
         let first = self.sizes.len();
-        let r = edit::merge(&self.bytes, &other);
+        let r = crate::guard::deep(|| edit::merge(&self.bytes, &other));
         self.apply(r, Some(first));
         app::toast(t!("PDF sona eklendi", "PDF appended"));
     }
@@ -111,14 +111,14 @@ impl PdfView {
     fn extract(&mut self) {
         let name = format!("{} {}", t!("Sayfa", "Page"), self.cur + 1);
         let Some(p) = dialog::save(app::hwnd(), &name, "pdf") else { return };
-        match edit::extract(&self.bytes, self.cur).and_then(|b| app::write_atomic(&p, &b)) {
+        match crate::guard::deep(|| edit::extract(&self.bytes, self.cur)).and_then(|b| app::write_atomic(&p, &b)) {
             Ok(()) => app::toast(t!("Sayfa ayrı dosyaya kaydedildi", "Page saved as a separate file")),
             Err(e) => app::error(&e),
         }
     }
 
     fn copy_text(&mut self) {
-        match edit::text(&self.bytes, self.cur) {
+        match crate::guard::deep(|| edit::text(&self.bytes, self.cur)) {
             Ok(s) if !s.trim().is_empty() => {
                 clip::copy(app::hwnd(), s.trim());
                 app::toast(t!("Sayfa metni kopyalandı", "Page text copied"));
@@ -150,11 +150,11 @@ impl PdfView {
             Cmd::Zoom(d) => self.zoom_step(d),
             Cmd::Pick(i) => self.go(i),
             Cmd::Rotate => {
-                let r = edit::rotate(&self.bytes, cur);
+                let r = crate::guard::deep(|| edit::rotate(&self.bytes, cur));
                 self.apply(r, Some(cur));
             }
             Cmd::Remove => {
-                let r = edit::delete(&self.bytes, cur);
+                let r = crate::guard::deep(|| edit::delete(&self.bytes, cur));
                 self.apply(r, Some(cur.min(n.saturating_sub(2))));
             }
             Cmd::Merge => self.merge(),
@@ -174,7 +174,7 @@ impl PdfView {
         let cur = self.cur;
         let to = if up { cur.checked_sub(1) } else { (cur + 1 < self.sizes.len()).then_some(cur + 1) };
         let Some(to) = to else { return };
-        let r = edit::move_page(&self.bytes, cur, to);
+        let r = crate::guard::deep(|| edit::move_page(&self.bytes, cur, to));
         self.apply(r, Some(to));
     }
 

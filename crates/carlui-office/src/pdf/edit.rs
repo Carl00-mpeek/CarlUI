@@ -52,12 +52,20 @@ fn inherited(d: &Document, id: ObjectId, key: &[u8]) -> Option<Object> {
 }
 
 fn number(d: &Document, o: &Object) -> f32 {
-    match o {
-        Object::Integer(i) => *i as f32,
-        Object::Real(r) => *r,
-        Object::Reference(id) => d.get_object(*id).map(|o| number(d, o)).unwrap_or(0.0),
-        _ => 0.0,
+    // Başvuru zinciri sınırlı: kendini gösteren nesne (5 0 R → 5 0 R) sonsuz döngü olmasın.
+    let mut o = o;
+    for _ in 0..32 {
+        match o {
+            Object::Integer(i) => return *i as f32,
+            Object::Real(r) => return *r,
+            Object::Reference(id) => match d.get_object(*id) {
+                Ok(n) => o = n,
+                Err(_) => return 0.0,
+            },
+            _ => return 0.0,
+        }
     }
+    0.0
 }
 
 /// Sayfanın görünen kutusu (CropBox, yoksa MediaBox): x0, y0, x1, y1.
@@ -376,6 +384,33 @@ mod tests {
         assert!((x - 0.0).abs() < 0.01 && (y - 0.0).abs() < 0.01, "{x},{y}");
         let (x, y) = to_page([0.0, 0.0, 612.0, 792.0], 0, 0.0, 0.0);
         assert!((x - 0.0).abs() < 0.01 && (y - 792.0).abs() < 0.01);
+    }
+
+    /// Kötü niyetli PDF: kendini gösteren Rotate/MediaBox, döngülü sayfa ağacı,
+    /// çok derin iç içe dizi. Hiçbiri takılmamalı ya da çökmemeli.
+    #[test]
+    fn hostile_pdf() {
+        let mut d = lopdf::Document::load_mem(&sample(2)).unwrap();
+        let id = pages(&d)[0];
+        let me = d.new_object_id();
+        d.objects.insert(me, Object::Reference(me));
+        let bx = d.new_object_id();
+        d.objects.insert(bx, Object::Reference(bx));
+        let p = d.get_dictionary_mut(id).unwrap();
+        p.set("Rotate", Object::Reference(me));
+        p.set("MediaBox", Object::Reference(bx));
+        // Sayfanın üst düğümü kendisi: miras ararken döngü.
+        p.set("Parent", Object::Reference(id));
+        let mut b = Vec::new();
+        d.save_to(&mut b).unwrap();
+        let _ = crate::guard::deep(|| (rotate(&b, 0), add_text(&b, 0, 0.5, 0.5, "x", 12.0, 0), move_page(&b, 0, 1), text(&b, 0)));
+
+        // 100 bin düzey iç içe dizi.
+        let mut raw = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R /X ".to_vec();
+        raw.extend(std::iter::repeat_n(b'[', 100_000));
+        raw.extend(std::iter::repeat_n(b']', 100_000));
+        raw.extend_from_slice(b" >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n");
+        let _ = crate::guard::deep(|| rotate(&raw, 0));
     }
 
     /// Gerçek dosyayla: `CARL_PDF` verilirse bütün işlemler hata vermeden çalışmalı.

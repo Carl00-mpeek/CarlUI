@@ -258,7 +258,7 @@ fn table(src: &str, n: &Node, d: &Document) -> Table {
         let mut row = Vec::new();
         for tc in tr.children_named("tc") {
             let pr = tc.child("tcPr");
-            let span = pr.and_then(|p| p.child("gridSpan")).and_then(|g| g.attr("val")).and_then(|v| v.parse().ok()).unwrap_or(1usize);
+            let span = pr.and_then(|p| p.child("gridSpan")).and_then(|g| g.attr("val")).and_then(|v| v.parse().ok()).unwrap_or(1usize).clamp(1, 64);
             let fill = pr.and_then(|p| p.child("shd")).and_then(|s| s.attr("fill")).and_then(hex);
             let mut paras = Vec::new();
             for c in &tc.children {

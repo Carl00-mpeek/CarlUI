@@ -214,6 +214,8 @@ pub enum Expr {
 struct P<'a> {
     t: &'a [Tok],
     i: usize,
+    /// İç içe parantez/işlev/işaret düzeyi (aşırısı yığını taşırırdı).
+    depth: usize,
 }
 
 impl P<'_> {
@@ -278,6 +280,15 @@ impl P<'_> {
         Ok(l)
     }
     fn unary(&mut self) -> Result<Expr, String> {
+        self.depth += 1;
+        if self.depth > crate::guard::FORMULA_NEST {
+            return Err("formül çok derin".into());
+        }
+        let r = self.unary_inner();
+        self.depth -= 1;
+        r
+    }
+    fn unary_inner(&mut self) -> Result<Expr, String> {
         if let Some(o) = self.op(&["-", "+"]) {
             self.i += 1;
             let e = self.unary()?;
@@ -391,8 +402,11 @@ impl P<'_> {
 }
 
 pub fn parse(src: &str) -> Result<Expr, String> {
+    if src.len() > crate::guard::FORMULA_LEN {
+        return Err("formül çok uzun".into());
+    }
     let t = tokenize(src)?;
-    let mut p = P { t: &t, i: 0 };
+    let mut p = P { t: &t, i: 0, depth: 0 };
     let e = p.expr()?;
     if p.i < t.len() {
         return Err("fazladan ifade".into());

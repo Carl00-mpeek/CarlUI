@@ -353,12 +353,15 @@ impl Book {
         if targets.is_empty() {
             return;
         }
-        let mut calc = Calc { book: self, memo: HashMap::new(), stack: HashSet::new(), sheet: 0 };
-        let mut results = Vec::with_capacity(targets.len());
-        for t in &targets {
-            calc.sheet = t.0;
-            results.push(calc.cell(t.0, t.1, t.2));
-        }
+        // Uzun bağımlılık zinciri derin özyineleme demek: geniş yığında hesapla.
+        let book: &Book = self;
+        let results = crate::guard::deep(|| {
+            let mut calc = Calc { book, memo: HashMap::new(), stack: HashSet::new(), sheet: 0 };
+            targets.iter().map(|t| {
+                calc.sheet = t.0;
+                calc.cell(t.0, t.1, t.2)
+            }).collect::<Vec<_>>()
+        });
         for (t, v) in targets.into_iter().zip(results) {
             if let Some(c) = self.sheets[t.0].cells.get_mut(&(t.1, t.2)) {
                 if v == Val::Err(formula::UNSUPPORTED.into()) && c.v != Val::Empty {
@@ -392,7 +395,7 @@ impl Calc<'_> {
         }
         let Some(cell) = self.book.sheets[sh].get(r, c) else { return Val::Empty };
         let Some(f) = &cell.f else { return cell.v.clone() };
-        if !self.stack.insert(key) {
+        if self.stack.len() >= crate::guard::CALC_DEPTH || !self.stack.insert(key) {
             return Val::Err("#CIRC!".into());
         }
         let prev = self.sheet;
@@ -438,6 +441,10 @@ impl formula::Ctx for Calc<'_> {
         let (r0, c0) = (a.0.min(b.0), a.1.min(b.1));
         let r1 = a.0.max(b.0).min(ext_r.max(r0 + 1) - 1);
         let c1 = a.1.max(b.1).min(ext_c.max(c0 + 1) - 1);
+        // Uzak köşeye tek hücre koyup dev bir aralık açtırmak belleği tüketirdi.
+        if (r1 - r0 + 1) as u64 * (c1 - c0 + 1) as u64 > crate::guard::GRID_CELLS {
+            return vec![vec![Val::Err("#NUM!".into())]];
+        }
         (r0..=r1).map(|r| (c0..=c1).map(|c| self.cell(sh, r, c)).collect()).collect()
     }
 }
@@ -555,5 +562,26 @@ mod tests {
         b.restore(u);
         assert!(b.sheets[0].get(11, 1).is_none());
         assert_eq!(general(0.1 + 0.2), "0,3");
+    }
+
+    /// Kötü niyetli tablo: tersine uzun zincir, aşırı derin formül, dev aralık.
+    /// Hiçbiri süreci düşürmemeli.
+    #[test]
+    fn hostile_book() {
+        let mut b = Book::new_blank();
+        let n = 30_000u32;
+        for r in 0..n {
+            let f = if r + 1 < n { format!("A{}+1", r + 2) } else { "1".into() };
+            b.sheets[0].cells.insert((r, 0), Cell { f: Some(f), ..Default::default() });
+        }
+        let deep = format!("{}1{}", "(".repeat(5000), ")".repeat(5000));
+        b.sheets[0].cells.insert((0, 1), Cell { f: Some(deep), ..Default::default() });
+        b.sheets[0].cells.insert((1_048_575, 16_383), Cell { v: Val::Num(1.0), ..Default::default() });
+        b.sheets[0].cells.insert((1, 1), Cell { f: Some("COUNTBLANK(A1:XFD1048576)".into()), ..Default::default() });
+        b.recalc();
+        assert_eq!(b.sheets[0].get(0, 0).unwrap().v, Val::Num(n as f64));
+        assert!(matches!(b.sheets[0].get(0, 1).unwrap().v, Val::Err(_)));
+        // Dev aralık 17 milyar hücre açmadan biter (sonuç önemli değil).
+        assert!(b.sheets[0].get(1, 1).is_some());
     }
 }

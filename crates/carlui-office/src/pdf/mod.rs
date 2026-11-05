@@ -63,8 +63,17 @@ pub fn sizes(bytes: &[u8]) -> Result<Vec<(f32, f32)>, String> {
 /// Sayfayı `width` piksel genişliğinde BMP olarak çizer.
 fn render(doc: &PdfDocument, page: usize, width: u32) -> windows::core::Result<Vec<u8>> {
     let p = doc.GetPage(page as u32)?;
+    // Çok ince uzun bir sayfa (1 × 200000 pt) dev bir bitmap istetmesin.
+    let s = p.Size()?;
+    let ratio = (s.Height.max(1.0) / s.Width.max(1.0)) as f64;
+    // Kenarlar da Direct2D sınırında kalsın; saçma oranlı sayfa biraz basık çizilir.
+    let side = crate::guard::SIDE;
+    let most = ((crate::guard::PIXELS as f64 / ratio).sqrt() as u32).clamp(1, side);
+    let w = width.clamp(1, most);
+    let h = ((w as f64 * ratio).round() as u32).clamp(1, side);
     let o = PdfPageRenderOptions::new()?;
-    o.SetDestinationWidth(width.max(8))?;
+    o.SetDestinationWidth(w)?;
+    o.SetDestinationHeight(h)?;
     o.SetIsIgnoringHighContrast(true)?;
     // BMP: sıkıştırma yok, PNG'ye göre çok daha hızlı yazılır ve çözülür.
     o.SetBitmapEncoderId(BitmapEncoder::BmpEncoderId()?)?;

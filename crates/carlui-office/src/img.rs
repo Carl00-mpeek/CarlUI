@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use windows::{
+    core::Interface,
     Win32::{
         Graphics::{Direct2D::*, Imaging::*},
         System::Com::*,
@@ -24,8 +25,23 @@ pub fn decode(bytes: &[u8]) -> Option<IWICFormatConverter> {
             stream.InitializeFromMemory(bytes).ok()?;
             let dec = wic.CreateDecoderFromStream(&stream, std::ptr::null(), WICDecodeMetadataCacheOnDemand).ok()?;
             let frame = dec.GetFrame(0).ok()?;
+            // Başlığında dev boyut yazan resim (ör. 60000×60000) belleği
+            // tüketmesin: piksel sınırını aşan resim küçültülerek çözülür.
+            let (mut w, mut h) = (0u32, 0u32);
+            frame.GetSize(&mut w, &mut h).ok()?;
+            let px = w as u64 * h as u64;
+            let side = crate::guard::SIDE as f64;
+            let too_big = px > crate::guard::IMAGE_PIXELS || w > crate::guard::SIDE || h > crate::guard::SIDE;
+            let src: IWICBitmapSource = if too_big {
+                let k = (crate::guard::IMAGE_PIXELS as f64 / px as f64).sqrt().min(side / w as f64).min(side / h as f64);
+                let sc = wic.CreateBitmapScaler().ok()?;
+                sc.Initialize(&frame, ((w as f64 * k) as u32).max(1), ((h as f64 * k) as u32).max(1), WICBitmapInterpolationModeFant).ok()?;
+                sc.cast().ok()?
+            } else {
+                frame.cast().ok()?
+            };
             let conv = wic.CreateFormatConverter().ok()?;
-            conv.Initialize(&frame, &GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeMedianCut).ok()?;
+            conv.Initialize(&src,&GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeMedianCut).ok()?;
             Some(conv)
         }
     })

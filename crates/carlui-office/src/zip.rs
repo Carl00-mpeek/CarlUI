@@ -84,6 +84,9 @@ impl Zip {
             return err("zip64 desteklenmiyor");
         }
         let mut entries = Vec::with_capacity(count);
+        // Girdilerin toplam sıkıştırılmış boyutu dosyayı aşamaz: aynı baytları
+        // gösteren binlerce sahte girdi belleği şişirmesin.
+        let mut total = 0usize;
         for _ in 0..count {
             if u32_at(b, p) != Some(0x0201_4b50) {
                 return err("bozuk zip dizini");
@@ -110,6 +113,10 @@ impl Zip {
             if name.ends_with('/') {
                 continue;
             }
+            total += csize;
+            if total > b.len() || size as usize > crate::guard::ZIP_ENTRY {
+                return err("zip girdileri dosyadan büyük (bozuk ya da kötü niyetli)");
+            }
             entries.push(Entry { name, data: Data::Raw { method, crc, size, bytes: bytes.to_vec() } });
         }
         Ok(Self { entries })
@@ -128,7 +135,9 @@ impl Zip {
         match &e.data {
             Data::Plain(v) => Some(v.clone()),
             Data::Raw { method: 0, bytes, .. } => Some(bytes.clone()),
-            Data::Raw { method: 8, bytes, size, .. } => miniz_oxide::inflate::decompress_to_vec_with_limit(bytes, (*size as usize).max(1) * 2 + 1024).ok(),
+            // Açılan boyut, dizinde yazanla sınırlı (o da guard::ZIP_ENTRY ile):
+            // "zip bombası" belleği dolduramaz.
+            Data::Raw { method: 8, bytes, size, .. } => miniz_oxide::inflate::decompress_to_vec_with_limit(bytes, *size as usize + 1024).ok(),
             Data::Raw { .. } => None,
         }
     }
@@ -244,6 +253,35 @@ mod tests {
         // Ham kopya: değişmeyen girdi yeniden yazılınca aynı kalır.
         let z3 = Zip::parse(&z2.to_bytes()).unwrap();
         assert_eq!(z3.read("a.txt").unwrap(), b"merhaba dunya merhaba dunya");
+    }
+
+    #[test]
+    fn hostile_archives() {
+        let mut z = Zip::new();
+        z.set("a.xml", vec![b'x'; 100_000]);
+        let good = z.to_bytes();
+        // Dizinde yazan boyut küçültülünce açma o sınırda durur (zip bombası).
+        let mut lie = good.clone();
+        let cd = (0..lie.len()).rev().find(|&i| u32_at(&lie, i) == Some(0x0201_4b50)).unwrap();
+        lie[cd + 24..cd + 28].copy_from_slice(&10u32.to_le_bytes());
+        assert!(Zip::parse(&lie).unwrap().read("a.xml").is_none());
+        // Aynı veriyi gösteren girdi sayısı şişirilince reddedilir.
+        let mut dup = good.clone();
+        let eocd = dup.len() - 22;
+        let entry = dup[cd..eocd].to_vec();
+        dup.truncate(eocd);
+        for _ in 0..50 {
+            dup.extend_from_slice(&entry);
+        }
+        let cd_len = (entry.len() * 50) as u32;
+        dup.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
+        dup.extend_from_slice(&[0u8; 4]);
+        dup.extend_from_slice(&50u16.to_le_bytes());
+        dup.extend_from_slice(&50u16.to_le_bytes());
+        dup.extend_from_slice(&cd_len.to_le_bytes());
+        dup.extend_from_slice(&(cd as u32).to_le_bytes());
+        dup.extend_from_slice(&0u16.to_le_bytes());
+        assert!(Zip::parse(&dup).is_err());
     }
 
     #[test]

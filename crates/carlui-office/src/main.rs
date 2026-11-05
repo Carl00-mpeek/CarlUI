@@ -12,6 +12,7 @@ mod clip;
 mod dialog;
 mod doc;
 mod field;
+mod guard;
 mod img;
 mod pdf;
 mod recent;
@@ -93,11 +94,12 @@ pub fn load(path: &Path) -> std::result::Result<Box<dyn View>, String> {
         _ => ext.clone(),
     };
     Ok(match kind.as_str() {
-        "xlsx" | "xlsm" => Box::new(sheet::view::SheetView::new(sheet::xlsx::load(&bytes)?)),
-        "xls" => Box::new(sheet::view::SheetView::new(sheet::xls::load(&bytes)?)),
-        "csv" | "tsv" | "txt" => Box::new(sheet::view::SheetView::new(sheet::csv::load(&bytes))),
-        "docx" => Box::new(doc::view::DocView::new(doc::docx::load(&bytes)?)),
-        "pptx" => Box::new(slides::view::SlideView::new(slides::pptx::load(&bytes)?)),
+        // Ayrıştırma geniş yığında: kötü niyetli iç içe yapı süreci düşürmesin.
+        "xlsx" | "xlsm" => Box::new(sheet::view::SheetView::new(guard::deep(|| sheet::xlsx::load(&bytes))?)),
+        "xls" => Box::new(sheet::view::SheetView::new(guard::deep(|| sheet::xls::load(&bytes))?)),
+        "csv" | "tsv" | "txt" => Box::new(sheet::view::SheetView::new(guard::deep(|| sheet::csv::load(&bytes)))),
+        "docx" => Box::new(doc::view::DocView::new(guard::deep(|| doc::docx::load(&bytes))?)),
+        "pptx" => Box::new(slides::view::SlideView::new(guard::deep(|| slides::pptx::load(&bytes))?)),
         "pdf" => Box::new(pdf::view::PdfView::new(bytes)?),
         _ => return Err(t!("Bu dosya türü desteklenmiyor.", "This file type isn't supported.").to_string()),
     })
