@@ -15,6 +15,7 @@ use windows::Win32::{
 };
 
 pub use crate::theme::Palette;
+pub use crate::replay::{Quality, ReplayConfig};
 pub use crate::tools::{CaseKind, ColorFormat, RenameConfig, RenameMode, Snippet, ToolsConfig};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -36,6 +37,7 @@ pub struct Config {
     pub alerts: AlertsConfig,
     pub vault: VaultConfig,
     pub tools: ToolsConfig,
+    pub replay: ReplayConfig,
 }
 
 /// Carl Vault (yerel şifreli kasa, `carlui-vault.exe`; kısayol: `shortcuts.vault`).
@@ -239,6 +241,8 @@ pub struct ShortcutsConfig {
     pub rename: String,
     /// Disk alanı analizörü; varsayılan boş = kapalı.
     pub disk: String,
+    /// Anlık tekrar: son N dakikayı kaydet, ör. "Alt+F10".
+    pub replay: String,
 }
 
 impl Default for ShortcutsConfig {
@@ -254,6 +258,7 @@ impl Default for ShortcutsConfig {
             color_picker: String::new(),
             rename: "Ctrl+Shift+R".into(),
             disk: String::new(),
+            replay: "Alt+F10".into(),
         }
     }
 }

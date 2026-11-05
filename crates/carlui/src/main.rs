@@ -483,6 +483,7 @@ fn run() -> Result<()> {
         sup.run_module("island", "carlui-island.exe");
         sup.run_module("start", "carlui-start.exe");
         sup.run_module("expand", "carlui-expand.exe");
+        sup.run_module("replay", "carlui-replay.exe");
 
         let pending_cfg: Arc<Mutex<Option<Config>>> = Arc::default();
         let pending = pending_cfg.clone();

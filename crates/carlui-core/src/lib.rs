@@ -15,6 +15,7 @@ pub mod log;
 pub mod paths;
 pub mod power;
 pub mod quick;
+pub mod replay;
 pub mod theme;
 pub mod tools;
 pub mod vaultlink;

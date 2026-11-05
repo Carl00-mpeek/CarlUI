@@ -26,10 +26,11 @@ pub enum Key {
     ColorPicker,
     Rename,
     Disk,
+    Replay,
 }
 
 impl Key {
-    const COMBOS: [Key; 7] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk];
+    const COMBOS: [Key; 8] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk, Key::Replay];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -42,6 +43,7 @@ impl Key {
             Key::ColorPicker => t!("Renk seçici", "Color picker"),
             Key::Rename => t!("Toplu yeniden adlandırma", "Batch rename"),
             Key::Disk => t!("Disk analizörü", "Disk analyzer"),
+            Key::Replay => t!("Anlık tekrarı kaydet", "Save instant replay"),
         }
     }
 
@@ -56,6 +58,7 @@ impl Key {
             Key::ColorPicker => t!("Ekrandaki bir pikselin rengini panoya kopyalar.", "Copies the color of a pixel on screen."),
             Key::Rename => t!("Gezgin'de seçili dosyalar için.", "For files selected in Explorer."),
             Key::Disk => t!("Diskte yer kaplayanları gösterir.", "Shows what takes up disk space."),
+            Key::Replay => t!("Son dakikaları video olarak kaydeder (oyun içinde de).", "Saves the last minutes as a video (in games too)."),
         }
     }
 
@@ -76,6 +79,7 @@ impl Key {
             Key::ColorPicker => s.color_picker.clone(),
             Key::Rename => s.rename.clone(),
             Key::Disk => s.disk.clone(),
+            Key::Replay => s.replay.clone(),
         }
     }
 
@@ -91,6 +95,7 @@ impl Key {
             Key::ColorPicker => s.color_picker = v,
             Key::Rename => s.rename = v,
             Key::Disk => s.disk = v,
+            Key::Replay => s.replay = v,
         }
     }
 
@@ -204,6 +209,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     key_row(app, p, f, Key::ColorPicker);
     key_row(app, p, f, Key::Rename);
     key_row(app, p, f, Key::Disk);
+    key_row(app, p, f, Key::Replay);
     f.section(p, "Dock");
     key_row(app, p, f, Key::AppNumbers);
     f.y += 6.0;

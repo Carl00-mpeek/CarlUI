@@ -141,6 +141,17 @@ pub fn downloads_dir() -> Option<std::path::PathBuf> {
     }
 }
 
+/// Kullanıcının Videolar klasörü (taşınmışsa yeni yeri).
+pub fn videos_dir() -> Option<std::path::PathBuf> {
+    use windows::Win32::UI::Shell::{FOLDERID_Videos, SHGetKnownFolderPath, KNOWN_FOLDER_FLAG};
+    unsafe {
+        let p = SHGetKnownFolderPath(&FOLDERID_Videos, KNOWN_FOLDER_FLAG(0), None).ok()?;
+        let s = p.to_string().ok();
+        windows::Win32::System::Com::CoTaskMemFree(Some(p.0 as _));
+        s.map(std::path::PathBuf::from)
+    }
+}
+
 /// Pencerenin sürecinin exe yolu, küçük harfle (erişilemezse boş).
 pub fn window_exe(hwnd: HWND) -> String {
     let mut pid = 0;

@@ -11,6 +11,7 @@ mod form;
 mod general;
 mod island;
 mod look;
+mod replay;
 mod search;
 pub mod shortcuts;
 mod tools;
@@ -30,10 +31,11 @@ pub enum Page {
     Shortcuts,
     Vault,
     Tools,
+    Replay,
 }
 
 impl Page {
-    pub const ALL: [Page; 10] = [Page::General, Page::Look, Page::Dock, Page::Island, Page::Search, Page::Clipboard, Page::Tools, Page::Game, Page::Vault, Page::Shortcuts];
+    pub const ALL: [Page; 11] = [Page::General, Page::Look, Page::Dock, Page::Island, Page::Search, Page::Clipboard, Page::Tools, Page::Replay, Page::Game, Page::Vault, Page::Shortcuts];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -47,6 +49,7 @@ impl Page {
             Page::Shortcuts => carlui_core::t!("Kısayollar", "Shortcuts"),
             Page::Vault => "Carl Vault",
             Page::Tools => carlui_core::t!("Araçlar", "Tools"),
+            Page::Replay => carlui_core::t!("Anlık tekrar", "Instant replay"),
         }
     }
 
@@ -62,6 +65,7 @@ impl Page {
             Page::Shortcuts => '\u{E765}',
             Page::Vault => '\u{E72E}',
             Page::Tools => '\u{E90F}',
+            Page::Replay => '\u{E714}',
         }
     }
 
@@ -78,6 +82,7 @@ impl Page {
             "shortcuts" | "kisayollar" | "kısayollar" => Page::Shortcuts,
             "vault" | "kasa" => Page::Vault,
             "tools" | "araclar" | "araçlar" => Page::Tools,
+            "replay" | "kayit" | "kayıt" | "tekrar" => Page::Replay,
             _ => return None,
         })
     }
@@ -95,5 +100,6 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         Page::Shortcuts => shortcuts::paint(app, p, f),
         Page::Vault => vault::paint(app, p, f),
         Page::Tools => tools::paint(app, p, f),
+        Page::Replay => replay::paint(app, p, f),
     }
 }

@@ -34,6 +34,7 @@ fn version_rc() -> String {
         Ok("carlui-vault") => "CarlUI Vault",
         Ok("carlui-tools") => "CarlUI Tools",
         Ok("carlui-expand") => "CarlUI Text expander",
+        Ok("carlui-replay") => "CarlUI Instant replay",
         Ok("carlui-setup") => "CarlUI Setup",
         _ => "CarlUI",
     };

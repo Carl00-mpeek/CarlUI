@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/carlui-core", "crates/carlui-ui", "crates/carlui", "crates/carlui-dock", "crates/carlui-tray", "crates/carlui-island", "crates/carlui-launcher", "crates/carlui-clip", "crates/carlui-sys", "crates/carlui-sensors", "crates/carlui-taskmgr", "crates/carlui-convert", "crates/carlui-settings", "crates/carlui-start", "crates/carlui-setup", "crates/carlui-vault", "crates/carlui-office", "crates/carlui-tools", "crates/carlui-expand"]
+members = ["crates/carlui-core", "crates/carlui-ui", "crates/carlui", "crates/carlui-dock", "crates/carlui-tray", "crates/carlui-island", "crates/carlui-launcher", "crates/carlui-clip", "crates/carlui-sys", "crates/carlui-sensors", "crates/carlui-taskmgr", "crates/carlui-convert", "crates/carlui-settings", "crates/carlui-start", "crates/carlui-setup", "crates/carlui-vault", "crates/carlui-office", "crates/carlui-tools", "crates/carlui-expand", "crates/carlui-replay"]
 
 [workspace.package]
 version = "0.3.1"
@@ -65,6 +65,7 @@ features = [
     "Win32_System_DataExchange",
     "Win32_Media_Audio",
     "Win32_Media_Audio_Endpoints",
+    "Win32_Media_MediaFoundation",
     "Win32_Devices_Display",
     "Win32_Devices_DeviceAndDriverInstallation",
     "Win32_Devices_Properties",
