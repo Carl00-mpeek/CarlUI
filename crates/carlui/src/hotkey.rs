@@ -1,7 +1,7 @@
 //! Ana sürecin üstlendiği genel kısayollar: Carl Vault (`shortcuts.vault`),
 //! renk seçici (`shortcuts.color_picker`, varsayılan boş = kapalı), disk
 //! analizörü (`shortcuts.disk`, varsayılan boş) ve toplu yeniden adlandırma
-//! (`shortcuts.rename`). Yeniden adlandırma kısayolu yalnızca Gezgin ya da
+//! (`shortcuts.rename`) ile sesle yazma (`shortcuts.dictate`). Yeniden adlandırma kısayolu yalnızca Gezgin ya da
 //! masaüstü öndeyken kaydedilir; böylece tarayıcıdaki Ctrl+Shift+R gibi
 //! kısayollar elinden alınmaz. Doğrulama (fare tuşu, tek tuş, Windows kısayolu
 //! reddi) ortak `keys` modülündedir; ayar değişince kısayollar yeniden kaydedilir.
@@ -20,6 +20,7 @@ pub const VAULT: i32 = 1;
 pub const PICKER: i32 = 2;
 pub const DISK: i32 = 3;
 pub const RENAME: i32 = 4;
+pub const DICTATE: i32 = 5;
 
 static RENAME_ON: AtomicBool = AtomicBool::new(false);
 
@@ -40,7 +41,7 @@ fn reg(hwnd: HWND, id: i32, c: Option<Combo>, name: &str, text: &str) {
 
 pub fn register(hwnd: HWND, cfg: &Config) {
     unsafe {
-        for id in [VAULT, PICKER, DISK, RENAME] {
+        for id in [VAULT, PICKER, DISK, RENAME, DICTATE] {
             let _ = UnregisterHotKey(hwnd, id);
         }
     }
@@ -48,6 +49,7 @@ pub fn register(hwnd: HWND, cfg: &Config) {
     let s = &cfg.shortcuts;
     reg(hwnd, VAULT, s.vault_combo(), "Vault", &s.vault);
     reg(hwnd, PICKER, s.color_picker_combo(), "Renk seçici", &s.color_picker);
+    reg(hwnd, DICTATE, s.dictate_combo(), "Dikte", &s.dictate);
     if cfg.tools.disk_enabled {
         reg(hwnd, DISK, s.disk_combo(), "Disk analizörü", &s.disk);
     }
@@ -91,6 +93,7 @@ pub fn tool(id: i32) {
         PICKER => "--pick".to_string(),
         DISK => "--disk".to_string(),
         RENAME => format!("--rename --hwnd {}", unsafe { GetForegroundWindow() }.0 as isize),
+        DICTATE => return dictate(),
         _ => return,
     };
     let exe = paths::sibling_exe("carlui-tools.exe");
@@ -100,5 +103,16 @@ pub fn tool(id: i32) {
         if r.0 as isize <= 32 {
             warn!("{} açılamadı ({args})", exe.display());
         }
+    }
+}
+
+/// Sesle yazmayı başlatır ya da (çalışıyorsa) bitirir: `carlui-convert.exe --dictate`.
+/// Metin o anda öndeki pencereye yazılır.
+fn dictate() {
+    let exe = paths::sibling_exe("carlui-convert.exe");
+    let fg = unsafe { GetForegroundWindow() }.0 as isize;
+    match std::process::Command::new(&exe).args(["--dictate", "--hwnd", &fg.to_string()]).spawn() {
+        Ok(_) => info!("dikte kısayolu"),
+        Err(e) => warn!("{} açılamadı: {e}", exe.display()),
     }
 }

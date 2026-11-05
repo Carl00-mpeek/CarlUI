@@ -321,6 +321,8 @@ pub struct ShortcutsConfig {
     pub replay: String,
     /// Anlık tekrar panelini aç/kapat (kayıt, mikrofon, kalite), ör. "Alt+F8".
     pub replay_panel: String,
+    /// Sesle yazma (dikte): bas, konuş, yeniden bas; metin imlecin olduğu yere yazılır.
+    pub dictate: String,
 }
 
 impl Default for ShortcutsConfig {
@@ -338,6 +340,7 @@ impl Default for ShortcutsConfig {
             disk: String::new(),
             replay: "Alt+F10".into(),
             replay_panel: "Alt+F8".into(),
+            dictate: "Ctrl+Alt+D".into(),
         }
     }
 }

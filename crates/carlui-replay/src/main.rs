@@ -22,6 +22,7 @@ mod mixer;
 mod panel;
 mod remux;
 mod ring;
+mod voice;
 mod writer;
 
 use carlui_core::{
@@ -273,8 +274,9 @@ fn file_name() -> String {
 }
 
 /// Son süreyi `folder`'a yazar (çağıran iş parçacığında).
-unsafe fn save_now(ring: &Arc<Ring>, folder: &std::path::Path) -> (PathBuf, Result<f64>) {
-    let segs = ring.cut(ring::now());
+/// `limit`: istenen süre (sn); yoksa tutulan sürenin tamamı.
+unsafe fn save_now(ring: &Arc<Ring>, folder: &std::path::Path, limit: Option<u32>) -> (PathBuf, Result<f64>) {
+    let segs = ring.cut(ring::now(), limit.map(|s| s as i64 * 10_000_000));
     let _ = std::fs::create_dir_all(folder);
     let out = folder.join(file_name());
     let started = std::time::Instant::now();
@@ -310,7 +312,7 @@ unsafe fn self_test() -> bool {
     let ring = s.ring.lock().unwrap_or_else(|e| e.into_inner()).clone();
     match ring {
         Some(r) => {
-            let (out, res) = save_now(&r, &folder);
+            let (out, res) = save_now(&r, &folder, None);
             println!("{} -> {res:?}", out.display());
         }
         None => println!("kayıt başlamadı"),
@@ -319,14 +321,14 @@ unsafe fn self_test() -> bool {
     true
 }
 
-fn save(ring: Arc<Ring>, rc: ReplayConfig) {
+fn save(ring: Arc<Ring>, rc: ReplayConfig, limit: Option<u32>) {
     let folder = rc.folder();
     if SAVING.swap(true, Ordering::SeqCst) {
         return;
     }
     let _ = std::thread::Builder::new().name("replay-save".into()).spawn(move || unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        let (out, res) = save_now(&ring, &folder);
+        let (out, res) = save_now(&ring, &folder, limit);
         match res {
             Ok(secs) => {
                 let len = if secs >= 60.0 { format!("{}:{:02}", secs as u32 / 60, secs as u32 % 60) } else { format!("{secs:.0} sn") };
@@ -443,6 +445,7 @@ fn main() -> Result<()> {
         let _ = std::thread::Builder::new().name("replay-cleanup".into()).spawn(move || cleanup(&rc, &rc.folder(), std::path::Path::new("")));
 
         let tid = GetCurrentThreadId();
+        voice::sync(&cfg, tid);
         config::watch(move |c| {
             *PENDING.lock().unwrap_or_else(|e| e.into_inner()) = Some(c);
             let _ = PostThreadMessageW(tid, WM_APP_RELOAD, WPARAM(0), LPARAM(0));
@@ -461,19 +464,26 @@ fn main() -> Result<()> {
                     if let Some(c) = PENDING.lock().unwrap_or_else(|e| e.into_inner()).take() {
                         carlui_ui::tone::follow(&c.theme);
                         apply(&mut sess, &c);
+                        voice::sync(&c, tid);
                         cfg = c;
                     }
                 }
                 WM_APP_SAVE => {
                     let ring = sess.as_ref().and_then(|s| s.ring.lock().unwrap_or_else(|e| e.into_inner()).clone());
                     if let Some(r) = ring {
-                        save(r, cfg.replay.clone());
+                        save(r, cfg.replay.clone(), None);
+                    }
+                }
+                voice::WM_APP_VOICE => {
+                    let ring = sess.as_ref().and_then(|s| s.ring.lock().unwrap_or_else(|e| e.into_inner()).clone());
+                    if let Some(r) = ring {
+                        save(r, cfg.replay.clone(), Some(msg.wParam.0 as u32).filter(|s| *s > 0));
                     }
                 }
                 WM_HOTKEY if msg.wParam.0 as i32 == HOTKEY => {
                     let ring = sess.as_ref().and_then(|s| s.ring.lock().unwrap_or_else(|e| e.into_inner()).clone());
                     match ring {
-                        Some(r) => save(r, cfg.replay.clone()),
+                        Some(r) => save(r, cfg.replay.clone(), None),
                         None => note(t!("Anlık tekrar", "Instant replay"), t!("Kayıt henüz başlamadı.", "Recording has not started yet.")),
                     }
                 }
@@ -483,6 +493,7 @@ fn main() -> Result<()> {
             }
         }
         panel::close();
+        voice::stop();
         if let Some(s) = sess.take() {
             s.stop();
         }

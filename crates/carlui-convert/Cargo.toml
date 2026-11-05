@@ -7,6 +7,7 @@ authors.workspace = true
 
 [dependencies]
 carlui-ai = { path = "../carlui-ai" }
+carlui-clip = { path = "../carlui-clip" }
 carlui-core.workspace = true
 carlui-ui.workspace = true
 serde_json.workspace = true

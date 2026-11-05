@@ -1,6 +1,7 @@
 //! Ayar sayfaları. Her sayfa `paint(app, painter, flow)` ile satırlarını dizer;
 //! değişiklik `Act::Edit` kapanışıyla `Config`'e uygulanır ve hemen kaydedilir.
 
+pub mod ai;
 pub mod backup;
 mod applist;
 mod clipboard;
@@ -34,10 +35,11 @@ pub enum Page {
     Vault,
     Tools,
     Replay,
+    Ai,
 }
 
 impl Page {
-    pub const ALL: [Page; 11] = [Page::General, Page::Look, Page::Dock, Page::Island, Page::Search, Page::Clipboard, Page::Tools, Page::Replay, Page::Game, Page::Vault, Page::Shortcuts];
+    pub const ALL: [Page; 12] = [Page::General, Page::Look, Page::Dock, Page::Island, Page::Search, Page::Clipboard, Page::Tools, Page::Replay, Page::Ai, Page::Game, Page::Vault, Page::Shortcuts];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -52,6 +54,7 @@ impl Page {
             Page::Vault => "Carl Vault",
             Page::Tools => carlui_core::t!("Araçlar", "Tools"),
             Page::Replay => carlui_core::t!("Anlık tekrar", "Instant replay"),
+            Page::Ai => carlui_core::t!("Yapay zekâ", "AI"),
         }
     }
 
@@ -68,6 +71,7 @@ impl Page {
             Page::Vault => '\u{E72E}',
             Page::Tools => '\u{E90F}',
             Page::Replay => '\u{E714}',
+            Page::Ai => '\u{E945}',
         }
     }
 
@@ -85,6 +89,7 @@ impl Page {
             "vault" | "kasa" => Page::Vault,
             "tools" | "araclar" | "araçlar" => Page::Tools,
             "replay" | "kayit" | "kayıt" | "tekrar" => Page::Replay,
+            "ai" | "yapay-zeka" | "yz" => Page::Ai,
             _ => return None,
         })
     }
@@ -103,5 +108,6 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         Page::Vault => vault::paint(app, p, f),
         Page::Tools => tools::paint(app, p, f),
         Page::Replay => replay::paint(app, p, f),
+        Page::Ai => ai::paint(app, p, f),
     }
 }

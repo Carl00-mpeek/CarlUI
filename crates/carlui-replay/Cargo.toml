@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+carlui-ai = { path = "../carlui-ai" }
 carlui-core.workspace = true
 carlui-ui.workspace = true
 nnnoiseless = { version = "0.5.2", default-features = false }

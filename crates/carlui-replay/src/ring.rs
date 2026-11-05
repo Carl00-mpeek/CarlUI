@@ -276,7 +276,8 @@ impl Ring {
     /// Kaydetmek için: açık segmenti keser, kapanmasını bekler ve son
     /// `keep` süresini kapsayan segmentleri (eskiden yeniye) döndürür.
     /// `release` çağrılana kadar bu segmentler silinmez.
-    pub fn cut(self: &Arc<Self>, now: i64) -> Vec<Segment> {
+    /// `limit` (100 ns) verilirse yalnızca son o kadarı (segment sınırına yuvarlanır).
+    pub fn cut(self: &Arc<Self>, now: i64, limit: Option<i64>) -> Vec<Segment> {
         self.holds.fetch_add(1, Ordering::SeqCst);
         let (tx, rx) = mpsc::channel();
         let old = {
@@ -291,7 +292,7 @@ impl Ring {
             }
         }
         let _ = rx.recv_timeout(std::time::Duration::from_secs(10));
-        let keep = self.keep.load(Ordering::SeqCst) as i64;
+        let keep = (self.keep.load(Ordering::SeqCst) as i64).min(limit.unwrap_or(i64::MAX));
         let done = self.done.lock().unwrap_or_else(|e| e.into_inner());
         let mut out = Vec::new();
         let mut total = 0;

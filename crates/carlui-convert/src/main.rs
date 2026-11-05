@@ -8,6 +8,8 @@
 //! orijinale dokunulmaz. İlerleme dock'un üstündeki küçük kartta görünür.
 //!
 //! Test/elle kullanım: `carlui-convert.exe dosya1 dosya2 …` (seçim yerine).
+//! `--dictate`: sesle yazma (bkz. `dictate`); ana süreç kısayolla başlatır.
+//! `--translate <dosya>`: ekran çevirisi (bkz. `translate`); ada başlatır.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -15,11 +17,13 @@
 extern crate carlui_core;
 
 mod ai;
+mod dictate;
 mod ffmpeg;
 mod image;
 mod kinds;
 mod progress;
 mod select;
+mod translate;
 
 use carlui_core::{info, log};
 use carlui_ui::glassmenu::{self, Icon, Row};
@@ -37,6 +41,13 @@ use windows::{
 pub fn reveal(path: &str) {
     unsafe {
         ShellExecuteW(HWND::default(), w!("open"), w!("explorer.exe"), &HSTRING::from(format!("/select,\"{path}\"")), PCWSTR::null(), SW_SHOWNORMAL);
+    }
+}
+
+/// Dosyayı varsayılan programıyla açar.
+pub fn open(path: &str) {
+    unsafe {
+        ShellExecuteW(HWND::default(), w!("open"), &HSTRING::from(path), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
     }
 }
 
@@ -60,13 +71,14 @@ enum Pick {
     Ai(ai::Op),
 }
 
-const AI_OPS: [ai::Op; 2] = [ai::Op::Background, ai::Op::Upscale];
+const AI_OPS: [ai::Op; 4] = [ai::Op::Background, ai::Op::Upscale, ai::Op::Transcript, ai::Op::Subtitles];
 const AI_BASE: usize = 900;
 
 /// Seçim menüsü; seçilen iş döner.
 fn choose(owner: HWND, groups: &[(Kind, Vec<String>)], skipped: usize, accent: Option<u32>) -> Option<Pick> {
     let total: usize = groups.iter().map(|g| g.1.len()).sum();
     let mut rows = vec![Row::Label(if total == 1 { format!("{} · {}", t!("Dönüştür", "Convert"), file_name(&groups[0].1[0])) } else { t!(format!("Dönüştür · {total} dosya"), format!("Convert · {total} files")) }, Icon::Glyph('\u{E895}', None))];
+    let mut shown = Vec::new();
     for (ki, (k, files)) in groups.iter().enumerate() {
         let k_index = KINDS.iter().position(|x| x == k).unwrap_or(ki);
         rows.push(Row::Header(if groups.len() > 1 || files.len() > 1 { format!("{} ({})", k.title(), files.len()) } else { k.title().to_string() }));
@@ -77,10 +89,13 @@ fn choose(owner: HWND, groups: &[(Kind, Vec<String>)], skipped: usize, accent: O
             }
             rows.push(Row::Item { id: k_index * 100 + ti, text: t.name().to_string(), icon: Icon::Glyph(glyph(*k), None) });
         }
-        if *k == Kind::Image {
+        // Bu türe uyan yapay zekâ işleri (ses+video seçiliyse yalnızca bir kez).
+        let ops: Vec<usize> = (0..AI_OPS.len()).filter(|&i| AI_OPS[i].kinds().contains(k) && !shown.contains(&i)).collect();
+        if !ops.is_empty() {
             rows.push(Row::Header(t!("Yapay zekâ", "AI").into()));
-            for (i, op) in AI_OPS.iter().enumerate() {
-                rows.push(Row::Item { id: AI_BASE + i, text: op.name(), icon: Icon::Glyph(op.glyph(), None) });
+            for i in ops {
+                shown.push(i);
+                rows.push(Row::Item { id: AI_BASE + i, text: AI_OPS[i].name(), icon: Icon::Glyph(AI_OPS[i].glyph(), None) });
             }
         }
     }
@@ -111,10 +126,41 @@ fn main() -> Result<()> {
     log::init("convert");
     let args: Vec<String> = std::env::args().skip(1).collect();
     let fg = args.iter().position(|a| a == "--hwnd").and_then(|i| args.get(i + 1)).and_then(|s| s.parse::<isize>().ok()).map(|h| HWND(h as _));
-    let mut files: Vec<String> = args.iter().enumerate().filter(|(i, a)| !a.starts_with("--") && !(*i > 0 && (args[i - 1] == "--hwnd" || args[i - 1] == "--to"))).map(|(_, a)| a.clone()).collect();
+    let mut files: Vec<String> = args.iter().enumerate().filter(|(i, a)| !a.starts_with("--") && !(*i > 0 && (args[i - 1] == "--hwnd" || args[i - 1] == "--to" || args[i - 1] == "--translate" || args[i - 1] == "--fetch"))).map(|(_, a)| a.clone()).collect();
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    }
+    if args.iter().any(|a| a == "--dictate") {
+        let cfg = carlui_core::config::load();
+        let accent = cfg.dock.menu_accent_color(glassmenu::accent);
+        let owner = unsafe { CreateWindowExW(WS_EX_TOOLWINDOW, w!("Static"), w!(""), WS_POPUP, 0, 0, 0, 0, None, None, None, None)? };
+        return dictate::run(owner, accent, fg.unwrap_or_else(|| unsafe { GetForegroundWindow() }));
+    }
+    // `--fetch <model>`: Ayarlar → Yapay zekâ'daki "İndir" düğmesi.
+    if let Some(m) = args.iter().position(|a| a == "--fetch").and_then(|i| args.get(i + 1)).and_then(|id| carlui_ai::catalog::get(id)) {
+        let accent = carlui_core::config::load().dock.menu_accent_color(glassmenu::accent);
+        let shared = progress::Shared::new();
+        shared.update(|s| s.title = t!("Hazırlanıyor", "Preparing").into());
+        let worker = shared.clone();
+        return progress::run(shared, accent.unwrap_or(0x4CC2FF), move || {
+            std::thread::spawn(move || {
+                if ai::ensure(&worker, m) {
+                    worker.update(|s| {
+                        s.title = t!(format!("{} hazır", m.name), format!("{} is ready", m.name));
+                        s.file = m.license.into();
+                        s.frac = 1.0;
+                        s.done = true;
+                    });
+                }
+            });
+        });
+    }
+    if let Some(file) = args.iter().position(|a| a == "--translate").and_then(|i| args.get(i + 1)) {
+        let cfg = carlui_core::config::load();
+        let accent = cfg.dock.menu_accent_color(glassmenu::accent);
+        let owner = unsafe { CreateWindowExW(WS_EX_TOOLWINDOW, w!("Static"), w!(""), WS_POPUP, 0, 0, 0, 0, None, None, None, None)? };
+        return translate::run(owner, accent, file);
     }
     if files.is_empty() {
         let fg = fg.unwrap_or_else(|| unsafe { GetForegroundWindow() });
@@ -148,12 +194,14 @@ fn main() -> Result<()> {
     let picked = match to.as_deref() {
         Some("nobg") => Some(Pick::Ai(ai::Op::Background)),
         Some("upscale") => Some(Pick::Ai(ai::Op::Upscale)),
+        Some("txt") => Some(Pick::Ai(ai::Op::Transcript)),
+        Some("srt") => Some(Pick::Ai(ai::Op::Subtitles)),
         Some(ext) => groups.iter().find_map(|(k, _)| k.targets().iter().find(|t| t.ext == ext).map(|t| Pick::Convert(*k, *t))),
         None => choose(owner, &groups, skipped, accent),
     };
     let (kind, target) = match picked {
         None => return Ok(()),
-        Some(Pick::Ai(op)) => return run_ai(owner, accent, op, groups.iter().find(|g| g.0 == Kind::Image).map(|g| g.1.clone()).unwrap_or_default(), args.iter().any(|a| a == "--yes")),
+        Some(Pick::Ai(op)) => return run_ai(owner, accent, op, groups.iter().filter(|g| op.kinds().contains(&g.0)).flat_map(|g| g.1.clone()).collect(), args.iter().any(|a| a == "--yes")),
         Some(Pick::Convert(k, t)) => (k, t),
     };
     let list = groups.iter().find(|g| g.0 == kind).map(|g| g.1.clone()).unwrap_or_default();
@@ -161,12 +209,7 @@ fn main() -> Result<()> {
     let mut ff = ffmpeg::find();
     let mut download = false;
     if ff.is_none() && needs_ffmpeg(kind, &target, &list) {
-        let rows = vec![
-            Row::Label(t!("Bu dönüşüm için FFmpeg gerekli", "This conversion needs FFmpeg").into(), Icon::Glyph('\u{E946}', None)),
-            Row::Item { id: 1, text: t!("FFmpeg'i indir (~110 MB, bir kez)", "Download FFmpeg (~110 MB, once)").into(), icon: Icon::Glyph('\u{E896}', None) },
-            Row::Item { id: 2, text: t!("Vazgeç", "Cancel").into(), icon: Icon::Glyph('\u{E711}', None) },
-        ];
-        if glassmenu::run(owner, rows, accent, cursor()) != Some(1) {
+        if !ask_ffmpeg(owner, accent) {
             return Ok(());
         }
         download = true;
@@ -181,23 +224,8 @@ fn main() -> Result<()> {
             unsafe {
                 let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
             }
-            let cancel = worker.cancel.clone();
-            if download {
-                worker.update(|s| {
-                    s.title = t!("FFmpeg indiriliyor", "Downloading FFmpeg").into();
-                    s.file = "github.com/BtbN/FFmpeg-Builds".into();
-                });
-                match ffmpeg::download(&cancel) {
-                    Ok(p) => ff = Some(p),
-                    Err(e) => {
-                        worker.update(|s| {
-                            s.title = e;
-                            s.failed = true;
-                            s.done = true;
-                        });
-                        return;
-                    }
-                }
+            if download && !fetch_ffmpeg(&worker, &mut ff) {
+                return;
             }
             convert_all(&worker, kind, target, &list, ff.as_ref());
         });
@@ -212,18 +240,15 @@ fn run_ai(owner: HWND, accent: Option<u32>, op: ai::Op, list: Vec<String>, yes: 
     }
     let m = op.model();
     let need = ai::missing_bytes(m);
-    if need > 0 && !yes {
-        let rows = vec![
-            Row::Label(t!(format!("{} modeli kurulu değil", m.name), format!("The {} model isn't installed", m.name)), Icon::Glyph('\u{E946}', None)),
-            Row::Label(format!("{} · {}", m.license, m.about()), Icon::Glyph('\u{E946}', None)),
-            Row::Item { id: 1, text: t!(format!("İndir ({}, bir kez)", ai::mb(need)), format!("Download ({}, once)", ai::mb(need))), icon: Icon::Glyph('\u{E896}', None) },
-            Row::Item { id: 2, text: t!("Vazgeç", "Cancel").into(), icon: Icon::Glyph('\u{E711}', None) },
-        ];
-        if glassmenu::run(owner, rows, accent, cursor()) != Some(1) {
-            return Ok(());
-        }
+    if need > 0 && !yes && !ask_model(owner, accent, m, need) {
+        return Ok(());
     }
-    let ff = ffmpeg::find();
+    let mut ff = ffmpeg::find();
+    // Ses/videodan ses çıkarmak için (WAV hariç) FFmpeg gerekir.
+    let download = ff.is_none() && op.is_speech() && list.iter().any(|f| !ai::readable_without_ffmpeg(f));
+    if download && !yes && !ask_ffmpeg(owner, accent) {
+        return Ok(());
+    }
     let shared = progress::Shared::new();
     shared.update(|s| s.title = t!("Hazırlanıyor", "Preparing").into());
     let worker = shared.clone();
@@ -232,9 +257,55 @@ fn run_ai(owner: HWND, accent: Option<u32>, op: ai::Op, list: Vec<String>, yes: 
             unsafe {
                 let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
             }
+            if download && !fetch_ffmpeg(&worker, &mut ff) {
+                return;
+            }
             ai::run_all(&worker, op, &list, ff.as_ref());
         });
     })
+}
+
+/// Model (ve motor) eksikken indirilsin mi diye sorar; lisans ve kaynak görünür.
+pub fn ask_model(owner: HWND, accent: Option<u32>, m: &carlui_ai::catalog::Model, need: u64) -> bool {
+    let rows = vec![
+        Row::Label(t!(format!("{} modeli kurulu değil", m.name), format!("The {} model isn't installed", m.name)), Icon::Glyph('\u{E946}', None)),
+        Row::Label(format!("{} · {}", m.license, m.about()), Icon::Glyph('\u{E946}', None)),
+        Row::Item { id: 1, text: t!(format!("İndir ({}, bir kez)", ai::mb(need)), format!("Download ({}, once)", ai::mb(need))), icon: Icon::Glyph('\u{E896}', None) },
+        Row::Item { id: 2, text: t!("Vazgeç", "Cancel").into(), icon: Icon::Glyph('\u{E711}', None) },
+    ];
+    glassmenu::run(owner, rows, accent, cursor()) == Some(1)
+}
+
+/// FFmpeg eksikken indirilsin mi diye sorar.
+fn ask_ffmpeg(owner: HWND, accent: Option<u32>) -> bool {
+    let rows = vec![
+        Row::Label(t!("Bu iş için FFmpeg gerekli", "This needs FFmpeg").into(), Icon::Glyph('\u{E946}', None)),
+        Row::Item { id: 1, text: t!("FFmpeg'i indir (~110 MB, bir kez)", "Download FFmpeg (~110 MB, once)").into(), icon: Icon::Glyph('\u{E896}', None) },
+        Row::Item { id: 2, text: t!("Vazgeç", "Cancel").into(), icon: Icon::Glyph('\u{E711}', None) },
+    ];
+    glassmenu::run(owner, rows, accent, cursor()) == Some(1)
+}
+
+/// FFmpeg'i ilerleme kartında indirir; başarısızsa kartı hata ile kapatır.
+fn fetch_ffmpeg(w: &progress::Shared, ff: &mut Option<PathBuf>) -> bool {
+    w.update(|s| {
+        s.title = t!("FFmpeg indiriliyor", "Downloading FFmpeg").into();
+        s.file = "github.com/BtbN/FFmpeg-Builds".into();
+    });
+    match ffmpeg::download(&w.cancel) {
+        Ok(p) => {
+            *ff = Some(p);
+            true
+        }
+        Err(e) => {
+            w.update(|s| {
+                s.title = e;
+                s.failed = true;
+                s.done = true;
+            });
+            false
+        }
+    }
 }
 
 fn cursor() -> (i32, i32) {

@@ -42,6 +42,8 @@ pub struct State {
     pub failed: bool,
     /// Bitince tıklanırsa Gezgin'de seçilecek dosya.
     pub reveal: Option<String>,
+    /// `reveal` Gezgin'de seçilmek yerine doğrudan açılsın.
+    pub open: bool,
 }
 
 pub struct Shared {
@@ -220,7 +222,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
         }
         WM_LBUTTONUP => {
             let p = pt();
-            let (done, reveal) = with(|w| w.shared.state.lock().map(|s| (s.done, s.reveal.clone())).unwrap_or_default()).unwrap_or_default();
+            let (done, reveal, open) = with(|w| w.shared.state.lock().map(|s| (s.done, s.reveal.clone(), s.open)).unwrap_or_default()).unwrap_or_default();
             if in_x(p) {
                 if done {
                     let _ = DestroyWindow(hwnd);
@@ -229,7 +231,11 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
                 }
             } else if done {
                 if let Some(r) = reveal {
-                    crate::reveal(&r);
+                    if open {
+                        crate::open(&r);
+                    } else {
+                        crate::reveal(&r);
+                    }
                 }
                 let _ = DestroyWindow(hwnd);
             }

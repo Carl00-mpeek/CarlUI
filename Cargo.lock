@@ -231,6 +231,7 @@ name = "carlui-convert"
 version = "0.5.0"
 dependencies = [
  "carlui-ai",
+ "carlui-clip",
  "carlui-core",
  "carlui-ui",
  "serde_json",
@@ -313,6 +314,7 @@ dependencies = [
 name = "carlui-replay"
 version = "0.5.0"
 dependencies = [
+ "carlui-ai",
  "carlui-core",
  "carlui-ui",
  "nnnoiseless",
@@ -333,6 +335,7 @@ dependencies = [
 name = "carlui-settings"
 version = "0.5.0"
 dependencies = [
+ "carlui-ai",
  "carlui-core",
  "carlui-ui",
  "windows",

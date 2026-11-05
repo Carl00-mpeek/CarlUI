@@ -487,12 +487,12 @@ impl App {
             }
             return;
         }
-        if out == Out::Ocr {
+        if out == Out::Ocr || out == Out::Translate {
             let area = o.sel_px();
             let px = self.shots.overlay.as_mut().map(|o| (std::mem::take(&mut o.frame.px), o.frame.w, o.frame.h));
             self.shot_close();
             if let (Some(area), Some((px, w, h))) = (area, px) {
-                self.shot_ocr(px, w, h, area);
+                self.shot_ocr(px, w, h, area, out == Out::Translate);
             }
             return;
         }
@@ -507,7 +507,10 @@ impl App {
 
     /// "Yazıyı kopyala": OCR arayüzü dondurmasın diye işçi iş parçacığında
     /// çalışır; metin panoya yazılır, sonuç adaya bildirim olarak düşer.
-    fn shot_ocr(&mut self, px: Vec<u8>, w: u32, h: u32, area: (u32, u32, u32, u32)) {
+    /// `translate`: metin panoya değil çeviriye gider; çeviri yapay zekâ
+    /// motorunu adaya yüklememek için `carlui-convert.exe --translate` ile
+    /// ayrı süreçte yapılır (ilerleme ve sonuç onun kartında görünür).
+    fn shot_ocr(&mut self, px: Vec<u8>, w: u32, h: u32, area: (u32, u32, u32, u32), translate: bool) {
         let raw = self.island.hwnd.0 as isize;
         let notes = self.notes_in.clone();
         let _ = std::thread::Builder::new().name("ocr".into()).spawn(move || {
@@ -515,6 +518,13 @@ impl App {
             drop(px);
             let (title, body) = match res {
                 Ok(text) if text.is_empty() => (t!("Yazı bulunamadı", "No text found").to_string(), t!("Seçili alanda okunabilir yazı yok.", "No readable text in the selected area.").to_string()),
+                Ok(text) if translate => match start_translate(&text) {
+                    Ok(()) => return,
+                    Err(e) => {
+                        carlui_core::warn!("çeviri başlatılamadı: {e}");
+                        (t!("Çeviri başlatılamadı", "Couldn't start translation").to_string(), e)
+                    }
+                },
                 Ok(text) => {
                     let ok = carlui_clip::write::set(HWND(raw as _), carlui_clip::write::Data::Text(&text)).is_some();
                     let first: String = text.lines().next().unwrap_or_default().chars().take(60).collect();
@@ -711,4 +721,12 @@ pub(crate) fn window_message(_hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> O
         _ => return None,
     }
     Some(LRESULT(0))
+}
+
+/// OCR metnini geçici dosyaya yazar ve çeviriciyi başlatır.
+fn start_translate(text: &str) -> std::result::Result<(), String> {
+    let file = std::env::temp_dir().join(format!("carlui-ocr-{}.txt", std::process::id()));
+    std::fs::write(&file, text.as_bytes()).map_err(|e| e.to_string())?;
+    let exe = carlui_core::paths::sibling_exe("carlui-convert.exe");
+    std::process::Command::new(exe).arg("--translate").arg(&file).spawn().map(|_| ()).map_err(|e| e.to_string())
 }

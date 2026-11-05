@@ -7,13 +7,22 @@
 #[macro_use]
 extern crate carlui_core;
 
+pub mod audio;
 pub mod catalog;
+pub mod command;
 pub mod esrgan;
+pub mod listen;
+pub mod marian;
+pub mod mic;
+mod nn;
 pub mod onnx;
 pub mod rmbg;
 pub mod runtime;
+pub mod spm;
 pub mod store;
+pub mod vosk;
 pub mod weights;
+pub mod whisper;
 
 /// Düz (premultiplied olmayan) BGRA resim, satırlar yukarıdan aşağı.
 pub struct Image {

@@ -1,15 +1,19 @@
-//! Bu modül "dönüştürücü menüsünden resmin arka planını nasıl sileriz ya da
-//! nasıl büyütürüz?" sorusunu çözüyor. Ayarlarda seçili model (yoksa önerilen)
-//! kullanılır; model ya da yapay zekâ motoru kurulu değilse önce sorulur,
-//! onay verilirse resmi kaynaktan indirilir (ilerleme aynı kartta görünür).
-//! Sonuç orijinalin yanına yazılır; orijinale dokunulmaz.
+//! Bu modül "dönüştürücü menüsünden resmin arka planını nasıl sileriz, nasıl
+//! büyütürüz, ses/videoyu nasıl yazıya ya da altyazıya dökeriz?" sorusunu
+//! çözüyor. Ayarlarda seçili model (yoksa önerilen) kullanılır; model ya da
+//! yapay zekâ motoru kurulu değilse önce sorulur, onay verilirse resmi
+//! kaynaktan indirilir (ilerleme aynı kartta görünür). Sonuç orijinalin
+//! yanına yazılır; orijinale dokunulmaz.
 
-use crate::{file_name, image, kinds, progress::Shared};
+use crate::{ffmpeg, file_name, image, kinds, kinds::Kind, progress::Shared};
 use carlui_ai::{
+    audio,
     catalog::{self, Feature, Model},
     esrgan::Upscaler,
     rmbg::Remover,
-    runtime, store, Image,
+    runtime, store,
+    whisper::{self, Whisper},
+    Image,
 };
 use std::{path::PathBuf, sync::atomic::Ordering};
 
@@ -20,6 +24,10 @@ const MAX_OUT_PIXELS: u64 = 120_000_000;
 pub enum Op {
     Background,
     Upscale,
+    /// Ses/video → düz metin (.txt)
+    Transcript,
+    /// Ses/video → altyazı (.srt)
+    Subtitles,
 }
 
 impl Op {
@@ -27,7 +35,20 @@ impl Op {
         match self {
             Op::Background => Feature::Background,
             Op::Upscale => Feature::Upscale,
+            Op::Transcript | Op::Subtitles => Feature::Speech,
         }
+    }
+
+    /// Bu işin uygulanabildiği dosya türleri.
+    pub fn kinds(self) -> &'static [Kind] {
+        match self {
+            Op::Background | Op::Upscale => &[Kind::Image],
+            Op::Transcript | Op::Subtitles => &[Kind::Audio, Kind::Video],
+        }
+    }
+
+    pub fn is_speech(self) -> bool {
+        self.feature() == Feature::Speech
     }
 
     pub fn model(self) -> &'static Model {
@@ -39,6 +60,8 @@ impl Op {
         match self {
             Op::Background => t!("Arka planı sil", "Remove background").into(),
             Op::Upscale => t!(format!("Büyüt (×{})", scale(self.model())), format!("Upscale (×{})", scale(self.model()))),
+            Op::Transcript => t!("Yazıya dök (.txt)", "Transcribe (.txt)").into(),
+            Op::Subtitles => t!("Altyazı çıkar (.srt)", "Generate subtitles (.srt)").into(),
         }
     }
 
@@ -46,6 +69,8 @@ impl Op {
         match self {
             Op::Background => '\u{E7C5}',
             Op::Upscale => '\u{E740}',
+            Op::Transcript => '\u{E8A5}',
+            Op::Subtitles => '\u{ED1E}',
         }
     }
 }
@@ -78,6 +103,11 @@ pub fn mb(n: u64) -> String {
     }
 }
 
+/// Ses dosyası FFmpeg'siz okunabilir mi (WAV doğrudan okunur).
+pub fn readable_without_ffmpeg(src: &str) -> bool {
+    kinds::ext(src) == "wav"
+}
+
 fn output_path(op: Op, src: &str, m: &Model) -> String {
     let p = std::path::Path::new(src);
     let dir = p.parent().map(|d| d.to_path_buf()).unwrap_or_default();
@@ -90,6 +120,8 @@ fn output_path(op: Op, src: &str, m: &Model) -> String {
             let e = if matches!(e.as_str(), "png" | "jpg" | "jpeg" | "bmp" | "tif" | "tiff" | "tga" | "dds" | "webp" | "avif" | "jxl") { e } else { "png".into() };
             (format!("{stem} (×{})", scale(m)), e)
         }
+        Op::Transcript => (stem, "txt".into()),
+        Op::Subtitles => (stem, "srt".into()),
     };
     kinds::output_path(&dir.join(format!("{stem}.{ext}")).to_string_lossy(), &ext)
 }
@@ -102,25 +134,43 @@ fn enc_ext(dst: &str) -> String {
     }
 }
 
-/// Motoru ve modeli (gerekirse) indirir, sonra her dosyayı işler.
-pub fn run_all(w: &Shared, op: Op, files: &[String], ff: Option<&PathBuf>) {
-    let m = op.model();
+/// Ses/videodan 16 kHz tek kanal örnekler (WAV doğrudan, diğerleri FFmpeg ile).
+fn load_pcm(w: &Shared, src: &str, ff: Option<&PathBuf>, prog: &dyn Fn(f32)) -> Result<Vec<f32>, String> {
+    if readable_without_ffmpeg(src) {
+        if let Ok(p) = std::fs::read(src).map_err(|e| e.to_string()).and_then(|b| audio::read_wav(&b)) {
+            return Ok(p);
+        }
+    }
+    let ff = ff.ok_or_else(|| t!("FFmpeg bulunamadı", "FFmpeg not found").to_string())?;
+    let tmp = std::env::temp_dir().join(format!("carlui-asr-{}.wav", std::process::id()));
+    let tmp_s = tmp.to_string_lossy().to_string();
+    let args: Vec<String> = ["-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le"].iter().map(|s| s.to_string()).collect();
+    let r = ffmpeg::run(ff, src, &args, &tmp_s, &w.cancel, prog).and_then(|_| std::fs::read(&tmp).map_err(|e| e.to_string())).and_then(|b| audio::read_wav(&b));
+    let _ = std::fs::remove_file(&tmp);
+    r
+}
+
+pub fn fail(w: &Shared, e: String) {
+    w.update(|s| {
+        s.title = e;
+        s.failed = true;
+        s.done = true;
+        s.frac = 1.0;
+    })
+}
+
+/// Motor ve model kurulu değilse ilerleme kartında indirir. Başarısızsa kartı
+/// hata ile kapatır ve false döner.
+pub fn ensure(w: &Shared, m: &Model) -> bool {
     let cancel = w.cancel.clone();
-    let fail = |e: String| {
-        w.update(|s| {
-            s.title = e;
-            s.failed = true;
-            s.done = true;
-            s.frac = 1.0;
-        })
-    };
     if !runtime::installed() {
         w.update(|s| {
             s.title = t!("Yapay zekâ motoru indiriliyor", "Downloading the AI engine").into();
             s.file = format!("ONNX Runtime {} · nuget.org", runtime::ORT_VERSION);
         });
         if let Err(e) = runtime::install(&cancel, &|f| w.update(|s| s.frac = f)) {
-            return fail(e);
+            fail(w, e);
+            return false;
         }
     }
     if !store::installed(m) {
@@ -130,8 +180,25 @@ pub fn run_all(w: &Shared, op: Op, files: &[String], ff: Option<&PathBuf>) {
             s.frac = 0.0;
         });
         if let Err(e) = store::install(m, &cancel, &|f| w.update(|s| s.frac = f)) {
-            return fail(e);
+            fail(w, e);
+            return false;
         }
+    }
+    true
+}
+
+/// Konuşma modelinin klasörü (model.safetensors'ın bulunduğu yer).
+pub fn speech_dir(m: &Model) -> Option<PathBuf> {
+    store::find(&store::dir(m), "model.safetensors").and_then(|p| p.parent().map(|d| d.to_path_buf()))
+}
+
+/// Motoru ve modeli (gerekirse) indirir, sonra her dosyayı işler.
+pub fn run_all(w: &Shared, op: Op, files: &[String], ff: Option<&PathBuf>) {
+    let m = op.model();
+    let cancel = w.cancel.clone();
+    let fail = |e: String| fail(w, e);
+    if !ensure(w, m) {
+        return;
     }
     w.update(|s| {
         s.title = t!("Model yükleniyor", "Loading the model").into();
@@ -142,10 +209,13 @@ pub fn run_all(w: &Shared, op: Op, files: &[String], ff: Option<&PathBuf>) {
     enum Eng {
         Bg(Remover),
         Up(Upscaler),
+        Asr(Box<Whisper>),
     }
+    let missing = || t!("Model dosyası bulunamadı", "Model file not found").to_string();
     let eng = match op {
-        Op::Background => store::find(&dir, "model.onnx").ok_or_else(|| t!("Model dosyası bulunamadı", "Model file not found").to_string()).and_then(|p| Remover::open(&p)).map(Eng::Bg),
-        Op::Upscale => store::find(&dir, "model.pth").ok_or_else(|| t!("Model dosyası bulunamadı", "Model file not found").to_string()).and_then(|p| Upscaler::open(&p)).map(Eng::Up),
+        Op::Background => store::find(&dir, "model.onnx").ok_or_else(missing).and_then(|p| Remover::open(&p)).map(Eng::Bg),
+        Op::Upscale => store::find(&dir, "model.pth").ok_or_else(missing).and_then(|p| Upscaler::open(&p)).map(Eng::Up),
+        Op::Transcript | Op::Subtitles => speech_dir(m).ok_or_else(missing).and_then(|d| Whisper::open(&d)).map(|w| Eng::Asr(Box::new(w))),
     };
     let mut eng = match eng {
         Ok(e) => e,
@@ -154,6 +224,8 @@ pub fn run_all(w: &Shared, op: Op, files: &[String], ff: Option<&PathBuf>) {
             return fail(t!("Model açılamadı", "Couldn't load the model").into());
         }
     };
+    let lang = carlui_core::config::load().ai.speech_lang;
+    let lang = Some(lang.as_str()).filter(|l| !l.is_empty());
 
     let n = files.len();
     let (mut ok, mut errors, mut last) = (0, Vec::new(), None);
@@ -165,6 +237,8 @@ pub fn run_all(w: &Shared, op: Op, files: &[String], ff: Option<&PathBuf>) {
         let verb = match op {
             Op::Background => t!("Arka plan siliniyor", "Removing background"),
             Op::Upscale => t!("Büyütülüyor", "Upscaling"),
+            Op::Transcript => t!("Yazıya dökülüyor", "Transcribing"),
+            Op::Subtitles => t!("Altyazı çıkarılıyor", "Generating subtitles"),
         };
         w.update(|s| {
             s.title = if n > 1 { format!("{verb} · {}/{n}", i + 1) } else { verb.into() };
@@ -173,20 +247,32 @@ pub fn run_all(w: &Shared, op: Op, files: &[String], ff: Option<&PathBuf>) {
         });
         let prog = |f: f32| w.update(|s| s.frac = (i as f32 + f) / n as f32);
         let dst = output_path(op, src, m);
-        let r = image::decode(src, ff).and_then(|p| {
-            let img = Image { w: p.w, h: p.h, bgra: p.data };
-            let out = match &mut eng {
-                Eng::Bg(r) => r.remove(&img, &cancel, &prog)?,
-                Eng::Up(u) => {
-                    let s = u.scale as u64;
-                    if img.w as u64 * img.h as u64 * s * s > MAX_OUT_PIXELS {
-                        return Err(t!("Resim büyütmek için fazla büyük", "The image is too large to upscale").into());
-                    }
-                    u.upscale(&img, &cancel, &prog)?
+        let r = match &mut eng {
+            Eng::Asr(wh) => load_pcm(w, src, ff, &|f| prog(f * 0.1)).and_then(|pcm| {
+                let (segs, l) = wh.transcribe(&pcm, lang, op == Op::Subtitles, &cancel, &|f| prog(0.1 + f * 0.9))?;
+                carlui_core::info!("yazıya dökme: {} parça, dil {l}", segs.len());
+                if segs.is_empty() {
+                    return Err(t!("Konuşma bulunamadı", "No speech found").into());
                 }
-            };
-            image::encode(&image::Pixels { w: out.w, h: out.h, data: out.bgra }, &dst, &enc_ext(&dst), ff)
-        });
+                let body = if op == Op::Subtitles { format!("\u{FEFF}{}", whisper::to_srt(&segs)) } else { whisper::to_text(&segs) + "\r\n" };
+                std::fs::write(&dst, body).map_err(|e| e.to_string())
+            }),
+            eng => image::decode(src, ff).and_then(|p| {
+                let img = Image { w: p.w, h: p.h, bgra: p.data };
+                let out = match eng {
+                    Eng::Bg(r) => r.remove(&img, &cancel, &prog)?,
+                    Eng::Up(u) => {
+                        let s = u.scale as u64;
+                        if img.w as u64 * img.h as u64 * s * s > MAX_OUT_PIXELS {
+                            return Err(t!("Resim büyütmek için fazla büyük", "The image is too large to upscale").into());
+                        }
+                        u.upscale(&img, &cancel, &prog)?
+                    }
+                    Eng::Asr(_) => unreachable!(),
+                };
+                image::encode(&image::Pixels { w: out.w, h: out.h, data: out.bgra }, &dst, &enc_ext(&dst), ff)
+            }),
+        };
         match r {
             Ok(()) => {
                 ok += 1;
@@ -211,8 +297,10 @@ pub fn run_all(w: &Shared, op: Op, files: &[String], ff: Option<&PathBuf>) {
             match (op, ok) {
                 (Op::Background, 1) => t!("Arka plan silindi", "Background removed").into(),
                 (Op::Upscale, 1) => t!("Büyütüldü", "Upscaled").into(),
-                _ if errors.is_empty() => t!(format!("{ok} resim hazır"), format!("{ok} images done")),
-                _ => t!(format!("{ok} resim hazır · {} hata", errors.len()), format!("{ok} images done · {} errors", errors.len())),
+                (Op::Transcript, 1) => t!("Yazıya döküldü", "Transcribed").into(),
+                (Op::Subtitles, 1) => t!("Altyazı hazır", "Subtitles ready").into(),
+                _ if errors.is_empty() => t!(format!("{ok} dosya hazır"), format!("{ok} files done")),
+                _ => t!(format!("{ok} dosya hazır · {} hata", errors.len()), format!("{ok} files done · {} errors", errors.len())),
             }
         } else {
             t!("İşlenemedi", "Processing failed").into()
@@ -239,6 +327,8 @@ mod tests {
         assert!(output_path(Op::Upscale, &src, m).ends_with("foto (×4).jpeg"));
         assert!(output_path(Op::Upscale, &d.join("a.heic").to_string_lossy(), m).ends_with("a (×4).png"));
         assert!(output_path(Op::Background, &src, m).ends_with(".png"));
+        assert!(output_path(Op::Subtitles, &d.join("v.mp4").to_string_lossy(), m).ends_with("v.srt"));
+        assert!(output_path(Op::Transcript, &d.join("s.mp3").to_string_lossy(), m).ends_with("s.txt"));
         assert_eq!(enc_ext("x.jpeg"), "jpg");
     }
 }

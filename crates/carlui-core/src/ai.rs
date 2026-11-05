@@ -20,11 +20,16 @@ pub struct AiConfig {
     pub command: String,
     /// Çeviri modeli.
     pub translate: String,
+    /// Konuşma dili ("tr", "en" …); boşsa otomatik bulunur.
+    pub speech_lang: String,
+    /// Sesli komutla anlık tekrar kaydı ("son iki dakikayı kaydet"). Mikrofon
+    /// sürekli dinlendiği için varsayılan kapalı; ses hiçbir yere gitmez.
+    pub voice_command: bool,
 }
 
 impl Default for AiConfig {
     fn default() -> Self {
-        Self { gpu: true, upscale: String::new(), background: String::new(), speech: String::new(), command: String::new(), translate: String::new() }
+        Self { gpu: true, upscale: String::new(), background: String::new(), speech: String::new(), command: String::new(), translate: String::new(), speech_lang: String::new(), voice_command: false }
     }
 }
 
@@ -51,5 +56,34 @@ impl AiConfig {
             _ => return,
         };
         *s = id.to_string();
+    }
+}
+
+impl crate::config::ShortcutsConfig {
+    /// Dikte kısayolu (boşsa kapalı; geçersizse varsayılan Ctrl+Alt+D).
+    pub fn dictate_combo(&self) -> Option<crate::keys::Combo> {
+        if self.dictate.trim().is_empty() {
+            return None;
+        }
+        crate::keys::parse_combo(&self.dictate)
+            .or_else(|e| {
+                crate::warn!("dikte kısayolu '{}' kullanılamaz: {e}; varsayılan (Ctrl+Alt+D) kullanılıyor", self.dictate);
+                crate::keys::parse_combo(&Self::default().dictate)
+            })
+            .ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config::ShortcutsConfig;
+
+    #[test]
+    fn dictate_combo() {
+        assert!(ShortcutsConfig::default().dictate_combo().is_some());
+        let off = ShortcutsConfig { dictate: String::new(), ..Default::default() };
+        assert!(off.dictate_combo().is_none());
+        let bad = ShortcutsConfig { dictate: "Sol tık".into(), ..Default::default() };
+        assert_eq!(bad.dictate_combo(), ShortcutsConfig::default().dictate_combo());
     }
 }

@@ -71,6 +71,8 @@ pub enum Act {
     ReplayPanel,
     /// Ayarları dosyaya aktar (true) ya da dosyadan al (false).
     Backup(bool),
+    /// Yapay zekâ modelini indir (true) ya da sil (false).
+    Model(&'static str, bool),
     /// İçerik alanı (tekerlek kaydırma hedefi).
     Scroll,
     /// Metin formu: 0 arama motoru, 5 kısaltma, 6 bildirim engeli, 7 pano hariç, 8 genişletici hariç formunu aç; 1/2 alan, 3 ekle, 4 vazgeç.
@@ -99,6 +101,10 @@ pub struct App {
     saved: Option<Instant>,
     /// Açık metin formu (arama motoru ekleme).
     pub input: Option<input::Input>,
+    /// Şu an indirilen yapay zekâ modelleri (dönüştürücü süreci bitince çıkar).
+    pub fetching: Arc<Mutex<Vec<&'static str>>>,
+    /// Model silinemediyse nedeni.
+    pub ai_error: Option<String>,
 }
 
 thread_local! {
@@ -205,6 +211,8 @@ impl App {
                     }
                 }
             }
+            Act::Model(id, true) => pages::ai::fetch(self, id),
+            Act::Model(id, false) => self.ai_error = pages::ai::remove(id).err(),
             Act::Scroll => {}
             Act::Input(k) => match k {
                 0 => self.input = Some(input::Input::new(input::Form::Engine)),
@@ -613,6 +621,8 @@ fn main() -> Result<()> {
             reload,
             saved: None,
             input: None,
+            fetching: Arc::default(),
+            ai_error: None,
         };
         tween::enable();
         APP.with(|a| *a.borrow_mut() = Some(app));

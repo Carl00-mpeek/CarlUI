@@ -111,13 +111,13 @@ pub static MODELS: &[Model] = &[
         feature: Feature::Command,
         tier: Tier::Small,
         name: "Vosk small TR",
-        about_tr: "Önerilen. 35 MB; sürekli dinlerken işlemciyi neredeyse hiç yormaz. Yalnızca komut sözcüklerini tanır.",
-        about_en: "Recommended. 35 MB; barely touches the CPU while listening. Only recognizes the command words.",
+        about_tr: "Önerilen (Türkçe). 50 MB, sürekli dinlerken işlemciyi yormaz; Türkçe komutları en doğru bu tanır.",
+        about_en: "Recommended for Turkish. 50 MB, barely touches the CPU; the most accurate for Turkish commands.",
         license: "Apache-2.0 (Alpha Cephei)",
         source: "https://alphacephei.com/vosk/models",
         files: &[
-            File { url: "https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip", name: "model.zip", size: 36_000_000, sha256: "", unzip: true },
-            File { url: "https://github.com/alphacep/vosk-api/releases/download/v0.3.45/vosk-win64-0.3.45.zip", name: "vosk.zip", size: 8_000_000, sha256: "", unzip: true },
+            File { url: "https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip", name: "model.zip", size: 36855784, sha256: "8c8d07cec1bce31add14967c16891c84152cdf76d391e33c08278119b9ea96e5", unzip: true },
+            File { url: "https://github.com/alphacep/vosk-api/releases/download/v0.3.45/vosk-win64-0.3.45.zip", name: "vosk.zip", size: 14882445, sha256: "f1dcc9cca460630f81ea8f71794f69c80bed6556d2a4e6237b5785e1d2dff34b", unzip: true },
         ],
     },
     Model {
@@ -125,8 +125,8 @@ pub static MODELS: &[Model] = &[
         feature: Feature::Command,
         tier: Tier::Medium,
         name: "Whisper tiny",
-        about_tr: "Daha serbest konuşmayı anlar (\"son iki dakikayı kaydet\"). Yalnızca konuşma algılanınca çalışır.",
-        about_en: "Understands freer phrasing (\"save the last two minutes\"). Only runs when speech is detected.",
+        about_tr: "İngilizce gibi diğer diller için, en hafif seçenek. Yalnızca konuşma duyulunca çalışır.",
+        about_en: "For English and other languages, the lightest choice. Only runs when speech is heard.",
         license: "Apache-2.0 (OpenAI)",
         source: "https://huggingface.co/openai/whisper-tiny",
         files: &[
@@ -140,8 +140,8 @@ pub static MODELS: &[Model] = &[
         feature: Feature::Command,
         tier: Tier::Large,
         name: "Whisper base",
-        about_tr: "Gürültülü ortamda en iyi tanıma. Dikte için Whisper base indirildiyse ayrıca yer kaplamaz.",
-        about_en: "Best recognition in noisy rooms. Takes no extra space if Whisper base is already downloaded for dictation.",
+        about_tr: "Diğer dillerde daha doğru (\"save the last 30 seconds\"). Dikte için Whisper base indirildiyse ek yer kaplamaz.",
+        about_en: "More accurate for other languages (\"save the last 30 seconds\"). Takes no extra space if Whisper base is downloaded for dictation.",
         license: "Apache-2.0 (OpenAI)",
         source: "https://huggingface.co/openai/whisper-base",
         files: &[],
@@ -238,8 +238,8 @@ pub static MODELS: &[Model] = &[
         files: &[
             File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/main/pytorch_model.bin", name: "model.pth", size: 469780741, sha256: "7bc7e1973431752bcbb083c090c3c8f1e6eb3389d2e2e0faf9bf1a85d969a789", unzip: false },
             File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/main/source.spm", name: "source.spm", size: 796953, sha256: "180d3f94ddfee5585d78b702290ded0f4f9bd40f299349c8383b32a579fefad4", unzip: false },
-            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/main/vocab.json", name: "vocab.json", size: 1501287, sha256: "", unzip: false },
-            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/main/config.json", name: "config.json", size: 1137, sha256: "", unzip: false },
+            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/main/vocab.json", name: "vocab.json", size: 1501287, sha256: "01ef522455d2bf22b0716416ee34688cc2b3f5fa257f742665d21b6acc450ac1", unzip: false },
+            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-tr/resolve/main/config.json", name: "config.json", size: 1137, sha256: "d5ff17d7f5373c403a3ed253d963e5f487a2b95607abdb873429ad4de64db598", unzip: false },
         ],
     },
     Model {
@@ -254,8 +254,8 @@ pub static MODELS: &[Model] = &[
         files: &[
             File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/main/model.safetensors", name: "model.safetensors", size: 469717280, sha256: "fbb0eb4c56cf9a6248adbda79c2bbce72cd8969b4b794fbbc434d4b7d995549d", unzip: false },
             File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/main/source.spm", name: "source.spm", size: 833378, sha256: "a6946a00a5cbd04044bb1c25b48ea798561a2fd12d872e5d1452bdc3dc076e77", unzip: false },
-            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/main/vocab.json", name: "vocab.json", size: 1501287, sha256: "", unzip: false },
-            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/main/config.json", name: "config.json", size: 1076, sha256: "", unzip: false },
+            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/main/vocab.json", name: "vocab.json", size: 1501287, sha256: "01ef522455d2bf22b0716416ee34688cc2b3f5fa257f742665d21b6acc450ac1", unzip: false },
+            File { url: "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-tr-en/resolve/main/config.json", name: "config.json", size: 1076, sha256: "9e03c439d75b5166feb31a01eeedb2befdc01eb41b3541ce37dc8e61eebd9d93", unzip: false },
         ],
     },
 ];
