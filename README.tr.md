@@ -182,9 +182,9 @@ Yapay zekâ** sayfasında.
   bas; ekrandaki İngilizce yazı Türkçeye (ya da tersi) çevrilip panoya konur.
 - **Sesli komutla klip:** Anlık tekrar açıkken "son iki dakikayı kaydet" de,
   klip kaydedilsin.
-- **Arka planı sil** ve **resim kalitesi artırma:** Bulanık ya da küçük
+- **Arka plan silme** ve **Resim kalite artırma:** Bulanık ya da küçük
   fotoğrafları 2-4 kat netleştirir. İkisi de dosya dönüştürücünün "Yapay zekâ"
-  bölümünde.
+  bölümünde ("Arka planı sil", "Kaliteyi artır").
 
 **Modeller:** Kurucuda model yok. Ses stüdyosunda **Küçük / Orta / Büyük**
 listesinden istediğini seçip indirirsin; her modelde boyut, lisans ve önerilen

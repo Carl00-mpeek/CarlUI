@@ -189,8 +189,8 @@ Everything runs on your PC; nothing goes to the cloud. Options are in
   other way round) and copied to the clipboard.
 - **Voice-triggered clips:** With instant replay on, say "save the last two
   minutes" to save a clip.
-- **Remove background** and **image quality enhancement:** Sharpens blurry or
-  small photos 2-4×. Both are in the file converter's "AI" section.
+- **Background removal** and **Image quality enhancement:** Sharpens blurry or
+  small photos 2-4×. Both are in the file converter's "AI" section ("Remove background", "Enhance quality").
 
 **Models:** None ship with the installer. In the Voice studio you pick the one
 you want from a **Small / Medium / Large** list; each shows its size, license
