@@ -1,0 +1,11 @@
+[package]
+name = "carlui-expand"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+carlui-core.workspace = true
+carlui-clip = { path = "../carlui-clip" }
+windows.workspace = true

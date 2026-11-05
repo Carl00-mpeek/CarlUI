@@ -8,7 +8,7 @@ include!("../../tools/winres.rs");
 
 use std::path::{Path, PathBuf};
 
-const EXES: [&str; 11] = ["carlui", "carlui-dock", "carlui-tray", "carlui-island", "carlui-start", "carlui-settings", "carlui-taskmgr", "carlui-convert", "carlui-sensors", "carlui-vault", "carlui-office"];
+const EXES: [&str; 13] = ["carlui", "carlui-dock", "carlui-tray", "carlui-island", "carlui-start", "carlui-settings", "carlui-taskmgr", "carlui-convert", "carlui-sensors", "carlui-vault", "carlui-office", "carlui-tools", "carlui-expand"];
 const EXTENSION: [&str; 11] = ["manifest.json", "background.js", "content.js", "passkey-page.js", "passkey-relay.js", "_locales/en/messages.json", "_locales/tr/messages.json", "popup.html", "popup.js", "popup.css", "KURULUM.md"];
 
 fn plain(p: &Path) -> String {

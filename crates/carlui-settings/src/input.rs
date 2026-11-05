@@ -4,8 +4,10 @@
 //! (Ad, Adres). Klavye WM_CHAR ile buraya gelir: yazma, Geri, Tab (alan
 //! değiştir), Ctrl+V (yapıştır), Enter (ekle), Esc (vazgeç). Adreste `{q}`
 //! yoksa ve "=" ile bitiyorsa sona eklenir; değilse hata gösterilir.
+//! Aynı form metin genişletici kısaltması eklemek için de kullanılır
+//! (Kısaltma, Metin); orada yapıştırılan satır sonları korunur.
 
-use carlui_core::config::Config;
+use carlui_core::config::{Config, Snippet};
 use std::time::Instant;
 use windows::Win32::{
     Foundation::{HANDLE, HGLOBAL, HWND},
@@ -17,7 +19,15 @@ use windows::Win32::{
 
 const CF_UNICODETEXT: u32 = 13;
 
+/// Formun ne eklediği.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Form {
+    Engine,
+    Snippet,
+}
+
 pub struct Input {
+    pub kind: Form,
     pub name: String,
     pub url: String,
     /// 0 ad, 1 adres.
@@ -28,8 +38,8 @@ pub struct Input {
 }
 
 impl Input {
-    pub fn new() -> Self {
-        Self { name: String::new(), url: String::new(), field: 0, error: None, since: Instant::now() }
+    pub fn new(kind: Form) -> Self {
+        Self { kind, name: String::new(), url: String::new(), field: 0, error: None, since: Instant::now() }
     }
 
     fn cur(&mut self) -> &mut String {
@@ -48,8 +58,10 @@ impl Input {
             0x09 => self.field ^= 1,
             0x16 => {
                 if let Some(t) = clipboard(hwnd) {
-                    let t: String = t.chars().filter(|c| !c.is_control()).collect();
-                    self.cur().push_str(t.trim());
+                    // Kısaltma metninde satır sonları kalır.
+                    let multi = self.kind == Form::Snippet && self.field == 1;
+                    let t: String = t.replace("\r\n", "\n").chars().filter(|c| !c.is_control() || (multi && *c == '\n')).collect();
+                    self.cur().push_str(if multi { &t } else { t.trim() });
                 }
             }
             c if c >= 0x20 => {
@@ -67,6 +79,9 @@ impl Input {
 
     /// Ayara ekler; olmazsa hatayı yazar ve false döner.
     pub fn apply(&mut self, cfg: &mut Config) -> bool {
+        if self.kind == Form::Snippet {
+            return self.apply_snippet(cfg);
+        }
         let name = self.name.trim().to_string();
         let mut url = self.url.trim().to_string();
         if name.is_empty() {
@@ -94,6 +109,30 @@ impl Input {
         }
         cfg.launcher.engines.insert(name, url.clone());
         cfg.launcher.web_search = url;
+        true
+    }
+}
+
+impl Input {
+    fn apply_snippet(&mut self, cfg: &mut Config) -> bool {
+        let key = self.name.trim().to_string();
+        if key.chars().count() < 2 || key.chars().any(char::is_whitespace) {
+            self.error = Some(carlui_core::t!("Kısaltma en az 2 karakter ve boşluksuz olmalı (ör. ;adres).", "The abbreviation needs at least 2 characters and no spaces (e.g. ;addr).").into());
+            self.field = 0;
+            return false;
+        }
+        if self.url.trim().is_empty() {
+            self.error = Some(carlui_core::t!("Yerine yazılacak metni girin.", "Enter the text to type instead.").into());
+            self.field = 1;
+            return false;
+        }
+        let text = self.url.clone();
+        let list = &mut cfg.tools.snippets;
+        match list.iter_mut().find(|s| s.key == key) {
+            Some(s) => s.text = text,
+            None => list.push(Snippet { key, text }),
+        }
+        cfg.tools.expander = true;
         true
     }
 }
@@ -128,14 +167,30 @@ mod tests {
     #[test]
     fn engines() {
         let mut c = Config::default();
-        let mut i = Input::new();
+        let mut i = Input::new(Form::Engine);
         i.name = "Wiki".into();
         i.url = "tr.wikipedia.org/w/index.php?search=".into();
         assert!(i.apply(&mut c));
         assert_eq!(c.launcher.web_search, "https://tr.wikipedia.org/w/index.php?search={q}");
-        let mut j = Input::new();
+        let mut j = Input::new(Form::Engine);
         j.name = "X".into();
         j.url = "https://x.com/ara".into();
         assert!(!j.apply(&mut c));
+    }
+
+    #[test]
+    fn snippets() {
+        let mut c = Config::default();
+        let n = c.tools.snippets.len();
+        let mut i = Input::new(Form::Snippet);
+        i.name = "a b".into();
+        i.url = "x".into();
+        assert!(!i.apply(&mut c));
+        i.name = ";adr".into();
+        assert!(i.apply(&mut c));
+        i.url = "y".into();
+        assert!(i.apply(&mut c));
+        assert_eq!(c.tools.snippets.len(), n + 1);
+        assert_eq!(c.tools.snippets.last().unwrap().text, "y");
     }
 }

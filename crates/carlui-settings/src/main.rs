@@ -64,9 +64,11 @@ pub enum Act {
     OpenFile,
     /// Tarayıcı eklentisi: 0 klasörü aç, 1 Firefox eklenti sayfası, 2 Chrome/Edge eklenti sayfası.
     Ext(u8),
+    /// Araç programını (`carlui-tools.exe`) verilen bayrakla başlat.
+    Tool(&'static str),
     /// İçerik alanı (tekerlek kaydırma hedefi).
     Scroll,
-    /// Arama motoru formu: 0 aç, 1 ad alanı, 2 adres alanı, 3 ekle, 4 vazgeç.
+    /// Metin formu: 0 arama motoru formunu aç, 5 kısaltma formunu aç, 1/2 alan, 3 ekle, 4 vazgeç.
     Input(u8),
 }
 
@@ -159,6 +161,9 @@ impl App {
             Act::OpenFile => unsafe {
                 ShellExecuteW(HWND::default(), w!("open"), w!("notepad.exe"), &HSTRING::from(carlui_core::paths::config_file().as_os_str()), PCWSTR::null(), SW_SHOWNORMAL);
             },
+            Act::Tool(arg) => unsafe {
+                ShellExecuteW(HWND::default(), w!("open"), &HSTRING::from(carlui_core::paths::sibling_exe("carlui-tools.exe").as_os_str()), &HSTRING::from(arg), PCWSTR::null(), SW_SHOWNORMAL);
+            },
             Act::Ext(k) => {
                 let b = pages::extension::browsers();
                 let target = match k {
@@ -174,7 +179,8 @@ impl App {
             }
             Act::Scroll => {}
             Act::Input(k) => match k {
-                0 => self.input = Some(input::Input::new()),
+                0 => self.input = Some(input::Input::new(input::Form::Engine)),
+                5 => self.input = Some(input::Input::new(input::Form::Snippet)),
                 1 | 2 => {
                     if let Some(i) = self.input.as_mut() {
                         i.field = k - 1;

@@ -236,6 +236,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "carlui-expand"
+version = "0.3.1"
+dependencies = [
+ "carlui-clip",
+ "carlui-core",
+ "windows",
+]
+
+[[package]]
 name = "carlui-island"
 version = "0.3.1"
 dependencies = [
@@ -333,6 +342,17 @@ dependencies = [
  "carlui-core",
  "carlui-sys",
  "carlui-ui",
+ "windows",
+]
+
+[[package]]
+name = "carlui-tools"
+version = "0.3.1"
+dependencies = [
+ "carlui-clip",
+ "carlui-core",
+ "carlui-ui",
+ "serde_json",
  "windows",
 ]
 

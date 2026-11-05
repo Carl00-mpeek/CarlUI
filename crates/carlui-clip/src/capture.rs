@@ -73,6 +73,21 @@ unsafe fn text() -> Option<String> {
     (!s.trim().is_empty()).then_some(s)
 }
 
+/// Panodaki düz metin (yapıştırma alanları ve metin genişletici için).
+pub fn plain_text() -> Option<String> {
+    unsafe {
+        for _ in 0..8 {
+            if OpenClipboard(HWND::default()).is_ok() {
+                let r = text();
+                let _ = CloseClipboard();
+                return r;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        }
+        None
+    }
+}
+
 unsafe fn files() -> Vec<String> {
     let Ok(h) = GetClipboardData(CF_HDROP) else { return Vec::new() };
     let drop = HDROP(h.0);

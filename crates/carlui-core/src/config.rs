@@ -15,6 +15,7 @@ use windows::Win32::{
 };
 
 pub use crate::theme::Palette;
+pub use crate::tools::{CaseKind, ColorFormat, RenameConfig, RenameMode, Snippet, ToolsConfig};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default)]
@@ -34,6 +35,7 @@ pub struct Config {
     pub download: DownloadConfig,
     pub alerts: AlertsConfig,
     pub vault: VaultConfig,
+    pub tools: ToolsConfig,
 }
 
 /// Carl Vault (yerel şifreli kasa, `carlui-vault.exe`; kısayol: `shortcuts.vault`).
@@ -231,6 +233,12 @@ pub struct ShortcutsConfig {
     pub converter: String,
     /// Carl Vault penceresini aç, ör. "Ctrl+Alt+P".
     pub vault: String,
+    /// Renk seçici (ekrandan renk al); varsayılan boş = kapalı.
+    pub color_picker: String,
+    /// Toplu yeniden adlandırma (yalnızca Gezgin/masaüstü öndeyken).
+    pub rename: String,
+    /// Disk alanı analizörü; varsayılan boş = kapalı.
+    pub disk: String,
 }
 
 impl Default for ShortcutsConfig {
@@ -243,6 +251,9 @@ impl Default for ShortcutsConfig {
             screenshot: "Alt+X".into(),
             converter: "Win+Alt".into(),
             vault: "Ctrl+Alt+P".into(),
+            color_picker: String::new(),
+            rename: "Ctrl+Shift+R".into(),
+            disk: String::new(),
         }
     }
 }

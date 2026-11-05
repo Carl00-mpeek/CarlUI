@@ -235,6 +235,7 @@ unsafe extern "system" fn on_explorer_show(_: HWINEVENTHOOK, _: u32, hwnd: HWND,
 unsafe extern "system" fn on_foreground(_: HWINEVENTHOOK, _: u32, _: HWND, _: i32, _: i32, _: u32, _: u32) {
     with_host(|h| {
         check_fullscreen(h);
+        hotkey::sync_rename(h.hwnd, &h.cfg);
         if fullscreen::desktop_is_foreground() {
             h.bus.publish(&Event::ShowDesktop);
         }
@@ -350,7 +351,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                     if h.cfg.cursor != new.cursor {
                         pointer::sync(&new.cursor);
                     }
-                    if h.cfg.shortcuts.vault != new.shortcuts.vault {
+                    if h.cfg.shortcuts != new.shortcuts || h.cfg.tools.rename_enabled != new.tools.rename_enabled || h.cfg.tools.disk_enabled != new.tools.disk_enabled {
                         hotkey::register(h.hwnd, &new);
                     }
                     h.cfg = new;
@@ -359,6 +360,10 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
             }
             WM_HOTKEY if wp.0 == hotkey::VAULT as usize => {
                 hotkey::open_vault();
+                LRESULT(0)
+            }
+            WM_HOTKEY => {
+                hotkey::tool(wp.0 as i32);
                 LRESULT(0)
             }
             WM_QUERYENDSESSION => LRESULT(1),
@@ -477,6 +482,7 @@ fn run() -> Result<()> {
         sup.run_module("tray", "carlui-tray.exe");
         sup.run_module("island", "carlui-island.exe");
         sup.run_module("start", "carlui-start.exe");
+        sup.run_module("expand", "carlui-expand.exe");
 
         let pending_cfg: Arc<Mutex<Option<Config>>> = Arc::default();
         let pending = pending_cfg.clone();

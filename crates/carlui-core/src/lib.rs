@@ -16,6 +16,7 @@ pub mod paths;
 pub mod power;
 pub mod quick;
 pub mod theme;
+pub mod tools;
 pub mod vaultlink;
 pub mod vcard;
 pub mod win;

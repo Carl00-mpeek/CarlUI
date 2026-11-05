@@ -23,10 +23,13 @@ pub enum Key {
     Converter,
     AppNumbers,
     Vault,
+    ColorPicker,
+    Rename,
+    Disk,
 }
 
 impl Key {
-    const COMBOS: [Key; 4] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault];
+    const COMBOS: [Key; 7] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -36,6 +39,9 @@ impl Key {
             Key::Converter => t!("Dönüştürücü", "Converter"),
             Key::AppNumbers => t!("Dock uygulamaları", "Dock apps"),
             Key::Vault => "Carl Vault",
+            Key::ColorPicker => t!("Renk seçici", "Color picker"),
+            Key::Rename => t!("Toplu yeniden adlandırma", "Batch rename"),
+            Key::Disk => t!("Disk analizörü", "Disk analyzer"),
         }
     }
 
@@ -47,6 +53,9 @@ impl Key {
             Key::Converter => t!("Seçili dosyalar için; tuşlar birlikte basılıp bırakılır.", "For selected files; press the keys together and release."),
             Key::AppNumbers => t!("Bu tuşlar + 1…9 dock'taki uygulamayı açar.", "These keys + 1…9 open the app on the dock."),
             Key::Vault => t!("Şifreli kasayı açar ya da öne getirir.", "Opens the encrypted vault or brings it to the front."),
+            Key::ColorPicker => t!("Ekrandaki bir pikselin rengini panoya kopyalar.", "Copies the color of a pixel on screen."),
+            Key::Rename => t!("Gezgin'de seçili dosyalar için.", "For files selected in Explorer."),
+            Key::Disk => t!("Diskte yer kaplayanları gösterir.", "Shows what takes up disk space."),
         }
     }
 
@@ -64,6 +73,9 @@ impl Key {
             Key::Converter => s.converter.clone(),
             Key::AppNumbers => s.app_numbers.clone(),
             Key::Vault => s.vault.clone(),
+            Key::ColorPicker => s.color_picker.clone(),
+            Key::Rename => s.rename.clone(),
+            Key::Disk => s.disk.clone(),
         }
     }
 
@@ -76,6 +88,9 @@ impl Key {
             Key::Converter => s.converter = v,
             Key::AppNumbers => s.app_numbers = v,
             Key::Vault => s.vault = v,
+            Key::ColorPicker => s.color_picker = v,
+            Key::Rename => s.rename = v,
+            Key::Disk => s.disk = v,
         }
     }
 
@@ -185,6 +200,10 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     key_row(app, p, f, Key::Screenshot);
     key_row(app, p, f, Key::Converter);
     key_row(app, p, f, Key::Vault);
+    f.section(p, t!("Araçlar", "Tools"));
+    key_row(app, p, f, Key::ColorPicker);
+    key_row(app, p, f, Key::Rename);
+    key_row(app, p, f, Key::Disk);
     f.section(p, "Dock");
     key_row(app, p, f, Key::AppNumbers);
     f.y += 6.0;

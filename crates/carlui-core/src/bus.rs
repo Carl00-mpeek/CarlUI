@@ -201,6 +201,19 @@ impl BusClient {
         client
     }
 
+    /// Kısa ömürlü araçlar için: bağlantı kurmadan tek bir olay gönderir
+    /// (ör. adaya bildirim). Ana süreç çalışmıyorsa `false`.
+    pub fn send_once(ev: &Event) -> bool {
+        // Sunucu bir sonraki boru örneğini açana kadar kısa süre "meşgul" olabilir.
+        for _ in 0..10 {
+            if let Some(mut f) = open_pipe(UP, true) {
+                return write_line(&mut f, ev).is_ok();
+            }
+            std::thread::sleep(Duration::from_millis(30));
+        }
+        false
+    }
+
     pub fn is_connected(&self) -> bool {
         self.up.lock().map(|u| u.is_some()).unwrap_or(false)
     }
