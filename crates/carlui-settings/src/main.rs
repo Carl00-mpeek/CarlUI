@@ -317,6 +317,7 @@ impl App {
         let mut hits = std::mem::take(&mut self.hits);
         hits.clear();
         tween::frame();
+        carlui_ui::paint::hover_frame();
         unsafe {
             rt.BeginDraw();
             rt.SetTransform(&Matrix3x2 { M11: s, M12: 0.0, M21: 0.0, M22: s, M31: 0.0, M32: 0.0 });
@@ -339,12 +340,16 @@ impl App {
             let scroll = self.scroll.get(&self.page).copied().unwrap_or(0.0);
             let slide = tween::to(tween::key("page"), 0.0, 13.0);
             let mut f = Flow { x, y: clip.y + 4.0 - scroll + slide, w: cw };
+            // Anahtarlar sayfaya ve içeriğe göre anahtarlanır: sayfa değişince ya da
+            // kaydırınca önceki öğenin durumundan "açılıp kapanma" oynamaz.
+            tween::place(Page::ALL.iter().position(|pg| *pg == self.page).unwrap_or(0) as u64 + 1, x, f.y);
             unsafe {
                 base.PushAxisAlignedClip(&clip.d2d(), D2D1_ANTIALIAS_MODE_ALIASED);
                 let lp = D2D1_LAYER_PARAMETERS { contentBounds: clip.d2d(), opacity: (1.0 - slide / 18.0).clamp(0.0, 1.0), maskTransform: Default::default(), ..Default::default() };
                 base.PushLayer(&lp, None);
             }
             pages::paint(self, &mut p, &mut f);
+            tween::place(0, 0.0, 0.0);
             unsafe {
                 base.PopLayer();
                 base.PopAxisAlignedClip();
@@ -445,11 +450,17 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         WM_MOUSEMOVE => {
             with_app(|a| {
                 let (x, y) = xy(lp);
-                a.mouse = (x / a.scale, y / a.scale);
+                let pt = (x / a.scale, y / a.scale);
+                // Yalnızca sürükleme varsa ya da bir vurgu değişiyorsa çiz; her
+                // fare hareketinde bütün pencereyi çizmek GPU'yu boşuna yorar.
+                let changed = carlui_ui::paint::hover_changed(&a.hits, a.mouse, pt);
+                a.mouse = pt;
                 if let Some((f, track)) = a.drag.clone() {
                     f(&mut a.cfg, (a.mouse.0 - track.x) / track.w);
+                    a.invalidate();
+                } else if changed {
+                    a.invalidate();
                 }
-                a.invalidate();
             });
             LRESULT(0)
         }

@@ -85,6 +85,9 @@ impl App {
         header(p, logo, &sub);
         let slide = tween::to(tween::key("page"), 0.0, 13.0);
         let y0 = 108.0 + slide;
+        // Anahtarlar sayfaya ve içeriğe göre sabit kalsın: sayfa kayarak gelirken
+        // anahtarlar açılıp kapanma animasyonu oynatmasın.
+        tween::place(self.page as u64 + 1, 0.0, y0);
         match self.page {
             Page::Welcome => self.welcome(p, y0),
             Page::Confirm => self.confirm(p, y0),

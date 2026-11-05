@@ -13,6 +13,25 @@ use windows::{
     },
 };
 
+thread_local! {
+    /// Son karede üstüne gelinip gelinmediği sorulan dikdörtgenler.
+    /// Yalnızca `hover_frame` çağıran pencerede tutulur (diğerlerinde birikmez).
+    static HOVERS: RefCell<Option<Vec<R>>> = const { RefCell::new(None) };
+}
+
+/// Karenin başında çağrılır: vurgu listesi yeni kareyle yeniden dolar.
+pub fn hover_frame() {
+    HOVERS.with(|h| *h.borrow_mut() = Some(Vec::new()));
+}
+
+/// Fare `from`dan `to`ya gidince son karede çizilen bir vurgu (ya da
+/// tıklanabilir alan) değişir mi? Değişmiyorsa yeniden çizmeye gerek yok;
+/// her fare hareketinde bütün pencereyi çizmek GPU'yu boşuna yorar.
+pub fn hover_changed<A>(hits: &[(R, A)], from: (f32, f32), to: (f32, f32)) -> bool {
+    let flip = |r: &R| r.contains(from) != r.contains(to);
+    hits.iter().any(|(r, _)| flip(r)) || HOVERS.with(|h| h.borrow().iter().flatten().any(flip))
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct R {
     pub x: f32,
@@ -134,6 +153,7 @@ impl<A: Clone> Painter<'_, A> {
     }
 
     pub fn hover(&self, r: R) -> bool {
+        HOVERS.with(|h| { if let Some(v) = h.borrow_mut().as_mut() { v.push(r) } });
         r.contains(self.mouse)
     }
 
@@ -196,7 +216,7 @@ impl<A: Clone> Painter<'_, A> {
         let sw = R::new(x, y, 34.0, 18.0);
         let k = if enabled { 1.0 } else { 0.35 };
         let hover = enabled && self.hover(sw.inset(-4.0));
-        let id = tween::key(("sw", x as i32, y as i32));
+        let id = tween::at("sw", x, y);
         let t = tween::to(id, if on { 1.0 } else { 0.0 }, 16.0);
         let hv = tween::to(id ^ 1, if hover { 1.0 } else { 0.0 }, 20.0);
         // Kapalı zemin → vurgu rengi geçişi.
@@ -269,7 +289,7 @@ impl<A: Clone> Painter<'_, A> {
 
     /// Düğme; `danger` kırmızı yazı.
     pub fn button(&mut self, r: R, glyph: Option<char>, label: &str, act: A, enabled: bool, danger: bool) {
-        let h = tween::to(tween::key(("btn", r.x as i32, r.y as i32)), if enabled && self.hover(r) { 1.0 } else { 0.0 }, 18.0);
+        let h = tween::to(tween::at("btn", r.x, r.y), if enabled && self.hover(r) { 1.0 } else { 0.0 }, 18.0);
         self.round(r, 6.0, 0xFFFFFF, 0.06 + 0.06 * h);
         self.outline(r, 6.0, if h > 0.0 { mix(0xFFFFFF, self.accent, h) } else { 0xFFFFFF }, 0.08 + 0.25 * h);
         let a = if enabled { 0.92 } else { 0.35 };
@@ -310,7 +330,7 @@ impl<A: Clone> Painter<'_, A> {
         self.round(r, 7.0, 0xFFFFFF, 0.06);
         self.outline(r, 7.0, 0xFFFFFF, 0.08);
         let w = r.w / items.len() as f32;
-        let id = tween::key(("seg", r.x as i32, r.y as i32));
+        let id = tween::at("seg", r.x, r.y);
         let has = selected < items.len();
         let pos = tween::to(id, if has { selected as f32 } else { -1.0 }, 15.0);
         let vis = tween::to(id ^ 1, if has { 1.0 } else { 0.0 }, 15.0);

@@ -72,7 +72,7 @@ impl Flow {
     /// Açık/kapalı ayar; satırın tamamı tıklanabilir.
     pub fn toggle(&mut self, p: &mut P, label: &str, desc: &str, on: bool, f: impl Fn(&mut Config) + 'static) {
         let r = self.row(p, label, desc, 60.0);
-        let hv = tween::to(tween::key(("row", r.x as i32, r.y as i32)), if p.hover(r) { 1.0 } else { 0.0 }, 18.0);
+        let hv = tween::to(tween::at("row", r.x, r.y), if p.hover(r) { 1.0 } else { 0.0 }, 18.0);
         if hv > 0.0 {
             p.round(r, 8.0, 0xFFFFFF, 0.035 * hv);
         }

@@ -135,6 +135,7 @@ impl Win {
         let mut hits = std::mem::take(&mut self.hits);
         hits.clear();
         tween::frame();
+        carlui_ui::paint::hover_frame();
         unsafe {
             rt.BeginDraw();
             rt.SetTransform(&Matrix3x2 { M11: s, M12: 0.0, M21: 0.0, M22: s, M31: 0.0, M32: 0.0 });
@@ -223,8 +224,12 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         WM_MOUSEMOVE => {
             with(|a| {
                 let (x, y) = xy(lp);
-                a.mouse = (x / a.scale, y / a.scale);
-                a.invalidate();
+                let pt = (x / a.scale, y / a.scale);
+                // Yalnızca bir vurgu değişiyorsa çiz (her harekette çizmek GPU yorar).
+                if carlui_ui::paint::hover_changed(&a.hits, a.mouse, pt) {
+                    a.invalidate();
+                }
+                a.mouse = pt;
             });
             LRESULT(0)
         }
