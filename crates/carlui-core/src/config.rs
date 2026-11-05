@@ -14,6 +14,7 @@ use windows::Win32::{
     System::Threading::{WaitForSingleObject, INFINITE},
 };
 
+pub use crate::ai::AiConfig;
 pub use crate::theme::{Palette, ThemeMode};
 pub use crate::replay::{Cleanup, Clip, Codec, Quality, ReplayConfig, Resolution, SaveSignal};
 pub use crate::tools::{exe_listed, CaseKind, ColorFormat, ExpandTrigger, RenameConfig, RenameMode, Snippet, ToolsConfig};
@@ -40,6 +41,7 @@ pub struct Config {
     pub replay: ReplayConfig,
     pub taskmgr: TaskmgrConfig,
     pub shots: ShotsConfig,
+    pub ai: AiConfig,
 }
 
 /// Ekran görüntüsü (adadaki düzenleyici; kısayol: `shortcuts.screenshot`).

@@ -1,0 +1,23 @@
+//! Bu crate "ücretli bulut hizmetlerinin yaptığı işleri bilgisayarda, ücretsiz
+//! nasıl yaparız?" sorusunu çözüyor. Modeller kurucuda gelmez; kullanıcı
+//! Ayarlar → Yapay zekâ'dan küçük/orta/büyük seçip resmi kaynaktan indirir
+//! (`catalog`, `store`). Modelleri ONNX Runtime ile çalıştırırız (`runtime`);
+//! resmi ağırlıklar ONNX değilse grafiği kendimiz kurarız (`onnx`, `weights`).
+
+#[macro_use]
+extern crate carlui_core;
+
+pub mod catalog;
+pub mod esrgan;
+pub mod onnx;
+pub mod rmbg;
+pub mod runtime;
+pub mod store;
+pub mod weights;
+
+/// Düz (premultiplied olmayan) BGRA resim, satırlar yukarıdan aşağı.
+pub struct Image {
+    pub w: u32,
+    pub h: u32,
+    pub bgra: Vec<u8>,
+}

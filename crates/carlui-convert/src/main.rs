@@ -14,6 +14,7 @@
 #[macro_use]
 extern crate carlui_core;
 
+mod ai;
 mod ffmpeg;
 mod image;
 mod kinds;
@@ -53,8 +54,17 @@ fn glyph(k: Kind) -> char {
     }
 }
 
-/// Seçim menüsü; seçilen (tür, hedef) döner.
-fn choose(owner: HWND, groups: &[(Kind, Vec<String>)], skipped: usize, accent: Option<u32>) -> Option<(Kind, Target)> {
+/// Menüden seçilen iş.
+enum Pick {
+    Convert(Kind, Target),
+    Ai(ai::Op),
+}
+
+const AI_OPS: [ai::Op; 2] = [ai::Op::Background, ai::Op::Upscale];
+const AI_BASE: usize = 900;
+
+/// Seçim menüsü; seçilen iş döner.
+fn choose(owner: HWND, groups: &[(Kind, Vec<String>)], skipped: usize, accent: Option<u32>) -> Option<Pick> {
     let total: usize = groups.iter().map(|g| g.1.len()).sum();
     let mut rows = vec![Row::Label(if total == 1 { format!("{} · {}", t!("Dönüştür", "Convert"), file_name(&groups[0].1[0])) } else { t!(format!("Dönüştür · {total} dosya"), format!("Convert · {total} files")) }, Icon::Glyph('\u{E895}', None))];
     for (ki, (k, files)) in groups.iter().enumerate() {
@@ -67,6 +77,12 @@ fn choose(owner: HWND, groups: &[(Kind, Vec<String>)], skipped: usize, accent: O
             }
             rows.push(Row::Item { id: k_index * 100 + ti, text: t.name().to_string(), icon: Icon::Glyph(glyph(*k), None) });
         }
+        if *k == Kind::Image {
+            rows.push(Row::Header(t!("Yapay zekâ", "AI").into()));
+            for (i, op) in AI_OPS.iter().enumerate() {
+                rows.push(Row::Item { id: AI_BASE + i, text: op.name(), icon: Icon::Glyph(op.glyph(), None) });
+            }
+        }
     }
     if skipped > 0 {
         rows.push(Row::Sep);
@@ -77,8 +93,11 @@ fn choose(owner: HWND, groups: &[(Kind, Vec<String>)], skipped: usize, accent: O
         let _ = GetCursorPos(&mut pt);
     }
     let id = glassmenu::run(owner, rows, accent, (pt.x, pt.y - 8))?;
+    if id >= AI_BASE {
+        return AI_OPS.get(id - AI_BASE).map(|o| Pick::Ai(*o));
+    }
     let k = KINDS[id / 100];
-    Some((k, k.targets()[id % 100]))
+    Some(Pick::Convert(k, k.targets()[id % 100]))
 }
 
 fn needs_ffmpeg(kind: Kind, t: &Target, files: &[String]) -> bool {
@@ -126,11 +145,17 @@ fn main() -> Result<()> {
     }
     // `--to webp`: menüsüz (test ve betikler için).
     let to = args.iter().position(|a| a == "--to").and_then(|i| args.get(i + 1)).map(|s| s.to_lowercase());
-    let picked = match to {
-        Some(ext) => groups.iter().find_map(|(k, _)| k.targets().iter().find(|t| t.ext == ext).map(|t| (*k, *t))),
+    let picked = match to.as_deref() {
+        Some("nobg") => Some(Pick::Ai(ai::Op::Background)),
+        Some("upscale") => Some(Pick::Ai(ai::Op::Upscale)),
+        Some(ext) => groups.iter().find_map(|(k, _)| k.targets().iter().find(|t| t.ext == ext).map(|t| Pick::Convert(*k, *t))),
         None => choose(owner, &groups, skipped, accent),
     };
-    let Some((kind, target)) = picked else { return Ok(()) };
+    let (kind, target) = match picked {
+        None => return Ok(()),
+        Some(Pick::Ai(op)) => return run_ai(owner, accent, op, groups.iter().find(|g| g.0 == Kind::Image).map(|g| g.1.clone()).unwrap_or_default(), args.iter().any(|a| a == "--yes")),
+        Some(Pick::Convert(k, t)) => (k, t),
+    };
     let list = groups.iter().find(|g| g.0 == kind).map(|g| g.1.clone()).unwrap_or_default();
 
     let mut ff = ffmpeg::find();
@@ -178,6 +203,38 @@ fn main() -> Result<()> {
         });
     })?;
     Ok(())
+}
+
+/// Yapay zekâ işi: model/motor eksikse önce sorar, sonra ilerleme kartında çalışır.
+fn run_ai(owner: HWND, accent: Option<u32>, op: ai::Op, list: Vec<String>, yes: bool) -> Result<()> {
+    if list.is_empty() {
+        return Ok(());
+    }
+    let m = op.model();
+    let need = ai::missing_bytes(m);
+    if need > 0 && !yes {
+        let rows = vec![
+            Row::Label(t!(format!("{} modeli kurulu değil", m.name), format!("The {} model isn't installed", m.name)), Icon::Glyph('\u{E946}', None)),
+            Row::Label(format!("{} · {}", m.license, m.about()), Icon::Glyph('\u{E946}', None)),
+            Row::Item { id: 1, text: t!(format!("İndir ({}, bir kez)", ai::mb(need)), format!("Download ({}, once)", ai::mb(need))), icon: Icon::Glyph('\u{E896}', None) },
+            Row::Item { id: 2, text: t!("Vazgeç", "Cancel").into(), icon: Icon::Glyph('\u{E711}', None) },
+        ];
+        if glassmenu::run(owner, rows, accent, cursor()) != Some(1) {
+            return Ok(());
+        }
+    }
+    let ff = ffmpeg::find();
+    let shared = progress::Shared::new();
+    shared.update(|s| s.title = t!("Hazırlanıyor", "Preparing").into());
+    let worker = shared.clone();
+    progress::run(shared, accent.unwrap_or(0x4CC2FF), move || {
+        std::thread::spawn(move || {
+            unsafe {
+                let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            }
+            ai::run_all(&worker, op, &list, ff.as_ref());
+        });
+    })
 }
 
 fn cursor() -> (i32, i32) {

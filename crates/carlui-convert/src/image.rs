@@ -234,24 +234,29 @@ fn write_tga(path: &str, p: &Pixels) -> std::result::Result<(), String> {
 /// `src` → `dst` (uzantı `ext`).
 pub fn convert(src: &str, dst: &str, ext: &str, ff: Option<&PathBuf>) -> std::result::Result<(), String> {
     let p = decode(src, ff)?;
+    encode(&p, dst, ext, ff)
+}
+
+/// Pikselleri `dst`ye `ext` biçiminde yazar; başarısızsa yarım dosyayı siler.
+pub fn encode(p: &Pixels, dst: &str, ext: &str, ff: Option<&PathBuf>) -> std::result::Result<(), String> {
     if p.w > 65535 || p.h > 65535 {
         return Err(t!("Resim çok büyük", "Image is too large").into());
     }
     let wic = |c: &GUID, p: &Pixels| wic_encode(dst, c, p).map_err(|e| e.message().to_string());
     let r = match ext {
-        "png" => wic(&GUID_ContainerFormatPng, &p),
-        "jpg" => wic(&GUID_ContainerFormatJpeg, &flatten(&p)),
-        "bmp" => wic(&GUID_ContainerFormatBmp, &flatten(&p)),
-        "tiff" => wic(&GUID_ContainerFormatTiff, &p),
+        "png" => wic(&GUID_ContainerFormatPng, p),
+        "jpg" => wic(&GUID_ContainerFormatJpeg, &flatten(p)),
+        "bmp" => wic(&GUID_ContainerFormatBmp, &flatten(p)),
+        "tiff" => wic(&GUID_ContainerFormatTiff, p),
         // GIF: FFmpeg varsa saydamlığı koruyan paletle; yoksa WIC (beyaz zemin).
-        "gif" if ff.is_none() => wic(&GUID_ContainerFormatGif, &flatten(&p)),
-        "ico" => write_ico(dst, &p),
-        "dds" => write_dds(dst, &p),
-        "tga" => write_tga(dst, &p),
+        "gif" if ff.is_none() => wic(&GUID_ContainerFormatGif, &flatten(p)),
+        "ico" => write_ico(dst, p),
+        "dds" => write_dds(dst, p),
+        "tga" => write_tga(dst, p),
         _ => {
             let Some(ff) = ff else { return Err(t!("Bu biçim için FFmpeg gerekli", "This format needs FFmpeg").into()) };
             let tmp = temp_png("out");
-            let r = wic_encode(&tmp.to_string_lossy(), &GUID_ContainerFormatPng, &p).map_err(|e| e.message().to_string()).and_then(|_| {
+            let r = wic_encode(&tmp.to_string_lossy(), &GUID_ContainerFormatPng, p).map_err(|e| e.message().to_string()).and_then(|_| {
                 let never = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                 ffmpeg::run(ff, &tmp.to_string_lossy(), &ffmpeg::args_for(Kind::Image, ext), dst, &never, &|_| {})
             });
