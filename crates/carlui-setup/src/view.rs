@@ -34,15 +34,25 @@ fn header(p: &P, logo: Option<&ID2D1Bitmap>, sub: &str) {
     p.text(sub, R::new(PAD + 68.0, 58.0, W - PAD * 2.0 - 68.0, 22.0), 12.5, false, TEXT, 0.6, Align::Left);
 }
 
-/// Başlık + açıklama + anahtar; satırın tamamı tıklanabilir.
-fn option(p: &mut P, r: R, title: &str, desc: &str, on: bool, enabled: bool, opt: Opt) {
+/// Seçenek satırı: başlık, açıklama, açık mı, seçilebilir mi, anahtar ve
+/// (varsa) seçeneğin diske eklediği bayt.
+struct Row<'a>(&'a str, &'a str, bool, bool, Opt, Option<u64>);
+
+/// Başlık + açıklama + anahtar; satırın tamamı tıklanabilir. Boyut verilirse
+/// anahtarın solunda yazar ("+3,7 MB").
+fn option(p: &mut P, r: R, Row(title, desc, on, enabled, opt, size): Row) {
     let hv = tween::to(tween::key(("opt", r.y as i32)), if enabled && p.hover(r) { 1.0 } else { 0.0 }, 18.0);
     if hv > 0.0 {
         p.round(r, 6.0, 0xFFFFFF, 0.04 * hv);
     }
     let a = if enabled { 1.0 } else { 0.45 };
-    p.text(title, R::new(r.x + 16.0, r.y + 8.0, r.w - 90.0, 22.0), 13.5, false, TEXT, 0.95 * a, Align::Left);
-    p.text(desc, R::new(r.x + 16.0, r.y + 29.0, r.w - 90.0, 18.0), 11.5, false, TEXT, 0.55 * a, Align::Left);
+    let right = if size.is_some() { 160.0 } else { 90.0 };
+    p.text(title, R::new(r.x + 16.0, r.y + 8.0, r.w - right, 22.0), 13.5, false, TEXT, 0.95 * a, Align::Left);
+    p.text(desc, R::new(r.x + 16.0, r.y + 29.0, r.w - right, 18.0), 11.5, false, TEXT, 0.55 * a, Align::Left);
+    if let Some(b) = size {
+        let on = on && enabled;
+        p.text(&format!("+{}", payload::mb(b)), R::new(r.right() - 16.0 - 34.0 - 12.0 - 80.0, r.y, 80.0, r.h), 12.0, on, TEXT, if on { 0.85 } else { 0.4 } * a, Align::Right);
+    }
     p.switch(r.right() - 16.0 - 34.0, r.y + (r.h - 18.0) / 2.0, on && enabled, enabled, Act::Toggle(opt));
     if enabled {
         p.hit(r, Act::Toggle(opt));
@@ -85,23 +95,23 @@ impl App {
         p.card(card);
         let pawn = self.pawnio;
         let xpi = payload::XPI.is_some();
-        let rows: [(&str, &str, bool, bool, Opt); 6] = [
-            (t!("Masaüstü kısayolu", "Desktop shortcut"), t!("Başlat menüsüne her durumda eklenir", "Always added to the Start menu"), self.opts.desktop, true, Opt::Desktop),
-            (t!("Kurulunca CarlUI'yi başlat", "Start CarlUI after install"), t!("Açılışta başlama kaydı bu konuma taşınır", "The startup entry points to this location"), self.opts.launch, true, Opt::Launch),
-            (t!("CPU sıcaklığı", "CPU temperature"), if pawn { t!("Yönetici izni ister · açılışta çalışan küçük bir görev kurar", "Needs admin · sets up a small task that runs at sign-in") } else { t!("PawnIO sürücüsü kurulu değil", "PawnIO driver not installed") }, self.opts.sensors, pawn, Opt::Sensors),
-            (t!("Firefox eklentisi", "Firefox extension"), if xpi { t!("İmzalı eklenti Firefox'a otomatik tanıtılır", "The signed extension is registered with Firefox") } else { t!("İmzalı paket yok · kurulumdan sonra elle yüklenir", "No signed package · load it manually after install") }, self.opts.firefox, xpi, Opt::Firefox),
-            (t!("Carl Office", "Carl Office"), t!("Excel, Word, PowerPoint ve PDF dosyalarını açar · kapalıyken arka planda çalışmaz", "Opens Excel, Word, PowerPoint and PDF files · nothing runs in the background"), self.opts.office, true, Opt::Office),
-            (t!("CarlUI duvar kâğıdı", "CarlUI wallpaper"), t!("Siyah zeminde CarlUI yazısı · masaüstü arka planı olur", "CarlUI lettering on black · set as desktop background"), self.opts.wallpaper, true, Opt::Wallpaper),
+        let rows = [
+            Row(t!("Masaüstü kısayolu", "Desktop shortcut"), t!("Başlat menüsüne her durumda eklenir", "Always added to the Start menu"), self.opts.desktop, true, Opt::Desktop, None),
+            Row(t!("Kurulunca CarlUI'yi başlat", "Start CarlUI after install"), t!("Açılışta başlama kaydı bu konuma taşınır", "The startup entry points to this location"), self.opts.launch, true, Opt::Launch, None),
+            Row(t!("CPU sıcaklığı", "CPU temperature"), if pawn { t!("Yönetici izni ister · açılışta çalışan küçük bir görev kurar", "Needs admin · sets up a small task that runs at sign-in") } else { t!("PawnIO sürücüsü kurulu değil", "PawnIO driver not installed") }, self.opts.sensors, pawn, Opt::Sensors, None),
+            Row(t!("Firefox eklentisi", "Firefox extension"), if xpi { t!("İmzalı eklenti Firefox'a otomatik tanıtılır", "The signed extension is registered with Firefox") } else { t!("İmzalı paket yok · kurulumdan sonra elle yüklenir", "No signed package · load it manually after install") }, self.opts.firefox, xpi, Opt::Firefox, None),
+            Row(t!("Carl Office", "Carl Office"), t!("Excel, Word, PowerPoint ve PDF açar · arka planda çalışmaz", "Opens Excel, Word, PowerPoint and PDF · no background process"), self.opts.office, true, Opt::Office, Some(payload::office_bytes())),
+            Row(t!("CarlUI duvar kâğıdı", "CarlUI wallpaper"), t!("Siyah zeminde CarlUI yazısı · masaüstü arka planı olur", "CarlUI lettering on black · set as desktop background"), self.opts.wallpaper, true, Opt::Wallpaper, Some(payload::wallpaper_bytes())),
         ];
-        for (i, (t, d, on, en, opt)) in rows.into_iter().enumerate() {
+        for (i, row) in rows.into_iter().enumerate() {
             let rr = R::new(card.x, card.y + 52.0 * i as f32, card.w, 52.0);
             if i > 0 {
                 p.fill(R::new(rr.x + 16.0, rr.y, rr.w - 32.0, 1.0), 0xFFFFFF, 0.06);
             }
-            option(p, rr, t, d, on, en, opt);
+            option(p, rr, row);
         }
 
-        footer_left(p, &format!("{:.1} MB · {}", payload::size_kb() as f32 / 1024.0, t!("yönetici izni gerekmez", "no admin rights needed")));
+        footer_left(p, &format!("{}: {} · {}", t!("Kurulacak", "To install"), payload::mb(payload::installed_bytes(&self.opts)), t!("yönetici izni gerekmez", "no admin rights needed")));
         p.button(R::new(W - PAD - 120.0 - 12.0 - 100.0, H - 58.0, 100.0, 34.0), None, t!("Vazgeç", "Cancel"), Act::Close, true, false);
         primary(p, R::new(W - PAD - 120.0, H - 58.0, 120.0, 34.0), if self.installed_before { t!("Güncelle", "Update") } else { t!("Kur", "Install") }, Act::Install, p.accent);
     }
@@ -122,7 +132,7 @@ impl App {
         }
         let card = R::new(PAD, y + 160.0, cw, 52.0);
         p.card(card);
-        option(p, card, t!("Ayarları ve verileri de kaldır", "Also remove settings and data"), t!(r"%APPDATA%\CarlUI (Carl Vault kasası dahil) ve %LOCALAPPDATA%\CarlUI · Geri Dönüşüm Kutusu'na", r"%APPDATA%\CarlUI (Carl Vault included) and %LOCALAPPDATA%\CarlUI · to the Recycle Bin"), self.purge, true, Opt::Purge);
+        option(p, card, Row(t!("Ayarları ve verileri de kaldır", "Also remove settings and data"), t!(r"%APPDATA%\CarlUI (Carl Vault kasası dahil) ve %LOCALAPPDATA%\CarlUI · Geri Dönüşüm Kutusu'na", r"%APPDATA%\CarlUI (Carl Vault included) and %LOCALAPPDATA%\CarlUI · to the Recycle Bin"), self.purge, true, Opt::Purge, None));
 
         p.button(R::new(W - PAD - 120.0 - 12.0 - 100.0, H - 58.0, 100.0, 34.0), None, t!("Vazgeç", "Cancel"), Act::Close, true, false);
         primary(p, R::new(W - PAD - 120.0, H - 58.0, 120.0, 34.0), t!("Kaldır", "Uninstall"), Act::Uninstall, RED);

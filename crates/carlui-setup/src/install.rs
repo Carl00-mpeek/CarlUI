@@ -216,7 +216,7 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
             ("DisplayIcon", shell::Val::Str(&icon)),
             ("InstallLocation", shell::Val::Str(&dir)),
             ("UninstallString", shell::Val::Str(&uninstall)),
-            ("EstimatedSize", shell::Val::Dword(payload::size_kb())),
+            ("EstimatedSize", shell::Val::Dword(payload::size_kb(o))),
             ("NoModify", shell::Val::Dword(1)),
             ("NoRepair", shell::Val::Dword(1)),
         ],
