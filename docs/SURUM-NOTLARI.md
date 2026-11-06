@@ -1,5 +1,23 @@
 # Sürüm notları
 
+## v0.9.0 — Anında yanıt veren asistan (2026-11-06)
+
+**Asistan artık bekletmiyor.** Model bellekte hazır durur, tuşu bırakınca yazı yarım
+saniye içinde gelir (önceden 5-6 saniyeydi). Canlı yazı da ilk saniyeden çalışır.
+- **Bellek:** Whisper small ile yaklaşık 1,6 GB RAM ve 1,9 GB ekran kartı belleği
+  tutar. Daha küçük model daha az yer kaplar.
+- **Bırakma:** Oyun öne gelince ya da asistan kapatılınca model bellekten çıkar.
+  Asistan kapanınca bellek bir saniye içinde boşalır.
+
+**Yeni: Sitede sesli arama.** "YouTube'da X'i aç" ve "YouTube'u aç ve X'i arat"
+artık YouTube'da arar.
+
+**Düzeltmeler**
+- **Sessizlik:** Konuşma duyulmazsa kart uyarı göstermeden kapanır.
+- **Onay ekranı:** Konuşmayı kısayolla durdurunca onay ekranı hemen kapanıyordu.
+- **Google Chrome:** "Google Chrome'u aç" Google'da arama yapıyordu, artık Chrome'u
+  açar. "Google'ı aç" da google.com'u açar.
+
 ## v0.8.0 — Sesli asistan aramada (2026-11-06)
 
 **Asistan artık adanın aramasında açılır.** Tetikleyince arama açılır, altta öneriler
