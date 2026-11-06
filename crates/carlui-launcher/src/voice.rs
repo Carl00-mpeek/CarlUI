@@ -155,7 +155,48 @@ fn site_with_locative(t: &Tok) -> Option<&'static Site> {
     if LOCATIVE.contains(&t.suf.as_str()) {
         return site_of(&t.base).map(|(_, s)| s);
     }
+    // "claude" adın kendisi: sonundaki "de" ek değil.
+    if site_of(&t.base).is_some_and(|(sc, _)| sc >= 0.95) {
+        return None;
+    }
     LOCATIVE.iter().filter_map(|l| t.base.strip_suffix(l)).filter(|b| b.len() >= 3).find_map(|b| site_of(b).filter(|(sc, _)| *sc >= 0.85).map(|(_, s)| s))
+}
+
+/// Cümledeki siteyi çıkarır: "… on youtube", "youtube'da …".
+fn pull_site(r: &mut Vec<Tok>) -> Option<String> {
+    if r.len() >= 2 && matches!(r[r.len() - 2].base.as_str(), "on" | "in" | "at") {
+        if let Some((_, s)) = site_of(&r[r.len() - 1].base) {
+            r.truncate(r.len() - 2);
+            return Some(s.title.to_string());
+        }
+    }
+    let i = r.iter().position(|t| site_with_locative(t).is_some())?;
+    let site = site_with_locative(&r[i]).map(|s| s.title.to_string());
+    r.remove(i);
+    site
+}
+
+/// "YouTube'u aç ve X'i arat", "open youtube and search X": önce site, sonra aranan.
+fn site_then_query(toks: &[Tok]) -> Option<(String, String)> {
+    let (site, mut rest) = match toks {
+        [s, v, rest @ ..] if tr_verb(&v.base) == Some(Verb::Open) => (s, rest),
+        [v, s, rest @ ..] if en_verb(&v.base) == Some(Verb::Open) => (s, rest),
+        _ => return None,
+    };
+    let (_, site) = site_of(&site.base)?;
+    while let [w, tail @ ..] = rest {
+        if !matches!(w.base.as_str(), "ve" | "and" | "sonra" | "then") && !matches!(en_verb(&w.base), Some(Verb::Search | Verb::Play)) {
+            break;
+        }
+        rest = tail;
+    }
+    if let [head @ .., last] = rest {
+        if tr_verb(&last.base).is_some() {
+            rest = head;
+        }
+    }
+    let query = rest.iter().map(|t| t.orig.as_str()).collect::<Vec<_>>().join(" ");
+    (!query.is_empty()).then(|| (site.title.to_string(), query))
 }
 
 /// Konuşmayı niyete çevirir.
@@ -214,6 +255,9 @@ pub fn parse(text: &str) -> Intent {
             return Intent::Media(Media::PlayPause);
         }
     }
+    if let Some((site, query)) = site_then_query(&toks) {
+        return Intent::Search { site: Some(site), query };
+    }
     // Fiil: İngilizcede başta, Türkçede sonda (bazen başta).
     let (verb, rest): (Option<Verb>, Vec<Tok>) = if let Some(v) = en_verb(words[0]) {
         let mut r = toks[1..].to_vec();
@@ -233,21 +277,7 @@ pub fn parse(text: &str) -> Intent {
     match verb {
         Some(Verb::Search) | Some(Verb::Play) => {
             let mut r = rest;
-            let mut site = None;
-            // "… on youtube", "… in google"
-            if r.len() >= 2 && matches!(r[r.len() - 2].base.as_str(), "on" | "in" | "at") {
-                if let Some((_, s)) = site_of(&r[r.len() - 1].base) {
-                    site = Some(s.title.to_string());
-                    r.truncate(r.len() - 2);
-                }
-            }
-            // "youtube'da … ara"
-            if site.is_none() {
-                if let Some(i) = r.iter().position(|t| site_with_locative(t).is_some()) {
-                    site = site_with_locative(&r[i]).map(|s| s.title.to_string());
-                    r.remove(i);
-                }
-            }
+            let mut site = pull_site(&mut r);
             if words[0] == "google" && site.is_none() {
                 site = Some("Google".into());
             }
@@ -264,7 +294,14 @@ pub fn parse(text: &str) -> Intent {
             }
             Intent::Search { site, query }
         }
-        Some(Verb::Open) if !rest.is_empty() => Intent::Open(target(&rest)),
+        Some(Verb::Open) if !rest.is_empty() => {
+            // "youtube'da X'i aç": sitede aranır.
+            let mut r = rest.clone();
+            match pull_site(&mut r) {
+                Some(site) if !r.is_empty() => Intent::Search { site: Some(site), query: r.iter().map(|t| t.orig.as_str()).collect::<Vec<_>>().join(" ") },
+                _ => Intent::Open(target(&rest)),
+            }
+        }
         Some(Verb::Close) if !rest.is_empty() => Intent::Close(target(&rest)),
         Some(_) => Intent::Unknown(all),
         None if words.len() <= 3 => Intent::Guess(target(&rest)),
@@ -472,6 +509,15 @@ mod tests {
         assert_eq!(parse("search cats on youtube"), Intent::Search { site: Some("YouTube".into()), query: "cats".into() });
         assert_eq!(parse("play lofi music"), Intent::Search { site: Some("YouTube".into()), query: "lofi music".into() });
         assert_eq!(parse("hava durumu ara"), Intent::Search { site: None, query: "hava durumu".into() });
+        let yt = |q: &str| Intent::Search { site: Some("YouTube".into()), query: q.into() };
+        assert_eq!(parse("YouTube'da Ebru Gündeş'i aç."), yt("Ebru Gündeş"));
+        assert_eq!(parse("youtube'dan lofi müzik aç"), yt("lofi müzik"));
+        assert_eq!(parse("YouTube'ı aç ve Ebru Gündeş'i arat."), yt("Ebru Gündeş"));
+        assert_eq!(parse("YouTube'u aç Ebru Gündeş"), yt("Ebru Gündeş"));
+        assert_eq!(parse("open cats on youtube"), yt("cats"));
+        assert_eq!(parse("open youtube and search for cats"), yt("cats"));
+        assert_eq!(parse("youtube'da aç"), Intent::Open("youtube".into()));
+        assert_eq!(parse("Claude Code'u aç"), Intent::Open("claude code".into()));
         assert_eq!(parse("Sesi 30 yap"), Intent::Quick(Quick::Volume(30)));
         assert_eq!(parse("sesi otuz yap"), Intent::Quick(Quick::Volume(30)));
         assert_eq!(parse("sesi artır"), Intent::Step(1));

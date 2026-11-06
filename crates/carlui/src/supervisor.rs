@@ -48,6 +48,11 @@ impl Supervisor {
 
     /// `exe` adlı modülü başlatır ve çöktükçe yeniden başlatır.
     pub fn run_module(&self, name: &'static str, exe: &'static str) {
+        self.run_module_with(name, exe, &[]);
+    }
+
+    /// `run_module` gibi, süreci verilen argümanlarla başlatır.
+    pub fn run_module_with(&self, name: &'static str, exe: &'static str, args: &'static [&'static str]) {
         let path = paths::sibling_exe(exe);
         let job = self.job;
         let shutting = self.shutting_down.clone();
@@ -57,7 +62,7 @@ impl Supervisor {
             .spawn(move || {
                 let mut crashes: VecDeque<Instant> = VecDeque::new();
                 while !shutting.load(Ordering::SeqCst) {
-                    let mut child: Child = match Command::new(&path).spawn() {
+                    let mut child: Child = match Command::new(&path).args(args).spawn() {
                         Ok(c) => c,
                         Err(e) => {
                             error!("{name} başlatılamadı ({}): {e}", path.display());

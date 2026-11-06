@@ -24,16 +24,14 @@ const LEVEL_EVERY: Duration = Duration::from_millis(80);
 /// Yanıtsız onay bu süre sonunda bırakılır.
 const REVIEW_MAX: Duration = Duration::from_secs(300);
 
-pub struct Panel {
+/// Olay yolu bağlantısı. Bekleyen süreç tek bağlantıyı her konuşmada yeniden kullanır.
+pub struct Link {
     bus: BusClient,
-    rx: Mutex<Receiver<Value>>,
-    last_level: Mutex<Instant>,
-    /// Ada kendi başına kapanacak ya da çoktan kapandı.
-    released: AtomicBool,
+    rx: Arc<Mutex<Receiver<Value>>>,
 }
 
-impl Panel {
-    pub fn open() -> Option<Arc<Self>> {
+impl Link {
+    pub fn connect() -> Self {
         let (tx, rx) = channel();
         let bus = BusClient::connect("assist", move |ev| {
             if let Event::Custom { name, data } = ev {
@@ -42,14 +40,34 @@ impl Panel {
                 }
             }
         });
+        Self { bus, rx: Arc::new(Mutex::new(rx)) }
+    }
+}
+
+pub struct Panel {
+    bus: BusClient,
+    rx: Arc<Mutex<Receiver<Value>>>,
+    last_level: Mutex<Instant>,
+    /// Ada kendi başına kapanacak ya da çoktan kapandı.
+    released: AtomicBool,
+}
+
+impl Panel {
+    pub fn open() -> Option<Arc<Self>> {
+        Self::on(&Link::connect())
+    }
+
+    pub fn on(link: &Link) -> Option<Arc<Self>> {
         let t0 = Instant::now();
-        while !bus.is_connected() {
+        while !link.bus.is_connected() {
             if t0.elapsed() > CONNECT {
                 return None;
             }
             std::thread::sleep(Duration::from_millis(5));
         }
-        let p = Self { bus, rx: Mutex::new(rx), last_level: Mutex::new(Instant::now()), released: AtomicBool::new(false) };
+        // Önceki konuşmadan kalan geç yanıtlar bu konuşmaya karışmasın.
+        let _ = link.rx.lock().ok()?.try_iter().count();
+        let p = Self { bus: link.bus.clone(), rx: link.rx.clone(), last_level: Mutex::new(Instant::now()), released: AtomicBool::new(false) };
         p.send(json!({ "op": "open" }));
         let answer = p.rx.lock().ok()?.recv_timeout(READY).ok()?;
         if answer["op"] == "ready" {

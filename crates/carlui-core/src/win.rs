@@ -334,3 +334,32 @@ mod tests {
         assert_eq!(tcp_client_pid(peer, port.wrapping_add(1)), None);
     }
 }
+
+/// Şu an öndeki pencere tam ekran bir oyun/uygulama mı? (Özel tam ekran D3D ya da
+/// monitörü çerçevesiz kaplayan pencere.)
+pub fn game_in_front() -> bool {
+    unsafe {
+        use windows::Win32::UI::Shell::{SHQueryUserNotificationState, QUNS_RUNNING_D3D_FULL_SCREEN};
+        if SHQueryUserNotificationState().is_ok_and(|q| q == QUNS_RUNNING_D3D_FULL_SCREEN) {
+            return true;
+        }
+        let fg = GetForegroundWindow();
+        let class = class_name(fg);
+        if fg.is_invalid() || matches!(class.as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd" | "CarlUI.Island" | "CarlUI.Host") {
+            return false;
+        }
+        // Tarayıcıda / oynatıcıda tam ekran video oyun değildir.
+        if is_media_window(fg) {
+            return false;
+        }
+        if GetWindowLongW(fg, GWL_STYLE) as u32 & WS_CAPTION.0 == WS_CAPTION.0 {
+            return false;
+        }
+        let mut r = RECT::default();
+        let _ = GetWindowRect(fg, &mut r);
+        let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        let _ = GetMonitorInfoW(MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST), &mut mi);
+        let m = mi.rcMonitor;
+        r.left <= m.left && r.top <= m.top && r.right >= m.right && r.bottom >= m.bottom
+    }
+}

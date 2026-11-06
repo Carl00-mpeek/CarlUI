@@ -530,6 +530,7 @@ fn run() -> Result<()> {
         sup.run_module("start", "carlui-start.exe");
         sup.run_module("expand", "carlui-expand.exe");
         sup.run_module("replay", "carlui-replay.exe");
+        sup.run_module_with("assist", "carlui-convert.exe", &["--assist-warm"]);
 
         let pending_cfg: Arc<Mutex<Option<Config>>> = Arc::default();
         let pending = pending_cfg.clone();

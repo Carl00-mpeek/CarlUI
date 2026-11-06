@@ -6,11 +6,13 @@
 //! eylemiyle uygular. Kısayola basıp hemen bırakılırsa susunca biter.
 //! Ada açıksa asistan aramanın içinde görünür (bkz. `assist_panel`): söylenenler
 //! konuşurken arama kutusuna düşer, ayar açıksa uygulamadan önce onay bekler.
+//! Model `assist_warm` sürecinde hazır bekler; o süreç yoksa her basışta açılır.
 //! Sürekli dinleme yoktur; mikrofon yalnızca kısayoldan sonra açılır. Ses buluta gitmez.
 
 use crate::{
     ai,
     assist_panel::Panel,
+    assist_warm::{self, Held, Warm},
     dictate::{loudest, short, wait_modifiers_up, SILENCE},
     progress::Shared,
 };
@@ -46,46 +48,75 @@ const LIVE_STEP: usize = whisper::SR * 6 / 10;
 
 /// Komut için model: sesli komutta seçili Whisper; Vosk seçiliyse (yalnızca
 /// anlık tekrar cümlelerini tanır) önerilen Whisper.
-fn model(cfg: &carlui_core::config::Config) -> &'static catalog::Model {
+pub(crate) fn model(cfg: &carlui_core::config::Config) -> &'static catalog::Model {
     let m = catalog::chosen(&cfg.ai, catalog::Feature::Command);
     if m.id.starts_with("vosk") { catalog::recommended(catalog::Feature::Command) } else { m }
 }
 
-pub fn run(owner: HWND, accent: Option<u32>) -> Result<()> {
+/// Konuşma sürerken açık duran kilit; ikinci basış bunu görüp konuşmayı bitirir.
+pub(crate) fn busy_mutex() -> Result<HANDLE> {
+    unsafe { CreateMutexW(None, false, w!("Local\\CarlUI.Assist")) }
+}
+
+pub(crate) fn stop_event() -> Result<HANDLE> {
+    unsafe { CreateEventW(None, false, false, w!("Local\\CarlUI.AssistStop")) }
+}
+
+pub(crate) fn opts(cfg: &carlui_core::config::Config, m: &'static catalog::Model, asked: bool) -> Opts {
+    Opts {
+        m,
+        vk: if asked { 0 } else { cfg.shortcuts.assist_combo().map(|c| c.vk).unwrap_or(0) },
+        lang: Some(cfg.ai.speech_lang.clone()).filter(|l| !l.is_empty()).unwrap_or_else(|| t!("tr", "en").into()),
+        web: cfg.launcher.web_search.clone(),
+        key: cfg.shortcuts.assist.clone(),
+        confirm: cfg.ai.assist_confirm,
+    }
+}
+
+pub(crate) type Loader = JoinHandle<std::result::Result<Whisper, String>>;
+
+pub(crate) fn open(m: &'static catalog::Model) -> std::result::Result<Whisper, String> {
+    ai::speech_dir(m).ok_or_else(|| t!("Model dosyası bulunamadı", "Model file not found").to_string()).and_then(|d| Whisper::open(&d))
+}
+
+pub(crate) fn load(m: &'static catalog::Model) -> Loader {
+    std::thread::spawn(move || {
+        let _ = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+        open(m)
+    })
+}
+
+/// `cold`: bekleyen sürece sormadan bu süreçte çalış.
+pub fn run(owner: HWND, accent: Option<u32>, cold: bool) -> Result<()> {
     unsafe {
-        let _mutex = CreateMutexW(None, false, w!("Local\\CarlUI.Assist"))?;
+        let _mutex = busy_mutex()?;
         let running = GetLastError() == ERROR_ALREADY_EXISTS;
-        let stop = CreateEventW(None, false, false, w!("Local\\CarlUI.AssistStop"))?;
+        let stop = stop_event()?;
         if running {
             // Dokun-konuş sürerken yeniden basış: hemen bitir.
             let _ = SetEvent(stop);
             return Ok(());
         }
+        if !cold && assist_warm::hand_over() {
+            return Ok(());
+        }
         let _ = ResetEvent(stop);
         let cfg = carlui_core::config::load();
         let m = model(&cfg);
-        let vk = cfg.shortcuts.assist_combo().map(|c| c.vk).unwrap_or(0);
         let need = ai::missing_bytes(m);
         // İndirme sorulduysa tuş çoktan bırakılmıştır: dokun-konuş.
         let asked = need > 0;
         if asked && !crate::ask_model(owner, accent, m, need) {
             return Ok(());
         }
-        let opts = Opts {
-            m,
-            vk: if asked { 0 } else { vk },
-            lang: Some(cfg.ai.speech_lang.clone()).filter(|l| !l.is_empty()).unwrap_or_else(|| t!("tr", "en").into()),
-            web: cfg.launcher.web_search.clone(),
-            key: cfg.shortcuts.assist.clone(),
-            confirm: cfg.ai.assist_confirm,
-        };
+        let opts = opts(&cfg, m, asked);
         let stop_h = stop.0 as isize;
         // Model inecekse kartta ilerleme gösterilir; yoksa asistan aramada görünür.
         if let Some(p) = (!asked).then(Panel::open).flatten() {
             let worker = Shared::new();
             let _ = std::thread::spawn(move || {
                 let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-                work(&worker, &opts, HANDLE(stop_h as _), Some(&p));
+                work(&worker, &opts, HANDLE(stop_h as _), Some(&p), None);
             })
             .join();
             return Ok(());
@@ -96,17 +127,17 @@ pub fn run(owner: HWND, accent: Option<u32>) -> Result<()> {
         crate::progress::run(shared, accent.unwrap_or(0x4CC2FF), move || {
             std::thread::spawn(move || {
                 let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-                work(&worker, &opts, HANDLE(stop_h as _), None);
+                work(&worker, &opts, HANDLE(stop_h as _), None, None);
             });
         })
     }
 }
 
-struct Opts {
+pub(crate) struct Opts {
     m: &'static catalog::Model,
     /// Basılı tutulan tuş (0: dokun-konuş).
     vk: u32,
-    lang: String,
+    pub lang: String,
     web: String,
     key: String,
     /// Uygulamadan önce onay beklensin (yalnızca aramada görünürken).
@@ -119,7 +150,7 @@ fn held(vk: u32) -> bool {
 
 /// Model hazır olunca konuşma sürerken biriken sesi yazıya döküp adaya yollar.
 /// Durdurulunca modeli son geçiş için geri verir.
-fn live(loader: JoinHandle<std::result::Result<Whisper, String>>, p: Arc<Panel>, heard: Arc<Mutex<Vec<f32>>>, halt: Arc<AtomicBool>, lang: String) -> JoinHandle<std::result::Result<Whisper, String>> {
+fn live(loader: Loader, p: Arc<Panel>, heard: Arc<Mutex<Vec<f32>>>, halt: Arc<AtomicBool>, lang: String) -> Loader {
     std::thread::spawn(move || {
         let _ = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
         let mut wh = loader.join().unwrap_or_else(|_| Err("panik".into()))?;
@@ -143,7 +174,7 @@ fn live(loader: JoinHandle<std::result::Result<Whisper, String>>, p: Arc<Panel>,
     })
 }
 
-fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<Panel>>) {
+pub(crate) fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<Panel>>, warm: Option<Warm>) {
     if !ai::ensure(w, o.m) {
         return;
     }
@@ -154,11 +185,26 @@ fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<Panel>>) {
         }
         ai::fail(w, e);
     };
+    // Kart açıkken konuşma duyulmadıysa söylenecek bir şey yok: kart sessizce kapanır.
+    let unheard = || match panel {
+        Some(_) => fail(t!("Konuşma duyulmadı", "No speech heard").into()),
+        None => w.update(|s| {
+            s.dismiss = true;
+            s.done = true;
+        }),
+    };
     // Model ve uygulama listesi konuşurken arka planda hazırlanır.
-    let loader = std::thread::spawn(move || {
-        let _ = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
-        ai::speech_dir(m).ok_or_else(|| t!("Model dosyası bulunamadı", "Model file not found").to_string()).and_then(|d| Whisper::open(&d))
-    });
+    let (loader, keep) = match warm {
+        Some(x) => (x.loader, Some(x.keep)),
+        None => (load(m), None),
+    };
+    let heard = Arc::new(Mutex::new(Vec::new()));
+    let halt = Arc::new(AtomicBool::new(false));
+    let loader = match panel {
+        Some(p) => live(loader, p.clone(), heard.clone(), halt.clone(), o.lang.clone()),
+        None => loader,
+    };
+    let mut held_model = Held { loader: Some(loader), keep, halt: halt.clone() };
     let apps = std::thread::spawn(|| {
         let c = index::cached();
         if !c.is_empty() {
@@ -173,12 +219,6 @@ fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<Panel>>) {
             carlui_core::warn!("asistan: mikrofon açılamadı: {e}");
             return fail(t!("Mikrofon açılamadı", "Couldn't open the microphone").into());
         }
-    };
-    let heard = Arc::new(Mutex::new(Vec::new()));
-    let halt = Arc::new(AtomicBool::new(false));
-    let loader = match panel {
-        Some(p) => live(loader, p.clone(), heard.clone(), halt.clone(), o.lang.clone()),
-        None => loader,
     };
     let t0 = Instant::now();
     let mut hold = held(o.vk);
@@ -256,6 +296,8 @@ fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<Panel>>) {
     }
     drop(mic);
     halt.store(true, Ordering::SeqCst);
+    // Kısayolla durdurulduysa sinyal açık kalmasın; yoksa onay ekranı anında kapanır.
+    let _ = unsafe { ResetEvent(stop) };
     if w.cancel.load(Ordering::SeqCst) {
         return;
     }
@@ -265,7 +307,7 @@ fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<Panel>>) {
         return fail(t!("Mikrofondan ses gelmiyor (sessiz ya da izin kapalı)", "No sound from the microphone (muted or access off)").into());
     }
     if loud < SILENCE || pcm.len() < whisper::SR / 4 {
-        return fail(t!("Konuşma duyulmadı", "No speech heard").into());
+        return unheard();
     }
     if let Some(p) = panel {
         p.thinking();
@@ -275,7 +317,7 @@ fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<Panel>>) {
         s.file = o.m.name.into();
         s.frac = 0.0;
     });
-    let mut wh = match loader.join().unwrap_or_else(|_| Err("panik".into())) {
+    let mut wh = match held_model.take() {
         Ok(wh) => wh,
         Err(e) => {
             carlui_core::warn!("asistan: model açılamadı: {e}");
@@ -283,20 +325,30 @@ fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<Panel>>) {
         }
     };
     let t1 = Instant::now();
-    let mut text = match wh.transcribe(&pcm, Some(&o.lang), false, &w.cancel, &|f| w.update(|s| s.frac = f)) {
-        Ok((segs, _)) => whisper::to_text(&segs).trim().to_string(),
+    let write = |wh: &mut Whisper| wh.transcribe(&pcm, Some(&o.lang), false, &w.cancel, &|f| w.update(|s| s.frac = f)).map(|(segs, _)| whisper::to_text(&segs).trim().to_string());
+    let mut written = write(&mut wh);
+    // Uyku ya da sürücü güncellemesi bekleyen modeli bozabilir: bir kez baştan aç.
+    if written.is_err() && held_model.warm() && !w.cancel.load(Ordering::SeqCst) {
+        carlui_core::warn!("asistan: hazır model çalışmadı, yeniden açılıyor");
+        if let Ok(fresh) = open(m) {
+            wh = fresh;
+            written = write(&mut wh);
+        }
+    }
+    held_model.give_back(wh);
+    let mut text = match written {
+        Ok(text) => text,
         Err(_) if w.cancel.load(Ordering::SeqCst) => return,
         Err(e) => {
             carlui_core::warn!("asistan: yazıya dökülemedi: {e}");
             return fail(t!("Anlaşılamadı", "Didn't catch that").into());
         }
     };
-    drop(wh);
     if panel.is_some_and(|p| p.cancelled()) {
         return;
     }
-    if panel.is_some() && text.is_empty() {
-        return fail(t!("Konuşma duyulmadı", "No speech heard").into());
+    if text.is_empty() {
+        return unheard();
     }
     let reviewed = panel.filter(|_| o.confirm);
     if let Some(p) = reviewed {
@@ -322,7 +374,7 @@ fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<Panel>>) {
         None => {}
     }
     w.update(|s| {
-        s.title = if text.is_empty() { t!("Konuşma duyulmadı", "No speech heard").into() } else { format!("“{}”", short(&text, 48)) };
+        s.title = format!("“{}”", short(&text, 48));
         s.file = plan.title.clone();
         s.failed = !ok;
         s.done = true;

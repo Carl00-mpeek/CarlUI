@@ -40,6 +40,8 @@ pub struct State {
     pub frac: f32,
     pub done: bool,
     pub failed: bool,
+    /// Sonuç gösterilmeden kart hemen kapansın.
+    pub dismiss: bool,
     /// Bitince tıklanırsa Gezgin'de seçilecek dosya.
     pub reveal: Option<String>,
     /// `reveal` Gezgin'de seçilmek yerine doğrudan açılsın.
@@ -194,7 +196,11 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
         WM_ERASEBKGND => LRESULT(1),
         WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
         WM_APP_UPDATE => {
-            let done = with(|w| w.shared.state.lock().map(|s| s.done).unwrap_or(false)).unwrap_or(false);
+            let (done, dismiss) = with(|w| w.shared.state.lock().map(|s| (s.done, s.dismiss)).unwrap_or_default()).unwrap_or_default();
+            if dismiss {
+                let _ = DestroyWindow(hwnd);
+                return LRESULT(0);
+            }
             if done && with(|w| w.closing.is_none()).unwrap_or(false) {
                 with(|w| w.closing = Some(Instant::now()));
                 SetTimer(hwnd, TIMER_CLOSE, 4000, None);

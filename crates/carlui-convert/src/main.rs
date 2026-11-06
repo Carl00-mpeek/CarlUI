@@ -22,6 +22,7 @@ extern crate carlui_core;
 mod ai;
 mod assist;
 mod assist_panel;
+mod assist_warm;
 mod dictate;
 mod license;
 mod ffmpeg;
@@ -146,10 +147,13 @@ fn main() -> Result<()> {
         let owner = unsafe { CreateWindowExW(WS_EX_TOOLWINDOW, w!("Static"), w!(""), WS_POPUP, 0, 0, 0, 0, None, None, None, None)? };
         return dictate::run(owner, accent, fg.unwrap_or_else(|| unsafe { GetForegroundWindow() }));
     }
+    if args.iter().any(|a| a == "--assist-warm") {
+        return assist_warm::run();
+    }
     if args.iter().any(|a| a == "--assist") {
         let accent = carlui_core::config::load().dock.menu_accent_color(glassmenu::accent);
         let owner = unsafe { CreateWindowExW(WS_EX_TOOLWINDOW, w!("Static"), w!(""), WS_POPUP, 0, 0, 0, 0, None, None, None, None)? };
-        return assist::run(owner, accent);
+        return assist::run(owner, accent, args.iter().any(|a| a == "--cold"));
     }
     if args.iter().any(|a| a == "--speak") {
         let accent = carlui_core::config::load().dock.menu_accent_color(glassmenu::accent);
