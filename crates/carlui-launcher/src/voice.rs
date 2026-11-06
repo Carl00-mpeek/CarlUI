@@ -180,7 +180,8 @@ fn pull_site(r: &mut Vec<Tok>) -> Option<String> {
 fn site_then_query(toks: &[Tok]) -> Option<(String, String)> {
     let (site, mut rest) = match toks {
         [s, v, rest @ ..] if tr_verb(&v.base) == Some(Verb::Open) => (s, rest),
-        [v, s, rest @ ..] if en_verb(&v.base) == Some(Verb::Open) => (s, rest),
+        // "open google chrome" tek bir ad: arama için bağlaç ya da fiil gerekir.
+        [v, s, w, rest @ ..] if en_verb(&v.base) == Some(Verb::Open) && (matches!(w.base.as_str(), "and" | "then") || matches!(en_verb(&w.base), Some(Verb::Search | Verb::Play))) => (s, rest),
         _ => return None,
     };
     let (_, site) = site_of(&site.base)?;
@@ -259,7 +260,9 @@ pub fn parse(text: &str) -> Intent {
         return Intent::Search { site: Some(site), query };
     }
     // Fiil: İngilizcede başta, Türkçede sonda (bazen başta).
-    let (verb, rest): (Option<Verb>, Vec<Tok>) = if let Some(v) = en_verb(words[0]) {
+    // "google" fiil de olur ad da: "Google Chrome'u aç", "Google'da kedi ara" fiil değil.
+    let google_is_name = words[0] == "google" && words.len() > 1 && (words[1] == "chrome" || tr_verb(words[words.len() - 1]).is_some());
+    let (verb, rest): (Option<Verb>, Vec<Tok>) = if let Some(v) = en_verb(words[0]).filter(|_| !google_is_name) {
         let mut r = toks[1..].to_vec();
         // "go to", "look up", "search for"
         if r.first().is_some_and(|t| matches!(t.base.as_str(), "to" | "up")) {
@@ -280,6 +283,9 @@ pub fn parse(text: &str) -> Intent {
             let mut site = pull_site(&mut r);
             if words[0] == "google" && site.is_none() {
                 site = Some("Google".into());
+                if r.first().is_some_and(|t| t.base == "google") {
+                    r.remove(0);
+                }
             }
             if verb == Some(Verb::Play) && site.is_none() {
                 site = Some("YouTube".into());
@@ -518,6 +524,16 @@ mod tests {
         assert_eq!(parse("open youtube and search for cats"), yt("cats"));
         assert_eq!(parse("youtube'da aç"), Intent::Open("youtube".into()));
         assert_eq!(parse("Claude Code'u aç"), Intent::Open("claude code".into()));
+        assert_eq!(parse("Google Chrome'u aç"), Intent::Open("google chrome".into()));
+        assert_eq!(parse("google chrome aç"), Intent::Open("google chrome".into()));
+        assert_eq!(parse("open google chrome"), Intent::Open("google chrome".into()));
+        assert_eq!(parse("Google Chrome"), Intent::Guess("google chrome".into()));
+        assert_eq!(parse("Google Chrome'u kapat"), Intent::Close("google chrome".into()));
+        assert_eq!(parse("Google'ı aç"), Intent::Open("google".into()));
+        let g = |q: &str| Intent::Search { site: Some("Google".into()), query: q.into() };
+        assert_eq!(parse("Google'da kedi ara"), g("kedi"));
+        assert_eq!(parse("google kedi ara"), g("kedi"));
+        assert_eq!(parse("google cats"), g("cats"));
         assert_eq!(parse("Sesi 30 yap"), Intent::Quick(Quick::Volume(30)));
         assert_eq!(parse("sesi otuz yap"), Intent::Quick(Quick::Volume(30)));
         assert_eq!(parse("sesi artır"), Intent::Step(1));
@@ -541,6 +557,9 @@ mod tests {
         assert_eq!(open("Spotifay'ı aç").how, launch("Spotify"));
         assert_eq!(open("krom aç").how, launch("Google Chrome"));
         assert_eq!(open("open chrome").how, launch("Google Chrome"));
+        assert_eq!(open("Google Chrome'u aç").how, launch("Google Chrome"));
+        assert_eq!(open("open google chrome").how, launch("Google Chrome"));
+        assert_eq!(open("Google'ı aç").how, How::Act(Act::Open("https://www.google.com".into())));
         assert_eq!(open("not defterini aç").how, launch("Not Defteri"));
         assert_eq!(open("vatsap aç").how, launch("WhatsApp"));
         assert_eq!(open("visual studio aç").how, launch("Visual Studio Code"));
