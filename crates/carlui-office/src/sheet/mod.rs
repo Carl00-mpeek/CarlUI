@@ -251,7 +251,7 @@ impl Book {
     pub fn set_input(&mut self, sh: usize, r: u32, c: u32, input: &str) {
         let style = self.sheets[sh].get(r, c).map(|x| x.s).unwrap_or(0);
         let mut cell = Cell { s: style, ..Default::default() };
-        if let Some(f) = input.strip_prefix('=').filter(|f| !f.trim().is_empty()) {
+        if let Some(f) = formula::typed(input) {
             cell.f = Some(formula::normalize(f));
         } else if let Some(d) = parse_date(input).filter(|_| input.contains('.') && input.matches('.').count() == 2 || input.contains('/')) {
             cell.v = Val::Num(d);
@@ -562,6 +562,31 @@ mod tests {
         b.restore(u);
         assert!(b.sheets[0].get(11, 1).is_none());
         assert_eq!(general(0.1 + 0.2), "0,3");
+    }
+
+    /// Küçük harfli başvurular ve boş/metin hücreler formülü bozmamalı.
+    #[test]
+    fn typed_formula_forms() {
+        let _lang = crate::test_lang("tr");
+        let mut b = Book::new_blank();
+        b.set_input(0, 0, 0, "3");
+        b.set_input(0, 4, 1, "4");
+        b.set_input(0, 0, 2, "=a1+b5");
+        assert_eq!(b.sheets[0].get(0, 2).unwrap().v, Val::Num(7.0));
+        b.set_input(0, 1, 2, "a1+b5=");
+        assert_eq!(b.sheets[0].get(1, 2).unwrap().f.as_deref(), Some("A1+B5"));
+        assert_eq!(b.sheets[0].get(1, 2).unwrap().v, Val::Num(7.0));
+        b.set_input(0, 2, 2, "TOPLA(a1:a2)=");
+        assert_eq!(b.sheets[0].get(2, 2).unwrap().f.as_deref(), Some("SUM(A1:A2)"));
+        // Boş hücre 0 sayılır.
+        b.set_input(0, 3, 2, "a1+z9=");
+        assert_eq!(b.sheets[0].get(3, 2).unwrap().v, Val::Num(3.0));
+        // Etiketler ve başvurusuz yazılar metin kalır.
+        for t in ["Toplam=", "x1=", "2+2=", "a1+=", "="] {
+            b.set_input(0, 5, 2, t);
+            let c = b.sheets[0].get(5, 2).unwrap();
+            assert!(c.f.is_none() && c.v == Val::Str(t.into()), "{t}");
+        }
     }
 
     /// Kötü niyetli tablo: tersine uzun zincir, aşırı derin formül, dev aralık.

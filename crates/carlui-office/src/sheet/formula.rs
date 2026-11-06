@@ -487,6 +487,21 @@ fn join(toks: &[Tok]) -> String {
     s
 }
 
+/// Hücreye yazılan metnin formül gövdesini verir (başındaki `=` olmadan).
+/// Olağan biçim `=A1+B5`; hesap makinesi alışkanlığıyla yazılan `a1+b5=` de
+/// kabul edilir. Sondaki `=` yalnızca gövde gerçekten hücre başvurulu bir işlemse
+/// formül sayılır; "Toplam=" ya da "x1=" gibi etiketler metin kalır.
+pub fn typed(input: &str) -> Option<&str> {
+    if let Some(f) = input.strip_prefix('=') {
+        return Some(f).filter(|f| !f.trim().is_empty());
+    }
+    let body = input.trim().strip_suffix('=')?;
+    let t = tokenize(body).ok()?;
+    let has_ref = t.iter().any(|x| matches!(x, Tok::Ident(id) if parse_ref(id).is_some()));
+    let acts = t.iter().any(|x| matches!(x, Tok::Op(_) | Tok::LParen));
+    (has_ref && acts && parse(body).is_ok()).then_some(body)
+}
+
 /// Kullanıcı girdisini dosya biçimine çevirir: Türkçe adlar → İngilizce,
 /// `;` → `,`. Başındaki `=` olmadan verilir.
 pub fn normalize(src: &str) -> String {
