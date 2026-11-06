@@ -1,9 +1,11 @@
 //! Bu modül tarayıcı eklentisinden gelen indirme tekliflerine adanın nasıl
 //! karar verdirdiğini çözüyor: teklif sıraya girer, ada "İndirme bilgisi"
-//! kartını gösterir (bkz. `island/offer.rs`). "İndir" CarlUI'nın indirme
-//! yöneticisini başlatır, "Farklı kaydet…" Windows'un kaydetme penceresini
-//! açar, "Tarayıcıya bırak" duraklatılmış tarayıcı indirmesini sürdürür.
-//! Oyundayken kart açılmaz; indirme sessizce CarlUI'ya alınır.
+//! kartını gösterir (bkz. `island/offer.rs`). Tarayıcıdaki indirme çoktan
+//! iptal edilmiştir ve kart karar verilene dek bekler: "İndir" CarlUI'nın
+//! indirme yöneticisini başlatır, "Farklı kaydet…" Windows'un kaydetme
+//! penceresini açar, "Tarayıcıya bırak" indirmeyi tarayıcıda yeniden başlatır,
+//! "İptal" hiçbir şey indirmez. Tam ekrandayken kart gizli sırada bekler; onaysız
+//! hiçbir şey inmez.
 
 use crate::{bridge::Choice, *};
 use std::path::PathBuf;
@@ -14,26 +16,12 @@ use windows::Win32::{
 
 impl App {
     pub(crate) fn offers_arrived(&mut self) {
-        for o in bridge::take_offers() {
-            if self.fullscreen || self.game {
-                let mut o = o;
-                o.answer(Choice::CarlUI);
-                self.dl_start_with(o.url.clone(), o.headers.clone(), Some(o.name.clone()), None);
-            } else {
-                self.offers.push_back(o);
-            }
-        }
+        self.offers.extend(bridge::take_offers());
         self.refresh(true);
     }
 
     pub(crate) fn offer_choice(&mut self, b: u8) {
         let Some(mut o) = self.offers.pop_front() else { return };
-        if o.at.elapsed() > bridge::OFFER_TTL {
-            // Köprü çoktan "tarayıcı" demiş; ikinci kez indirmeyelim.
-            self.push_note(Note { app: t!("İndirmeler", "Downloads").into(), title: t!("İndirme tarayıcıda sürdü", "Download continued in the browser").into(), body: o.name.clone(), ..Default::default() });
-            self.refresh(true);
-            return;
-        }
         match b {
             0 => {
                 o.answer(Choice::CarlUI);
@@ -46,9 +34,17 @@ impl App {
                 }
                 None => self.offers.push_front(o),
             },
-            _ => {
+            2 if o.browser_listening() => {
                 info!("indirme tarayıcıya bırakıldı: {}", o.name);
                 o.answer(Choice::Browser);
+            }
+            2 => {
+                let title = t!("Tarayıcı yanıt vermiyor, indirmeyi sayfadan yeniden başlatın", "The browser isn't responding, start the download again from the page");
+                self.push_note(Note { app: t!("İndirmeler", "Downloads").into(), title: title.into(), body: o.name.clone(), ..Default::default() });
+            }
+            _ => {
+                info!("indirme iptal edildi: {}", o.name);
+                o.answer(Choice::Cancel);
             }
         }
         self.refresh(true);

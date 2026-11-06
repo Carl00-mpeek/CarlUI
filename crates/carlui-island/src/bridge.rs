@@ -3,10 +3,12 @@
 //! `extension/`) yalnızca bu bilgisayardan erişilebilen küçük bir yerel
 //! adrese (127.0.0.1:47321) konuşur:
 //! - `GET /ping` → yönetici açık mı?
-//! - `POST /offer` → tarayıcı indirmeyi duraklatır; ada "İndirme bilgisi"
-//!   kartıyla aşağı açılır (ad, boyut, kaynak, kayıt yeri). Kullanıcının
-//!   seçimi (CarlUI indirir / tarayıcıya bırak) yanıt olarak döner;
-//!   eklenti tarayıcıdaki indirmeyi buna göre iptal eder ya da sürdürür.
+//! - `POST /offer` → eklenti tarayıcıdaki indirmeyi çoktan iptal etmiştir; ada
+//!   "İndirme bilgisi" kartıyla aşağı açılır (ad, boyut, kaynak, kayıt yeri).
+//!   Yanıt hemen bir bilet döner; onaysız hiçbir şey inmez.
+//! - `POST /offer/wait` → bilete verilen karar: `carlui`, `browser` (eklenti
+//!   indirmeyi tarayıcıda yeniden başlatır), `cancel` ya da karar yoksa `wait`.
+//!   Tarayıcı uzun bekleyen isteği olan eklentiyi kapatabildiği için kısa sürer.
 //! - `POST /vault/find`, `/vault/fill`, `/vault/open` → Carl Vault ile giriş
 //!   sayfası doldurma; `/vault/save` → sayfada gönderilen giriş/kayıt formunu
 //!   kasaya sorma ve (kullanıcı onaylayınca) kaydetme. İstek kasanın borusuna
@@ -20,6 +22,10 @@
 //! (CORS preflight) gerektirir ve buna izin verilmez; ayrıca köken yalnızca
 //! eklenti kökeni olabilir. Yönetici kapalıysa teklif hemen "browser" döner.
 //!
+//! Eklenti güncellenip henüz yenilenmemişse eski sürüm indirmeyi duraklatıp tek
+//! istekte bekler (`v` alanı yok). Ona "iptal" diye bir yanıt yoktur: "carlui"
+//! denir ki tarayıcıdaki indirmeyi iptal etsin, sürdürmesin.
+//!
 //! Başlık ve köken bu bilgisayardaki başka bir programca taklit edilebilir;
 //! bu yüzden `/vault/` istekleri ayrıca bağlantıyı açan sürece bakılarak
 //! kabul edilir: bilinen bir tarayıcı olmalı ve öndeki pencereyle aynı exe
@@ -27,9 +33,13 @@
 
 use crate::*;
 use std::{
+    collections::HashMap,
     io::{BufRead, BufReader, Read, Write},
     net::{TcpListener, TcpStream},
-    sync::{atomic::AtomicBool, mpsc},
+    sync::{
+        atomic::{AtomicBool, AtomicU64},
+        mpsc,
+    },
 };
 
 pub const PORT: u16 = 47321;
@@ -46,6 +56,25 @@ pub static VAULT_FILL: AtomicBool = AtomicBool::new(true);
 pub enum Choice {
     CarlUI,
     Browser,
+    Cancel,
+}
+
+impl Choice {
+    fn action(self) -> &'static str {
+        match self {
+            Choice::CarlUI => "carlui",
+            Choice::Browser => "browser",
+            Choice::Cancel => "cancel",
+        }
+    }
+
+    /// Eski eklenti `carlui` dışındaki her yanıtta indirmeyi sürdürür.
+    fn legacy_action(self) -> &'static str {
+        match self {
+            Choice::Browser => "browser",
+            Choice::CarlUI | Choice::Cancel => "carlui",
+        }
+    }
 }
 
 pub struct Offer {
@@ -55,11 +84,19 @@ pub struct Offer {
     pub host: String,
     pub headers: String,
     pub at: Instant,
+    /// Eklenti kararı `/offer/wait` ile soruyor (eski sürüm tek istekte bekler).
+    polled: bool,
     reply: Option<mpsc::Sender<Choice>>,
 }
 
-/// Köprü bu kadar bekler; sonra tarayıcı indirmeyi kendisi sürdürür.
-pub const OFFER_TTL: Duration = Duration::from_secs(235);
+/// Eski eklentinin isteği bu kadar açık kalır.
+const OFFER_TTL: Duration = Duration::from_secs(235);
+/// Bir `/offer/wait` isteği en çok bu kadar sürer.
+const POLL: Duration = Duration::from_secs(20);
+/// Sahipsiz kalan bilet (tarayıcı kapandı) bu kadar sonra atılır.
+const TICKET_TTL: Duration = Duration::from_secs(3600);
+/// Sunucu yanıt vermezse kart ad ve boyutu beklemeden açılır.
+const PROBE_WAIT: Duration = Duration::from_secs(6);
 
 impl Offer {
     pub fn answer(&mut self, c: Choice) {
@@ -67,16 +104,62 @@ impl Offer {
             let _ = tx.send(c);
         }
     }
+
+    /// Karar hâlâ tarayıcıya ulaşır mı? Kapanan eklenti indirmeyi yeniden başlatamaz.
+    pub fn browser_listening(&self) -> bool {
+        if !self.polled {
+            return self.at.elapsed() < OFFER_TTL;
+        }
+        LAST_POLL.lock().is_ok_and(|t| t.is_some_and(|t| t.elapsed() < POLL + Duration::from_secs(10)))
+    }
 }
 
 impl Drop for Offer {
     fn drop(&mut self) {
-        // Yanıtsız kalan teklif tarayıcıya bırakılır (duraklatılmış indirme sürer).
-        self.answer(Choice::Browser);
+        // Yanıtsız kalan teklif iptaldir: onay yoksa indirme de yok.
+        self.answer(Choice::Cancel);
     }
 }
 
 static OFFERS: Mutex<VecDeque<Offer>> = Mutex::new(VecDeque::new());
+/// Kararı beklenen biletler: bilet → (son soruluş, yanıt kanalı).
+static TICKETS: Mutex<Option<HashMap<u64, (Instant, mpsc::Receiver<Choice>)>>> = Mutex::new(None);
+static NEXT_TICKET: AtomicU64 = AtomicU64::new(1);
+static LAST_POLL: Mutex<Option<Instant>> = Mutex::new(None);
+
+fn park(id: u64, at: Instant, rx: mpsc::Receiver<Choice>) {
+    if let Ok(mut t) = TICKETS.lock() {
+        let map = t.get_or_insert_with(HashMap::new);
+        map.retain(|_, w| w.0.elapsed() < TICKET_TTL);
+        map.insert(id, (at, rx));
+    }
+}
+
+/// Bilete verilen karar; henüz yoksa `wait`. Bilinmeyen bilet iptal sayılır.
+fn poll(id: u64) -> &'static str {
+    if let Ok(mut t) = LAST_POLL.lock() {
+        *t = Some(Instant::now());
+    }
+    let Some((_, rx)) = TICKETS.lock().ok().and_then(|mut t| t.as_mut()?.remove(&id)) else { return Choice::Cancel.action() };
+    match rx.recv_timeout(POLL) {
+        Ok(c) => c.action(),
+        Err(mpsc::RecvTimeoutError::Disconnected) => Choice::Cancel.action(),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            park(id, Instant::now(), rx);
+            "wait"
+        }
+    }
+}
+
+/// Ad ve boyut sunucudan; asılı kalan sunucu kartı geciktirmesin.
+fn probe(url: &str, headers: &str) -> (Option<String>, u64) {
+    let (tx, rx) = mpsc::channel();
+    let (url, headers) = (url.to_string(), headers.to_string());
+    std::thread::spawn(move || {
+        let _ = tx.send(crate::dlman::probe(&url, &headers));
+    });
+    rx.recv_timeout(PROBE_WAIT).unwrap_or((None, 0))
+}
 
 pub fn take_offers() -> Vec<Offer> {
     OFFERS.lock().map(|mut q| q.drain(..).collect()).unwrap_or_default()
@@ -288,24 +371,34 @@ fn handle(mut s: TcpStream, hwnd: isize) {
                 }
             }
             let headers = headers.join("\r\n");
+            let (tx, rx) = mpsc::channel();
+            let polled = v.get("v").and_then(|x| x.as_u64()).unwrap_or(0) >= 2;
+            let waiting = if polled {
+                let id = NEXT_TICKET.fetch_add(1, Ordering::Relaxed);
+                park(id, Instant::now(), rx);
+                respond(&mut s, "200 OK", &format!("{{\"id\":{id}}}"));
+                None
+            } else {
+                Some(rx)
+            };
             // Ad ve boyut sunucudan (IDM'deki gibi): tarayıcı çoğu zaman henüz bilmiyor.
-            let (probed, psize) = crate::dlman::probe(&url, &headers);
+            let (probed, psize) = probe(&url, &headers);
             let given = g("filename").rsplit(['\\', '/']).next().unwrap_or("").to_string();
             let name = probed.or((!given.is_empty()).then_some(given)).unwrap_or_else(|| crate::dlman::name_from_url(&url));
             let size = if psize > 0 { psize } else { v.get("size").and_then(|x| x.as_f64()).unwrap_or(0.0).max(0.0) as u64 };
             let host = url.split("://").nth(1).and_then(|r| r.split('/').next()).unwrap_or("").to_string();
-            let (tx, rx) = mpsc::channel();
             info!("tarayıcıdan indirme teklifi: {name} ({host})");
             if let Ok(mut q) = OFFERS.lock() {
-                q.push_back(Offer { url, name, size, host, headers, at: Instant::now(), reply: Some(tx) });
+                q.push_back(Offer { url, name, size, host, headers, at: Instant::now(), polled, reply: Some(tx) });
             }
             post(WM_APP_OFFER, 0);
-            // Tarayıcının servis çalışanı ~5 dk'da kapanabilir; ondan önce yanıtla.
-            let c = rx.recv_timeout(Duration::from_secs(240)).unwrap_or(Choice::Browser);
-            let a = match c {
-                Choice::CarlUI => "carlui",
-                Choice::Browser => "browser",
-            };
+            if let Some(rx) = waiting {
+                let c = rx.recv_timeout(OFFER_TTL).unwrap_or(Choice::Cancel);
+                respond(&mut s, "200 OK", &format!("{{\"action\":\"{}\"}}", c.legacy_action()));
+            }
+        }
+        ("POST", "/offer/wait") => {
+            let a = poll(v.get("id").and_then(|x| x.as_u64()).unwrap_or(0));
             respond(&mut s, "200 OK", &format!("{{\"action\":\"{a}\"}}"));
         }
         _ => respond(&mut s, "404 Not Found", "{}"),
@@ -333,6 +426,56 @@ pub fn start(hwnd: isize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Köprüye tek istek gönderir, yanıtın gövdesini döner.
+    fn post(addr: std::net::SocketAddr, path: &str, body: &str) -> serde_json::Value {
+        let mut c = TcpStream::connect(addr).unwrap();
+        write!(c, "POST {path} HTTP/1.1\r\nX-CarlUI: 1\r\nContent-Length: {}\r\n\r\n{body}", body.len()).unwrap();
+        let mut out = String::new();
+        c.read_to_string(&mut out).unwrap();
+        serde_json::from_str(out.split("\r\n\r\n").nth(1).unwrap()).unwrap()
+    }
+
+    fn next_offer() -> Offer {
+        for _ in 0..600 {
+            if let Some(o) = take_offers().pop() {
+                return o;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("teklif gelmedi");
+    }
+
+    #[test]
+    fn offers_need_an_answer() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = l.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for s in l.incoming().flatten() {
+                std::thread::spawn(move || handle(s, 0));
+            }
+        });
+        let offer = r#"{"v":2,"url":"http://127.0.0.1:1/a.bin","filename":"a.bin"}"#;
+        let wait = |r: &serde_json::Value| post(addr, "/offer/wait", &format!("{{\"id\":{}}}", r["id"]))["action"].as_str().unwrap().to_string();
+
+        // Bilet hemen döner; karar sonradan sorulur.
+        let r = post(addr, "/offer", offer);
+        let mut o = next_offer();
+        o.answer(Choice::Browser);
+        assert_eq!(wait(&r), "browser");
+        assert!(o.browser_listening());
+
+        // Yanıtsız kalan teklif tarayıcıya dönmez, iptal olur.
+        let r = post(addr, "/offer", offer);
+        drop(next_offer());
+        assert_eq!(wait(&r), "cancel");
+        assert_eq!(wait(&r), "cancel", "bilet bir kez yanıtlanır");
+
+        // Eski eklenti iptali ancak "carlui" yanıtıyla yapar.
+        let old = std::thread::spawn(move || post(addr, "/offer", r#"{"url":"http://127.0.0.1:1/a.bin"}"#));
+        drop(next_offer());
+        assert_eq!(old.join().unwrap()["action"], "carlui");
+    }
 
     #[test]
     fn non_browser_peer_is_refused() {

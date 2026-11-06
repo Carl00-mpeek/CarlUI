@@ -2,8 +2,8 @@
 //! başlayan bir indirmeyi kimin yapacağına karar vermek için ayrı, kaba bir
 //! pencere açmak istemiyoruz. Çözüm: ada aşağı doğru kart olarak açılır;
 //! dosya türü rozeti, ad, boyut · kaynak ve kayıt klasörü satır satır kayarak
-//! belirir, altında üç hap düğme (İndir / Farklı kaydet… / Tarayıcıya bırak)
-//! sırayla yerine oturur. Ana düğme hafifçe "nefes alır" ki karar beklendiği
+//! belirir, altında dört hap düğme (İndir / Farklı kaydet… / Tarayıcıya bırak /
+//! İptal) sırayla yerine oturur. Ana düğme hafifçe "nefes alır" ki karar beklendiği
 //! belli olsun.
 
 use super::*;
@@ -17,7 +17,7 @@ pub struct OfferView<'a> {
     pub more: usize,
 }
 
-const W: f32 = 400.0;
+const W: f32 = 440.0;
 const PAD: f32 = 16.0;
 const ICON: f32 = 46.0;
 const BTN_H: f32 = 32.0;
@@ -98,7 +98,7 @@ impl Island {
         let by = (iy + ipx).max(fy + fh) + 14.0 * s;
         let bh = (BTN_H * s).round();
         let gap = 8.0 * s;
-        let labels = [(t!("İndir", "Download"), 1.15f32), (t!("Farklı kaydet…", "Save as…"), 1.25), (t!("Tarayıcıya bırak", "Leave to browser"), 1.35)];
+        let labels = [(t!("İndir", "Download"), 0.95f32), (t!("Farklı kaydet…", "Save as…"), 1.3), (t!("Tarayıcıya bırak", "Leave to browser"), 1.5), (t!("İptal", "Cancel"), 0.8)];
         let total: f32 = labels.iter().map(|l| l.1).sum();
         let avail = w - 2.0 * pad - gap * (labels.len() as f32 - 1.0);
         let mut x = pad;

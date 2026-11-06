@@ -1,6 +1,8 @@
-// CarlUI İndirmeler: tarayıcıda başlayan indirmeyi duraklatır, CarlUI adasına
-// "İndirme bilgisi" kartı olarak sorar ve verilen karara göre iptal eder (CarlUI
-// indiriyor) ya da sürdürür (tarayıcıda kalsın). CarlUI çalışmıyorsa ya da
+// CarlUI İndirmeler: indirme yöneticisi gibi çalışır. Tarayıcıda başlayan indirme
+// anında iptal edilir (duraklatmak aktarımı her zaman durdurmaz) ve CarlUI adasına
+// "İndirme bilgisi" kartı olarak sorulur; onay gelmeden hiçbir şey inmez. Karar
+// CarlUI'nın indirmesiyse ya da iptalse tarayıcıda başka bir şey yapılmaz; "Tarayıcıya
+// bırak" denirse indirme tarayıcıda yeniden başlatılır. CarlUI çalışmıyorsa ya da
 // indirme yöneticisi kapalıysa hiçbir şeye dokunmaz; o durumda tarayıcının kendi
 // indirmelerinin ilerlemesini adaya bildirir.
 //
@@ -30,10 +32,18 @@ async function call(path, body, timeoutMs) {
   }
 }
 
+// "Tarayıcıya bırak" ile yeniden başlatılan adresler: bir kez daha sorulmaz.
+// Chromium `byExtensionId` alanını onCreated'da doldurmuyor, ona güvenilemez.
+const allowed = new Set();
+
 API.downloads.onCreated.addListener(async (item) => {
   const url = item.finalUrl || item.url || "";
   // blob:/data: adresleri yalnızca tarayıcıda anlamlı; onlara karışma.
   if (!/^https?:/i.test(url) || item.byExtensionId || item.state !== "in_progress") return;
+  if (allowed.delete(item.url) || allowed.delete(url)) {
+    watchProgress();
+    return;
+  }
 
   const ping = await call("/ping", undefined, 800);
   if (!ping || !ping.enabled) {
@@ -41,11 +51,7 @@ API.downloads.onCreated.addListener(async (item) => {
     return;
   }
 
-  let paused = false;
-  try {
-    await API.downloads.pause(item.id);
-    paused = true;
-  } catch {}
+  await stop(item);
 
   let cookies = "";
   try {
@@ -53,9 +59,10 @@ API.downloads.onCreated.addListener(async (item) => {
     cookies = list.map((c) => `${c.name}=${c.value}`).join("; ");
   } catch {}
 
-  const answer = await call(
+  const offer = await call(
     "/offer",
     {
+      v: 2,
       url,
       filename: item.filename || "",
       size: item.totalBytes > 0 ? item.totalBytes : item.fileSize > 0 ? item.fileSize : 0,
@@ -63,19 +70,44 @@ API.downloads.onCreated.addListener(async (item) => {
       cookies,
       ua: navigator.userAgent,
     },
-    250000
+    10000
   );
 
-  if (answer && answer.action === "carlui") {
-    try { await API.downloads.cancel(item.id); } catch {}
-    try { await API.downloads.erase({ id: item.id }); } catch {}
-  } else {
-    if (paused) {
-      try { await API.downloads.resume(item.id); } catch {}
+  // Kart açılamadıysa (CarlUI az önce kapandı) karar soran kimse yok: CarlUI
+  // kapalıyken olduğu gibi tarayıcı indirir.
+  const action = offer?.id ? await decision(offer.id) : (offer?.action ?? "browser");
+  if (action === "browser") {
+    allowed.add(url);
+    try {
+      await API.downloads.download({ url });
+    } catch {
+      allowed.delete(url);
     }
-    watchProgress();
   }
 });
+
+// Tarayıcıdaki indirmeyi durdurur ve listeden siler. Küçük dosya iptalden önce
+// bitmiş olabilir; onaysız dosya kalmasın diye o da silinir.
+async function stop(item) {
+  try { await API.downloads.cancel(item.id); } catch {}
+  try {
+    const [d] = await API.downloads.search({ id: item.id });
+    if (d?.state === "complete") await API.downloads.removeFile(item.id);
+  } catch {}
+  try { await API.downloads.erase({ id: item.id }); } catch {}
+}
+
+// Karar gelene dek sorar; kart süresiz bekleyebilir. Tarayıcı 30 sn'den uzun süren
+// isteği olan servis çalışanını kapatır: istekler kısa tutulur, API çağrısı da
+// çalışanı ayakta tutar. CarlUI kapanırsa onay yoktur, indirme başlatılmaz.
+async function decision(id) {
+  for (;;) {
+    try { await API.runtime.getPlatformInfo(); } catch {}
+    const r = await call("/offer/wait", { id }, 25000);
+    if (!r) return "cancel";
+    if (r.action !== "wait") return r.action;
+  }
+}
 
 // Tarayıcının kendi indirmeleri: saniyede bir adaya ilerleme bildir.
 let watching = false;

@@ -64,12 +64,16 @@ boyut görünür.
   düzenlerken passkey'i kaldırabilirsiniz.
 
 ## İndirmeler: ne yapar?
-- **İndirme yöneticisi açıkken:** Tarayıcıda bir indirme başlayınca indirme
-  duraklatılır. Ada aşağı doğru "İndirme bilgisi" kartıyla açılır ve dosya adı,
-  boyutu, kaynağı ve kayıt yeri görünür. Üç seçenek vardır:
+- **İndirme yöneticisi açıkken:** Tarayıcıda bir indirme başlayınca tarayıcıdaki
+  indirme hemen iptal edilir; onay vermeden hiçbir şey inmez. Ada aşağı doğru
+  "İndirme bilgisi" kartıyla açılır ve dosya adı, boyutu, kaynağı ve kayıt yeri
+  görünür. Kart siz karar verene dek bekler; tam ekrandayken çıkınca açılır. Dört
+  seçenek vardır:
   - **İndir:** CarlUI indirir; yüzde ve hız adada görünür.
   - **Farklı kaydet…:** Önce kayıt yeri seçilir.
-  - **Tarayıcıya bırak:** Tarayıcı kaldığı yerden devam eder.
+  - **Tarayıcıya bırak:** İndirme tarayıcıda baştan başlar. Tek kullanımlık
+    bağlantılarda ya da form gönderip dosya üreten sitelerde bu çalışmayabilir.
+  - **İptal:** Hiçbir şey inmez.
 - **İndirme yöneticisi kapalıyken** (Ayarlar → Arama): Eklenti hiçbir indirmeye
   karışmaz. Yalnızca tarayıcının kendi indirmelerinin yüzdesini ve hızını adaya
   bildirir.
