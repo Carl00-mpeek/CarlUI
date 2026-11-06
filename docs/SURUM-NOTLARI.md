@@ -15,6 +15,9 @@ yönetici izni ister. Şimdilik yalnızca Intel işlemcilerde çalışır.
   1-2 saniye kalıyordu. Artık oyun kaydı korunur. Farklı çözünürlükteki bölümler
   kenarlarında siyah boşlukla kaydedilir.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`41a33616666a12a6348eee42fec670f6d285695b764751a22e39d155ccecfed1`
+
 ## v0.9.0 — Anında yanıt veren asistan (2026-11-06)
 
 **Asistan artık bekletmiyor.** Model bellekte hazır durur, tuşu bırakınca yazı yarım
