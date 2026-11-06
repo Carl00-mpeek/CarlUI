@@ -63,6 +63,15 @@ pub enum View {
     Hub,
     /// Tarayıcıdan gelen indirme: "İndirme bilgisi" kartı.
     Offer,
+    /// Şarkı ya da ses değişince kısa süre görünen gösterge.
+    Osd,
+}
+
+/// Kısa göstergenin içeriği.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Osd {
+    Track,
+    Volume { level: u8, muted: bool },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -111,6 +120,7 @@ pub struct Model<'a> {
     pub note: Option<&'a Note>,
     /// Ekran görüntüsü bildirimine tıklandı: altında Aç / Düzenle / Sil.
     pub note_open: bool,
+    pub osd: Option<Osd>,
     pub app_volume: Option<f32>,
     pub spot: Option<SpotView<'a>>,
     pub clip: Option<crate::clipper::ClipView<'a>>,
@@ -568,6 +578,42 @@ impl Island {
                 self.equalizer(&kids, w - 12.0 * s - 13.0 * s, ((compact_h - 13.0 * s) / 2.0).round(), snap.playing)?;
                 (w, compact_h)
             }
+            View::Osd => match (m.osd, m.media) {
+                (Some(Osd::Volume { level, muted }), _) => {
+                    let w = (250.0 * s).round();
+                    let pad = (14.0 * s).round();
+                    let g = self.text.glyph(gfx, if muted { '\u{E74F}' } else { '\u{E767}' }, (15.0 * s).round(), 0.9)?;
+                    kids.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, pad, ((compact_h - g.height) / 2.0).round())?)?;
+                    let text = if muted { t!("Sessiz", "Muted").to_string() } else { level.to_string() };
+                    let (t, tw, th) = self.label(gfx, &text, 13.0, true, 56.0 * s, 0.95)?;
+                    Self::place(&t, w - pad - tw, (compact_h - th) / 2.0)?;
+                    kids.InsertAtTop(&t)?;
+                    let bx = pad + 26.0 * s;
+                    let value = if muted { 0.0 } else { level as f32 / 100.0 };
+                    self.bar(&kids, bx, ((compact_h - 4.0 * s) / 2.0).round(), w - bx - pad - 62.0 * s, value, false)?;
+                    (w, compact_h)
+                }
+                (Some(Osd::Track), Some(snap)) => {
+                    let h = (56.0 * s).round();
+                    let pad = (8.0 * s).round();
+                    let apx = (40.0 * s).round();
+                    let a = self.art_or_glyph(gfx, snap, apx, 9.0 * s)?;
+                    Self::place(&a, pad, pad)?;
+                    kids.InsertAtTop(&a)?;
+                    let tx = pad + apx + 12.0 * s;
+                    let tmax = 300.0 * s;
+                    let (t, tw, th) = self.label(gfx, &snap.title, 13.5, true, tmax, 0.96)?;
+                    let artist = if snap.artist.is_empty() { t!("Bilinmeyen sanatçı", "Unknown artist") } else { &snap.artist };
+                    let (ar, aw, ah) = self.label(gfx, artist, 12.0, false, tmax, 0.62)?;
+                    let y = ((h - th - ah - 2.0 * s) / 2.0).round();
+                    Self::place(&t, tx, y)?;
+                    Self::place(&ar, tx, y + th + 2.0 * s)?;
+                    kids.InsertAtTop(&t)?;
+                    kids.InsertAtTop(&ar)?;
+                    ((tx + tw.max(aw) + 20.0 * s).max(200.0 * s).round(), h)
+                }
+                _ => return self.build(gfx, View::Clock, m),
+            },
             View::MediaFull => {
                 let Some(snap) = m.media else { return self.build(gfx, View::Clock, m) };
                 let w = (380.0 * s).round();
@@ -958,6 +1004,21 @@ impl Island {
             self.set_region(Some((r, false)));
         } else {
             self.set_region(Some((self.pill_rect(), true)));
+        }
+    }
+
+    /// Açıkken tıklamalar adadan geçip alttaki pencereye (oyuna) gider.
+    pub fn click_through(&self, on: bool) {
+        unsafe {
+            let bits = (WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0) as isize;
+            let ex = GetWindowLongPtrW(self.hwnd, GWL_EXSTYLE) as isize;
+            if (ex & bits == bits) == on {
+                return;
+            }
+            SetWindowLongPtrW(self.hwnd, GWL_EXSTYLE, (if on { ex | bits } else { ex & !bits }) as _);
+            if on {
+                let _ = SetLayeredWindowAttributes(self.hwnd, COLORREF(0), 255, LWA_ALPHA);
+            }
         }
     }
 

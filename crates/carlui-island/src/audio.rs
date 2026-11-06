@@ -9,11 +9,72 @@ use windows::{
     core::*,
     Win32::{
         Foundation::*,
-        Media::Audio::*,
+        Media::Audio::{Endpoints::IAudioEndpointVolume, *},
         System::{Com::*, Threading::*},
         UI::WindowsAndMessaging::*,
     },
 };
+
+/// Sistem sesi kodu: yüzde, sessizdeyse `MUTED` eklenmiş hâli.
+const MUTED: usize = 1000;
+
+fn level_code(level: f32, muted: bool) -> usize {
+    (level.clamp(0.0, 1.0) * 100.0).round() as usize + if muted { MUTED } else { 0 }
+}
+
+/// `watch_master` iletisinin kodunu yüzde ve sessiz bilgisine çevirir.
+pub fn decode_level(code: usize) -> (u8, bool) {
+    ((code % MUTED) as u8, code >= MUTED)
+}
+
+fn default_endpoint(en: &IMMDeviceEnumerator) -> Option<(String, IAudioEndpointVolume)> {
+    unsafe {
+        let dev = en.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+        let p = dev.GetId().ok()?;
+        let id = p.to_string().unwrap_or_default();
+        CoTaskMemFree(Some(p.0 as _));
+        Some((id, dev.Activate(CLSCTX_ALL, None).ok()?))
+    }
+}
+
+/// Sistem sesini izler, değişince `msg` iletisini gönderir. Varsayılan çıkış
+/// aygıtı değişince yeni aygıtın sesi "değişim" sayılmaz.
+pub fn watch_master(hwnd: isize, msg: u32) {
+    std::thread::spawn(move || unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let Ok(en) = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL) else { return };
+        let (mut ep, mut id, mut last, mut tick) = (None, String::new(), None, 0u32);
+        loop {
+            if tick % 20 == 0 {
+                match default_endpoint(&en) {
+                    Some((new_id, e)) => {
+                        if new_id != id {
+                            id = new_id;
+                            last = None;
+                        }
+                        ep = Some(e);
+                    }
+                    None => {
+                        ep = None;
+                        id.clear();
+                        last = None;
+                    }
+                }
+            }
+            tick = tick.wrapping_add(1);
+            if let Some(e) = &ep {
+                if let (Ok(v), Ok(m)) = (e.GetMasterVolumeLevelScalar(), e.GetMute()) {
+                    let code = level_code(v, m.as_bool());
+                    if last.is_some_and(|l| l != code) {
+                        let _ = PostMessageW(HWND(hwnd as _), msg, WPARAM(code), LPARAM(0));
+                    }
+                    last = Some(code);
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(150));
+        }
+    });
+}
 
 fn process_exe(pid: u32) -> String {
     unsafe {
@@ -134,5 +195,19 @@ pub fn set(vols: &[ISimpleAudioVolume], v: f32) {
                 let _ = vol.SetMute(false, std::ptr::null());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod level_tests {
+    use super::*;
+
+    #[test]
+    fn level_round_trip() {
+        assert_eq!(decode_level(level_code(0.0, false)), (0, false));
+        assert_eq!(decode_level(level_code(0.424, false)), (42, false));
+        assert_eq!(decode_level(level_code(1.0, false)), (100, false));
+        assert_eq!(decode_level(level_code(1.0, true)), (100, true));
+        assert_eq!(decode_level(level_code(0.0, true)), (0, true));
     }
 }

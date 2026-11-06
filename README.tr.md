@@ -75,7 +75,8 @@
   sürücü dolmak üzereyken bildirim gelir. Sınırlar **Ayarlar → Ada ve
   bildirimler → Uyarılar** bölümünde.
 - **Oyun modu:** Tam ekranda arayüz çekilir, modüller uyku moduna geçer,
-  bildirimler oyundan sonra gösterilir.
+  bildirimler oyundan sonra gösterilir. Şarkı ya da ses değişince ada kısa süre
+  görünür.
 - **Carl Office (ücretsiz):** Excel, Word, PowerPoint ve PDF dosyalarını
   açar ve düzenler; ayrı bir ofis programı ya da abonelik gerekmez.
   - **Excel (xlsx, xls, csv):** Hücre düzenleme, Türkçe formüller (TOPLA,

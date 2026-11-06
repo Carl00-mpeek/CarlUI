@@ -1,5 +1,16 @@
 # Sürüm notları
 
+## v0.9.2 — Tam ekranda şarkı ve ses göstergesi (2026-11-07)
+
+**Yeni: Ada tam ekranda da görünür.** Şarkı değişince ya da ses açılıp kısılınca ada
+kısa süre belirir. Odak almaz, tıklamalar oyuna gider. **Ayarlar → Oyun modu** bölümündeki
+**Tam ekranda şarkı ve sesi göster** ile kapatılabilir. Özel tam ekran oyunlarda
+görünmeyebilir.
+
+**Düzeltmeler**
+- **Ses göstergesi:** Ayarlardaki seçenek hiçbir şey yapmıyordu, artık masaüstünde de
+  çalışır.
+
 ## v0.9.1 — Arama, sıcaklık ve kayıt düzeltmeleri (2026-11-06)
 
 **Yeni: CPU sıcaklığı Ayarlar'dan kurulur.** PawnIO'yu CarlUI'den sonra kurduysan

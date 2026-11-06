@@ -75,7 +75,8 @@
   temperature you set, or when a drive is almost full. Limits are in
   **Settings → Island and notifications → Alerts**.
 - **Game mode:** In fullscreen the UI steps aside, modules go to sleep and
-  notifications wait until you're done.
+  notifications wait until you're done. The island still appears briefly when
+  the song or volume changes.
 - **Carl Office (free):** Opens and edits Excel, Word, PowerPoint and PDF
   files; no separate office suite or subscription needed.
   - **Excel (xlsx, xls, csv):** Cell editing, formulas (SUM, IF, VLOOKUP…),

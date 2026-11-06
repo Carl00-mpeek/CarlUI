@@ -728,11 +728,13 @@ pub struct GameConfig {
     /// Oyundayken gelen bildirimleri sakla, oyundan çıkınca göster
     /// (kapalıysa oyunda gelenler hiç gösterilmez).
     pub hold_notes: bool,
+    /// Tam ekranda gizliyken şarkı değişince ve ses açılıp kısılınca ada kısa süre görünür.
+    pub show_osd: bool,
 }
 
 impl Default for GameConfig {
     fn default() -> Self {
-        Self { hide_on_fullscreen: true, hold_notes: true }
+        Self { hide_on_fullscreen: true, hold_notes: true, show_osd: true }
     }
 }
 

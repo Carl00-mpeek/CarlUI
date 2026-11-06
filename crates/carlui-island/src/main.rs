@@ -51,7 +51,7 @@ use carlui_core::{
 };
 use carlui_ui::gfx::Gfx;
 use carlui_core::win::WM_CARLUI_SEARCH;
-use island::{Hit, Island, Model, View};
+use island::{Hit, Island, Model, Osd, View};
 use launcher::{IconPx, Key, Launcher, Outcome};
 use media::{Cmd, Snap};
 use notify::Note;
@@ -88,6 +88,10 @@ const WM_MOUSELEAVE: u32 = 0x02A3;
 const WM_APP_BUS: u32 = WM_APP + 1;
 const WM_APP_MEDIA: u32 = WM_APP + 2;
 pub(crate) const WM_APP_NOTE: u32 = WM_APP + 3;
+const WM_APP_VOLUME: u32 = WM_APP + 13;
+/// Şarkı ve ses göstergesinin ekranda kaldığı süre.
+const OSD_MS: u32 = 2500;
+const TIMER_OSD: usize = 19;
 const WM_APP_CONFIG: u32 = WM_APP + 4;
 const WM_APP_FG: u32 = WM_APP + 5;
 const WM_APP_PEEK: u32 = WM_APP + 6;
@@ -127,6 +131,9 @@ struct App {
     media_slot: Arc<Mutex<Option<Snap>>>,
     media: Option<Snap>,
     paused_since: Option<Instant>,
+    /// Ekrandaki kısa gösterge ve son görülen şarkı (başlık + sanatçı).
+    osd: Option<Osd>,
+    last_track: String,
     notes_in: Arc<Mutex<VecDeque<Note>>>,
     pending: VecDeque<Note>,
     note: Option<Note>,
@@ -223,6 +230,20 @@ unsafe extern "system" fn win_event(_: HWINEVENTHOOK, event: u32, hwnd: HWND, id
     let _ = PostMessageW(HWND(HWND_ISLAND.load(Ordering::Relaxed) as _), WM_APP_FG, WPARAM(0), LPARAM(0));
 }
 
+/// Yeni bir şarkı çalmaya başladı mı? Başlıksız ara durumlar ve ilk görülen şarkı sayılmaz.
+fn new_track(last: &mut String, title: &str, artist: &str, playing: bool) -> bool {
+    if title.trim().is_empty() {
+        return false;
+    }
+    let key = format!("{title}\n{artist}");
+    if *last == key {
+        return false;
+    }
+    let first = last.is_empty();
+    *last = key;
+    playing && !first
+}
+
 impl App {
     fn media_active(&self) -> bool {
         self.cfg.notify.media_bar
@@ -230,11 +251,11 @@ impl App {
     }
 
     fn desired(&self) -> View {
-        if self.fullscreen && !self.spot.open {
-            return View::Hidden;
-        }
         if self.spot.open {
             return View::Search;
+        }
+        if self.fullscreen {
+            return if self.osd.is_some() { View::Osd } else { View::Hidden };
         }
         if !self.offers.is_empty() {
             return View::Offer;
@@ -248,6 +269,9 @@ impl App {
         let media = self.media_active();
         if self.expanded && media {
             return View::MediaFull;
+        }
+        if self.osd.is_some() {
+            return View::Osd;
         }
         if self.date {
             return View::Date;
@@ -283,7 +307,7 @@ impl App {
             self.refresh_vols();
         }
         // Şarkı/video çalarken ada kapağın rengini alır (ayarla kapatılabilir).
-        let art = (self.cfg.island.media_tint && self.media_active() && matches!(view, View::Media | View::MediaFull | View::Search | View::Clip))
+        let art = (self.cfg.island.media_tint && self.media_active() && matches!(view, View::Media | View::MediaFull | View::Search | View::Clip | View::Osd))
             .then(|| self.media.as_ref().and_then(|m| m.art.as_ref()))
             .flatten();
         let rebuild = self.island.set_mood(&self.gfx, art) || rebuild;
@@ -291,6 +315,7 @@ impl App {
             media: self.media.as_ref(),
             note: self.note.as_ref(),
             note_open: self.note_open,
+            osd: self.osd,
             app_volume: if media_panel { audio::get(&self.vols) } else { None },
             spot: (view == View::Search).then(|| self.spot.view()),
             clip: None,
@@ -314,6 +339,7 @@ impl App {
                 carlui_core::error!("ada görünümü yenilenemedi ({view:?}): {e}");
             }
         }
+        self.island.click_through(self.fullscreen && view == View::Osd);
         let wanted = std::mem::take(&mut self.island.icon_requests);
         if !wanted.is_empty() {
             self.spot.request_icons(wanted);
@@ -327,7 +353,7 @@ impl App {
             }
         }
         // Maksimize pencere üstündeyse yukarı saklan (ayar açıksa); bildirim ve açık panel her zaman iner.
-        let up = self.cfg.island.hide_over_maximized && self.covered && !self.peek && self.note.is_none() && !self.expanded && !matches!(view, View::Hidden | View::Search | View::Clip | View::Hub);
+        let up = self.cfg.island.hide_over_maximized && self.covered && !self.peek && self.note.is_none() && !self.expanded && !matches!(view, View::Hidden | View::Search | View::Clip | View::Hub | View::Osd);
         self.island.slide(up);
         // Ayara göre gizlenen ada (masaüstünde "Uygulamada" saati) de fareyle çağrılabilir.
         let hidden = !self.fullscreen && (view == View::Hidden || (self.peek && view == View::Clock && self.cfg.clock.mode != ClockMode::Always));
@@ -443,7 +469,27 @@ impl App {
         if new.is_none() {
             self.expanded = false;
         }
+        let changed = new.as_ref().is_some_and(|m| new_track(&mut self.last_track, &m.title, &m.artist, m.playing));
         self.media = new;
+        if changed && self.cfg.notify.media_bar {
+            self.show_osd(Osd::Track);
+        } else {
+            self.refresh(true);
+        }
+    }
+
+    /// Kısa göstergeyi açar; tam ekranda da görünür (ayar kapalı değilse).
+    fn show_osd(&mut self, osd: Osd) {
+        if self.fullscreen && !self.cfg.game.show_osd {
+            return;
+        }
+        self.osd = Some(osd);
+        unsafe {
+            SetTimer(self.island.hwnd, TIMER_OSD, OSD_MS, None);
+            if self.fullscreen {
+                let _ = SetWindowPos(self.island.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+        }
         self.refresh(true);
     }
 
@@ -754,7 +800,7 @@ impl App {
                 }
             }
             View::Clock if self.hub_click() => {}
-            View::Media if self.hub_click() => {}
+            View::Media | View::Osd if self.hub_click() => {}
             View::Hub => match h {
                 Hit::HubClear | Hit::NoteRow(_) | Hit::NoteDel(_) | Hit::NoteAct(..) | Hit::GroupToggle(_) | Hit::GroupClear(_) | Hit::DlToggle(_) | Hit::DlCancel(_) => self.hub_hit(h),
                 Hit::Prev => self.command(Cmd::Prev),
@@ -779,8 +825,8 @@ impl App {
                 self.date = false;
                 self.refresh(false);
             }
-            View::Media => {
-                self.expanded = true;
+            View::Media | View::Osd => {
+                self.expanded = self.media_active();
                 self.vols.clear();
                 self.refresh(false);
             }
@@ -954,6 +1000,11 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
                             a.show_next_note();
                         }
                     }
+                    TIMER_OSD => {
+                        let _ = KillTimer(hwnd, TIMER_OSD);
+                        a.osd = None;
+                        a.refresh(false);
+                    }
                     TIMER_MISSED => {
                         let _ = KillTimer(hwnd, TIMER_MISSED);
                         a.show_missed();
@@ -1019,6 +1070,15 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
             }
             WM_APP_MEDIA => {
                 with_app(|a| a.on_media());
+                LRESULT(0)
+            }
+            WM_APP_VOLUME => {
+                with_app(|a| {
+                    if a.cfg.notify.volume_osd {
+                        let (level, muted) = audio::decode_level(wp.0);
+                        a.show_osd(Osd::Volume { level, muted });
+                    }
+                });
                 LRESULT(0)
             }
             bridge::WM_APP_OFFER => {
@@ -1152,6 +1212,7 @@ fn main() -> Result<()> {
         });
         let media_slot: Arc<Mutex<Option<Snap>>> = Arc::default();
         media::start(hwnd_raw, WM_APP_MEDIA, media_slot.clone());
+        audio::watch_master(hwnd_raw, WM_APP_VOLUME);
         let notes_in: Arc<Mutex<VecDeque<Note>>> = Arc::default();
         notify::set_hide_banners(cfg.notify.enabled && cfg.notify.hide_windows_banners);
         banners::sync_sound(cfg.notify.enabled && cfg.notify.sound != NotifySound::Windows);
@@ -1206,6 +1267,8 @@ fn main() -> Result<()> {
                 media_slot,
                 media: None,
                 paused_since: None,
+                osd: None,
+                last_track: String::new(),
                 notes_in,
                 pending: VecDeque::new(),
                 note: None,
@@ -1283,4 +1346,21 @@ fn main() -> Result<()> {
         info!("ada kapandı");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod track_tests {
+    use super::new_track;
+
+    #[test]
+    fn only_a_real_change_counts() {
+        let mut last = String::new();
+        assert!(!new_track(&mut last, "A", "X", true), "ilk şarkı gösterilmez");
+        assert!(!new_track(&mut last, "A", "X", true), "aynı şarkı");
+        assert!(!new_track(&mut last, "", "", true), "başlıksız ara durum");
+        assert!(!new_track(&mut last, "A", "X", true), "ara durumdan sonra aynı şarkı");
+        assert!(new_track(&mut last, "B", "X", true), "yeni şarkı");
+        assert!(!new_track(&mut last, "C", "X", false), "duraklatılmışken değişim");
+        assert!(!new_track(&mut last, "C", "X", true), "aynı şarkı sürdürüldü");
+    }
 }

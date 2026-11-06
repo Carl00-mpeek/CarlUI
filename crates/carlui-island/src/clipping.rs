@@ -135,7 +135,7 @@ impl App {
         let view = if self.clip.open { View::Clip } else { View::Hidden };
         let store = self.clip.store.clone();
         let guard = if self.clip.open { store.lock().ok() } else { None };
-        let model = Model { media: None, note: None, note_open: false, app_volume: None, spot: None, clip: guard.as_deref().map(|st| self.clip.view(st)), hub: None, badge: 0, timer: None, offer: None };
+        let model = Model { media: None, note: None, note_open: false, osd: None, app_volume: None, spot: None, clip: guard.as_deref().map(|st| self.clip.view(st)), hub: None, badge: 0, timer: None, offer: None };
         let animate = view != self.pop.view;
         if let Err(e) = self.pop.set_view(&self.gfx, view, &model, animate) {
             carlui_core::error!("pano paneli kurulamadı: {e}");

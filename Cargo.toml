@@ -4,7 +4,7 @@ members = ["crates/carlui-core", "crates/carlui-ui", "crates/carlui", "crates/ca
     "crates/carlui-remover", "crates/carlui-office", "crates/carlui-tools", "crates/carlui-expand", "crates/carlui-replay", "crates/carlui-ai"]
 
 [workspace.package]
-version = "0.9.1"
+version = "0.9.2"
 edition = "2021"
 license = "MIT"
 authors = ["Demhat Dayan <maildemhat@gmail.com>"]
