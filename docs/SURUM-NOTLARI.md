@@ -1,5 +1,31 @@
 # Sürüm notları
 
+## v0.7.0 — İndirme yöneticisi (2026-11-06)
+
+**İndirmeler artık onaysız başlamaz.** Tarayıcıdaki indirme hemen kesilir ve adada
+bir kart açılır. Kart sen karar verene dek bekler.
+- **Seçenekler:** İndir, Farklı kaydet…, Tarayıcıya bırak ve İptal.
+- **İptal:** Dosya inmez, tarayıcıda da yarım dosya kalmaz.
+- **Tam ekran:** Oyun ya da tam ekran varken indirme kendiliğinden başlamaz, kart
+  sonra açılır.
+- **Eklenti:** Güncellemeden sonra tarayıcının eklentiler sayfasında CarlUI
+  eklentisinin ↻ düğmesine bas. Tarayıcıya bırakılan indirme adresten yeniden
+  başlar; tek kullanımlık bağlantılarda sayfadan yeniden başlatman gerekebilir.
+
+**Yeni: Tam Kaldırıcı.** Uygulamayı kaldırır, geride kalan klasör ve kayıt
+anahtarlarını tarar. Dosyalar Geri Dönüşüm Kutusu'na gider, anahtarlar önce
+yedeklenir. Yeni kurulanlar listenin üstünde görünür. Win menüsünde varsayılan
+kısayolu var.
+
+**Yeni: Dosya kilidi açıcı.** Bir dosyayı tutan uygulamayı gösterir ve bıraktırır.
+Tam Kaldırıcı'nın silemediği öğelerde de sunulur.
+
+**Yeni: Alan kaydı.** Ekran görüntüsü aracında seçilen alan sesiyle MP4'e kaydedilir,
+sonuç GIF'e çevrilebilir.
+
+**Yeni: Pencere düzenleri.** Pencere yerleri ekran değişince ve uykudan sonra geri
+konur. Düzenler adla kaydedilip uygulanır.
+
 ## v0.6.2 — Açık tema (2026-11-06)
 
 **Açık tema baştan yapıldı.** Gri yüzeyler yerine beyaz cam geldi; bu görünüm
