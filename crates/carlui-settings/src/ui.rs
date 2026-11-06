@@ -229,7 +229,7 @@ impl Flow {
         p.bar(tr, frac, p.accent);
         let kx = tr.x + tr.w * frac;
         let k = if hot { 9.0 } else { 8.0 };
-        p.round(R::new(kx - k, tr.y + 2.0 - k, k * 2.0, k * 2.0), k, 0xFFFFFF, 0.95);
+        p.knob(kx, tr.y + 2.0, k);
         let setter = move |c: &mut Config, f: f32| {
             let v = min + f.clamp(0.0, 1.0) * (max - min);
             set(c, ((v / step).round() * step).clamp(min, max));

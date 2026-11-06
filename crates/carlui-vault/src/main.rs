@@ -139,7 +139,7 @@ impl Win {
         unsafe {
             rt.BeginDraw();
             rt.SetTransform(&Matrix3x2 { M11: s, M12: 0.0, M21: 0.0, M22: s, M31: 0.0, M32: 0.0 });
-            rt.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
+            rt.Clear(Some(&carlui_ui::tone::backdrop()));
         }
         {
             let base: ID2D1RenderTarget = rt.cast()?;
@@ -355,6 +355,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
 fn main() -> Result<()> {
     log::init("vault");
     let cfg = config::load();
+    carlui_ui::tone::follow(&cfg.theme);
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
@@ -383,8 +384,9 @@ fn main() -> Result<()> {
         let sw = GetSystemMetrics(SM_CXSCREEN);
         let sh = GetSystemMetrics(SM_CYSCREEN);
         let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), CLASS, w!("Carl Vault"), WS_OVERLAPPEDWINDOW, (sw - ww) / 2, (sh - wh) / 2, ww, wh, None, None, inst, None)?;
-        let on: i32 = 1;
+        let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
+        carlui_ui::tone::caption(hwnd);
         let backdrop = DWMSBT_TRANSIENTWINDOW;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
         let _ = DwmExtendFrameIntoClientArea(hwnd, &MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });

@@ -57,7 +57,7 @@ impl Dock {
             }
         }
 
-        let sep_brush = self.comp.CreateColorBrushWithColor(color(self.theme.separator))?;
+        let sep_brush = self.comp.CreateColorBrushWithColor(carlui_ui::glass::exact(self.theme.separator))?;
         let sep_h = (24.0 * m.s).round();
         let sep_w = m.s.round().max(1.0);
         while self.seps.len() < sep_xs.len() {

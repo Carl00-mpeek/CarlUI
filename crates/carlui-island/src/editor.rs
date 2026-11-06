@@ -31,8 +31,10 @@ const EM_SETTEXTMODE: u32 = WM_USER + 89;
 const EM_SETMARGINS: u32 = 0x00D3;
 const EM_SETSEL: u32 = 0x00B1;
 const TM_PLAINTEXT_UNDO: usize = 1 | 8 | 32;
-/// Kartın zeminiyle aynı renk (COLORREF, BGR): Rgba(30, 30, 32).
-const BG: u32 = 0x00201E1E;
+/// Kartın zeminiyle aynı renk (COLORREF, BGR): Rgba(30, 30, 32), açık temada beyaz.
+fn bg() -> u32 {
+    if carlui_ui::tone::light() { 0x00FFFFFF } else { 0x00201E1E }
+}
 
 #[repr(C)]
 struct CharFormatW {
@@ -100,7 +102,7 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
             WM_ERASEBKGND => {
                 let mut r = RECT::default();
                 let _ = GetClientRect(hwnd, &mut r);
-                let bg = CreateSolidBrush(COLORREF(BG));
+                let bg = CreateSolidBrush(COLORREF(bg()));
                 FillRect(HDC(wp.0 as _), &r, bg);
                 let _ = DeleteObject(bg);
                 LRESULT(1)
@@ -166,10 +168,10 @@ pub fn open_at(owner: HWND, notify: HWND, r: RECT, scale: f32, id: String, text:
             let _ = DestroyWindow(hwnd);
             return false;
         };
-        let _ = SetWindowTheme(edit, w!("DarkMode_Explorer"), PCWSTR::null());
+        let _ = SetWindowTheme(edit, if carlui_ui::tone::light() { w!("Explorer") } else { w!("DarkMode_Explorer") }, PCWSTR::null());
         SendMessageW(edit, EM_SETTEXTMODE, WPARAM(TM_PLAINTEXT_UNDO), LPARAM(0));
         SendMessageW(edit, EM_EXLIMITTEXT, WPARAM(0), LPARAM(64 * 1024 * 1024));
-        SendMessageW(edit, EM_SETBKGNDCOLOR, WPARAM(0), LPARAM(BG as isize));
+        SendMessageW(edit, EM_SETBKGNDCOLOR, WPARAM(0), LPARAM(bg() as isize));
         let mut face = [0u16; 32];
         for (i, u) in "Segoe UI".encode_utf16().enumerate() {
             face[i] = u;
@@ -181,7 +183,7 @@ pub fn open_at(owner: HWND, notify: HWND, r: RECT, scale: f32, id: String, text:
             dw_effects: 0,
             y_height: 202,
             y_offset: 0,
-            cr_text_color: 0x00EBEBEB,
+            cr_text_color: if carlui_ui::tone::light() { 0x00261814 } else { 0x00EBEBEB },
             b_char_set: 1,
             b_pitch_and_family: 0,
             sz_face_name: face,

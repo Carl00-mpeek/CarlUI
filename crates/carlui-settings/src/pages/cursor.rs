@@ -85,7 +85,13 @@ fn swatches(p: &mut P, f: &mut Flow, label: &str, desc: &str, colors: &[u32], va
         item(
             p,
             cur == Some(c),
-            &|p, s| p.round(s, sw / 2.0, c, 1.0),
+            &|p, s| {
+                carlui_ui::tone::literal(|| p.round(s, sw / 2.0, c, 1.0));
+                // Beyaz örnek beyaz camda kaybolmasın.
+                if carlui_ui::tone::light() {
+                    p.outline(s, sw / 2.0, 0xFFFFFF, 0.3);
+                }
+            },
             edit(move |cfg| set(&mut cfg.cursor, fmt(c))),
         );
     }

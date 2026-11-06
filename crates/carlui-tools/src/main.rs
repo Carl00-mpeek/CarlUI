@@ -39,6 +39,7 @@ fn main() {
         "disk"
     };
     log::init(&format!("tools-{mode}"));
+    carlui_ui::tone::follow(&carlui_core::config::load().theme);
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);

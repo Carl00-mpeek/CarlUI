@@ -94,8 +94,10 @@ impl Island {
         let old = self.mood.and_then(|m| m.1);
         self.mood = if key == 0 { None } else { Some((key, hs)) };
         let tint = hs.map(|(h, s)| {
-            let (r, g, b) = hsv_to_rgb(h, s.clamp(0.45, 0.8), 0.62);
-            Rgba(r, g, b, 0x66)
+            // Açık temada beyaz cama yalnızca hafif bir renk gelir; yazı mürekkep kalır.
+            let light = carlui_ui::tone::light();
+            let (r, g, b) = hsv_to_rgb(h, s.clamp(0.45, 0.8), if light { 0.92 } else { 0.62 });
+            Rgba(r, g, b, if light { 0x2C } else { 0x66 })
         });
         let _ = self.glass.set_mood(&self.comp, tint, 600);
         old != hs

@@ -10,9 +10,16 @@ use windows::{
     UI::{Color, Composition::*},
 };
 
+/// Koyu cama göre yazılmış renk: açık temada rolüne göre çevrilir.
 pub fn color(c: Rgba) -> Color {
-    let (r, g, b) = crate::tone::rgb8(c.0, c.1, c.2);
-    Color { A: c.3, R: r, G: g, B: b }
+    let hex = (c.0 as u32) << 16 | (c.1 as u32) << 8 | c.2 as u32;
+    let (v, a) = crate::tone::fill(hex, c.3 as f32 / 255.0);
+    Color { A: (a * 255.0).round().min(255.0) as u8, R: (v >> 16) as u8, G: (v >> 8) as u8, B: v as u8 }
+}
+
+/// Gerçek renk: `Theme` değerleri (zaten temaya göre), gölge ve kapak rengi.
+pub fn exact(c: Rgba) -> Color {
+    Color { A: c.3, R: c.0, G: c.1, B: c.2 }
 }
 
 pub fn v2(x: f32, y: f32) -> Vector2 {
@@ -40,8 +47,8 @@ fn gradient(comp: &Compositor, top: Rgba, bottom: Rgba, end: f32) -> Result<Comp
     b.SetStartPoint(v2(0.0, 0.0))?;
     b.SetEndPoint(v2(0.0, 1.0))?;
     let stops = b.ColorStops()?;
-    stops.Append(&comp.CreateColorGradientStopWithOffsetAndColor(0.0, color(top))?)?;
-    stops.Append(&comp.CreateColorGradientStopWithOffsetAndColor(end, color(bottom))?)?;
+    stops.Append(&comp.CreateColorGradientStopWithOffsetAndColor(0.0, exact(top))?)?;
+    stops.Append(&comp.CreateColorGradientStopWithOffsetAndColor(end, exact(bottom))?)?;
     Ok(b)
 }
 
@@ -66,16 +73,16 @@ impl Glass {
 
         // 1) Sistem arka plan bulanıklığı
         layer(&comp.CreateHostBackdropBrush()?.cast()?)?;
-        // 2) Koyu füme tint
-        let tint_brush = comp.CreateColorBrushWithColor(color(theme.glass_tint))?;
+        // 2) Füme (açık temada süt beyazı) tint
+        let tint_brush = comp.CreateColorBrushWithColor(exact(theme.glass_tint))?;
         layer(&tint_brush.cast()?)?;
         // 2b) Ruh hali: soldan sağa sönen renk (başta saydam)
         let mood_brush = comp.CreateLinearGradientBrush()?;
         mood_brush.SetStartPoint(v2(0.0, 0.0))?;
         mood_brush.SetEndPoint(v2(1.0, 1.0))?;
         let ms = mood_brush.ColorStops()?;
-        ms.Append(&comp.CreateColorGradientStopWithOffsetAndColor(0.0, color(Rgba(0, 0, 0, 0)))?)?;
-        ms.Append(&comp.CreateColorGradientStopWithOffsetAndColor(1.0, color(Rgba(0, 0, 0, 0)))?)?;
+        ms.Append(&comp.CreateColorGradientStopWithOffsetAndColor(0.0, exact(Rgba(0, 0, 0, 0)))?)?;
+        ms.Append(&comp.CreateColorGradientStopWithOffsetAndColor(1.0, exact(Rgba(0, 0, 0, 0)))?)?;
         layer(&mood_brush.cast()?)?;
         // 3) Üstten sönen hafif parlaklık
         let clear = Rgba(theme.gloss.0, theme.gloss.1, theme.gloss.2, 0);
@@ -114,7 +121,7 @@ impl Glass {
         for (i, to) in [(0, a), (1, b)] {
             let stop = stops.GetAt(i)?;
             let anim = comp.CreateColorKeyFrameAnimation()?;
-            anim.InsertKeyFrame(1.0, color(to))?;
+            anim.InsertKeyFrame(1.0, exact(to))?;
             anim.SetDuration(crate::motion::ts(ms))?;
             stop.StartAnimation(h!("Color"), &anim)?;
         }
@@ -142,6 +149,6 @@ impl Glass {
 
     /// Tema değişince (ör. cam yoğunluğu) yeniden oluşturmadan güncelle.
     pub fn apply_theme(&self, theme: &Theme) -> Result<()> {
-        self.tint_brush.SetColor(color(theme.glass_tint))
+        self.tint_brush.SetColor(exact(theme.glass_tint))
     }
 }

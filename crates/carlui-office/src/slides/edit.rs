@@ -330,7 +330,7 @@ impl SlideView {
         let mut rows = vec![Row::Header(t!("Yazı rengi", "Font color").into())];
         rows.push(item(1, t!("Otomatik", "Automatic"), '\u{E8D3}'));
         for (i, (c, n)) in colors.iter().enumerate() {
-            rows.push(Row::Item { id: 10 + i, text: n.to_string(), icon: Icon::Glyph('\u{E8D3}', Some(*c)) });
+            rows.push(Row::Item { id: 10 + i, text: n.to_string(), icon: Icon::Swatch('\u{E8D3}', *c) });
         }
         match glassmenu::run(app::hwnd(), rows, None, cursor_pt()) {
             Some(1) => self.command(Cmd::Color(u32::MAX)),

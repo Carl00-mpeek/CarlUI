@@ -140,6 +140,11 @@ fn rect(x: f32, y: f32, w: f32, h: f32) -> RECT {
     RECT { left: x as i32, top: y as i32, right: (x + w) as i32, bottom: (y + h) as i32 }
 }
 
+/// Açık kutucuğun vurgu katmanı: açık temada yazı mürekkep kalır, zemin renklenir.
+fn tile_on() -> f32 {
+    if carlui_ui::tone::light() { 0.24 } else { 1.0 }
+}
+
 pub struct Panel {
     pub hwnd: HWND,
     comp: Compositor,
@@ -265,8 +270,8 @@ impl Panel {
         b.SetStartPoint(v2(0.0, 0.0))?;
         b.SetEndPoint(if horizontal { v2(1.0, 0.0) } else { v2(1.0, 1.0) })?;
         let stops = b.ColorStops()?;
-        stops.Append(&self.comp.CreateColorGradientStopWithOffsetAndColor(0.0, color(self.theme.accent.0))?)?;
-        stops.Append(&self.comp.CreateColorGradientStopWithOffsetAndColor(1.0, color(self.theme.accent.1))?)?;
+        stops.Append(&self.comp.CreateColorGradientStopWithOffsetAndColor(0.0, carlui_ui::glass::exact(self.theme.accent.0))?)?;
+        stops.Append(&self.comp.CreateColorGradientStopWithOffsetAndColor(1.0, carlui_ui::glass::exact(self.theme.accent.1))?)?;
         b.cast()
     }
 
@@ -296,7 +301,7 @@ impl Panel {
         self.radios = r;
         for (tile, on) in [(&self.wifi, r.wifi), (&self.bt, r.bluetooth)] {
             if let Some(t) = tile {
-                let _ = self.motion.fade(&t.on_layer, h!("Opacity"), if on == Some(true) { 1.0 } else { 0.0 }, 160, 0);
+                let _ = self.motion.fade(&t.on_layer, h!("Opacity"), if on == Some(true) { tile_on() } else { 0.0 }, 160, 0);
             }
         }
     }

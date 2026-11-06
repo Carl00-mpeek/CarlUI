@@ -415,7 +415,7 @@ impl Island {
                 let (bg, _) = self.rrect(bs, bs, 8.0 * s, &fill)?;
                 Self::place(&bg, bx, by + (ph - bs) / 2.0 + 1.0 * s)?;
                 kids.InsertAtTop(&bg)?;
-                let g = self.text.glyph(gfx, *glyph, (13.0 * s).round(), *alpha)?;
+                let g = carlui_ui::tone::literal_if(*id == 1 && c.pinned, || self.text.glyph(gfx, *glyph, (13.0 * s).round(), *alpha))?;
                 kids.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, bx + (bs - g.width) / 2.0, by + (ph - g.height) / 2.0 + 1.0 * s)?)?;
                 self.hits.push((Hit::ClipBtn(*id), RECT { left: bx as i32, top: by as i32, right: (bx + bs) as i32, bottom: (by + ph) as i32 }));
                 bx -= 4.0 * s;
@@ -495,8 +495,8 @@ impl Island {
             let (l, _, lh) = self.label(gfx, v.hint, 11.0, false, fw * 0.5, 0.75)?;
             Self::place(&l, pad + 14.0 * s + g.width, y + (hh - lh) / 2.0)?;
             kids.InsertAtTop(&l)?;
-            let (bl, blw, blh) = self.label(gfx, t!("Geri al", "Undo"), 11.0, true, 100.0 * s, 1.0)?;
-            let ug = self.text.glyph(gfx, '\u{E7A7}', (11.0 * s).round(), 1.0)?;
+            let (bl, blw, blh) = carlui_ui::tone::literal(|| self.label(gfx, t!("Geri al", "Undo"), 11.0, true, 100.0 * s, 1.0))?;
+            let ug = carlui_ui::tone::literal(|| self.text.glyph(gfx, '\u{E7A7}', (11.0 * s).round(), 1.0))?;
             let bh2 = (20.0 * s).round();
             let bw = (blw + ug.width + 22.0 * s).round();
             let bx = pad + fw - 4.0 * s - bw;
@@ -653,7 +653,7 @@ impl Island {
         // Sahte gölge + ince kenar: iki katman yuvarlak dikdörtgen.
         for (k, a) in [(6.0, 0x14u8), (3.0, 0x22)] {
             let k = k * s;
-            let (sh, _) = self.rrect(w + 2.0 * k, bh + 2.0 * k, 12.0 * s + k, &self.solid(Rgba(0, 0, 0, a))?)?;
+            let (sh, _) = self.rrect(w + 2.0 * k, bh + 2.0 * k, 12.0 * s + k, &self.shade(a)?)?;
             Self::place(&sh, -k, -k + 3.0 * s)?;
             root.Children()?.InsertAtTop(&sh)?;
         }
@@ -706,7 +706,7 @@ impl Island {
             g.SetSize(v2(w + 2.0 * k, h + 2.0 * k))?;
             g.StartAnimation(h!("Size"), &grow)?;
             let shape = self.comp.CreateSpriteShapeWithGeometry(&g)?;
-            shape.SetFillBrush(&self.solid(Rgba(0, 0, 0, a))?)?;
+            shape.SetFillBrush(&self.shade(a)?)?;
             let sv = self.comp.CreateShapeVisual()?;
             sv.SetRelativeSizeAdjustment(v2(1.0, 1.0))?;
             sv.SetSize(v2(2.0 * k, 2.0 * k))?;
@@ -766,7 +766,7 @@ impl Island {
         // Sağ üstte Kaydet ve X; kartın sağ kenarına bağlı (genişlerken kenarla gelir).
         let bh = (24.0 * s).round();
         let by = ((head - bh) / 2.0).round();
-        let (save_l, slw, slh) = self.label(gfx, t!("Kaydet", "Save"), 11.5, true, 100.0 * s, 1.0)?;
+        let (save_l, slw, slh) = carlui_ui::tone::literal(|| self.label(gfx, t!("Kaydet", "Save"), 11.5, true, 100.0 * s, 1.0))?;
         let sw = (slw + 22.0 * s).round();
         let xw = bh;
         let gap = 6.0 * s;

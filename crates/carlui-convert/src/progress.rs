@@ -101,6 +101,7 @@ impl Win {
             let trim = DWRITE_TRIMMING { granularity: DWRITE_TRIMMING_GRANULARITY_CHARACTER, delimiter: 0, delimiterCount: 0 };
             let sign = self.dw.CreateEllipsisTrimmingSign(&f).ok();
             let _ = f.SetTrimming(&trim, sign.as_ref());
+            let (c, a) = carlui_ui::tone::ink(c, a);
             let Ok(b) = rt.CreateSolidColorBrush(&col(c, a), None) else { return };
             let w: Vec<u16> = s.encode_utf16().collect();
             rt.DrawText(&w, &f, &r, &b, D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
@@ -109,6 +110,7 @@ impl Win {
 
     fn round(&self, rt: &ID2D1RenderTarget, r: D2D_RECT_F, rad: f32, c: u32, a: f32) {
         unsafe {
+            let (c, a) = carlui_ui::tone::fill(c, a);
             if let Ok(b) = rt.CreateSolidColorBrush(&col(c, a), None) {
                 rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect: r, radiusX: rad, radiusY: rad }, &b);
             }
@@ -132,7 +134,7 @@ impl Win {
         unsafe {
             rt.BeginDraw();
             rt.SetTransform(&Matrix3x2 { M11: s, M12: 0.0, M21: 0.0, M22: s, M31: 0.0, M32: 0.0 });
-            rt.Clear(Some(&col(0, 0.0)));
+            rt.Clear(Some(&carlui_ui::tone::backdrop()));
         }
         self.round(&rt, D2D_RECT_F { left: 0.0, top: 0.0, right: W, bottom: H }, 0.0, 0x16161A, 0.40);
         let (g, gc) = if st.failed {
@@ -268,13 +270,13 @@ pub fn run(shared: Arc<Shared>, accent: u32, start: impl FnOnce()) -> Result<()>
         let x = (work.left + work.right - pw) / 2;
         let y = work.bottom - ph - (96.0 * scale) as i32;
         let _ = SetWindowPos(hwnd, HWND_TOPMOST, x, y, pw, ph, SWP_NOACTIVATE);
-        let on: i32 = 1;
+        let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let round = DWMWCP_ROUND;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &round as *const _ as _, 4);
         let backdrop = DWMSBT_TRANSIENTWINDOW;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
-        let border: u32 = 0x00505050;
+        let border: u32 = if carlui_ui::tone::light() { 0x00E4DCD8 } else { 0x00505050 };
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &border as *const _ as _, 4);
         let _ = DwmExtendFrameIntoClientArea(hwnd, &windows::Win32::UI::Controls::MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
         shared.hwnd.store(hwnd.0 as isize, Ordering::SeqCst);
@@ -285,7 +287,7 @@ pub fn run(shared: Arc<Shared>, accent: u32, start: impl FnOnce()) -> Result<()>
                 factory: D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None).unwrap(),
                 dw: DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED).unwrap(),
                 scale,
-                accent,
+                accent: carlui_ui::tone::accent(accent),
                 hover_x: false,
                 closing: None,
             })

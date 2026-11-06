@@ -144,7 +144,7 @@ impl<V: View> Host<V> {
         unsafe {
             rt.BeginDraw();
             rt.SetTransform(&Matrix3x2 { M11: s, M12: 0.0, M21: 0.0, M22: s, M31: 0.0, M32: 0.0 });
-            rt.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
+            rt.Clear(Some(&crate::tone::backdrop()));
         }
         {
             let base: ID2D1RenderTarget = rt.cast()?;
@@ -392,6 +392,7 @@ pub fn run<V: View>(view: V, o: Opts) -> Result<V> {
         let hwnd = CreateWindowExW(ex, class, &HSTRING::from(o.title.as_str()), style, x, y, ww, wh, None, None, inst, None)?;
         let on = i32::from(!crate::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
+        crate::tone::caption(hwnd);
         let backdrop = DWMSBT_TRANSIENTWINDOW;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
         let corner = DWMWCP_ROUND;

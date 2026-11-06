@@ -32,7 +32,7 @@ use carlui_core::{
 };
 use carlui_ui::{
     gfx::Gfx,
-    glass::{color, v2, v3, Glass},
+    glass::{v2, v3, Glass},
     icons,
     motion::Motion,
 };
@@ -238,7 +238,7 @@ impl Dock {
         let accent = gfx.surface(aw, ah, |dc| icons::draw_dot(dc, aw, ah, Some(((a0.0, a0.1, a0.2), (a1.0, a1.1, a1.2)))))?;
         let dot_brush = comp.CreateSurfaceBrushWithSurface(&dot)?;
         let active_brush = comp.CreateSurfaceBrushWithSurface(&accent)?;
-        let hl_brush = comp.CreateColorBrushWithColor(color(theme.hover))?;
+        let hl_brush = comp.CreateColorBrushWithColor(carlui_ui::glass::exact(theme.hover))?;
 
         let mut dock = Self {
             hwnd,

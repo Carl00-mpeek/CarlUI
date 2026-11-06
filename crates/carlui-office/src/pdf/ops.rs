@@ -189,7 +189,7 @@ impl PdfView {
         ];
         let mut rows = vec![Row::Header(t!("Yazı rengi", "Font color").into())];
         for (i, (c, n)) in colors.iter().enumerate() {
-            rows.push(Row::Item { id: 10 + i, text: n.to_string(), icon: Icon::Glyph('\u{E8D3}', Some(*c)) });
+            rows.push(Row::Item { id: 10 + i, text: n.to_string(), icon: Icon::Swatch('\u{E8D3}', *c) });
         }
         if let Some(id @ 10..=15) = glassmenu::run(app::hwnd(), rows, None, cursor_pt()) {
             self.note_color = colors[id - 10].0;
@@ -353,7 +353,7 @@ impl PdfView {
             x += ui::tool(p, x, y, '\u{E8E8}', Act::View(Cmd::Size(1)), false);
             let cr = R::new(x, y, 32.0, 30.0);
             x += ui::tool(p, x, y, '\u{E8D3}', Act::View(Cmd::ColorMenu), false);
-            p.fill(R::new(cr.x + 8.0, cr.bottom() - 6.0, 16.0, 3.0), self.note_color, 1.0);
+            carlui_ui::tone::literal(|| p.fill(R::new(cr.x + 8.0, cr.bottom() - 6.0, 16.0, 3.0), self.note_color, 1.0));
         }
         x += ui::sep(p, x, y);
         x += ui::tool_text(p, x, y, t!("Birleştir", "Merge"), Act::View(Cmd::Merge), false, false);

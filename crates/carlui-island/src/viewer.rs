@@ -152,7 +152,7 @@ impl Viewer {
         let r = (18.0 * s).round();
         for (k, a) in [(3.0, 0x26u8), (9.0, 0x1A), (17.0, 0x10), (27.0, 0x08)] {
             let k = k * s;
-            let sh = self.rrect(tw + 2.0 * k, th + 2.0 * k, r + k, Rgba(0, 0, 0, a))?;
+            let sh = carlui_ui::tone::literal(|| self.rrect(tw + 2.0 * k, th + 2.0 * k, r + k, Rgba(0, 0, 0, a)))?;
             sh.SetOffset(v3(-k, -k + 8.0 * s))?;
             layer.Children()?.InsertAtTop(&sh)?;
             frame.push(sh.cast()?);

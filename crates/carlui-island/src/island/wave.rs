@@ -74,7 +74,7 @@ impl Island {
         mask.SetEndPoint(v2(1.0, 0.0))?;
         let stops = mask.ColorStops()?;
         for (o, a) in [(0.0, 0u8), (0.45, 70), (1.0, 255)] {
-            stops.Append(&comp.CreateColorGradientStopWithOffsetAndColor(o, color(Rgba(255, 255, 255, a)))?)?;
+            stops.Append(&comp.CreateColorGradientStopWithOffsetAndColor(o, carlui_ui::glass::exact(Rgba(255, 255, 255, a)))?)?;
         }
         let brush = comp.CreateMaskBrush()?;
         brush.SetSource(&src)?;

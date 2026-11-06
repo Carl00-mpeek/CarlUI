@@ -46,8 +46,10 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         } else if p.hover(s) {
             p.round(s.inset(-3.0), sw / 2.0 + 3.0, 0xFFFFFF, 0.25);
         }
-        p.round(s, sw / 2.0, hex(a), 1.0);
-        p.round(s.inset(sw * 0.28), sw * 0.22, hex(b), 1.0);
+        carlui_ui::tone::literal(|| {
+            p.round(s, sw / 2.0, hex(a), 1.0);
+            p.round(s.inset(sw * 0.28), sw * 0.22, hex(b), 1.0);
+        });
         p.hit(s.inset(-3.0), edit(move |c| c.theme.palette = pal));
         x += sw + gap;
     }

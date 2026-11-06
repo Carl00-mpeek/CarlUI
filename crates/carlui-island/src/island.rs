@@ -351,14 +351,19 @@ impl Island {
         self.comp.CreateColorBrushWithColor(color(c))?.cast()
     }
 
+    /// Gölge: temadan bağımsız hep koyu.
+    fn shade(&self, a: u8) -> Result<CompositionBrush> {
+        self.comp.CreateColorBrushWithColor(carlui_ui::glass::exact(Rgba(0, 0, 0, a)))?.cast()
+    }
+
     fn accent_brush(&self) -> Result<CompositionBrush> {
         let b = self.comp.CreateLinearGradientBrush()?;
         b.SetStartPoint(v2(0.0, 0.0))?;
         b.SetEndPoint(v2(1.0, 0.0))?;
         let stops = b.ColorStops()?;
         let (c0, c1) = self.accent_colors();
-        stops.Append(&self.comp.CreateColorGradientStopWithOffsetAndColor(0.0, color(c0))?)?;
-        stops.Append(&self.comp.CreateColorGradientStopWithOffsetAndColor(1.0, color(c1))?)?;
+        stops.Append(&self.comp.CreateColorGradientStopWithOffsetAndColor(0.0, carlui_ui::glass::exact(c0))?)?;
+        stops.Append(&self.comp.CreateColorGradientStopWithOffsetAndColor(1.0, carlui_ui::glass::exact(c1))?)?;
         b.cast()
     }
 
@@ -370,7 +375,12 @@ impl Island {
                 let s = s.clamp(0.5, 0.85);
                 let a = hsv_to_rgb(h, s, 0.95);
                 let b = hsv_to_rgb((h + 25.0).rem_euclid(360.0), s, 0.85);
-                (Rgba(a.0, a.1, a.2, 255), Rgba(b.0, b.1, b.2, 255))
+                let (a, b) = (Rgba(a.0, a.1, a.2, 255), Rgba(b.0, b.1, b.2, 255));
+                if carlui_ui::tone::light() {
+                    (carlui_core::theme::light_rgba(a), carlui_core::theme::light_rgba(b))
+                } else {
+                    (a, b)
+                }
             }
             _ => self.theme.accent,
         }
@@ -431,7 +441,7 @@ impl Island {
         let c = self.comp.CreateContainerVisual()?;
         let (bg, _) = self.rrect(px, px, radius, &self.accent_brush()?)?;
         c.Children()?.InsertAtTop(&bg)?;
-        let g = self.text.glyph(gfx, '\u{EC4F}', (px * 0.5).round(), 0.95)?;
+        let g = carlui_ui::tone::literal(|| self.text.glyph(gfx, '\u{EC4F}', (px * 0.5).round(), 0.95))?;
         c.Children()?.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, (px - g.width) / 2.0, (px - g.height) / 2.0)?)?;
         c.cast()
     }
@@ -644,7 +654,7 @@ impl Island {
                         let c = self.comp.CreateContainerVisual()?;
                         let (bg, _) = self.rrect(ipx, ipx, 10.0 * s, &self.accent_brush()?)?;
                         c.Children()?.InsertAtTop(&bg)?;
-                        let g = self.text.glyph(gfx, '\u{EA8F}', (ipx * 0.5).round(), 0.95)?;
+                        let g = carlui_ui::tone::literal(|| self.text.glyph(gfx, '\u{EA8F}', (ipx * 0.5).round(), 0.95))?;
                         c.Children()?.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, (ipx - g.width) / 2.0, (ipx - g.height) / 2.0)?)?;
                         c.cast()?
                     }
@@ -860,7 +870,7 @@ impl Island {
                 // büyüdükçe cam açılır. Tek renkli bir katman; ek yük yok denecek kadar az.
                 let veil = self.comp.CreateSpriteVisual()?;
                 veil.SetSize(v2(w, h))?;
-                veil.SetBrush(&self.comp.CreateColorBrushWithColor(color(Rgba(235, 238, 245, 0x55)))?)?;
+                veil.SetBrush(&self.comp.CreateColorBrushWithColor(carlui_ui::glass::exact(Rgba(235, 238, 245, 0x55)))?)?;
                 c.Children()?.InsertAtTop(&veil)?;
                 mo.fade(&veil, h!("Opacity"), 0.0, 240, 150)?;
             } else if was == View::Hidden {

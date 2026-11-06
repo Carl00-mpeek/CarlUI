@@ -57,6 +57,49 @@ impl Palette {
     }
 }
 
+/// sRGB göreli parlaklığı (WCAG); `c` = 0xRRGGBB.
+fn luminance(c: u32) -> f32 {
+    let lin = |v: u32| {
+        let v = (v & 0xFF) as f32 / 255.0;
+        if v <= 0.03928 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    };
+    0.2126 * lin(c >> 16) + 0.7152 * lin(c >> 8) + 0.0722 * lin(c)
+}
+
+/// İki rengin WCAG kontrast oranı.
+pub fn contrast(a: u32, b: u32) -> f32 {
+    let (x, y) = (luminance(a), luminance(b));
+    (x.max(y) + 0.05) / (x.min(y) + 0.05)
+}
+
+/// Rengi tonunu koruyarak `on` üstünde `ratio` kontrastına ulaşana dek koyulaştırır.
+pub fn deepen(c: u32, on: u32, ratio: f32) -> u32 {
+    let mut k = 1.0f32;
+    let mut out = c;
+    while contrast(out, on) < ratio && k > 0.1 {
+        k -= 0.03;
+        let s = |v: u32| ((v & 0xFF) as f32 * k).round() as u32;
+        out = s(c >> 16) << 16 | s(c >> 8) << 8 | s(c);
+    }
+    out
+}
+
+/// Açık temada vurgu: beyaz zeminde görünür, üstündeki beyaz yazı okunur.
+/// Gri vurgu serin bir arduvaz tonuna oturur; yoksa yüzey gibi çevrilirdi.
+pub fn light_accent(c: u32) -> u32 {
+    // Üstündeki yazı yarı saydam olabilir; hedef bu payı içerir.
+    let out = deepen(c, 0xFFFFFF, 5.2);
+    let ch = [out >> 16 & 0xFF, out >> 8 & 0xFF, out & 0xFF];
+    let spread = ch.iter().max().unwrap_or(&0) - ch.iter().min().unwrap_or(&0);
+    if spread > 48 { out } else { 0x3A4A6B }
+}
+
+/// `light_accent`in `Rgba` biçimi; alfa korunur.
+pub fn light_rgba(c: Rgba) -> Rgba {
+    let v = light_accent((c.0 as u32) << 16 | (c.1 as u32) << 8 | c.2 as u32);
+    Rgba((v >> 16) as u8, (v >> 8) as u8, v as u8, c.3)
+}
+
 /// Ayarlardan türetilmiş, çizime hazır tema.
 #[derive(Clone, Copy, Debug)]
 pub struct Theme {
@@ -78,6 +121,22 @@ pub struct Theme {
 impl Theme {
     pub fn from_config(t: &crate::config::ThemeConfig) -> Self {
         let density = t.glass_density.clamp(0.0, 1.0);
+        let (radius_scale, anim_scale) = (t.corner_radius.clamp(0.3, 1.5), 1.0 / t.animation_speed.clamp(0.25, 3.0));
+        if t.is_light() {
+            // Beyaz cam: süt beyazı tint, parlak üst kenar, serin ince alt kenar.
+            let (a0, a1) = t.palette.accent();
+            return Self {
+                accent: (light_rgba(a0), light_rgba(a1)),
+                glass_tint: Rgba(255, 255, 255, (190.0 + density * 50.0) as u8),
+                rim_top: Rgba(255, 255, 255, 0xE6),
+                rim_bottom: Rgba(20, 24, 38, 0x26),
+                gloss: Rgba(255, 255, 255, 0x50),
+                hover: Rgba(40, 60, 110, 0x16),
+                separator: Rgba(20, 24, 38, 0x22),
+                radius_scale,
+                anim_scale,
+            };
+        }
         Self {
             accent: t.palette.accent(),
             glass_tint: Rgba(14, 16, 28, (110.0 + density * 120.0) as u8),
@@ -86,8 +145,8 @@ impl Theme {
             gloss: Rgba(255, 255, 255, 0x18),
             hover: Rgba(255, 255, 255, 0x1E),
             separator: Rgba(255, 255, 255, 0x2A),
-            radius_scale: t.corner_radius.clamp(0.3, 1.5),
-            anim_scale: 1.0 / t.animation_speed.clamp(0.25, 3.0),
+            radius_scale,
+            anim_scale,
         }
     }
 }

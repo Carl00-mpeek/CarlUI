@@ -321,11 +321,11 @@ impl App {
         unsafe {
             rt.BeginDraw();
             rt.SetTransform(&Matrix3x2 { M11: s, M12: 0.0, M21: 0.0, M22: s, M31: 0.0, M32: 0.0 });
-            rt.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
+            rt.Clear(Some(&carlui_ui::tone::backdrop()));
         }
         {
             let base: ID2D1RenderTarget = rt.cast()?;
-            let mut p = P { rt: &base, fonts: &self.fonts, mouse: self.mouse, hits: &mut hits, accent: self.accent };
+            let mut p = P { rt: &base, fonts: &self.fonts, mouse: self.mouse, hits: &mut hits, accent: carlui_ui::tone::accent(self.accent) };
             p.fill(R::new(0.0, 0.0, w, h), 0x101014, 0.30);
             p.fill(R::new(0.0, 0.0, SIDEBAR, h), 0x000000, 0.12);
             self.sidebar(&mut p, h);
@@ -375,7 +375,7 @@ impl App {
                 let r = R::new(SIDEBAR + (w - SIDEBAR - tw) / 2.0, h - 52.0 + 24.0 * (1.0 - t), tw, 34.0);
                 p.round(r, 17.0, 0x202024, 0.96 * t);
                 p.outline(r, 17.0, 0xFFFFFF, 0.12 * t);
-                p.glyph('\u{E73E}', R::new(r.x + 12.0, r.y, 16.0, r.h), 12.0, self.accent, t);
+                p.glyph('\u{E73E}', R::new(r.x + 12.0, r.y, 16.0, r.h), 12.0, carlui_ui::tone::accent(self.accent), t);
                 p.text(m, R::new(r.x + 30.0, r.y, r.w - 38.0, r.h), 13.0, false, TEXT, 0.95 * t, Align::Left);
             }
         }
@@ -406,7 +406,7 @@ impl App {
         let sr = R::new(10.0, 56.0 + at * step, SIDEBAR - 20.0, ih);
         p.round(sr, 7.0, 0xFFFFFF, 0.10);
         let stretch = ((at - sel).abs() * 10.0).min(8.0);
-        p.round(R::new(sr.x, sr.y + ih * 0.26 - stretch, 3.0, sr.h - ih * 0.52 + 2.0 * stretch), 1.5, self.accent, 1.0);
+        p.round(R::new(sr.x, sr.y + ih * 0.26 - stretch, 3.0, sr.h - ih * 0.52 + 2.0 * stretch), 1.5, carlui_ui::tone::accent(self.accent), 1.0);
         for (i, pg) in Page::ALL.iter().enumerate() {
             let r = R::new(10.0, 56.0 + i as f32 * step, SIDEBAR - 20.0, ih);
             let hv = tween::to(tween::key(("side-h", i)), if self.page != *pg && p.hover(r) { 1.0 } else { 0.0 }, 18.0);
@@ -609,6 +609,7 @@ fn main() -> Result<()> {
         let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), CLASS, &HSTRING::from(carlui_core::t!("CarlUI Ayarları", "CarlUI Settings")), WS_OVERLAPPEDWINDOW, wa.left + (aw - ww) / 2, wa.top + (ah - wh) / 2, ww, wh, None, None, inst, None)?;
         let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
+        carlui_ui::tone::caption(hwnd);
         let backdrop = DWMSBT_TRANSIENTWINDOW;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
         let _ = DwmExtendFrameIntoClientArea(hwnd, &MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
@@ -632,7 +633,7 @@ fn main() -> Result<()> {
             scale: GetDpiForWindow(hwnd).max(96) as f32 / 96.0,
             mouse: (-1.0, -1.0),
             hits: Vec::new(),
-            accent: glassmenu::accent(),
+            accent: glassmenu::system_accent(),
             cfg,
             page,
             recording: None,

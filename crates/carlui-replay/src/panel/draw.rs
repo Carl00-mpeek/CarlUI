@@ -76,7 +76,7 @@ impl Panel {
             p.round(R::new(x - 2.0, tr.y, 4.0, 4.0), 2.0, if x <= kx { 0x000000 } else { TEXT }, 0.45);
         }
         let k = if hot { 8.0 } else { 7.0 };
-        p.round(R::new(kx - k, tr.y + 2.0 - k, k * 2.0, k * 2.0), k, 0xFFFFFF, 0.95);
+        p.knob(kx, tr.y + 2.0, k);
         // Uçlardaki duraklar kenardan da tutulsun: alan düğme yarıçapı kadar geniş.
         p.hit(R::new(r.x - 10.0, r.y, r.w + 20.0, r.h), A::Slide(slot));
         self.sliders.push((slot, R::new(tr.x, r.y, tr.w, r.h)));

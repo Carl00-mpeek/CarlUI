@@ -301,8 +301,7 @@ impl DocView {
             if r.bottom() < area.y || r.y > area.bottom() {
                 continue;
             }
-            p.fill(R::new(r.x + 2.0, r.y + 3.0, r.w, r.h), 0x000000, 0.35);
-            p.fill(r, 0xFFFFFF, 1.0);
+            p.paper(r);
         }
         let (a, b) = self.ed.cur.range();
         let sel = a != b;
@@ -316,11 +315,11 @@ impl DocView {
                 continue;
             }
             let range = (sel && i >= a.p && i <= b.p).then(|| (if i == a.p { a.c } else { 0 }, if i == b.p { b.c } else { para.len() + 1 }));
-            layout::draw(p, &self.d, para, l, &g, (self.px + g.left, sy), range, &mut self.imgs);
+            carlui_ui::tone::literal(|| layout::draw(p, &self.d, para, l, &g, (self.px + g.left, sy), range, &mut self.imgs));
         }
         if app::caret_on() && !sel {
             if let Some((x, y, h)) = self.nav().caret(self.ed.cur.at) {
-                p.fill(R::new(self.px + x, top + y, (1.5 * self.zoom).max(1.0), h), 0x000000, 1.0);
+                carlui_ui::tone::literal(|| p.fill(R::new(self.px + x, top + y, (1.5 * self.zoom).max(1.0), h), 0x000000, 1.0));
             }
         }
         unsafe {

@@ -10,6 +10,26 @@
 
 (() => {
   if (window.top !== window || window.__carlVault) return;
+
+  // Tarayıcı açık temadaysa şeritler beyaz cam olur; yazılar AA kontrastındadır.
+  const LIGHT = `
+  @media (prefers-color-scheme: light) {
+    .pill, .yes, .use { background: #7a2fc0; }
+    .pill:hover, .yes:hover, .use:hover { background: #6a25ad; }
+    .menu, .note, .box { background: rgba(255,255,255,.92); color: #141826; -webkit-backdrop-filter: blur(18px) saturate(1.5); backdrop-filter: blur(18px) saturate(1.5);
+      box-shadow: 0 8px 28px rgba(20,24,38,.18), 0 0 0 1px rgba(20,24,38,.08); }
+    .menu button { color: #141826; }
+    .menu button:hover, .menu button:focus-visible { background: #eceaf6; }
+    .menu span, .nm span, .row label { color: #565266; }
+    .head, .t { color: #6a25ad; }
+    .msg b, .pw { color: #141826; }
+    .pw { background: #f1f0f8; }
+    .nm input { background: #fff; color: #141826; border-color: #c9c6d6; }
+    .nm input:focus { border-color: #7a2fc0; }
+    .no, .again { background: #eceaf6; color: #141826; }
+    .no:hover, .again:hover { background: #dfdcef; }
+    .no:focus-visible, .again:focus-visible { outline-color: #7a2fc0; }
+  }`;
   window.__carlVault = true;
 
   // Firefox `browser` (söz döndürür), Chromium `chrome` (geri çağırma).
@@ -92,6 +112,7 @@
   .note { position: absolute; right: 0; top: 28px; padding: 7px 9px; border-radius: 6px; background: #23202a; color: #eee;
     font-weight: 400; white-space: nowrap; display: none; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
   .note.on { display: block; }
+  ${LIGHT}
 </style>
 <button class="pill" title="Carl Vault ile doldur">
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.6v4.1c0 3.2 2.3 5.8 5.5 6.8 3.2-1 5.5-3.6 5.5-6.8V3.6z"/><rect x="5.6" y="7.2" width="4.8" height="3.6" rx=".6" fill="currentColor" stroke="none"/><path d="M6.6 7.2V6a1.4 1.4 0 0 1 2.8 0v1.2"/></svg>
@@ -332,6 +353,7 @@
   .no { background: #3a3445; color: #eee; }
   .no:hover { background: #48405a; }
   button:focus-visible { outline: 2px solid #fff; outline-offset: -3px; }
+  ${LIGHT}
 </style>
 <div class="box" role="dialog" aria-label="Carl Vault">
   <div class="head"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 3.6v4.1c0 3.2 2.3 5.8 5.5 6.8 3.2-1 5.5-3.6 5.5-6.8V3.6z"/></svg>Carl Vault</div>
@@ -492,6 +514,7 @@
   .use:hover { background: #9b55d6; }
   .again { background: #3a3445; color: #eee; }
   .again:hover { background: #48405a; }
+  ${LIGHT}
 </style>
 <div class="box">
   <div class="t"></div>

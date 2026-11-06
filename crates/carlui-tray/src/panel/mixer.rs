@@ -24,7 +24,7 @@ impl Panel {
         };
         let (bg, _) = self.rrect(bs, bs, bs / 2.0, &brush)?;
         rk.InsertAtTop(&bg)?;
-        let g = self.text.glyph(gfx, if self.audio_open { '\u{E70E}' } else { '\u{E70D}' }, 11.0 * s, 0.95)?;
+        let g = carlui_ui::tone::literal_if(self.audio_open, || self.text.glyph(gfx, if self.audio_open { '\u{E70E}' } else { '\u{E70D}' }, 11.0 * s, 0.95))?;
         rk.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, (bs - g.width) / 2.0, (bs - g.height) / 2.0)?)?;
         content.Children()?.InsertAtTop(&row)?;
         self.audio_btn = Some(rect(x, by, bs, bs));
@@ -63,7 +63,7 @@ impl Panel {
             rk.InsertAtTop(&bg)?;
             if d.default {
                 let (on, _) = self.rrect(row_w, row_h, 10.0 * s * rs, &self.accent_brush(true)?)?;
-                on.SetOpacity(0.45)?;
+                on.SetOpacity(if carlui_ui::tone::light() { 0.2 } else { 0.45 })?;
                 rk.InsertAtTop(&on)?;
             }
             let g = self.text.glyph(gfx, '\u{E7F5}', 14.0 * s, if d.default { 0.95 } else { 0.7 })?;

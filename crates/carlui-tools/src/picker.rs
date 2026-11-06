@@ -119,7 +119,8 @@ impl Picker {
             let _ = DeleteObject(frame);
             // Etiket: renk örneği + kod.
             let lr = RECT { left: x, top: y + size, right: x + size, bottom: r.bottom - oy };
-            let bg = CreateSolidBrush(COLORREF(0x1A1616));
+            let light = carlui_ui::tone::light();
+            let bg = CreateSolidBrush(COLORREF(if light { 0xFFFFFF } else { 0x1A1616 }));
             FillRect(dc, &lr, bg);
             let _ = DeleteObject(bg);
             let pad = (lr.bottom - lr.top) / 5;
@@ -129,7 +130,7 @@ impl Picker {
             let _ = DeleteObject(swb);
             let of = SelectObject(dc, self.font);
             SetBkMode(dc, TRANSPARENT);
-            SetTextColor(dc, COLORREF(0xF0F0F0));
+            SetTextColor(dc, COLORREF(if light { 0x261814 } else { 0xF0F0F0 }));
             let mut tr = RECT { left: sw.right + pad, ..lr };
             let mut text: Vec<u16> = color::format((cr, cg, cb), self.format).encode_utf16().collect();
             DrawTextW(dc, &mut text, &mut tr, DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_NOPREFIX);

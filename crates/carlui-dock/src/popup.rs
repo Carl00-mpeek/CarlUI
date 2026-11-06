@@ -11,7 +11,7 @@
 use carlui_core::theme::Theme;
 use carlui_ui::{
     gfx::Gfx,
-    glass::{color, v2, v3, Glass},
+    glass::{v2, v3, Glass},
     icons,
     motion::Motion,
     text::Text,
@@ -189,7 +189,7 @@ impl Popup {
 
         let glass = Glass::new(&self.comp, &self.theme, (18.0 * s * self.theme.radius_scale).round())?;
         let content = glass.content.Children()?;
-        let hl_brush = self.comp.CreateColorBrushWithColor(color(self.theme.hover))?;
+        let hl_brush = self.comp.CreateColorBrushWithColor(carlui_ui::glass::exact(self.theme.hover))?;
         let close_brush = self.comp.CreateSurfaceBrushWithSurface(&self.close_surface)?;
 
         for (i, (src, title)) in items.iter().take(n).enumerate() {

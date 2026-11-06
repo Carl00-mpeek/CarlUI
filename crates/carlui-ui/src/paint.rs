@@ -74,9 +74,14 @@ pub enum Align {
     Right,
 }
 
-pub fn rgb(c: u32, a: f32) -> D2D1_COLOR_F {
-    let c = crate::tone::hex(c);
+fn exact(c: u32, a: f32) -> D2D1_COLOR_F {
     D2D1_COLOR_F { r: ((c >> 16) & 0xFF) as f32 / 255.0, g: ((c >> 8) & 0xFF) as f32 / 255.0, b: (c & 0xFF) as f32 / 255.0, a }
+}
+
+/// Dolgu ve kenar rengi (açık temada cama çevrilir).
+pub fn rgb(c: u32, a: f32) -> D2D1_COLOR_F {
+    let (c, a) = crate::tone::fill(c, a);
+    exact(c, a)
 }
 
 pub struct Fonts {
@@ -192,6 +197,12 @@ impl<A: Clone> Painter<'_, A> {
         unsafe { self.rt.CreateSolidColorBrush(&rgb(c, a), None).ok() }
     }
 
+    /// Yazı ve simge fırçası (açık temada okunurluk için koyulaşır).
+    fn pen(&self, c: u32, a: f32) -> Option<ID2D1SolidColorBrush> {
+        let (c, a) = crate::tone::ink(c, a);
+        unsafe { self.rt.CreateSolidColorBrush(&exact(c, a), None).ok() }
+    }
+
     pub fn hover(&self, r: R) -> bool {
         HOVERS.with(|h| { if let Some(v) = h.borrow_mut().as_mut() { v.push(r) } });
         r.contains(self.mouse)
@@ -227,13 +238,13 @@ impl<A: Clone> Painter<'_, A> {
     }
 
     pub fn text(&self, s: &str, r: R, size: f32, bold: bool, c: u32, a: f32, align: Align) {
-        let (Some(f), Some(b)) = (self.fonts.get(size, bold, align, false), self.brush(c, a)) else { return };
+        let (Some(f), Some(b)) = (self.fonts.get(size, bold, align, false), self.pen(c, a)) else { return };
         let w: Vec<u16> = s.encode_utf16().collect();
         unsafe { self.rt.DrawText(&w, &f, &r.d2d(), &b, D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL) };
     }
 
     pub fn glyph(&self, g: char, r: R, size: f32, c: u32, a: f32) {
-        let (Some(f), Some(b)) = (self.fonts.get(size, false, Align::Center, true), self.brush(c, a)) else { return };
+        let (Some(f), Some(b)) = (self.fonts.get(size, false, Align::Center, true), self.pen(c, a)) else { return };
         let w: Vec<u16> = g.to_string().encode_utf16().collect();
         unsafe { self.rt.DrawText(&w, &f, &r.d2d(), &b, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL) };
     }
@@ -248,6 +259,30 @@ impl<A: Clone> Painter<'_, A> {
             self.glyph(g, r, size, c, a);
             self.rt.SetTransform(&old);
         }
+    }
+
+    /// Belge sayfası: her temada beyaz kâğıt. Açık temada beyaz camdan yumuşak
+    /// gölge ve ince kenarla ayrılır.
+    pub fn paper(&self, r: R) {
+        let light = crate::tone::light();
+        crate::tone::literal(|| {
+            self.fill(R::new(r.x + 2.0, r.y + 3.0, r.w, r.h), 0x000000, if light { 0.10 } else { 0.35 });
+            self.fill(r, 0xFFFFFF, 1.0);
+            if light {
+                self.outline(r, 0.0, 0x141826, 0.12);
+            }
+        });
+    }
+
+    /// Kaydırıcı topuzu: her temada beyaz; açık temada ince kenarla seçilir.
+    pub fn knob(&self, x: f32, y: f32, k: f32) {
+        let r = R::new(x - k, y - k, k * 2.0, k * 2.0);
+        crate::tone::literal(|| {
+            self.round(r, k, 0xFFFFFF, 0.95);
+            if crate::tone::light() {
+                self.outline(r, k, 0x141826, 0.28);
+            }
+        });
     }
 
     /// Satır içi küçük anahtar (etiketsiz). Kapalıyken soluk. Topuz kayar,
@@ -308,6 +343,7 @@ impl<A: Clone> Painter<'_, A> {
                 let _ = sink.Close();
             }
             self.rt.PushAxisAlignedClip(&r.d2d(), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+            let color = crate::tone::mark(color);
             if let Some(b) = self.brush(color, 0.22) {
                 self.rt.FillGeometry(&area, &b, None);
             }
@@ -323,7 +359,7 @@ impl<A: Clone> Painter<'_, A> {
         self.round(r, r.h / 2.0, 0xFFFFFF, 0.08);
         let w = (r.w * frac.clamp(0.0, 1.0)).max(if frac > 0.0 { r.h } else { 0.0 });
         if w > 0.0 {
-            self.round(R::new(r.x, r.y, w, r.h), r.h / 2.0, color, 0.9);
+            self.round(R::new(r.x, r.y, w, r.h), r.h / 2.0, crate::tone::mark(color), 0.9);
         }
     }
 

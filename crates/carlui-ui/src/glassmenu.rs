@@ -32,6 +32,8 @@ pub enum Icon {
     None,
     /// Segoe Fluent Icons glifi ve isteğe bağlı renk (0xRRGGBB).
     Glyph(char, Option<u32>),
+    /// Renk seçeneği: glif her temada gerçek rengiyle çizilir.
+    Swatch(char, u32),
     Image(IWICFormatConverter),
 }
 
@@ -72,13 +74,30 @@ thread_local! {
     static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
 }
 
-fn rgb(c: u32, a: f32) -> D2D1_COLOR_F {
-    let c = crate::tone::hex(c);
+fn exact(c: u32, a: f32) -> D2D1_COLOR_F {
     D2D1_COLOR_F { r: ((c >> 16) & 0xFF) as f32 / 255.0, g: ((c >> 8) & 0xFF) as f32 / 255.0, b: (c & 0xFF) as f32 / 255.0, a }
 }
 
-/// Windows vurgu renginin koyu zemin için açık tonu (Ayarlar > Kişiselleştirme > Renkler).
+/// Dolgu rengi (açık temada cama çevrilir).
+fn rgb(c: u32, a: f32) -> D2D1_COLOR_F {
+    let (c, a) = crate::tone::fill(c, a);
+    exact(c, a)
+}
+
+/// Yazı ve simge rengi (açık temada mürekkebe çevrilir).
+fn pen(c: u32, a: f32) -> D2D1_COLOR_F {
+    let (c, a) = crate::tone::ink(c, a);
+    exact(c, a)
+}
+
+/// Windows vurgu renginin geçerli temaya uygun tonu (Ayarlar > Kişiselleştirme > Renkler).
 pub fn accent() -> u32 {
+    crate::tone::accent(system_accent())
+}
+
+/// Windows vurgu renginin koyu zemin için açık tonu. Temayı canlı izleyen
+/// pencereler bunu saklar, çizerken `tone::accent`ten geçirir.
+pub fn system_accent() -> u32 {
     unsafe {
         let mut buf = [0u8; 32];
         let mut len = buf.len() as u32;
@@ -197,7 +216,7 @@ impl State {
         let ht = self.height();
         unsafe {
             rt.BeginDraw();
-            rt.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
+            rt.Clear(Some(&crate::tone::backdrop()));
             let brush = |c: D2D1_COLOR_F| rt.CreateSolidColorBrush(&c, None);
             // Cam: akriliğin üstüne hafif koyu ton, üstte ince parlama.
             let all = D2D_RECT_F { left: 0.0, top: 0.0, right: w, bottom: ht };
@@ -209,8 +228,8 @@ impl State {
             )?;
             let grad = rt.CreateLinearGradientBrush(&D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES { startPoint: D2D_POINT_2F { x: 0.0, y: 0.0 }, endPoint: D2D_POINT_2F { x: 0.0, y: 90.0 } }, None, &shine)?;
             rt.FillRectangle(&D2D_RECT_F { bottom: 90.0f32.min(ht), ..all }, &grad);
-            let white = brush(rgb(0xFFFFFF, 0.93))?;
-            let dim = brush(rgb(0xFFFFFF, 0.55))?;
+            let white = brush(pen(0xFFFFFF, 0.93))?;
+            let dim = brush(pen(0xFFFFFF, 0.55))?;
             let accent = brush(self.accent)?;
             let line = brush(rgb(0xFFFFFF, 0.10))?;
             let hover = brush(rgb(0xFFFFFF, 0.10))?;
@@ -226,7 +245,12 @@ impl State {
                 let draw_icon = |icon: &Icon| match icon {
                     Icon::Glyph(c, col) => {
                         let t: Vec<u16> = c.to_string().encode_utf16().collect();
-                        let b = col.map(|c| brush(rgb(c, 1.0)).ok()).flatten();
+                        let b = col.map(|c| brush(pen(c, 1.0)).ok()).flatten();
+                        rt.DrawText(&t, &glyphs, &D2D_RECT_F { left: 12.0, top: imid - ITEM_H / 2.0, right: 12.0 + ICON + 6.0, bottom: imid + ITEM_H / 2.0 }, b.as_ref().unwrap_or(&white), D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+                    }
+                    Icon::Swatch(c, col) => {
+                        let t: Vec<u16> = c.to_string().encode_utf16().collect();
+                        let b = brush(exact(*col, 1.0)).ok();
                         rt.DrawText(&t, &glyphs, &D2D_RECT_F { left: 12.0, top: imid - ITEM_H / 2.0, right: 12.0 + ICON + 6.0, bottom: imid + ITEM_H / 2.0 }, b.as_ref().unwrap_or(&white), D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
                     }
                     Icon::Image(_) => {
@@ -369,7 +393,7 @@ pub fn run(owner: HWND, rows: Vec<Row>, accent: Option<u32>, at: (i32, i32)) -> 
         };
         tops.push(tops.last().unwrap() + h);
     }
-    let st = State { rows, tops, width, scale, hover: None, result: None, done: false, accent: accent.map(|c| rgb(c, 1.0)).unwrap_or(rgb(0xFFFFFF, 0.55)), factory, dw, rt: None, bitmaps: Vec::new() };
+    let st = State { rows, tops, width, scale, hover: None, result: None, done: false, accent: accent.map(|c| pen(c, 1.0)).unwrap_or(pen(0xFFFFFF, 0.55)), factory, dw, rt: None, bitmaps: Vec::new() };
     let (pw, ph) = ((st.width * scale).ceil() as i32, (st.height() * scale).ceil() as i32);
     // Ekrana sığdır.
     let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
@@ -389,7 +413,7 @@ pub fn run(owner: HWND, rows: Vec<Row>, accent: Option<u32>, at: (i32, i32)) -> 
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &round as *const _ as _, 4);
         let backdrop = DWMSBT_TRANSIENTWINDOW;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
-        let border: u32 = 0x00505050;
+        let border: u32 = if crate::tone::light() { 0x00E4DCD8 } else { 0x00505050 };
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &border as *const _ as _, 4);
         let _ = DwmExtendFrameIntoClientArea(hwnd, &windows::Win32::UI::Controls::MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
         let _ = ShowWindow(hwnd, SW_SHOW);

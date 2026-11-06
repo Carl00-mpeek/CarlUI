@@ -14,8 +14,8 @@ use windows::{
 };
 
 fn color(r: u8, g: u8, b: u8, a: f32) -> D2D1_COLOR_F {
-    let (r, g, b) = crate::tone::rgb8(r, g, b);
-    D2D1_COLOR_F { r: r as f32 / 255.0, g: g as f32 / 255.0, b: b as f32 / 255.0, a }
+    let (c, a) = crate::tone::ink((r as u32) << 16 | (g as u32) << 8 | b as u32, a);
+    D2D1_COLOR_F { r: (c >> 16) as f32 / 255.0, g: ((c >> 8) & 0xFF) as f32 / 255.0, b: (c & 0xFF) as f32 / 255.0, a }
 }
 
 fn pt(x: f32, y: f32) -> D2D_POINT_2F {

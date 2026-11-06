@@ -131,6 +131,7 @@ fn needs_ffmpeg(kind: Kind, t: &Target, files: &[String]) -> bool {
 
 fn main() -> Result<()> {
     log::init("convert");
+    carlui_ui::tone::follow(&carlui_core::config::load().theme);
     let args: Vec<String> = std::env::args().skip(1).collect();
     let fg = args.iter().position(|a| a == "--hwnd").and_then(|i| args.get(i + 1)).and_then(|s| s.parse::<isize>().ok()).map(|h| HWND(h as _));
     let mut files: Vec<String> = args.iter().enumerate().filter(|(i, a)| !a.starts_with("--") && !(*i > 0 && (args[i - 1] == "--hwnd" || args[i - 1] == "--to" || args[i - 1] == "--translate" || args[i - 1] == "--fetch"))).map(|(_, a)| a.clone()).collect();

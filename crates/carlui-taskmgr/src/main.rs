@@ -393,11 +393,11 @@ impl App {
         unsafe {
             rt.BeginDraw();
             rt.SetTransform(&Matrix3x2 { M11: s, M12: 0.0, M21: 0.0, M22: s, M31: 0.0, M32: 0.0 });
-            rt.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
+            rt.Clear(Some(&carlui_ui::tone::backdrop()));
         }
         {
             let base: ID2D1RenderTarget = rt.cast()?;
-            let mut p = Painter { rt: &base, fonts: &self.fonts, mouse: self.mouse, hits: &mut hits, accent: self.accent };
+            let mut p = Painter { rt: &base, fonts: &self.fonts, mouse: self.mouse, hits: &mut hits, accent: carlui_ui::tone::accent(self.accent) };
             // Hafif koyu ton: akrilik çok açık arka planlarda da okunaklı kalsın.
             p.fill(R::new(0.0, 0.0, w, h), 0x101014, 0.30);
             p.fill(R::new(0.0, 0.0, SIDEBAR, h), 0x000000, 0.12);
@@ -451,7 +451,7 @@ impl App {
             let r = R::new(10.0, 56.0 + i as f32 * 42.0, SIDEBAR - 20.0, 38.0);
             if self.tab == *t {
                 p.round(r, 7.0, 0xFFFFFF, 0.10);
-                p.round(R::new(r.x, r.y + 10.0, 3.0, r.h - 20.0), 1.5, self.accent, 1.0);
+                p.round(R::new(r.x, r.y + 10.0, 3.0, r.h - 20.0), 1.5, carlui_ui::tone::accent(self.accent), 1.0);
             } else if p.hover(r) {
                 p.round(r, 7.0, 0xFFFFFF, 0.06);
             }
@@ -463,7 +463,7 @@ impl App {
         // En altta: yönetici değilsek düğme, yöneticiysek yalnızca rozet.
         let r = R::new(10.0, h - 52.0, SIDEBAR - 20.0, 38.0);
         if self.admin {
-            p.glyph('\u{EA18}', R::new(r.x + 10.0, r.y, 24.0, r.h), 15.0, self.accent, 1.0);
+            p.glyph('\u{EA18}', R::new(r.x + 10.0, r.y, 24.0, r.h), 15.0, carlui_ui::tone::accent(self.accent), 1.0);
             p.text(t!("Yönetici olarak çalışıyor", "Running as admin"), R::new(r.x + 42.0, r.y, r.w - 50.0, r.h), 12.5, false, TEXT, 0.6, Align::Left);
         } else {
             p.round(r, 7.0, 0xFFFFFF, if p.hover(r) { 0.12 } else { 0.06 });
@@ -505,7 +505,7 @@ impl App {
         // Menü imlecin altında değil üstünde açılır; ekrana sığdırılır.
         let n = rows.len() as i32;
         let at = (pt.x + 120, pt.y + (n * 32 * self.scale as i32) / 2);
-        let id = glassmenu::run(self.hwnd, rows, Some(self.accent), at);
+        let id = glassmenu::run(self.hwnd, rows, Some(carlui_ui::tone::accent(self.accent)), at);
         let a = match id {
             Some(1) => Act::Reveal,
             Some(2) => Act::Suspend,
@@ -735,6 +735,7 @@ fn main() -> Result<()> {
         }
         let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
+        carlui_ui::tone::caption(hwnd);
         let backdrop = DWMSBT_TRANSIENTWINDOW;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
         let _ = DwmExtendFrameIntoClientArea(hwnd, &MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
@@ -753,7 +754,7 @@ fn main() -> Result<()> {
             scale: GetDpiForWindow(hwnd).max(96) as f32 / 96.0,
             mouse: (-1.0, -1.0),
             hits: Vec::new(),
-            accent: glassmenu::accent(),
+            accent: glassmenu::system_accent(),
             tab: tab_arg.unwrap_or(Tab::Processes),
             sampler: sample::Sampler::new(),
             procs: procs::Procs::new(),

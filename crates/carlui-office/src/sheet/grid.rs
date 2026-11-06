@@ -135,17 +135,20 @@ impl SheetView {
         self.layout(area);
         self.paint_bar(p);
         let g = self.geo.clone();
-        p.fill(g.head, 0xFFFFFF, 1.0);
-        unsafe {
-            p.rt.PushAxisAlignedClip(&g.grid.d2d(), windows::Win32::Graphics::Direct2D::D2D1_ANTIALIAS_MODE_ALIASED);
-        }
-        self.paint_cells(p, &g);
-        self.paint_selection(p, &g);
-        unsafe {
-            p.rt.PopAxisAlignedClip();
-        }
-        self.paint_headers(p, &g);
-        self.paint_editor(p);
+        // Tablo her iki temada da beyaz kâğıttır; renkleri gerçek kalır.
+        carlui_ui::tone::literal(|| {
+            p.fill(g.head, 0xFFFFFF, 1.0);
+            unsafe {
+                p.rt.PushAxisAlignedClip(&g.grid.d2d(), windows::Win32::Graphics::Direct2D::D2D1_ANTIALIAS_MODE_ALIASED);
+            }
+            self.paint_cells(p, &g);
+            self.paint_selection(p, &g);
+            unsafe {
+                p.rt.PopAxisAlignedClip();
+            }
+            self.paint_headers(p, &g);
+            self.paint_editor(p);
+        });
         self.paint_tabs(p, &g);
     }
 

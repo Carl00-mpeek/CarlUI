@@ -225,7 +225,7 @@ impl PdfView {
                 continue;
             }
             let tr = R::new(r.x + 34.0, y, THUMB_W, th);
-            p.fill(tr, 0xFFFFFF, 1.0);
+            carlui_ui::tone::literal(|| p.fill(tr, 0xFFFFFF, 1.0));
             match self.thumbs.get(&i) {
                 Some((_, bm)) => blit(p.rt, bm, tr),
                 None if !self.failed.contains(&(i, true)) => jobs.push(Job { page: i, width: tw, thumb: true }),
@@ -268,13 +268,12 @@ impl PdfView {
                 continue;
             }
             visible.push(i);
-            p.fill(R::new(r.x + 2.0, r.y + 3.0, r.w, r.h), 0x000000, 0.35);
-            p.fill(r, 0xFFFFFF, 1.0);
+            p.paper(r);
             if let Some((_, bm)) = self.pages.get(&i) {
                 blit(p.rt, bm, r);
             }
         }
-        self.paint_note(p, &tops);
+        carlui_ui::tone::literal(|| self.paint_note(p, &tops));
         unsafe { p.rt.PopAxisAlignedClip() };
         // Görünenler önce (ekran ortasına yakın olan önce), sonra bir sonraki sayfa.
         let mid = c.y + c.h / 2.0;

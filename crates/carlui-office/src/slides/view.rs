@@ -369,7 +369,7 @@ impl SlideView {
                 blit(p.rt, bm, tr);
             }
             if hidden {
-                p.fill(tr, 0x000000, 0.45);
+                carlui_ui::tone::literal(|| p.fill(tr, 0x000000, 0.45));
             }
             let on = i == self.cur;
             if on {
@@ -396,7 +396,7 @@ impl SlideView {
             self.main = offscreen(&rt, sw, sh, self.scale, |b| render::draw_slide(b, d, cur, 0.0, 0.0, k, imgs, true, editing)).map(|bm| (key, bm));
         }
         let sr = R::new(self.ox, self.oy, sw, sh);
-        p.fill(R::new(sr.x + 3.0, sr.y + 4.0, sr.w, sr.h), 0x000000, 0.35);
+        carlui_ui::tone::literal(|| p.fill(R::new(sr.x + 3.0, sr.y + 4.0, sr.w, sr.h), 0x000000, if carlui_ui::tone::light() { 0.12 } else { 0.35 }));
         if let Some((_, bm)) = &self.main {
             blit(p.rt, bm, sr);
         }
@@ -413,7 +413,7 @@ impl SlideView {
         if !grouped && !self.edit {
             for (x, y) in Self::handles(r) {
                 let h = R::new(x - 4.0, y - 4.0, 8.0, 8.0);
-                p.fill(h, 0xFFFFFF, 1.0);
+                carlui_ui::tone::literal(|| p.fill(h, 0xFFFFFF, 1.0));
                 p.outline(h, 0.0, p.accent, 1.0);
             }
         }
@@ -436,7 +436,7 @@ impl SlideView {
                     if let Some((x, y, h)) = nav.caret(self.ed.cur.at) {
                         let bg = self.slide_bg();
                         let lum = ((bg >> 16) & 0xFF) * 3 + ((bg >> 8) & 0xFF) * 6 + (bg & 0xFF);
-                        p.fill(R::new(x, y, (1.5 * self.k / 1.33).max(1.0), h), if lum > 1270 { 0x000000 } else { 0xFFFFFF }, 1.0);
+                        carlui_ui::tone::literal(|| p.fill(R::new(x, y, (1.5 * self.k / 1.33).max(1.0), h), if lum > 1270 { 0x000000 } else { 0xFFFFFF }, 1.0));
                     }
                 }
             }
@@ -486,7 +486,7 @@ impl View for SlideView {
         }
         self.mouse = p.mouse;
         if let Some(i) = self.present {
-            self.paint_present(p, area, i);
+            carlui_ui::tone::literal(|| self.paint_present(p, area, i));
             return;
         }
         self.area = area;

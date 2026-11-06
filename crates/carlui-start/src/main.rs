@@ -490,7 +490,7 @@ impl App {
         unsafe {
             let _ = GetCursorPos(&mut pt);
         }
-        let r = glassmenu::run(self.hwnd, rows, Some(self.accent), (pt.x, pt.y));
+        let r = glassmenu::run(self.hwnd, rows, Some(carlui_ui::tone::accent(self.accent)), (pt.x, pt.y));
         unsafe {
             let _ = SetForegroundWindow(self.hwnd);
         }
@@ -673,12 +673,13 @@ impl App {
         unsafe {
             rt.BeginDraw();
             rt.SetTransform(&Matrix3x2 { M11: s, M12: 0.0, M21: 0.0, M22: s, M31: -ox, M32: -oy });
-            // Opak zemin (eski camın koyu tonu).
-            rt.Clear(Some(&D2D1_COLOR_F { r: 0.17, g: 0.17, b: 0.18, a: 1.0 }));
+            // Opak zemin (eski camın koyu tonu; açık temada süt beyazı).
+            let bg = if carlui_ui::tone::light() { D2D1_COLOR_F { r: 0.98, g: 0.98, b: 0.99, a: 1.0 } } else { D2D1_COLOR_F { r: 0.17, g: 0.17, b: 0.18, a: 1.0 } };
+            rt.Clear(Some(&bg));
         }
         let content = {
             let base: ID2D1RenderTarget = rt.cast()?;
-            let mut p = view::P { rt: &base, fonts: &self.fonts, mouse: self.mouse, hits: &mut hits, accent: self.accent };
+            let mut p = view::P { rt: &base, fonts: &self.fonts, mouse: self.mouse, hits: &mut hits, accent: carlui_ui::tone::accent(self.accent) };
             view::paint(self, &mut p)
         };
         self.max_scroll = (content - view::clip().h + 12.0).max(0.0);
@@ -922,7 +923,7 @@ fn main() -> Result<()> {
         // Sistem camı (blur) yok: cam pencere bölgesi kırpmasını dinlemediği için
         // açılışta tam boy belirip içerikten önce geliyordu. Zemin D2D ile
         // opak çizilir; böylece zemin ve içerik tek parça büyür.
-        let border: u32 = 0x00505050;
+        let border: u32 = if carlui_ui::tone::light() { 0x00E4DCD8 } else { 0x00505050 };
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &border as *const _ as _, 4);
 
         let app = App {
@@ -934,7 +935,7 @@ fn main() -> Result<()> {
             scale: GetDpiForWindow(hwnd).max(96) as f32 / 96.0,
             mouse: (-1.0, -1.0),
             hits: Vec::new(),
-            accent: glassmenu::accent(),
+            accent: glassmenu::system_accent(),
             store: Store::load(),
             view: View::Home,
             scroll: 0.0,

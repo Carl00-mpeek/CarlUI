@@ -66,7 +66,7 @@ impl Island {
         let badge = self.comp.CreateContainerVisual()?;
         let (bg, _) = self.rrect(ipx, ipx, 12.0 * s, &self.accent_brush()?)?;
         badge.Children()?.InsertAtTop(&bg)?;
-        let g = self.text.glyph(gfx, glyph_for(o.name), (ipx * 0.46).round(), 0.96)?;
+        let g = carlui_ui::tone::literal(|| self.text.glyph(gfx, glyph_for(o.name), (ipx * 0.46).round(), 0.96))?;
         badge.Children()?.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, (ipx - g.width) / 2.0, (ipx - g.height) / 2.0)?)?;
         badge.SetSize(v2(ipx, ipx))?;
         badge.SetCenterPoint(Vector3 { X: ipx / 2.0, Y: ipx / 2.0, Z: 0.0 })?;
@@ -108,7 +108,7 @@ impl Island {
             let b = self.comp.CreateContainerVisual()?;
             let (rect, _) = self.rrect(bw, bh, bh / 2.0, &brush)?;
             b.Children()?.InsertAtTop(&rect)?;
-            let (t, tw, th) = self.label(gfx, text, 12.5, k == 0, bw - 12.0 * s, if k == 0 { 0.98 } else { 0.85 })?;
+            let (t, tw, th) = carlui_ui::tone::literal_if(k == 0, || self.label(gfx, text, 12.5, k == 0, bw - 12.0 * s, if k == 0 { 0.98 } else { 0.85 }))?;
             Self::place(&t, (bw - tw) / 2.0, (bh - th) / 2.0)?;
             b.Children()?.InsertAtTop(&t)?;
             b.SetSize(v2(bw, bh))?;

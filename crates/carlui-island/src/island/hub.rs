@@ -130,7 +130,7 @@ impl Island {
         let (bg, _) = self.rrect(px, px, 8.0 * self.s, &self.accent_brush()?)?;
         c.Children()?.InsertAtTop(&bg)?;
         let glyph = if n.shot.is_some() { '\u{E722}' } else { '\u{EA8F}' };
-        let g = self.text.glyph(gfx, glyph, (px * 0.5).round(), 0.95)?;
+        let g = carlui_ui::tone::literal(|| self.text.glyph(gfx, glyph, (px * 0.5).round(), 0.95))?;
         c.Children()?.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, (px - g.width) / 2.0, (px - g.height) / 2.0)?)?;
         c.cast()
     }
@@ -395,7 +395,7 @@ impl Island {
     pub(super) fn badge(&self, gfx: &Gfx, kids: &VisualCollection, x: f32, h: f32, n: usize) -> Result<f32> {
         let s = self.s;
         let txt = if n > 9 { "9+".to_string() } else { n.to_string() };
-        let (t, tw, th) = self.label(gfx, &txt, 10.0, true, 30.0 * s, 0.95)?;
+        let (t, tw, th) = carlui_ui::tone::literal(|| self.label(gfx, &txt, 10.0, true, 30.0 * s, 0.95))?;
         let bh = (16.0 * s).round();
         let bw = (tw + 9.0 * s).max(bh).round();
         let (b, _) = self.rrect(bw, bh, bh / 2.0, &self.accent_brush()?)?;

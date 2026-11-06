@@ -50,13 +50,13 @@ impl SheetView {
         let mut rows = vec![Row::Header(t!("Dolgu rengi", "Fill color").into())];
         rows.push(Row::Item { id: 1, text: t!("Dolgu yok", "No fill").into(), icon: Icon::Glyph('\u{E711}', None) });
         for (i, (c, n)) in colors.iter().enumerate() {
-            rows.push(Row::Item { id: 10 + i, text: n.to_string(), icon: Icon::Glyph('\u{E91F}', Some(*c)) });
+            rows.push(Row::Item { id: 10 + i, text: n.to_string(), icon: Icon::Swatch('\u{E91F}', *c) });
         }
         rows.push(Row::Sep);
         rows.push(Row::Header(t!("Yazı rengi", "Font color").into()));
         rows.push(Row::Item { id: 2, text: t!("Otomatik", "Automatic").into(), icon: Icon::Glyph('\u{E8D3}', None) });
         for (i, (c, n)) in text.iter().enumerate() {
-            rows.push(Row::Item { id: 20 + i, text: n.to_string(), icon: Icon::Glyph('\u{E8D3}', Some(*c)) });
+            rows.push(Row::Item { id: 20 + i, text: n.to_string(), icon: Icon::Swatch('\u{E8D3}', *c) });
         }
         match glassmenu::run(app::hwnd(), rows, None, cursor()) {
             Some(1) => self.restyle(None, |l| l.fill = None),

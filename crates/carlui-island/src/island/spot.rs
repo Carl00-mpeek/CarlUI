@@ -117,7 +117,7 @@ impl Island {
         let c = self.comp.CreateContainerVisual()?;
         let (bg, _) = self.rrect(px, px, (px * 0.28).round(), &self.accent_brush()?)?;
         c.Children()?.InsertAtTop(&bg)?;
-        let g = self.text.glyph(gfx, glyph, (px * 0.5).round(), 0.95)?;
+        let g = carlui_ui::tone::literal(|| self.text.glyph(gfx, glyph, (px * 0.5).round(), 0.95))?;
         c.Children()?.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, (px - g.width) / 2.0, (px - g.height) / 2.0)?)?;
         c.cast()
     }
