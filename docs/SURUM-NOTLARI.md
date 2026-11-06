@@ -18,6 +18,9 @@ artık YouTube'da arar.
 - **Google Chrome:** "Google Chrome'u aç" Google'da arama yapıyordu, artık Chrome'u
   açar. "Google'ı aç" da google.com'u açar.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`230d289a55d5ea2d43047a796a1f2a4f4e98066e5840a51a4e7ab14548930828`
+
 ## v0.8.0 — Sesli asistan aramada (2026-11-06)
 
 **Asistan artık adanın aramasında açılır.** Tetikleyince arama açılır, altta öneriler
