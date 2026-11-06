@@ -26,6 +26,9 @@ sonuç GIF'e çevrilebilir.
 **Yeni: Pencere düzenleri.** Pencere yerleri ekran değişince ve uykudan sonra geri
 konur. Düzenler adla kaydedilip uygulanır.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`bb0b3d152b625def4f44a3b75113987d14031a77fbcedfb03af9953df951cbf5`
+
 ## v0.6.2 — Açık tema (2026-11-06)
 
 **Açık tema baştan yapıldı.** Gri yüzeyler yerine beyaz cam geldi; bu görünüm
