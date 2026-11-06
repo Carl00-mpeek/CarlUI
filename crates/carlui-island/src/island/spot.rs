@@ -37,6 +37,8 @@ pub struct SpotView<'a> {
     pub confirm: Option<usize>,
     pub hint: &'a str,
     pub placeholder: &'a str,
+    /// Sesli asistan: öneriler yerine şeritler ve onay düğmeleri.
+    pub listen: Option<ListenView<'a>>,
 }
 
 // Yerleşim (DIP)
@@ -208,7 +210,7 @@ impl Island {
         }
         self.spot_field_h = fh;
         self.hits.push((Hit::Field, RECT { left: pad as i32, top: fy as i32, right: (pad + fw) as i32, bottom: (fy + fh) as i32 }));
-        let g = self.text.glyph(gfx, '\u{E721}', (17.0 * s).round(), 0.6)?;
+        let g = self.text.glyph(gfx, if v.listen.is_some() { '\u{E720}' } else { '\u{E721}' }, (17.0 * s).round(), 0.6)?;
         kids.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, pad + 16.0 * s, fy + (fh1 - g.height) / 2.0)?)?;
         let (cx, cy) = match &ft {
             None => {
@@ -241,7 +243,10 @@ impl Island {
         blink.SetDelayTime(ts(500))?;
         blink.SetIterationBehavior(AnimationIterationBehavior::Forever)?;
         caret.StartAnimation(h!("Opacity"), &blink)?;
-        kids.InsertAtTop(&caret)?;
+        // Asistan yazarken imleç yok; yalnızca düzeltirken görünür.
+        if v.listen.as_ref().is_none_or(|l| l.stage == ListenStage::Edit) {
+            kids.InsertAtTop(&caret)?;
+        }
 
         // ---- Gövde ----
         // Ayrı katmanda: kutu büyürken gövde de onunla birlikte aşağı kayar.
@@ -254,6 +259,11 @@ impl Island {
         let kids = &body.Children()?;
         let mut y = fy + fh + (8.0 * s).round();
         match v.mode {
+            _ if v.listen.is_some() => {
+                if let Some(l) = &v.listen {
+                    y = self.build_listen(gfx, kids, l, pad, fw, y)?;
+                }
+            }
             SpotMode::Home => {
                 let tw = (TILE_W * s).round();
                 let tile_h = (TILE_H * s).round();

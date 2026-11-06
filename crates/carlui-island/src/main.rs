@@ -25,6 +25,7 @@ mod clipgame;
 mod bridge;
 mod clipping;
 mod dlman;
+mod listening;
 mod offering;
 mod downloads;
 mod editor;
@@ -636,6 +637,7 @@ impl App {
                         self.push_note(Note { app: g("app"), aumid: g("aumid"), title: g("title"), body, ..Default::default() });
                     }
                     "island-dump" => self.dump(),
+                    "assist" => self.assist_event(&data),
                     // {"secs": 300, "label": "çay"} · secs 0 = kronometre · {"stop": true}
                     "timer" => {
                         let secs = data.get("secs").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
@@ -796,6 +798,7 @@ impl App {
                     self.refresh(false);
                 }
             },
+            View::Search if self.spot.listen.is_some() => self.listen_click(h),
             View::Search => {
                 if let Hit::Row(i) | Hit::Tile(i) | Hit::Chip(i) = h {
                     let ctrl = unsafe { GetKeyState(VK_CONTROL.0 as i32) } < 0;
@@ -816,6 +819,9 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
     if let Some(r) = searching::window_message(hwnd, msg, wp, lp) {
         return r;
     }
+    if let Some(r) = listening::window_message(msg, wp) {
+        return r;
+    }
     if let Some(r) = hubbing::window_message(hwnd, msg, wp, lp) {
         return r;
     }
@@ -825,7 +831,7 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
     unsafe {
         match msg {
             WM_MOUSEACTIVATE => {
-                let open = with_app(|a| a.spot.open).unwrap_or(false);
+                let open = with_app(|a| a.spot.open && !a.listen_passive()).unwrap_or(false);
                 LRESULT(if open { MA_ACTIVATE } else { MA_NOACTIVATE } as isize)
             }
             WM_MOUSEMOVE => {

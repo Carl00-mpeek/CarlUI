@@ -68,10 +68,8 @@ pub fn accept(m: &Model) -> Result<(), String> {
     std::fs::write(&f, format!("{}\n{}\n{}\n{secs}\n", m.id, m.license, m.source)).map_err(|e| e.to_string())
 }
 
+/// Komut girdisi dikteyle aynı dosyaları kullanır; silmek ikisinden de kaldırır.
 pub fn remove(m: &Model) -> Result<(), String> {
-    if real_id(m.id) != m.id {
-        return Ok(());
-    }
     let d = dir(m);
     let _ = std::fs::remove_file(d.join(".ok"));
     std::fs::remove_dir_all(&d).or_else(|e| if d.exists() { Err(e.to_string()) } else { Ok(()) })

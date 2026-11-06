@@ -80,6 +80,23 @@ impl App {
         }
     }
 
+    /// Aramayı açmaya hazırlar: bildirimi bekletir, sonuçları kurar. Odak almaz.
+    pub(crate) fn search_prepare(&mut self, prev: HWND) {
+        let hwnd = self.island.hwnd;
+        if let Some(n) = self.note.take() {
+            self.pending.push_front(n);
+            unsafe {
+                let _ = KillTimer(hwnd, TIMER_NOTE);
+            }
+        }
+        self.expanded = false;
+        self.date = false;
+        self.spot.open(&self.cfg, if prev == hwnd { HWND::default() } else { prev });
+        let p = cursor();
+        self.last_mouse = (p.x, p.y);
+        self.island.reset_highlight();
+    }
+
     pub(crate) fn open_search(&mut self) {
         // Tam ekran video/sunum üstünde de açılır; yalnızca oyunda açılmaz.
         if self.game || !self.cfg.launcher.enabled || self.spot.open {
@@ -87,17 +104,7 @@ impl App {
         }
         let hwnd = self.island.hwnd;
         unsafe {
-            let prev = GetForegroundWindow();
-            if let Some(n) = self.note.take() {
-                self.pending.push_front(n);
-                let _ = KillTimer(hwnd, TIMER_NOTE);
-            }
-            self.expanded = false;
-            self.date = false;
-            self.spot.open(&self.cfg, if prev == hwnd { HWND::default() } else { prev });
-            let p = cursor();
-            self.last_mouse = (p.x, p.y);
-            self.island.reset_highlight();
+            self.search_prepare(GetForegroundWindow());
             // Klavye alabilmek için pencere geçici olarak etkinleştirilebilir olur.
             let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex & !(WS_EX_NOACTIVATE.0 as isize));
@@ -112,6 +119,7 @@ impl App {
         if !self.spot.open {
             return;
         }
+        self.listen_closing();
         let prev = self.spot.prev_fg;
         self.spot.close();
         let hwnd = self.island.hwnd;
@@ -209,6 +217,10 @@ impl App {
             VK_INSERT if shift => Key::Paste,
             _ => return false,
         };
+        if self.spot.listen.is_some() {
+            self.listen_key(k);
+            return true;
+        }
         let o = self.spot.key(&self.cfg, k);
         self.spot_outcome(o);
         true
@@ -275,7 +287,7 @@ pub(crate) fn window_message(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> Op
         WM_SYSKEYUP | WM_KEYUP if wp.0 as u16 == VK_MENU.0 => {
             let alone = ALT_ALONE.swap(false, std::sync::atomic::Ordering::Relaxed);
             let open = with_app(|a| {
-                if a.spot.open && alone {
+                if a.spot.open && a.spot.listen.is_none() && alone {
                     let o = a.spot.key(&a.cfg, Key::Alt);
                     a.spot_outcome(o);
                 }
@@ -292,6 +304,7 @@ pub(crate) fn window_message(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> Op
         WM_CHAR => {
             with_app(|a| {
                 if a.spot.open {
+                    a.listen_typing(wp.0 as u16);
                     let o = a.spot.char(&a.cfg, wp.0 as u16);
                     a.spot_outcome(o);
                 }

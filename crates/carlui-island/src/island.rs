@@ -34,6 +34,7 @@ use windows::{
 
 mod clipview;
 mod hub;
+mod listen;
 mod mood;
 mod offer;
 mod spot;
@@ -41,6 +42,7 @@ mod wave;
 
 pub use clipview::panel_size as clip_panel_size;
 pub use hub::{groups, HubView, Stat};
+pub use listen::{ListenStage, ListenView};
 use mood::hsv_to_rgb;
 pub use offer::OfferView;
 pub use spot::{SpotMode, SpotView, ROWS_MAX};
@@ -67,6 +69,8 @@ pub enum View {
 pub enum Hit {
     /// İndirme kartı düğmeleri: 0 İndir, 1 Farklı kaydet, 2 Tarayıcıya bırak.
     OfferBtn(u8),
+    /// Asistan onay düğmeleri: 0 vazgeç, 1 düzenle, 2 gönder.
+    ListenBtn(u8),
     None,
     Pill,
     Prev,
@@ -251,6 +255,9 @@ pub struct Island {
     /// Medya dalgasının hiç durmayan saati (0→1 döngü): panel yeniden
     /// kurulunca dalga başa sarmasın.
     wave_clock: CompositionPropertySet,
+    /// Asistan şeritlerinin saati ve ses seviyesi; yüzeyleri (genişlik, yükseklik, açık tema) için saklanır.
+    listen_fx: CompositionPropertySet,
+    listen_strips: Option<((u32, u32, bool), Vec<CompositionDrawingSurface>)>,
     /// Hub'ın üst satırı: (kap, genişlik, gösterge sayısı); saniyelik yenileme için.
     hub_stats: Option<(ContainerVisual, f32, usize)>,
 }
@@ -276,6 +283,7 @@ impl Island {
         let overlay = comp.CreateContainerVisual()?;
         root.Children()?.InsertAtTop(&overlay)?;
         let wave_clock = wave::clock(&comp)?;
+        let listen_fx = listen::clock(&comp)?;
         Ok(Self {
             hwnd,
             motion: Motion::new(&comp, theme),
@@ -312,6 +320,8 @@ impl Island {
             hub_rows: Vec::new(),
             hub_seen: Default::default(),
             wave_clock,
+            listen_fx,
+            listen_strips: None,
             hub_stats: None,
         })
     }

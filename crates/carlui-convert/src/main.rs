@@ -21,6 +21,7 @@ extern crate carlui_core;
 
 mod ai;
 mod assist;
+mod assist_panel;
 mod dictate;
 mod license;
 mod ffmpeg;

@@ -31,11 +31,13 @@ pub struct AiConfig {
     pub speak_speed: f32,
     /// Sesli asistan (bas-konuş komutları). Model ilk kullanımda indirilir.
     pub assistant: bool,
+    /// Asistan söyleneni uygulamadan önce arama kutusunda onay bekler.
+    pub assist_confirm: bool,
 }
 
 impl Default for AiConfig {
     fn default() -> Self {
-        Self { gpu: true, upscale: String::new(), background: String::new(), speech: String::new(), command: String::new(), translate: String::new(), speech_lang: String::new(), voice_command: false, speak: String::new(), speak_speed: 1.0, assistant: false }
+        Self { gpu: true, upscale: String::new(), background: String::new(), speech: String::new(), command: String::new(), translate: String::new(), speech_lang: String::new(), voice_command: false, speak: String::new(), speak_speed: 1.0, assistant: false, assist_confirm: false }
     }
 }
 

@@ -4,7 +4,7 @@
 //! `island/spot.rs`'de yapılır. Uygulama/dosya ikonları ayrı bir iş
 //! parçacığında yüklenir ki yazarken arayüz hiç takılmasın.
 
-use crate::island::{SpotMode, SpotView, ROWS_MAX};
+use crate::island::{ListenStage, ListenView, SpotMode, SpotView, ROWS_MAX};
 use carlui_core::config::Config;
 use carlui_launcher::{
     actions,
@@ -64,8 +64,17 @@ pub enum Outcome {
     Download(Option<String>),
 }
 
+/// Arama sesli asistan için açıkken durum (bkz. `listening`).
+pub struct Listen {
+    pub stage: ListenStage,
+    pub status: String,
+    /// Asistandan son haber.
+    pub seen: std::time::Instant,
+}
+
 pub struct Launcher {
     pub open: bool,
+    pub listen: Option<Listen>,
     query: Vec<char>,
     /// `query`'nin metin hali (çizim için).
     text: String,
@@ -155,6 +164,7 @@ impl Launcher {
         icon_thread(rx, icons_out, icons_done);
         Self {
             open: false,
+            listen: None,
             query: Vec::new(),
             text: String::new(),
             caret: 0,
@@ -207,10 +217,23 @@ impl Launcher {
 
     pub fn close(&mut self) {
         self.open = false;
+        self.listen = None;
         self.query.clear();
         self.items.clear();
         self.saved = None;
         self.confirm = None;
+    }
+
+    /// Asistanın söylenenleri kutuya yazması; sonuç aranmaz, öneri gösterilmez.
+    pub fn set_text(&mut self, s: &str) {
+        self.query = s.chars().collect();
+        self.caret = self.query.len();
+        self.text = s.to_string();
+        self.all_selected = false;
+    }
+
+    pub fn typed(&self) -> String {
+        self.query_string()
     }
 
     fn query_string(&self) -> String {
@@ -301,6 +324,7 @@ impl Launcher {
             SpotMode::List => t!("Enter aç · Tab tamamla · Alt eylemler · Ctrl+Enter konumu aç · Shift+Enter yönetici · Esc temizle", "Enter open · Tab complete · Alt actions · Ctrl+Enter open location · Shift+Enter admin · Esc clear"),
             SpotMode::Actions => t!("Enter uygula · Esc ya da Alt geri", "Enter apply · Esc or Alt back"),
         };
+        let hint = if self.listen.is_some() { "" } else { hint };
         SpotView {
             query: &self.text,
             caret: self.caret,
@@ -313,7 +337,10 @@ impl Launcher {
             scroll: self.scroll,
             confirm: self.confirm,
             hint,
-            placeholder: if self.all_apps { t!("Tüm uygulamalar içinde ara", "Search all apps") } else { t!("Uygulama, dosya veya web'de ara", "Search apps, files or the web") },
+            listen: self.listen.as_ref().map(|l| ListenView { stage: l.stage, status: &l.status }),
+            placeholder: if self.listen.is_some() {
+                t!("Konuşun…", "Speak…")
+            } else if self.all_apps { t!("Tüm uygulamalar içinde ara", "Search all apps") } else { t!("Uygulama, dosya veya web'de ara", "Search apps, files or the web") },
         }
     }
 

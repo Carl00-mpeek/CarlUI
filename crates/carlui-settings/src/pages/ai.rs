@@ -69,6 +69,13 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         c.assistant,
         |c| c.ai.assistant ^= true,
     );
+    f.toggle(
+        p,
+        t!("Uygulamadan önce onayla", "Confirm before running"),
+        t!("Söyledikleriniz arama kutusunda bekler: düzeltebilir, ✓ ile gönderebilir ya da ✕ ile vazgeçebilirsiniz. Kapalıyken tuşu bırakınca hemen uygulanır.", "What you said waits in the search box: fix it, send it with ✓ or drop it with ✕. When off, it runs as soon as you release the key."),
+        c.assist_confirm,
+        |c| c.ai.assist_confirm ^= true,
+    );
     if let Some(e) = &app.ai_error {
         f.row_c(p, t!("Model silinemedi", "Couldn't remove the model"), e, 0.0, Some(ORANGE));
     }
