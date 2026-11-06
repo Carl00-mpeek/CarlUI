@@ -16,6 +16,9 @@ pencere odağı kaybedince de korunuyor. Koyu tema değişmedi.
 **Düzeltme:** Tabloya sondaki `=` ile yazılan işlemler de formül sayılıyor. Örneğin
 `a1+b5=` iki hücrenin toplamını verir. `Toplam=` gibi etiketler metin olarak kalır.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`b6654f33d44b0aa0aa1d18d4d0c3100ee9ecbdffa0cf1692162f941e0a6fafc5`
+
 ## v0.6.1 — Performans (2026-11-06)
 
 **Menüler artık donmadan açılıyor.** Özellikle zayıf bilgisayarlarda ve ağ ya da
