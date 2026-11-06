@@ -312,6 +312,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "carlui-remover"
+version = "0.6.2"
+dependencies = [
+ "carlui-clip",
+ "carlui-core",
+ "carlui-ui",
+ "serde",
+ "serde_json",
+ "windows",
+]
+
+[[package]]
 name = "carlui-replay"
 version = "0.6.2"
 dependencies = [
@@ -409,18 +421,6 @@ name = "carlui-ui"
 version = "0.6.2"
 dependencies = [
  "carlui-core",
- "windows",
-]
-
-[[package]]
-name = "carlui-uninstall"
-version = "0.6.2"
-dependencies = [
- "carlui-clip",
- "carlui-core",
- "carlui-ui",
- "serde",
- "serde_json",
  "windows",
 ]
 

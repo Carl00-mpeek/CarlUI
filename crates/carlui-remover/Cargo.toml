@@ -1,5 +1,5 @@
 [package]
-name = "carlui-uninstall"
+name = "carlui-remover"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

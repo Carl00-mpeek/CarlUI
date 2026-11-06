@@ -86,7 +86,7 @@ fn remove(it: &Left) -> bool {
 /// reddedilirse öğeler yerinde kalır, rapor bunları başarısız sayar.
 fn elevate(items: &[Left]) {
     let Ok(json) = serde_json::to_vec(items) else { return };
-    let file = std::env::temp_dir().join(format!("carlui-uninstall-{}.json", std::process::id()));
+    let file = std::env::temp_dir().join(format!("carlui-remover-{}.json", std::process::id()));
     if std::fs::write(&file, json).is_err() {
         return;
     }

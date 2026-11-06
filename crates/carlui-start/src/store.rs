@@ -44,7 +44,7 @@ pub struct Store {
     /// Tam Kaldırıcı kısayolu bir kez eklendi. Kullanıcı sonradan menüden
     /// çıkarırsa geri gelmesin diye ayrıca tutulur.
     #[serde(default)]
-    pub uninstaller: bool,
+    pub remover: bool,
 }
 
 fn file() -> PathBuf {
@@ -55,8 +55,8 @@ fn tile(name: &str, path: &str) -> Tile {
     Tile { name: name.into(), path: path.into(), args: String::new() }
 }
 
-fn uninstaller() -> Tile {
-    tile(t!("Tam Kaldırıcı", "Uninstaller"), &paths::sibling_exe("carlui-uninstall.exe").to_string_lossy())
+fn remover() -> Tile {
+    tile(t!("Tam Kaldırıcı", "Uninstaller"), &paths::sibling_exe("carlui-remover.exe").to_string_lossy())
 }
 
 impl Store {
@@ -64,7 +64,7 @@ impl Store {
         match std::fs::read(file()) {
             Ok(b) => match serde_json::from_slice::<Self>(&b) {
                 Ok(mut s) => {
-                    if s.adopt(uninstaller()) {
+                    if s.adopt(remover()) {
                         s.save();
                     }
                     s
@@ -84,10 +84,12 @@ impl Store {
 
     /// Eski menülere kaldırıcı kısayolunu bir kereliğine ekler; değiştiyse doğru.
     fn adopt(&mut self, t: Tile) -> bool {
-        if self.uninstaller {
+        if self.remover {
             return false;
         }
-        self.uninstaller = true;
+        self.remover = true;
+        // İlk derlemenin kutucuğu, adı çakıştığı için CarlUI'nin kendi kaldırıcısını açıyordu.
+        self.items.retain(|i| !matches!(i, Item::App(x) if x.path.to_lowercase().ends_with("carlui-uninstall.exe")));
         if !self.contains(None, &t) {
             self.items.push(Item::App(t));
         }
@@ -104,8 +106,8 @@ impl Store {
                 items.push(Item::App(Tile { name: p.name, path: p.path, args: p.args }));
             }
         }
-        items.push(Item::App(uninstaller()));
-        Self { items, uninstaller: true }
+        items.push(Item::App(remover()));
+        Self { items, remover: true }
     }
 
     pub fn save(&self) {
@@ -237,7 +239,7 @@ mod tests {
 
     #[test]
     fn kaldirici_bir_kez_eklenir_ve_geri_gelmez() {
-        let t = tile("Tam Kaldırıcı", "C:/x/carlui-uninstall.exe");
+        let t = tile("Tam Kaldırıcı", "C:/x/carlui-remover.exe");
         let mut s: Store = serde_json::from_str(r#"{"items":[]}"#).unwrap();
         assert!(s.adopt(t.clone()));
         assert_eq!(s.items.len(), 1);
@@ -248,9 +250,17 @@ mod tests {
 
     #[test]
     fn zaten_sabitliyse_cift_eklenmez() {
-        let t = tile("Tam Kaldırıcı", "C:/x/carlui-uninstall.exe");
-        let mut s = Store { items: vec![Item::App(t.clone())], uninstaller: false };
+        let t = tile("Tam Kaldırıcı", "C:/x/carlui-remover.exe");
+        let mut s = Store { items: vec![Item::App(t.clone())], remover: false };
         assert!(s.adopt(t));
         assert_eq!(s.items.len(), 1);
+    }
+
+    #[test]
+    fn adopt_replaces_clashing_tile() {
+        let old = tile("Tam Kaldırıcı", "C:/x/CarlUI-Uninstall.exe");
+        let mut s = Store { items: vec![Item::App(old)], remover: false };
+        assert!(s.adopt(tile("Tam Kaldırıcı", "C:/x/carlui-remover.exe")));
+        assert!(matches!(&s.items[..], [Item::App(t)] if t.path.ends_with("carlui-remover.exe")));
     }
 }
