@@ -11,6 +11,9 @@ görünmeyebilir.
 - **Ses göstergesi:** Ayarlardaki seçenek hiçbir şey yapmıyordu, artık masaüstünde de
   çalışır.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`17a67044bea401ab0ad6277911e1e1fd1d9a80d8c28a25a67a43d18a5c8be277`
+
 ## v0.9.1 — Arama, sıcaklık ve kayıt düzeltmeleri (2026-11-06)
 
 **Yeni: CPU sıcaklığı Ayarlar'dan kurulur.** PawnIO'yu CarlUI'den sonra kurduysan
