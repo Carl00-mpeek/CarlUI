@@ -1,5 +1,21 @@
 # Sürüm notları
 
+## v0.6.2 — Açık tema (2026-11-06)
+
+**Açık tema baştan yapıldı.** Gri yüzeyler yerine beyaz cam geldi; bu görünüm
+pencere odağı kaybedince de korunuyor. Koyu tema değişmedi.
+- **Yazılar:** Açık temadaki yazılar ve vurgu renkleri artık AA kontrast düzeyinde
+  okunuyor.
+- **Pencereler:** Ayarlar, Görev Yöneticisi, Kasa, Dönüştürücü, Ofis ve kurucu aynı
+  beyaz camı kullanıyor. Başlık çubukları da pencereyle aynı renkte.
+- **Belgeler:** Tablo, belge ve PDF sayfaları her iki temada da gerçek renkleriyle
+  beyaz kâğıt olarak çiziliyor.
+- **Renk seçenekleri:** Renk örnekleri temaya göre değişmiyor. Kaydırıcı topuzları
+  beyaz zeminde de seçiliyor.
+
+**Düzeltme:** Tabloya sondaki `=` ile yazılan işlemler de formül sayılıyor. Örneğin
+`a1+b5=` iki hücrenin toplamını verir. `Toplam=` gibi etiketler metin olarak kalır.
+
 ## v0.6.1 — Performans (2026-11-06)
 
 **Menüler artık donmadan açılıyor.** Özellikle zayıf bilgisayarlarda ve ağ ya da
