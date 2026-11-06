@@ -1,5 +1,20 @@
 # Sürüm notları
 
+## v0.8.0 — Sesli asistan aramada (2026-11-06)
+
+**Asistan artık adanın aramasında açılır.** Tetikleyince arama açılır, altta öneriler
+yerine sesinle büyüyen animasyon çıkar. Konuştukların üstteki arama kutusuna canlı
+yazılır.
+- **Yedek:** Oyundayken, ada kapalıyken ya da model inerken eski kart gösterilir.
+
+**Yeni: Uygulamadan önce onayla.** Ayarlar'ın AI sayfasında seçilir.
+- **Kapalıysa:** Tuşu bırakınca metin doğrudan uygulanır.
+- **Açıksa:** Metin kutuda bekler. Düzenle ile değiştirebilir, ✓ ya da Enter ile
+  gönderebilir, ✕ ya da Esc ile iptal edebilirsin.
+
+**Düzeltme: Model silme.** Asistan listesindeki Whisper modellerinde Sil düğmesi
+çalışmıyordu. Bu dosyalar dikteyle ortak olduğu için model ikisinden de kalkar.
+
 ## v0.7.0 — İndirme yöneticisi (2026-11-06)
 
 **İndirmeler artık onaysız başlamaz.** Tarayıcıdaki indirme hemen kesilir ve adada
