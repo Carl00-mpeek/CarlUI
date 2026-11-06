@@ -151,6 +151,20 @@ impl Ui {
             p.text(&t!(format!("Kayıt yedekleri: {s}"), format!("Registry backups: {s}")), R::new(col.x, y, col.w, 20.0), 12.0, false, TEXT, 0.6, Align::Center);
             y += 20.0;
         }
-        p.button(R::new(cx - 80.0, y + 14.0, 160.0, 38.0), None, t!("Listeye dön", "Back to list"), A::Close, true, false);
+        if rep.failed.iter().any(|f| std::path::Path::new(f).exists()) {
+            p.button(R::new(cx - 168.0, y + 14.0, 160.0, 38.0), Some('\u{E785}'), t!("Kilidi aç", "Unlock"), A::Unlock, true, false);
+            p.button(R::new(cx + 8.0, y + 14.0, 160.0, 38.0), None, t!("Listeye dön", "Back to list"), A::Close, true, false);
+        } else {
+            p.button(R::new(cx - 80.0, y + 14.0, 160.0, 38.0), None, t!("Listeye dön", "Back to list"), A::Close, true, false);
+        }
+    }
+
+    /// Silinemeyen dosya ve klasörleri kimin tuttuğunu gösterir.
+    pub(super) fn unlock(&self) {
+        let Flow::Done(rep) = &self.flow else { return };
+        let paths = rep.failed.iter().filter(|f| std::path::Path::new(f).exists());
+        if let Err(e) = std::process::Command::new(carlui_core::paths::sibling_exe("carlui-tools.exe")).arg("--unlock").args(paths).spawn() {
+            carlui_core::warn!("dosya kilidi açıcı başlatılamadı: {e}");
+        }
     }
 }

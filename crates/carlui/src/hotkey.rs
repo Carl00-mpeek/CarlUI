@@ -1,7 +1,8 @@
 //! Ana sürecin üstlendiği genel kısayollar: Carl Vault (`shortcuts.vault`),
 //! renk seçici (`shortcuts.color_picker`, varsayılan boş = kapalı), disk
 //! analizörü (`shortcuts.disk`, varsayılan boş) ve toplu yeniden adlandırma
-//! (`shortcuts.rename`), sesle yazma (`shortcuts.dictate`) ve sesli okuma (`shortcuts.speak`). Yeniden adlandırma kısayolu yalnızca Gezgin ya da
+//! (`shortcuts.rename`), dosya kilidi açıcı (`shortcuts.unlock`), pencere
+//! düzenleri (`shortcuts.layouts`), sesle yazma (`shortcuts.dictate`) ve sesli okuma (`shortcuts.speak`). Yeniden adlandırma kısayolu yalnızca Gezgin ya da
 //! masaüstü öndeyken kaydedilir; böylece tarayıcıdaki Ctrl+Shift+R gibi
 //! kısayollar elinden alınmaz. Doğrulama (fare tuşu, tek tuş, Windows kısayolu
 //! reddi) ortak `keys` modülündedir; ayar değişince kısayollar yeniden kaydedilir.
@@ -23,8 +24,11 @@ pub const RENAME: i32 = 4;
 pub const DICTATE: i32 = 5;
 pub const SPEAK: i32 = 6;
 pub const ASSIST: i32 = 7;
+pub const UNLOCK: i32 = 8;
+pub const LAYOUTS: i32 = 9;
 
 static RENAME_ON: AtomicBool = AtomicBool::new(false);
+static UNLOCK_ON: AtomicBool = AtomicBool::new(false);
 
 fn reg(hwnd: HWND, id: i32, c: Option<Combo>, name: &str, text: &str) {
     let Some(c) = c else { return };
@@ -43,11 +47,12 @@ fn reg(hwnd: HWND, id: i32, c: Option<Combo>, name: &str, text: &str) {
 
 pub fn register(hwnd: HWND, cfg: &Config) {
     unsafe {
-        for id in [VAULT, PICKER, DISK, RENAME, DICTATE, SPEAK, ASSIST] {
+        for id in [VAULT, PICKER, DISK, RENAME, DICTATE, SPEAK, ASSIST, UNLOCK, LAYOUTS] {
             let _ = UnregisterHotKey(hwnd, id);
         }
     }
     RENAME_ON.store(false, Ordering::SeqCst);
+    UNLOCK_ON.store(false, Ordering::SeqCst);
     let s = &cfg.shortcuts;
     reg(hwnd, VAULT, s.vault_combo(), "Vault", &s.vault);
     reg(hwnd, PICKER, s.color_picker_combo(), "Renk seçici", &s.color_picker);
@@ -59,6 +64,7 @@ pub fn register(hwnd: HWND, cfg: &Config) {
     if cfg.tools.disk_enabled {
         reg(hwnd, DISK, s.disk_combo(), "Disk analizörü", &s.disk);
     }
+    reg(hwnd, LAYOUTS, s.layouts_combo(), "Pencere düzenleri", &s.layouts);
     sync_rename(hwnd, cfg);
 }
 
@@ -67,19 +73,25 @@ fn explorer_foreground() -> bool {
     matches!(class.as_str(), "CabinetWClass" | "ExploreWClass" | "Progman" | "WorkerW")
 }
 
-/// Ön plan değişince çağrılır: yeniden adlandırma kısayolunu yalnızca
-/// Gezgin/masaüstü öndeyken tutar.
+/// Ön plan değişince çağrılır: yeniden adlandırma ve dosya kilidi açıcı
+/// kısayollarını yalnızca Gezgin/masaüstü öndeyken tutar.
 pub fn sync_rename(hwnd: HWND, cfg: &Config) {
-    let want = cfg.tools.rename_enabled && explorer_foreground();
-    if want == RENAME_ON.load(Ordering::SeqCst) {
+    let front = explorer_foreground();
+    let s = &cfg.shortcuts;
+    sync_one(hwnd, RENAME, &RENAME_ON, cfg.tools.rename_enabled && front, s.rename_combo(), "Yeniden adlandırma", &s.rename);
+    sync_one(hwnd, UNLOCK, &UNLOCK_ON, cfg.tools.unlock_enabled && front, s.unlock_combo(), "Dosya kilidi açıcı", &s.unlock);
+}
+
+fn sync_one(hwnd: HWND, id: i32, on: &AtomicBool, want: bool, c: Option<Combo>, name: &str, text: &str) {
+    if want == on.load(Ordering::SeqCst) {
         return;
     }
-    RENAME_ON.store(want, Ordering::SeqCst);
+    on.store(want, Ordering::SeqCst);
     if want {
-        reg(hwnd, RENAME, cfg.shortcuts.rename_combo(), "Yeniden adlandırma", &cfg.shortcuts.rename);
+        reg(hwnd, id, c, name, text);
     } else {
         unsafe {
-            let _ = UnregisterHotKey(hwnd, RENAME);
+            let _ = UnregisterHotKey(hwnd, id);
         }
     }
 }
@@ -99,6 +111,8 @@ pub fn tool(id: i32) {
         PICKER => "--pick".to_string(),
         DISK => "--disk".to_string(),
         RENAME => format!("--rename --hwnd {}", unsafe { GetForegroundWindow() }.0 as isize),
+        UNLOCK => format!("--unlock --hwnd {}", unsafe { GetForegroundWindow() }.0 as isize),
+        LAYOUTS => "--layouts".to_string(),
         DICTATE => return convert("--dictate"),
         SPEAK => return convert("--speak"),
         ASSIST => return convert("--assist"),

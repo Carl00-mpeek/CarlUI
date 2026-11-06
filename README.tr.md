@@ -107,6 +107,15 @@
   H.265), oyunu yavaşlatmaz, özel tam ekranda da çalışır. Mikrofon, gürültü
   engelleme, kalite, çözünürlük, kare hızı ve eski klipleri silme ayarları var.
   **Alt+F8** oyunun odağını almayan küçük denetim panelini açar.
+- **Alan kaydı:** Ekran görüntüsü aracında alan seçip kayıt düğmesine bas
+  (Ctrl+R). Alan, Durdur'a ya da **Ctrl+Alt+R**'ye basana dek sesiyle MP4
+  olarak kaydedilir; sonuç GIF'e de çevrilebilir.
+- **Dosya kilidi açıcı (Ctrl+Alt+U):** Bir dosyayı ya da klasörü hangi
+  uygulamanın tuttuğunu gösterir; uygulamaya kapanmasını söyler ya da onayınla
+  zorla kapatır. Tam Kaldırıcı'nın silemediği öğelerde de sunulur.
+- **Pencere düzenleri (Ctrl+Alt+L):** Ekran çıkarılıp takılınca ya da uykudan
+  sonra pencereleri eski yerlerine koyar. Dizilimleri "iş" ya da "oyun" diye
+  kaydedip tek tıkla uygularsın; kapalı uygulamalar açılmaz.
 - **Ekran görüntüsü (Alt+X):** Tüm monitörler donar; alan seç, çiz, yaz, sil,
   geri al, kopyala ya da kaydet. **Ctrl+T** seçimdeki yazıyı okuyup panoya
   koyar (OCR); seçimdeki QR kodu okunur, 2FA QR'ı tek düğmeyle Carl Vault'a
@@ -147,6 +156,9 @@
 | Ctrl+Alt+P | Carl Vault |
 | Ctrl+Shift+R | Toplu yeniden adlandırma |
 | Alt+F10 / Alt+F8 | Anlık tekrar: son dakikaları kaydet / paneli aç |
+| Ctrl+Alt+R | Alan kaydını durdur |
+| Ctrl+Alt+U | Dosya kilidi açıcı |
+| Ctrl+Alt+L | Pencere düzenleri |
 | Ctrl+Alt+S | Seçili metni sesli oku |
 | Ctrl+Alt+D | Dikte |
 | Ctrl+Alt+A (basılı tut) | Sesli asistan |

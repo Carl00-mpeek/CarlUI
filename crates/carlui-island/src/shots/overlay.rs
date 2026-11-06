@@ -44,6 +44,8 @@ pub enum Btn {
     Ocr,
     /// Seçimdeki yazıyı oku ve yerel modelle çevir.
     Translate,
+    /// Seçili alanı videoya kaydet.
+    Record,
     Save,
     Close,
     /// Bulunan QR kodunun düğmesi: (sıra, eylem).
@@ -59,6 +61,7 @@ pub enum Out {
     Enter,
     Ocr,
     Translate,
+    Record,
     Save,
     Qr(usize, qr::Act),
 }
@@ -327,6 +330,7 @@ impl Overlay {
             (0x0D, _) if self.has_selection() => return Out::Enter,
             (0x43, true) if self.has_selection() => return Out::Copy,
             (0x53, true) if self.has_selection() => return Out::Save,
+            (0x52, true) if self.has_selection() && self.editing.is_none() => return Out::Record,
             (0x54, true) if self.has_selection() => {
                 let shift = unsafe { windows::Win32::UI::Input::KeyboardAndMouse::GetKeyState(0x10) } < 0;
                 return if shift { Out::Translate } else { Out::Ocr };
@@ -397,6 +401,10 @@ impl Overlay {
             Btn::Translate => {
                 self.finish_typing();
                 return Out::Translate;
+            }
+            Btn::Record => {
+                self.finish_typing();
+                return Out::Record;
             }
             Btn::Save => {
                 self.finish_typing();
@@ -599,7 +607,7 @@ impl Overlay {
         let s = self.s;
         let bs = 36.0 * s;
         let gap = 4.0 * s;
-        let items: Vec<(Btn, char)> = vec![
+        let mut items: Vec<(Btn, char)> = vec![
             (Btn::Tool(Tool::Select), '\u{E7A8}'),
             (Btn::Tool(Tool::Pen), '\u{EDFB}'),
             (Btn::Tool(Tool::Text), '\u{E8D2}'),
@@ -615,6 +623,10 @@ impl Overlay {
             (Btn::Save, '\u{E74E}'),
             (Btn::Close, '\u{E711}'),
         ];
+        // Düzenlenen eski bir resimde kaydedilecek canlı ekran yok.
+        if self.editing.is_none() {
+            items.insert(items.len() - 2, (Btn::Record, '\u{E714}'));
+        }
         let seps = 2.0 * 10.0 * s;
         let tw = items.len() as f32 * (bs + gap) - gap + 16.0 * s + seps;
         let th = bs + 12.0 * s;
@@ -691,6 +703,7 @@ impl Overlay {
                 Btn::Copy => t!("Kopyala (Ctrl+C)", "Copy (Ctrl+C)"),
                 Btn::Ocr => t!("Yazıyı kopyala (Ctrl+T)", "Copy text (Ctrl+T)"),
                 Btn::Translate => t!("Çevir (Ctrl+Shift+T)", "Translate (Ctrl+Shift+T)"),
+                Btn::Record => t!("Alanı videoya kaydet (Ctrl+R)", "Record this area (Ctrl+R)"),
                 Btn::Save => if self.editing.is_some() { t!("Kaydet (Ctrl+S)", "Save (Ctrl+S)") } else { t!("Masaüstüne kaydet (Ctrl+S)", "Save to desktop (Ctrl+S)") },
                 Btn::Close => t!("Kapat (Esc)", "Close (Esc)"),
                 Btn::Qr(..) => "",

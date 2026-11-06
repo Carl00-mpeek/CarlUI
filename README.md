@@ -109,6 +109,15 @@
   fullscreen too. Settings for microphone, noise suppression, quality,
   resolution, frame rate and deleting old clips. **Alt+F8** opens a small
   control panel that doesn't steal focus from the game.
+- **Area recording:** Select an area in the screenshot tool and press the
+  record button (Ctrl+R). The area is recorded to an MP4 with sound until you
+  press Stop or **Ctrl+Alt+R**, and the result can be turned into a GIF.
+- **File unlocker (Ctrl+Alt+U):** Shows which app is holding a file or folder
+  and asks it to close, or force closes it once you confirm. Also offered for
+  items the Full Uninstaller can't delete.
+- **Window layouts (Ctrl+Alt+L):** Puts windows back after a screen is
+  unplugged and returned or after sleep. Save arrangements as "work" or
+  "game" and apply them in one click; apps that are closed aren't launched.
 - **Screenshot (Alt+X):** All monitors freeze; select an area, draw, type,
   erase, undo, copy or save. **Ctrl+T** reads the text in the selection and
   copies it (OCR); QR codes in the selection are read, and a 2FA QR goes to
@@ -150,6 +159,9 @@
 | Ctrl+Alt+P | Carl Vault |
 | Ctrl+Shift+R | Batch rename |
 | Alt+F10 / Alt+F8 | Instant replay: save the last minutes / open the panel |
+| Ctrl+Alt+R | Stop area recording |
+| Ctrl+Alt+U | File unlocker |
+| Ctrl+Alt+L | Window layouts |
 | Ctrl+Alt+S | Read selected text aloud |
 | Ctrl+Alt+D | Dictation |
 | Ctrl+Alt+A (hold) | Voice assistant |

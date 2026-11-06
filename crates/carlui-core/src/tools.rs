@@ -82,6 +82,10 @@ pub struct ToolsConfig {
     pub rename: RenameConfig,
     /// Disk analizörü modülü açık.
     pub disk_enabled: bool,
+    /// Dosya kilidi açıcı modülü açık.
+    pub unlock_enabled: bool,
+    /// Ekran değişince ve uykudan sonra pencereleri eski yerlerine koy.
+    pub window_memory: bool,
     /// Metin genişletici modülü açık.
     pub expander: bool,
     pub snippets: Vec<Snippet>,
@@ -98,6 +102,8 @@ impl Default for ToolsConfig {
             rename_enabled: true,
             rename: RenameConfig::default(),
             disk_enabled: true,
+            unlock_enabled: true,
+            window_memory: true,
             expander: true,
             snippets: vec![
                 Snippet { key: ";tarih".into(), text: "{tarih}".into() },
@@ -137,6 +143,21 @@ impl ShortcutsConfig {
             return None;
         }
         combo(&self.rename, "yeniden adlandırma").or_else(|| crate::keys::parse_combo(&Self::default().rename).ok())
+    }
+
+    /// Dosya kilidi açıcı kısayolu (yalnızca Gezgin/masaüstü öndeyken; boşsa None).
+    pub fn unlock_combo(&self) -> Option<crate::keys::Combo> {
+        combo(&self.unlock, "dosya kilidi açıcı")
+    }
+
+    /// Pencere düzenleri penceresinin kısayolu (boşsa None).
+    pub fn layouts_combo(&self) -> Option<crate::keys::Combo> {
+        combo(&self.layouts, "pencere düzenleri")
+    }
+
+    /// Alan kaydını durduran kısayol (yalnızca kayıt sürerken; boşsa None).
+    pub fn record_stop_combo(&self) -> Option<crate::keys::Combo> {
+        combo(&self.record_stop, "alan kaydı")
     }
 
     /// Disk analizörü kısayolu (boşsa None).

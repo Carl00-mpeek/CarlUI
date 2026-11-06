@@ -317,6 +317,12 @@ pub struct ShortcutsConfig {
     pub rename: String,
     /// Disk alanı analizörü; varsayılan boş = kapalı.
     pub disk: String,
+    /// Dosya kilidi açıcı: Gezgin'de seçili öğeyi kimin tuttuğunu gösterir.
+    pub unlock: String,
+    /// Pencere düzenleri penceresi: kaydet ve uygula.
+    pub layouts: String,
+    /// Süren alan kaydını durdurur.
+    pub record_stop: String,
     /// Anlık tekrar: son N dakikayı kaydet, ör. "Alt+F10".
     pub replay: String,
     /// Anlık tekrar panelini aç/kapat (kayıt, mikrofon, kalite), ör. "Alt+F8".
@@ -342,6 +348,9 @@ impl Default for ShortcutsConfig {
             color_picker: String::new(),
             rename: "Ctrl+Shift+R".into(),
             disk: String::new(),
+            unlock: "Ctrl+Alt+U".into(),
+            layouts: "Ctrl+Alt+L".into(),
+            record_stop: "Ctrl+Alt+R".into(),
             replay: "Alt+F10".into(),
             replay_panel: "Alt+F8".into(),
             dictate: "Ctrl+Alt+D".into(),

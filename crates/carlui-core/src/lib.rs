@@ -12,6 +12,7 @@ pub mod bus;
 pub mod config;
 pub mod cursor;
 pub mod keys;
+pub mod layouts;
 pub mod log;
 pub mod paths;
 pub mod power;

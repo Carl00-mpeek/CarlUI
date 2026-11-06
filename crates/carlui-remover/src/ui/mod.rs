@@ -60,6 +60,8 @@ pub enum A {
     All,
     Reveal(usize),
     Delete,
+    /// Silinemeyen dosyaları dosya kilidi açıcıda göster.
+    Unlock,
     /// Listeye dön ve listeyi yenile.
     Close,
 }
@@ -308,6 +310,7 @@ impl View for Ui {
     fn click(&mut self, a: A, _ctx: &mut Ctx) {
         match a {
             A::Nothing | A::Search => {}
+            A::Unlock => self.unlock(),
             A::Tab(i) => {
                 self.tab = i;
                 self.scroll = 0;

@@ -5,7 +5,8 @@
 //! kapanır, arkada bellek tutmaz.
 //!
 //! `--pick` renk seçici · `--rename [--hwnd N]` yeniden adlandırma ·
-//! `--disk [sürücü]` disk analizörü.
+//! `--disk [sürücü]` disk analizörü · `--unlock [--hwnd N] [yollar]` dosya
+//! kilidi açıcı · `--layouts` pencere düzenleri.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -15,10 +16,12 @@ extern crate carlui_core;
 mod color;
 mod disk;
 mod field;
+mod layouts;
 mod note;
 mod picker;
 mod rename;
 mod select;
+mod unlock;
 
 use carlui_core::log;
 use carlui_ui::view;
@@ -35,6 +38,10 @@ fn main() {
         "pick"
     } else if has("--rename") {
         "rename"
+    } else if has("--unlock") {
+        "unlock"
+    } else if has("--layouts") {
+        "layouts"
     } else {
         "disk"
     };
@@ -44,11 +51,18 @@ fn main() {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
+    let fg = args.iter().position(|a| a == "--hwnd").and_then(|i| args.get(i + 1)).and_then(|s| s.parse::<isize>().ok()).map(|h| HWND(h as _));
     let r = match mode {
         "pick" => picker::run(),
-        "rename" => {
-            let fg = args.iter().position(|a| a == "--hwnd").and_then(|i| args.get(i + 1)).and_then(|s| s.parse::<isize>().ok()).map(|h| HWND(h as _));
-            rename::run(fg.unwrap_or_else(|| unsafe { GetForegroundWindow() }))
+        "rename" => rename::run(fg.unwrap_or_else(|| unsafe { GetForegroundWindow() })),
+        "layouts" => layouts::run(),
+        "unlock" => {
+            let given = args.iter().enumerate().filter(|(i, a)| !a.starts_with("--") && (*i == 0 || args[i - 1] != "--hwnd"));
+            let mut paths: Vec<std::path::PathBuf> = given.map(|(_, a)| a.into()).collect();
+            if let (true, Some(fg)) = (paths.is_empty(), fg) {
+                paths = select::selection(fg).into_iter().map(Into::into).collect();
+            }
+            unlock::run(paths)
         }
         _ => {
             let drive = args.iter().find(|a| !a.starts_with("--")).cloned();

@@ -26,6 +26,9 @@ pub enum Key {
     ColorPicker,
     Rename,
     Disk,
+    Unlock,
+    Layouts,
+    RecordStop,
     Replay,
     ReplayPanel,
     Dictate,
@@ -34,7 +37,7 @@ pub enum Key {
 }
 
 impl Key {
-    const COMBOS: [Key; 12] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk, Key::Replay, Key::ReplayPanel, Key::Dictate, Key::Speak, Key::Assist];
+    const COMBOS: [Key; 15] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk, Key::Unlock, Key::Layouts, Key::RecordStop, Key::Replay, Key::ReplayPanel, Key::Dictate, Key::Speak, Key::Assist];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -47,6 +50,9 @@ impl Key {
             Key::ColorPicker => t!("Renk seçici", "Color picker"),
             Key::Rename => t!("Toplu yeniden adlandırma", "Batch rename"),
             Key::Disk => t!("Disk analizörü", "Disk analyzer"),
+            Key::Unlock => t!("Dosya kilidi açıcı", "File unlocker"),
+            Key::Layouts => t!("Pencere düzenleri", "Window layouts"),
+            Key::RecordStop => t!("Alan kaydını durdur", "Stop area recording"),
             Key::Replay => t!("Anlık tekrarı kaydet", "Save instant replay"),
             Key::ReplayPanel => t!("Anlık tekrar paneli", "Instant replay panel"),
             Key::Dictate => t!("Sesle yazma", "Voice typing"),
@@ -66,6 +72,9 @@ impl Key {
             Key::ColorPicker => t!("Ekrandaki bir pikselin rengini panoya kopyalar.", "Copies the color of a pixel on screen."),
             Key::Rename => t!("Gezgin'de seçili dosyalar için.", "For files selected in Explorer."),
             Key::Disk => t!("Diskte yer kaplayanları gösterir.", "Shows what takes up disk space."),
+            Key::Unlock => t!("Gezgin'de seçili öğeyi hangi uygulamanın tuttuğunu gösterir.", "Shows which app holds the item selected in Explorer."),
+            Key::Layouts => t!("Pencere düzenini kaydeder ya da kayıtlı düzeni uygular.", "Saves the window layout or applies a saved one."),
+            Key::RecordStop => t!("Ekran görüntüsü aracından başlatılan kaydı bitirir.", "Ends a recording started from the screenshot tool."),
             Key::Replay => t!("Son dakikaları video olarak kaydeder (oyun içinde de).", "Saves the last minutes as a video (in games too)."),
             Key::ReplayPanel => t!("Kaydı başlatma, mikrofon ve kalite paneli; oyunun odağını almaz.", "Panel for recording, microphone and quality; never takes focus from the game."),
             Key::Dictate => t!("Bas, konuş, yeniden bas; söylediğin imlecin olduğu yere yazılır (yerel, buluta gitmez).", "Press, speak, press again; what you said is typed at the cursor (local, never sent to the cloud)."),
@@ -91,6 +100,9 @@ impl Key {
             Key::ColorPicker => s.color_picker.clone(),
             Key::Rename => s.rename.clone(),
             Key::Disk => s.disk.clone(),
+            Key::Unlock => s.unlock.clone(),
+            Key::Layouts => s.layouts.clone(),
+            Key::RecordStop => s.record_stop.clone(),
             Key::Replay => s.replay.clone(),
             Key::ReplayPanel => s.replay_panel.clone(),
             Key::Dictate => s.dictate.clone(),
@@ -111,6 +123,9 @@ impl Key {
             Key::ColorPicker => s.color_picker = v,
             Key::Rename => s.rename = v,
             Key::Disk => s.disk = v,
+            Key::Unlock => s.unlock = v,
+            Key::Layouts => s.layouts = v,
+            Key::RecordStop => s.record_stop = v,
             Key::Replay => s.replay = v,
             Key::ReplayPanel => s.replay_panel = v,
             Key::Dictate => s.dictate = v,
@@ -229,6 +244,9 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     key_row(app, p, f, Key::ColorPicker);
     key_row(app, p, f, Key::Rename);
     key_row(app, p, f, Key::Disk);
+    key_row(app, p, f, Key::Unlock);
+    key_row(app, p, f, Key::Layouts);
+    key_row(app, p, f, Key::RecordStop);
     key_row(app, p, f, Key::Replay);
     key_row(app, p, f, Key::ReplayPanel);
     key_row(app, p, f, Key::Dictate);

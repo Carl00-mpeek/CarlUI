@@ -45,6 +45,29 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{EDA2}'), t!("Aç", "Open"), Act::Tool("--disk"), true, false);
     }
 
+    f.toggle(
+        p,
+        t!("Dosya kilidi açıcı", "File unlocker"),
+        &t!(format!("Gezgin'de öğeyi seçip kısayola basın ({}).", sc.unlock), format!("Select an item in Explorer and press the shortcut ({}).", sc.unlock)),
+        c.unlock_enabled,
+        |c| c.tools.unlock_enabled ^= true,
+    );
+    if c.unlock_enabled {
+        let r = f.row(p, t!("Kilit açıcıyı aç", "Open the unlocker"), t!("Bir dosyayı hangi uygulamanın tuttuğunu gösterir, tek tıkla bıraktırır.", "Shows which app holds a file and makes it let go in one click."), 120.0);
+        p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E785}'), t!("Aç", "Open"), Act::Tool("--unlock"), true, false);
+    }
+
+    f.section(p, t!("Pencereler", "Windows"));
+    f.toggle(
+        p,
+        t!("Pencere yerlerini hatırla", "Remember window positions"),
+        t!("Ekran çıkarılıp takılınca ya da uykudan sonra pencereler eski yerlerine döner.", "When a screen comes back or the PC wakes, windows return to their places."),
+        c.window_memory,
+        |c| c.tools.window_memory ^= true,
+    );
+    let r = f.row(p, t!("Pencere düzenleri", "Window layouts"), &key_hint(&sc.layouts), 120.0);
+    p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E737}'), t!("Aç", "Open"), Act::Tool("--layouts"), true, false);
+
     f.section(p, t!("Ekran görüntüsü", "Screenshot"));
     let s = &app.cfg.shots;
     let sel = match s.action {

@@ -487,6 +487,17 @@ impl App {
             }
             return;
         }
+        if out == Out::Record {
+            let area = o.sel_px().map(|(a, b, c, d)| (o.frame.rect.left + a as i32, o.frame.rect.top + b as i32, c - a, d - b));
+            self.shot_close();
+            if let Some((x, y, w, h)) = area {
+                let exe = carlui_core::paths::sibling_exe("carlui-replay.exe");
+                if let Err(e) = std::process::Command::new(exe).arg("--area").arg(format!("{x},{y},{w},{h}")).spawn() {
+                    warn!("alan kaydı başlatılamadı: {e}");
+                }
+            }
+            return;
+        }
         if out == Out::Ocr || out == Out::Translate {
             let area = o.sel_px();
             let px = self.shots.overlay.as_mut().map(|o| (std::mem::take(&mut o.frame.px), o.frame.w, o.frame.h));

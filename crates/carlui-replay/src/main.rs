@@ -20,6 +20,7 @@ mod capture;
 mod denoise;
 mod mixer;
 mod panel;
+mod record;
 mod remux;
 mod ring;
 mod voice;
@@ -406,6 +407,11 @@ fn apply(sess: &mut Option<Session>, cfg: &Config) {
 }
 
 fn main() -> Result<()> {
+    // Alan kaydı ayrı süreç: anlık tekrarın tek örnek kuralına girmez.
+    let mut args = std::env::args().skip_while(|a| a != "--area");
+    if args.next().is_some() {
+        return record::run(&args.next().unwrap_or_default());
+    }
     log::init("replay");
     unsafe {
         let want_panel = std::env::args().any(|a| a == "--panel");

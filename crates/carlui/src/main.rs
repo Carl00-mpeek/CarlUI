@@ -15,6 +15,7 @@
 mod autostart;
 mod fullscreen;
 mod hotkey;
+mod layouts;
 mod pointer;
 mod supervisor;
 mod taskbar;
@@ -47,6 +48,10 @@ const TIMER_REAPPLY: usize = 2;
 const TIMER_FS_SOON: usize = 3;
 /// Windows imleç şemasını/boyutunu değiştirdi: bizimkini yeniden uygula.
 const TIMER_CURSOR: usize = 4;
+/// Pencere yerlerinin düzenli kaydı.
+const TIMER_WINDOWS: usize = 5;
+/// Ekran değişimi ya da uyanma yatıştı: pencereleri geri koy.
+const TIMER_WINDOWS_BACK: usize = 6;
 
 struct Host {
     hwnd: HWND,
@@ -61,6 +66,8 @@ struct Host {
     /// Öndeki uygulamanın pencere konumu kancası ve süreci (tam ekranda sökülür).
     follow_hook: HWINEVENTHOOK,
     follow_pid: u32,
+    /// Ekran dizilimine göre hatırlanan pencere yerleri.
+    windows: layouts::Memory,
 }
 
 fn explorer_pid() -> u32 {
@@ -323,6 +330,36 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                 });
                 LRESULT(0)
             }
+            WM_TIMER if wp.0 == TIMER_WINDOWS => {
+                with_host(|h| {
+                    if h.cfg.tools.window_memory && !h.fullscreen.active {
+                        h.windows.snapshot();
+                    }
+                });
+                LRESULT(0)
+            }
+            WM_TIMER if wp.0 == TIMER_WINDOWS_BACK => {
+                let _ = KillTimer(hwnd, TIMER_WINDOWS_BACK);
+                with_host(|h| {
+                    if h.cfg.tools.window_memory {
+                        h.windows.restore(h.fullscreen.active);
+                    }
+                });
+                LRESULT(0)
+            }
+            WM_POWERBROADCAST if wp.0 == PBT_APMSUSPEND as usize => {
+                with_host(|h| {
+                    if h.cfg.tools.window_memory {
+                        h.windows.snapshot();
+                        h.windows.hold();
+                    }
+                });
+                LRESULT(1)
+            }
+            WM_POWERBROADCAST if wp.0 == PBT_APMRESUMEAUTOMATIC as usize => {
+                SetTimer(hwnd, TIMER_WINDOWS_BACK, 3000, None);
+                LRESULT(1)
+            }
             WM_TIMER if wp.0 == TIMER_CURSOR => {
                 let _ = KillTimer(hwnd, TIMER_CURSOR);
                 with_host(|h| {
@@ -338,6 +375,12 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
             }
             WM_DISPLAYCHANGE => {
                 SetTimer(hwnd, TIMER_REAPPLY, 800, None);
+                with_host(|h| {
+                    if h.cfg.tools.window_memory {
+                        h.windows.hold();
+                    }
+                });
+                SetTimer(hwnd, TIMER_WINDOWS_BACK, 1500, None);
                 LRESULT(0)
             }
             WM_APP_CONFIG => {
@@ -351,8 +394,11 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                     if h.cfg.cursor != new.cursor {
                         pointer::sync(&new.cursor);
                     }
-                    if h.cfg.shortcuts != new.shortcuts || h.cfg.tools.rename_enabled != new.tools.rename_enabled || h.cfg.tools.disk_enabled != new.tools.disk_enabled {
+                    if h.cfg.shortcuts != new.shortcuts || h.cfg.tools.rename_enabled != new.tools.rename_enabled || h.cfg.tools.disk_enabled != new.tools.disk_enabled || h.cfg.tools.unlock_enabled != new.tools.unlock_enabled {
                         hotkey::register(h.hwnd, &new);
+                    }
+                    if !new.tools.window_memory {
+                        h.windows.clear();
                     }
                     h.cfg = new;
                 });
@@ -505,6 +551,7 @@ fn run() -> Result<()> {
         );
         // Ön plan değişmeden tam ekrana geçen oyunlar için seyrek bir yedek kontrol.
         SetTimer(hwnd, TIMER_FULLSCREEN, 1500, None);
+        SetTimer(hwnd, TIMER_WINDOWS, 5000, None);
 
         HOST.with(|h| {
             *h.borrow_mut() = Some(Host {
@@ -519,6 +566,7 @@ fn run() -> Result<()> {
                 pending_cfg,
                 follow_hook: HWINEVENTHOOK::default(),
                 follow_pid: 0,
+                windows: layouts::Memory::default(),
             })
         });
         with_host(follow_foreground);
