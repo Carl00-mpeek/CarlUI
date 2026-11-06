@@ -15,6 +15,9 @@ yazılır.
 **Düzeltme: Model silme.** Asistan listesindeki Whisper modellerinde Sil düğmesi
 çalışmıyordu. Bu dosyalar dikteyle ortak olduğu için model ikisinden de kalkar.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`dfaadef75234c0a7d1de7895bc8304d87413ceb23056de981e4001ba6f09b931`
+
 ## v0.7.0 — İndirme yöneticisi (2026-11-06)
 
 **İndirmeler artık onaysız başlamaz.** Tarayıcıdaki indirme hemen kesilir ve adada
