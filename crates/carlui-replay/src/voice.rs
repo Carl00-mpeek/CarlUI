@@ -7,7 +7,13 @@
 
 use carlui_ai::{catalog, listen::Listener, store};
 use carlui_core::config::Config;
-use std::sync::Mutex;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+    time::Duration,
+};
 use windows::Win32::{
     Foundation::{LPARAM, WPARAM},
     UI::WindowsAndMessaging::{PostThreadMessageW, WM_APP},
@@ -18,11 +24,13 @@ pub const WM_APP_VOICE: u32 = WM_APP + 4;
 
 /// Son kurulan ayarın anahtarı (model + dil) ve dinleyici (açılamadıysa yok).
 static CUR: Mutex<Option<(String, Option<Listener>)>> = Mutex::new(None);
+/// Modelin inmesini bekleyen iş parçacığı çalışıyor mu.
+static WAITING: AtomicBool = AtomicBool::new(false);
 
 /// Ayara göre dinleyiciyi başlatır, değiştirir ya da durdurur.
 pub fn sync(cfg: &Config, tid: u32) {
     let want = (cfg.ai.voice_command && cfg.replay.enabled).then(|| {
-        let m = catalog::chosen(&cfg.ai, catalog::Feature::Command);
+        let m = catalog::replay_command(&cfg.ai);
         (format!("{}|{}", m.id, cfg.ai.speech_lang), m, cfg.ai.speech_lang.clone())
     });
     let _ = std::thread::Builder::new().name("voice-sync".into()).spawn(move || {
@@ -50,11 +58,34 @@ pub fn sync(cfg: &Config, tid: u32) {
                 let body = if store::installed(m) {
                     t!("Mikrofon ya da model açılamadı.", "Couldn't open the microphone or the model.")
                 } else {
+                    wait_for_model(tid);
                     t!("Önce Ayarlar → Yapay zekâ'dan komut modelini indirin.", "Download the command model in Settings → AI first.")
                 };
                 crate::note(t!("Sesli komut", "Voice command"), body);
             }
         }
+    });
+}
+
+/// İndirme bitince ayar dosyası değişmez, kimse `sync` çağırmaz; bu yüzden
+/// model gelene (ya da sesli komut kapanana) dek ara ara bakılır.
+fn wait_for_model(tid: u32) {
+    if WAITING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let _ = std::thread::Builder::new().name("voice-wait".into()).spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_secs(5));
+            let cfg = carlui_core::config::load();
+            if !(cfg.ai.voice_command && cfg.replay.enabled) {
+                break;
+            }
+            if store::installed(catalog::replay_command(&cfg.ai)) {
+                sync(&cfg, tid);
+                break;
+            }
+        }
+        WAITING.store(false, Ordering::SeqCst);
     });
 }
 

@@ -16,10 +16,12 @@ pub fn root() -> PathBuf {
     carlui_core::paths::data_dir().join("models")
 }
 
-/// Bazı girdiler başka bir modelin dosyalarını kullanır (komut için Whisper base).
+/// Bazı girdiler başka bir modelin dosyalarını kullanır (komut için Whisper).
 fn real_id(id: &str) -> &str {
     match id {
         "cmd-whisper-base" => "whisper-base",
+        "cmd-whisper-small" => "whisper-small",
+        "cmd-whisper-turbo" => "whisper-turbo",
         x => x,
     }
 }

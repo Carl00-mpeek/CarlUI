@@ -1,7 +1,7 @@
 //! Bu modül "elimi klavyeye götürmeden 'YouTube'u aç', 'sesi 30 yap',
 //! 'YouTube'da lofi ara' diyebilir miyim?" sorununu çözüyor (sesli asistan).
 //! Kısayol (`shortcuts.assist`, varsayılan Ctrl+Alt+A) basılı tutulurken
-//! mikrofon dinlenir; bırakınca ses yerel Whisper (tiny ya da base) ile
+//! mikrofon dinlenir; bırakınca ses yerel Whisper ile
 //! yazıya dökülür, `carlui_launcher::voice` cümleyi anlar ve aramanın kendi
 //! eylemiyle uygular. Kısayola basıp hemen bırakılırsa susunca biter.
 //! Model ancak konuşma bitince çalışır; sürekli dinleme yoktur. Ses buluta gitmez.
@@ -36,10 +36,10 @@ const NO_SPEECH: Duration = Duration::from_secs(5);
 const TAP_MAX: Duration = Duration::from_secs(10);
 
 /// Komut için model: sesli komutta seçili Whisper; Vosk seçiliyse (yalnızca
-/// anlık tekrar cümlelerini tanır) Whisper tiny.
+/// anlık tekrar cümlelerini tanır) önerilen Whisper.
 fn model(cfg: &carlui_core::config::Config) -> &'static catalog::Model {
     let m = catalog::chosen(&cfg.ai, catalog::Feature::Command);
-    if m.id.starts_with("vosk") { catalog::get("cmd-whisper-tiny").unwrap_or(m) } else { m }
+    if m.id.starts_with("vosk") { catalog::recommended(catalog::Feature::Command) } else { m }
 }
 
 pub fn run(owner: HWND, accent: Option<u32>) -> Result<()> {

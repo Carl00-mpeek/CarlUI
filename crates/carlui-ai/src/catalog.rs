@@ -75,7 +75,7 @@ pub struct Model {
 
 impl Model {
     pub fn size(&self) -> u64 {
-        // Dosyasız girdi (komut için Whisper base) eşinin dosyalarını kullanır.
+        // Dosyasız girdi (komut için Whisper) eşinin dosyalarını kullanır.
         if self.files.is_empty() {
             if let Some(m) = self.id.strip_prefix("cmd-").and_then(get) {
                 return m.size();
@@ -154,8 +154,8 @@ pub static MODELS: &[Model] = &[
         feature: Feature::Command,
         tier: Tier::Small,
         name: "Vosk small TR",
-        about_tr: "Anlık tekrar komutları için önerilen. 50 MB, sürekli dinlerken işlemciyi yormaz. Sesli asistan bunun yerine Whisper tiny kullanır.",
-        about_en: "Recommended for instant replay commands. 50 MB, barely touches the CPU. The voice assistant uses Whisper tiny instead.",
+        about_tr: "Anlık tekrar komutları için. 50 MB, sürekli dinlerken işlemciyi yormaz. Sesli asistan bunun yerine Whisper base kullanır.",
+        about_en: "For instant replay commands. 50 MB, barely touches the CPU. The voice assistant uses Whisper base instead.",
         license: "Apache-2.0 (Alpha Cephei)",
         restricted: false,
         source: "https://alphacephei.com/vosk/models",
@@ -169,8 +169,8 @@ pub static MODELS: &[Model] = &[
         feature: Feature::Command,
         tier: Tier::Medium,
         name: "Whisper tiny",
-        about_tr: "Sesli asistanın varsayılanı; her dilde, en hafif Whisper. Yalnızca konuşma bitince çalışır.",
-        about_en: "The voice assistant default; any language, the lightest Whisper. Only runs once you stop talking.",
+        about_tr: "En hafif Whisper; her dilde çalışır, komutları daha sık karıştırır. Yalnızca konuşma bitince çalışır.",
+        about_en: "The lightest Whisper; any language, mixes up commands more often. Only runs once you stop talking.",
         license: "Apache-2.0 (OpenAI)",
         restricted: false,
         source: "https://huggingface.co/openai/whisper-tiny",
@@ -185,11 +185,35 @@ pub static MODELS: &[Model] = &[
         feature: Feature::Command,
         tier: Tier::Large,
         name: "Whisper base",
-        about_tr: "Daha doğru; asistan komutlarını daha az karıştırır. Dikte için Whisper base indirildiyse ek yer kaplamaz.",
-        about_en: "More accurate; the assistant mixes up fewer commands. Takes no extra space if Whisper base is downloaded for dictation.",
+        about_tr: "Sesli asistan için önerilen. Komutları az karıştırır. Dikte için indirildiyse ek yer kaplamaz.",
+        about_en: "Recommended for the voice assistant. Mixes up few commands. No extra space if downloaded for dictation.",
         license: "Apache-2.0 (OpenAI)",
         restricted: false,
         source: "https://huggingface.co/openai/whisper-base",
+        files: &[],
+    },
+    Model {
+        id: "cmd-whisper-small",
+        feature: Feature::Command,
+        tier: Tier::Large,
+        name: "Whisper small",
+        about_tr: "Base'den daha doğru, ama asistan her basışta birkaç saniye yükler. Anlık tekrar komutları açıksa oyunda da bellekte kalır.",
+        about_en: "More accurate than base, but the assistant takes a few seconds to load it on every press. Stays in memory during games if replay commands are on.",
+        license: "Apache-2.0 (OpenAI)",
+        restricted: false,
+        source: "https://huggingface.co/openai/whisper-small",
+        files: &[],
+    },
+    Model {
+        id: "cmd-whisper-turbo",
+        feature: Feature::Command,
+        tier: Tier::Large,
+        name: "Whisper large-v3-turbo",
+        about_tr: "En doğru sonuç, ama asistan her basışta 10 saniyeden uzun yükleyebilir. Anlık tekrar komutları açıksa oyunda da bellekte kalır.",
+        about_en: "Most accurate, but the assistant can take over 10 seconds to load it on every press. Stays in memory during games if replay commands are on.",
+        license: "MIT (OpenAI)",
+        restricted: false,
+        source: "https://huggingface.co/openai/whisper-large-v3-turbo",
         files: &[],
     },
     // ---- Arka plan silme
@@ -399,7 +423,7 @@ pub fn recommended(f: Feature) -> &'static Model {
         Feature::Upscale => "esrgan-x4",
         Feature::Background => "birefnet-general",
         Feature::Speech => "whisper-small",
-        Feature::Command => "vosk-tr",
+        Feature::Command => "cmd-whisper-base",
         Feature::Translate => "opus-en-tr",
         Feature::Speak => "kokoro-q8",
     };
@@ -415,6 +439,15 @@ pub fn selectable(m: &Model) -> bool {
 /// Ayarlarda seçili model (geçersiz ya da boşsa önerilen).
 pub fn chosen(cfg: &carlui_core::config::AiConfig, f: Feature) -> &'static Model {
     get(cfg.chosen(f.key())).filter(|m| m.feature == f && selectable(m)).unwrap_or_else(|| recommended(f))
+}
+
+/// Anlık tekrarın sürekli dinleyen modeli. Seçim yapılmadıysa Vosk kalır:
+/// oyun sürerken işlemciyi ve belleği en az o yorar.
+pub fn replay_command(cfg: &carlui_core::config::AiConfig) -> &'static Model {
+    if cfg.chosen(Feature::Command.key()).is_empty() {
+        return get("vosk-tr").expect("katalogda Vosk yok");
+    }
+    chosen(cfg, Feature::Command)
 }
 
 impl Tier {
@@ -452,7 +485,7 @@ mod tests {
         }
         for (i, m) in MODELS.iter().enumerate() {
             assert!(MODELS[..i].iter().all(|o| o.id != m.id), "aynı kimlik: {}", m.id);
-            assert!(!m.files.is_empty() || get("whisper-base").is_some() && m.id == "cmd-whisper-base", "dosyasız model: {}", m.id);
+            assert!(!m.files.is_empty() || m.id.strip_prefix("cmd-").and_then(get).is_some_and(|o| !o.files.is_empty()), "dosyasız model: {}", m.id);
             for f in m.files {
                 assert!(crate::net::allowed(f.url), "izinsiz adres: {}", f.url);
                 assert!(!f.url.contains("/resolve/main/") && !f.url.contains("/latest/"), "sürüme bağlı değil: {}", f.url);

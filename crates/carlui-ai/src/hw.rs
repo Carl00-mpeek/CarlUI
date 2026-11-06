@@ -27,8 +27,8 @@ const fn cpu(ram_gb: u32) -> Needs {
 pub fn needs(m: &Model) -> Needs {
     match m.id {
         "whisper-base" | "cmd-whisper-tiny" | "cmd-whisper-base" => n(4, 0),
-        "whisper-small" => n(8, 2),
-        "whisper-turbo" => n(16, 4),
+        "whisper-small" | "cmd-whisper-small" => n(8, 2),
+        "whisper-turbo" | "cmd-whisper-turbo" => n(16, 4),
         "birefnet-tiny" => n(8, 2),
         "birefnet-general" | "birefnet-matting" => n(16, 4),
         "esrgan-general" => n(4, 0),
