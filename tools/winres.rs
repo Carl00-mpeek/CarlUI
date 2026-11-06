@@ -32,6 +32,7 @@ fn version_rc() -> String {
         Ok("carlui-convert") => "CarlUI File converter",
         Ok("carlui-sensors") => "CarlUI Sensors",
         Ok("carlui-vault") => "CarlUI Vault",
+        Ok("carlui-uninstall") => "CarlUI Uninstaller",
         Ok("carlui-tools") => "CarlUI Tools",
         Ok("carlui-expand") => "CarlUI Text expander",
         Ok("carlui-replay") => "CarlUI Instant replay",

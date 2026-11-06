@@ -38,6 +38,7 @@ $marks = @{
     'convert'  = 'E8AB'
     # Vault: kilit.
     'vault'    = 'E72E'
+    'uninstall' = 'E74D'
     # Office: köşesi kıvrık belge, içinde satırlar.
     'office'   = { param($g, $s, $b) $g.FillPath($b, (RoundRect (0.27*$s) (0.17*$s) (0.46*$s) (0.66*$s) (0.06*$s))); $h = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 0x6A, 0x70, 0xF9)); foreach ($i in 0..3) { $w = if ($i -eq 3) { 0.18 } else { 0.30 }; $g.FillRectangle($h, (0.35*$s), ((0.33 + $i * 0.11)*$s), ($w*$s), [Math]::Max(1, 0.05*$s)) } }
     # Sensörler: termometre.

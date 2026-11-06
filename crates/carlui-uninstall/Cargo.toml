@@ -1,0 +1,17 @@
+[package]
+name = "carlui-uninstall"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+carlui-core.workspace = true
+carlui-ui.workspace = true
+carlui-clip = { path = "../carlui-clip" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dependencies.windows]
+workspace = true
+features = ["Management_Deployment"]

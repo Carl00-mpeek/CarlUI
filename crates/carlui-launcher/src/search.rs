@@ -549,6 +549,14 @@ pub fn build(raw: &str, cx: &Ctx) -> Vec<Item> {
         it.key = "carlui:vault".into();
         ranked.push((vs + boost(cx.usage, &it.key), it));
     }
+    // Tam Kaldırıcı (yanındaki carlui-uninstall.exe).
+    let us = ["tam kaldirici", "kaldirici", "uninstaller", "uninstall", "program kaldir"].iter().map(|k| score(k, &q)).max().unwrap_or(0);
+    if us >= 400 {
+        let exe = carlui_core::paths::sibling_exe("carlui-uninstall.exe").to_string_lossy().into_owned();
+        let mut it = Item::new(t!("Tam Kaldırıcı", "Uninstaller").to_string(), t!("Programları artıklarıyla birlikte kaldırır", "Removes programs along with their leftovers"), Icon::Glyph('\u{E74D}'), Act::Open(exe), "Uygulama");
+        it.key = "carlui:uninstall".into();
+        ranked.push((us + boost(cx.usage, &it.key), it));
+    }
     for (name, path, kw) in index::places() {
         let s = score(&norm(&name), &q).max(norm(kw).split(' ').map(|k| score(k, &q)).max().unwrap_or(0).min(700) - 60);
         if s >= 400 {

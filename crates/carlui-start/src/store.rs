@@ -41,6 +41,10 @@ impl Item {
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Store {
     pub items: Vec<Item>,
+    /// Tam Kaldırıcı kısayolu bir kez eklendi. Kullanıcı sonradan menüden
+    /// çıkarırsa geri gelmesin diye ayrıca tutulur.
+    #[serde(default)]
+    pub uninstaller: bool,
 }
 
 fn file() -> PathBuf {
@@ -51,19 +55,43 @@ fn tile(name: &str, path: &str) -> Tile {
     Tile { name: name.into(), path: path.into(), args: String::new() }
 }
 
+fn uninstaller() -> Tile {
+    tile(t!("Tam Kaldırıcı", "Uninstaller"), &paths::sibling_exe("carlui-uninstall.exe").to_string_lossy())
+}
+
 impl Store {
     pub fn load() -> Self {
         match std::fs::read(file()) {
-            Ok(b) => serde_json::from_slice(&b).unwrap_or_else(|e| {
-                warn!("start.json okunamadı ({e}); boş menüyle devam");
-                Self::default()
-            }),
+            Ok(b) => match serde_json::from_slice::<Self>(&b) {
+                Ok(mut s) => {
+                    if s.adopt(uninstaller()) {
+                        s.save();
+                    }
+                    s
+                }
+                Err(e) => {
+                    warn!("start.json okunamadı ({e}); boş menüyle devam");
+                    Self::default()
+                }
+            },
             Err(_) => {
                 let s = Self::seed();
                 s.save();
                 s
             }
         }
+    }
+
+    /// Eski menülere kaldırıcı kısayolunu bir kereliğine ekler; değiştiyse doğru.
+    fn adopt(&mut self, t: Tile) -> bool {
+        if self.uninstaller {
+            return false;
+        }
+        self.uninstaller = true;
+        if !self.contains(None, &t) {
+            self.items.push(Item::App(t));
+        }
+        true
     }
 
     fn seed() -> Self {
@@ -76,7 +104,8 @@ impl Store {
                 items.push(Item::App(Tile { name: p.name, path: p.path, args: p.args }));
             }
         }
-        Self { items }
+        items.push(Item::App(uninstaller()));
+        Self { items, uninstaller: true }
     }
 
     pub fn save(&self) {
@@ -199,5 +228,29 @@ impl Store {
         self.items.remove(from);
         let at = if from < onto { onto - 1 } else { onto };
         made.then_some(at)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kaldirici_bir_kez_eklenir_ve_geri_gelmez() {
+        let t = tile("Tam Kaldırıcı", "C:/x/carlui-uninstall.exe");
+        let mut s: Store = serde_json::from_str(r#"{"items":[]}"#).unwrap();
+        assert!(s.adopt(t.clone()));
+        assert_eq!(s.items.len(), 1);
+        s.remove(None, 0);
+        assert!(!s.adopt(t));
+        assert!(s.items.is_empty());
+    }
+
+    #[test]
+    fn zaten_sabitliyse_cift_eklenmez() {
+        let t = tile("Tam Kaldırıcı", "C:/x/carlui-uninstall.exe");
+        let mut s = Store { items: vec![Item::App(t.clone())], uninstaller: false };
+        assert!(s.adopt(t));
+        assert_eq!(s.items.len(), 1);
     }
 }
