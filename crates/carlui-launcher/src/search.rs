@@ -527,7 +527,7 @@ pub fn build(raw: &str, cx: &Ctx) -> Vec<Item> {
     // Uygulamalar, ayarlar, konumlar, komutlar
     let mut ranked: Vec<(i32, Item)> = Vec::new();
     for a in cx.apps {
-        let s = score(&norm(&a.name), &q);
+        let s = score(&norm(&a.name), &q).max(index::alias(a).map_or(0, |k| score(k, &q).min(700) - 60));
         if s >= 250 {
             let it = app_item(a, cx.run);
             ranked.push((s + 15 + boost(cx.usage, &it.key), it));

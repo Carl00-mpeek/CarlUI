@@ -62,12 +62,25 @@ fn pwstr_take(p: PWSTR) -> String {
 }
 
 /// Kaldırıcılar, kurulum sihirbazları ve belgeler listede kalabalık yapmasın.
+/// Başka programları kaldırmaya yarayan uygulamalar (HiBit Uninstaller, IObit
+/// Uninstaller) bunlardan değildir; onlar aranabilmeli. Bizim Tam Kaldırıcı
+/// aramaya ayrıca eklendiği için burada elenir.
 fn is_noise(name: &str, target: &str) -> bool {
     let n = name.to_lowercase();
     let t = target.to_lowercase();
     let file = t.rsplit('\\').next().unwrap_or("");
-    n.starts_with("uninstall") || n.contains("kaldır") || file.starts_with("unins") || file.contains("uninstall") || t.starts_with("http")
+    let stem = file.strip_suffix(".exe").unwrap_or(file);
+    let uninstaller = stem == "uninstaller" || stem.starts_with("unins") && !stem.contains("uninstaller") || stem.contains("uninstall") && !stem.contains("uninstaller");
+    n.starts_with("uninstall") || (n.contains("kaldır") && !n.contains("kaldırıcı")) || uninstaller || file == "carlui-remover.exe" || t.starts_with("http")
         || [".txt", ".url", ".html", ".htm", ".pdf", ".chm", ".rtf"].iter().any(|e| t.ends_with(e))
+}
+
+/// Adında geçmeyen ama aranan ad: Office uygulamaları "Word", "Excel" diye
+/// listelenir, "office" yazan onları da bulmalı.
+pub fn alias(a: &App) -> Option<&'static str> {
+    let id = a.aumid.to_lowercase();
+    let office = a.target.to_lowercase().contains("\\microsoft office\\") || id.contains("microsoft.office") || id.contains("microsoftoffice");
+    office.then_some("office")
 }
 
 /// `shell:AppsFolder` içeriğini okur. Bir COM (STA) iş parçacığında çağrılmalı.
@@ -411,4 +424,36 @@ pub fn window_of(app: &App, run: &[Running]) -> Option<Running> {
 pub fn legacy_usage() -> HashMap<String, u32> {
     let path = std::env::var("LOCALAPPDATA").map(|d| PathBuf::from(d).join("CarlSpotlight").join("usage.json")).unwrap_or_default();
     std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn uninstaller_apps_stay_but_their_uninstallers_go() {
+        for (name, file) in [("HiBit Uninstaller", "HiBitUninstaller.exe"), ("IObit Uninstaller", "IObitUninstaller.exe"), ("Word", "WINWORD.EXE")] {
+            assert!(!is_noise(name, &format!("C:\\Program Files\\App\\{file}")), "{name}");
+        }
+        for (name, file) in [
+            ("Uninstall IDM", "Uninstall.exe"),
+            ("Uninstall ISLC", "uninst.exe"),
+            ("Prismatik sil", "unins000.exe"),
+            ("App temizle", "uninstaller.exe"),
+            ("Foo sil", "foo_uninstall.exe"),
+            ("RBX Cursor Studio uygulamasını kaldır", "x.exe"),
+            ("CarlUI Tam Kaldırıcı", "carlui-remover.exe"),
+        ] {
+            assert!(is_noise(name, &format!("C:\\Program Files\\App\\{file}")), "{name}");
+        }
+    }
+
+    #[test]
+    fn office_apps_answer_to_office() {
+        let app = |target: &str, aumid: &str| App { name: "Word".into(), parsing: "p".into(), target: target.into(), aumid: aumid.into() };
+        assert_eq!(alias(&app("C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE", "")), Some("office"));
+        assert_eq!(alias(&app("", "Microsoft.Office.WINWORD.EXE.15")), Some("office"));
+        assert_eq!(alias(&app("", "Microsoft.MicrosoftOfficeHub_8wekyb3d8bbwe!Microsoft.MicrosoftOfficeHub")), Some("office"));
+        assert_eq!(alias(&app("C:\\Programs\\CarlUI\\carlui-office.exe", "")), None);
+    }
 }

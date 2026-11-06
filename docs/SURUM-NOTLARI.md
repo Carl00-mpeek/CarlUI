@@ -1,5 +1,20 @@
 # Sürüm notları
 
+## v0.9.1 — Arama, sıcaklık ve kayıt düzeltmeleri (2026-11-06)
+
+**Yeni: CPU sıcaklığı Ayarlar'dan kurulur.** PawnIO'yu CarlUI'den sonra kurduysan
+**Ayarlar → Ada → Sistem göstergesi** bölümündeki **Kur** düğmesi yeter. Bir kez
+yönetici izni ister. Şimdilik yalnızca Intel işlemcilerde çalışır.
+
+**Düzeltmeler**
+- **Arama:** HiBit Uninstaller gibi kaldırma programları aramada çıkmıyordu.
+- **Office:** "office" yazınca Word, Excel ve diğer Office uygulamaları da çıkar.
+- **İndirme göstergesi:** Discord'da yayın izlemek indirme sanılıyordu. Teams, Zoom,
+  Slack ve Spotify için de aynı düzeltme yapıldı.
+- **Anlık tekrar:** Oyundan çıkınca çözünürlük değişirse kayıt sıfırlanıyor, klip
+  1-2 saniye kalıyordu. Artık oyun kaydı korunur. Farklı çözünürlükteki bölümler
+  kenarlarında siyah boşlukla kaydedilir.
+
 ## v0.9.0 — Anında yanıt veren asistan (2026-11-06)
 
 **Asistan artık bekletmiyor.** Model bellekte hazır durur, tuşu bırakınca yazı yarım

@@ -115,16 +115,33 @@ fn pick(rx: f64, writes: &[(u32, String, f64)]) -> Option<usize> {
         return None;
     }
     let (i, w) = writes.iter().enumerate().max_by(|a, b| a.1 .2.total_cmp(&b.1 .2))?;
-    // Tarayıcı video izlerken de önbelleğe yazar; 4K akış ~3 MB/sn'yi geçmez.
-    let browser = BROWSERS.contains(&w.1.to_lowercase().as_str());
-    if browser && rx < BROWSER_RX {
+    // Video ve yayın izlerken bu programlar önbelleğe de yazar; 4K akış ~3 MB/sn'yi geçmez.
+    let streaming = STREAMING.contains(&w.1.to_lowercase().as_str());
+    if streaming && rx < STREAM_RX {
         return None;
     }
     (w.2 >= START_W && w.2 >= rx * 0.2).then_some(i)
 }
 
-const BROWSERS: &[&str] = &["firefox.exe", "chrome.exe", "msedge.exe", "opera.exe", "brave.exe", "vivaldi.exe"];
-const BROWSER_RX: f64 = 5.0 * MB;
+/// Tarayıcılar ve yayın/görüşme uygulamaları: asıl işleri akış olduğu için
+/// yalnızca akışın çıkamayacağı bir hızda indirme sayılırlar.
+const STREAMING: &[&str] = &[
+    "firefox.exe",
+    "chrome.exe",
+    "msedge.exe",
+    "opera.exe",
+    "brave.exe",
+    "vivaldi.exe",
+    "discord.exe",
+    "discordptb.exe",
+    "discordcanary.exe",
+    "ms-teams.exe",
+    "teams.exe",
+    "zoom.exe",
+    "slack.exe",
+    "spotify.exe",
+];
+const STREAM_RX: f64 = 5.0 * MB;
 
 struct Active {
     pid: u32,
@@ -305,6 +322,10 @@ mod tests {
         let ff = vec![(9, "firefox.exe".to_string(), 3.0 * MB)];
         assert_eq!(pick(3.0 * MB, &ff), None);
         assert_eq!(pick(30.0 * MB, &[(9, "firefox.exe".to_string(), 30.0 * MB)]), Some(0));
+        // Discord'da yayın izlemek indirme değil; gerçekten hızlı inerse sayılır.
+        let dc = |r: f64| vec![(7, "Discord.exe".to_string(), r * MB)];
+        assert_eq!(pick(2.0 * MB, &dc(1.5)), None);
+        assert_eq!(pick(20.0 * MB, &dc(20.0)), Some(0));
     }
 
     /// Canlı: `cargo test -p carlui-island -- --ignored live --nocapture`

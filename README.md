@@ -238,7 +238,8 @@ compare the SHA-256 of your download with the one on the Releases page.
 
 - **CPU temperature:** Intel CPUs need the [PawnIO](https://pawnio.eu) driver.
   If it's installed, the installer turns on "CPU temperature"; it asks for
-  admin rights once.
+  admin rights once. If you install PawnIO later, set it up from
+  **Settings → Island → System stats**.
 - **Browser extension:** Moves downloads started in the browser to the island
   and fills login pages from Carl Vault.
   It ships in `%LOCALAPPDATA%\Programs\CarlUI\extension\carlui-downloads`; turn

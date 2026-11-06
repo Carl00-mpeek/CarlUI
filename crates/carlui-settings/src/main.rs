@@ -73,6 +73,10 @@ pub enum Act {
     Studio,
     /// Ayarları dosyaya aktar (true) ya da dosyadan al (false).
     Backup(bool),
+    /// CPU sıcaklığı görevini yönetici izniyle kur.
+    SensorsSetup,
+    /// PawnIO sürücüsünün sayfasını aç.
+    SensorsDriver,
     /// Yapay zekâ modelini indir (true) ya da sil (false).
     Model(&'static str, bool),
     /// İçerik alanı (tekerlek kaydırma hedefi).
@@ -96,6 +100,8 @@ pub struct App {
     pub error: Option<(Key, String)>,
     /// İçe/dışa aktarma sonucu (Genel sayfasında gösterilir).
     pub notice: Option<String>,
+    /// CPU sıcaklığı kurulumunun hata iletisi (Ada sayfasında gösterilir).
+    pub sensor_note: Option<String>,
     scroll: HashMap<Page, f32>,
     max_scroll: HashMap<Page, f32>,
     drag: Option<(Rc<dyn Fn(&mut Config, f32)>, R)>,
@@ -194,6 +200,10 @@ impl App {
                     Err(e) => self.notice = Some(e),
                 }
             }
+            Act::SensorsSetup => self.sensor_note = pages::sensors::setup(self.hwnd),
+            Act::SensorsDriver => unsafe {
+                ShellExecuteW(HWND::default(), w!("open"), w!("https://pawnio.eu"), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
+            },
             Act::ReplayPanel => {
                 let _ = std::process::Command::new(carlui_core::paths::sibling_exe("carlui-replay.exe")).arg("--panel").spawn();
             }
@@ -639,6 +649,7 @@ fn main() -> Result<()> {
             recording: None,
             error: None,
             notice: None,
+            sensor_note: None,
             scroll: HashMap::new(),
             max_scroll: HashMap::new(),
             drag: None,

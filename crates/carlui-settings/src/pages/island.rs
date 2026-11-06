@@ -51,6 +51,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
 
     f.section(p, t!("Sistem göstergesi", "System stats"));
     f.toggle(p, t!("CPU sıcaklığı", "CPU temperature"), "", cfg.stats.cpu_temp, |c| c.stats.cpu_temp ^= true);
+    super::sensors::paint(app, p, f);
     f.toggle(p, t!("GPU sıcaklığı", "GPU temperature"), "", cfg.stats.gpu_temp, |c| c.stats.gpu_temp ^= true);
     f.toggle(p, t!("RAM kullanımı", "RAM usage"), "", cfg.stats.ram, |c| c.stats.ram ^= true);
     f.slider(p, t!("Açılma gecikmesi", "Open delay"), t!("Fare adanın üstünde bu kadar kalınca genişler.", "Expands after the mouse rests on the island this long."), cfg.stats.hover_ms as f32, 100.0, 1500.0, 50.0, |v| format!("{v:.0} ms"), |c, v| c.stats.hover_ms = v as u32);

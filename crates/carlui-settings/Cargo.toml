@@ -8,5 +8,6 @@ authors.workspace = true
 [dependencies]
 carlui-ai = { path = "../carlui-ai" }
 carlui-core.workspace = true
+carlui-sys = { path = "../carlui-sys" }
 carlui-ui.workspace = true
 windows.workspace = true

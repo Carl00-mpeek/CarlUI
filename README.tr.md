@@ -233,7 +233,8 @@ SHA-256 değerini Releases sayfasındakiyle karşılaştırabilirsin.
 
 - **CPU sıcaklığı:** Intel işlemcilerde sıcaklık için
   [PawnIO](https://pawnio.eu) sürücüsü gerekir. Kuruluysa kurucu "CPU
-  sıcaklığı" seçeneğini açar; bir kez yönetici izni ister.
+  sıcaklığı" seçeneğini açar; bir kez yönetici izni ister. PawnIO'yu sonradan
+  kurarsan **Ayarlar → Ada → Sistem göstergesi** bölümünden kur.
 - **Tarayıcı eklentisi:** Tarayıcıda başlayan indirmeleri adaya taşır
   ve giriş sayfalarını Carl Vault kasasından doldurur.
   `%LOCALAPPDATA%\Programs\CarlUI\extension\carlui-downloads` klasöründe gelir;

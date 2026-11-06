@@ -18,6 +18,7 @@ extern crate carlui_core;
 mod audio;
 mod capture;
 mod denoise;
+mod fit;
 mod mixer;
 mod panel;
 mod record;
@@ -163,8 +164,12 @@ unsafe fn video_loop(cfg: ReplayConfig, stop: Arc<AtomicBool>, cur: Current) {
     let period = 10_000_000 / fps as i64;
     // Kodlayıcı kareyi eşzamansız okur: dokular sırayla yeniden kullanılır.
     const POOL: usize = 6;
+    // Kayıt masaüstü boyutunda sabit kalır; oyun çözünürlüğü değiştirince
+    // tampon silinmez. Ekran kartı sığdıramazsa kaynak boyutuna dönülür.
+    let mut fixed = true;
     'outer: while !stop.load(Ordering::SeqCst) {
-        let (w, h) = (screen.w & !1, screen.h & !1);
+        let mut src = (screen.w & !1, screen.h & !1);
+        let (w, h) = if fixed { capture::desktop_size().unwrap_or(src) } else { src };
         let (ow, oh) = cfg.out_size(w, h);
         let mut fmt = writer::Format { w, h, ow, oh, hevc: cfg.codec == config::Codec::Hevc, fps, bitrate: cfg.bitrate(ow, oh), audio: true };
         if fmt.hevc && !hevc_ok(&fmt, &dm) {
@@ -173,14 +178,25 @@ unsafe fn video_loop(cfg: ReplayConfig, stop: Arc<AtomicBool>, cur: Current) {
         }
         set_info(&fmt);
         let make = || -> Option<(ID3D11Texture2D, Vec<ID3D11Texture2D>)> {
-            let p = screen.texture().ok()?;
-            let pool = (0..POOL).map(|_| screen.texture().ok()).collect::<Option<Vec<_>>>()?;
+            let p = screen.texture(src.0, src.1).ok()?;
+            let pool = (0..POOL).map(|_| screen.texture(w, h).ok()).collect::<Option<Vec<_>>>()?;
             Some((p, pool))
         };
-        let Some((pending, pool)) = make() else {
+        let Some((mut pending, pool)) = make() else {
             warn!("kayıt dokuları oluşturulamadı");
             return;
         };
+        let mut fit = None;
+        if src != (w, h) {
+            match fit::Fit::new(&screen.dev, &screen.ctx, &pending, src, &pool, (w, h)) {
+                Ok(f) => fit = Some(f),
+                Err(e) => {
+                    warn!("görüntü sığdırılamadı: {e}");
+                    fixed = false;
+                    continue 'outer;
+                }
+            }
+        }
         let r = Ring::new(fmt, dm.clone(), temp_dir(), cfg.minutes());
         *cur.lock().unwrap_or_else(|e| e.into_inner()) = Some(r.clone());
         info!("anlık tekrar kaydı başladı: {w}x{h} → {ow}x{oh} {} {fps} fps, {} Mbps, {} dk", if fmt.hevc { "H.265" } else { "H.264" }, fmt.bitrate / 1_000_000, cfg.minutes());
@@ -191,20 +207,39 @@ unsafe fn video_loop(cfg: ReplayConfig, stop: Arc<AtomicBool>, cur: Current) {
         let mut slot = 0;
         while !stop.load(Ordering::SeqCst) {
             let wait = ((next - ring::now()) / 10_000).clamp(0, 100) as u32;
-            match screen.next(wait, &pending) {
-                capture::Got::Frame => {
-                    have = true;
-                    fresh = true;
-                }
-                capture::Got::Idle => {}
-                capture::Got::Lost => {
-                    if (screen.w & !1, screen.h & !1) != (w, h) {
-                        info!("ekran boyutu değişti ({w}x{h} → {}x{}), kayıt yeniden kuruluyor", screen.w, screen.h);
-                        *cur.lock().unwrap_or_else(|e| e.into_inner()) = None;
-                        r.stop();
-                        continue 'outer;
+            let got = screen.next(wait, &pending);
+            let now_src = (screen.w & !1, screen.h & !1);
+            if now_src != src {
+                // Oyunun geçici kipi: kayıt sürer. Masaüstünün kendisi değiştiyse baştan kurulur.
+                if fixed && capture::desktop_size().unwrap_or(now_src) == (w, h) {
+                    let made = screen.texture(now_src.0, now_src.1).and_then(|p| {
+                        let f = if now_src == (w, h) { None } else { Some(fit::Fit::new(&screen.dev, &screen.ctx, &p, now_src, &pool, (w, h))?) };
+                        Ok((p, f))
+                    });
+                    match made {
+                        Ok((p, f)) => {
+                            info!("ekran boyutu değişti ({}x{} → {}x{}), kayıt sürüyor", src.0, src.1, now_src.0, now_src.1);
+                            pending = p;
+                            fit = f;
+                            src = now_src;
+                            have = false;
+                            fresh = false;
+                            continue;
+                        }
+                        Err(e) => {
+                            warn!("görüntü sığdırılamadı: {e}");
+                            fixed = false;
+                        }
                     }
                 }
+                info!("ekran boyutu değişti ({}x{} → {}x{}), kayıt yeniden kuruluyor", src.0, src.1, now_src.0, now_src.1);
+                *cur.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                r.stop();
+                continue 'outer;
+            }
+            if matches!(got, capture::Got::Frame) {
+                have = true;
+                fresh = true;
             }
             let t = ring::now();
             if t < next {
@@ -213,9 +248,20 @@ unsafe fn video_loop(cfg: ReplayConfig, stop: Arc<AtomicBool>, cur: Current) {
             // Ekran değişmese de yarım saniyede bir kare: video donmuş görünmesin.
             if have && (fresh || t - last >= 5_000_000) {
                 let tex = &pool[slot];
-                slot = (slot + 1) % POOL;
-                screen.ctx.CopyResource(tex, &pending);
+                match &fit {
+                    Some(f) => {
+                        if let Err(e) = f.blit(slot) {
+                            warn!("görüntü sığdırılamadı: {e}");
+                            fixed = false;
+                            *cur.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                            r.stop();
+                            continue 'outer;
+                        }
+                    }
+                    None => screen.ctx.CopyResource(tex, &pending),
+                }
                 r.video(tex, t, period);
+                slot = (slot + 1) % POOL;
                 last = t;
                 fresh = false;
             }

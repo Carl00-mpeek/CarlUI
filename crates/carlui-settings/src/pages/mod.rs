@@ -16,6 +16,7 @@ mod island;
 mod look;
 mod replay;
 mod search;
+pub mod sensors;
 pub mod shortcuts;
 mod tools;
 mod vault;

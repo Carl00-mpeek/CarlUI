@@ -4,13 +4,19 @@
 //! ya da (özel tam ekranda) oyunun doğrudan ekrana bastığı görüntüyü GPU'da
 //! kopyalar. Kare CPU'ya hiç inmez. Ekran kipi değişince (oyun özel tam ekrana
 //! geçince, çözünürlük değişince, UAC ekranında) çoğaltma kaybolur; yeniden
-//! kurulur.
+//! kurulur. Oyunun çözünürlüğü masaüstünden farklıysa kare `fit` ile sığdırılır.
 
 use windows::{
     core::*,
     Win32::{
         Foundation::HMODULE,
-        Graphics::{Direct3D::*, Direct3D11::*, Dxgi::Common::*, Dxgi::*},
+        Graphics::{
+            Direct3D::*,
+            Direct3D11::*,
+            Dxgi::Common::*,
+            Dxgi::*,
+            Gdi::{EnumDisplaySettingsW, DEVMODEW, ENUM_REGISTRY_SETTINGS},
+        },
     },
 };
 
@@ -30,6 +36,14 @@ pub enum Got {
     Idle,
     /// Çoğaltma şu an yok (güvenli masaüstü, kip değişimi); yeniden denenecek.
     Lost,
+}
+
+/// Birincil monitörün masaüstü boyutu (çift sayılı). Kayıtlı ayardan okunur:
+/// özel tam ekran oyunun geçici kipi bunu değiştirmez.
+pub fn desktop_size() -> Option<(u32, u32)> {
+    let mut m = DEVMODEW { dmSize: std::mem::size_of::<DEVMODEW>() as u16, ..Default::default() };
+    let ok = unsafe { EnumDisplaySettingsW(PCWSTR::null(), ENUM_REGISTRY_SETTINGS, &mut m) }.as_bool();
+    (ok && m.dmPelsWidth > 1 && m.dmPelsHeight > 1).then_some((m.dmPelsWidth & !1, m.dmPelsHeight & !1))
 }
 
 /// Birincil monitörü süren ekran kartında bir D3D11 aygıtı açar.
@@ -93,10 +107,10 @@ impl Screen {
     }
 
     /// Kodlayıcıya verilecek BGRA doku (çift boyutlu: H.264 tek sayı sevmez).
-    pub unsafe fn texture(&self) -> Result<ID3D11Texture2D> {
+    pub unsafe fn texture(&self, w: u32, h: u32) -> Result<ID3D11Texture2D> {
         let td = D3D11_TEXTURE2D_DESC {
-            Width: self.w & !1,
-            Height: self.h & !1,
+            Width: w,
+            Height: h,
             MipLevels: 1,
             ArraySize: 1,
             Format: DXGI_FORMAT_B8G8R8A8_UNORM,
@@ -133,12 +147,12 @@ impl Screen {
                         tex.GetDesc(&mut sd);
                         let mut dd = D3D11_TEXTURE2D_DESC::default();
                         dst.GetDesc(&mut dd);
-                        if sd.Width >= dd.Width && sd.Height >= dd.Height {
+                        if sd.Width & !1 == dd.Width && sd.Height & !1 == dd.Height {
                             let b = D3D11_BOX { left: 0, top: 0, front: 0, right: dd.Width, bottom: dd.Height, back: 1 };
                             self.ctx.CopySubresourceRegion(dst, 0, 0, 0, 0, &tex, 0, Some(&b));
                             got = Got::Frame;
                         } else {
-                            // Boyut değişti: çağıran yeni boyutla baştan kurar.
+                            // Boyut değişti: çağıran `dst`'yi yeni boyutla kurar.
                             self.w = sd.Width;
                             self.h = sd.Height;
                             got = Got::Lost;

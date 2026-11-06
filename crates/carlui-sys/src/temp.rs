@@ -44,6 +44,20 @@ struct Shared {
     cores: [f32; MAX],
 }
 
+const PAWNIO_DLL: &str = "C:\\Program Files\\PawnIO\\PawnIOLib.dll";
+
+/// PawnIO kurulu mu (okuyucunun yükleyeceği kitaplık yerinde mi)?
+pub fn driver_installed() -> bool {
+    std::path::Path::new(PAWNIO_DLL).exists()
+}
+
+/// İşlemci Intel mi? Okuyucu yalnızca Intel'in sıcaklık kayıtlarını bilir.
+pub fn intel() -> bool {
+    #[allow(unused_unsafe)]
+    let id = unsafe { std::arch::x86_64::__cpuid(0) };
+    (id.ebx, id.edx, id.ecx) == (0x756E_6547, 0x4965_6E69, 0x6C65_746E) // "GenuineIntel"
+}
+
 /// Paylaşılan bellekten son ölçüm (5 sn'den eskiyse yok sayılır).
 pub fn read() -> Option<Temps> {
     unsafe {
@@ -128,7 +142,7 @@ impl Msr {
     /// `module`: PawnIO'nun imzalı IntelMSR modülü (IntelMSR.bin).
     pub fn open(module: &[u8]) -> std::result::Result<Self, String> {
         unsafe {
-            let lib = LoadLibraryW(w!("C:\\Program Files\\PawnIO\\PawnIOLib.dll")).map_err(|_| t!("PawnIO kurulu değil", "PawnIO is not installed").to_string())?;
+            let lib = LoadLibraryW(&HSTRING::from(PAWNIO_DLL)).map_err(|_| t!("PawnIO kurulu değil", "PawnIO is not installed").to_string())?;
             let get = |n: PCSTR| GetProcAddress(lib, n).ok_or_else(|| "PawnIOLib eksik".to_string());
             let open: PioOpen = std::mem::transmute(get(s!("pawnio_open"))?);
             let load: PioLoad = std::mem::transmute(get(s!("pawnio_load"))?);
