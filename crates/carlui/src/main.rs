@@ -69,6 +69,9 @@ struct Host {
     follow_pid: u32,
     /// Ekran dizilimine göre hatırlanan pencere yerleri.
     windows: layouts::Memory,
+    /// Tam ekranın en son görüldüğü an. Oyun ekran kipini değiştirip bırakınca
+    /// gelen ekran değişikliği "monitör değişti" sayılıp pencereler oynatılmasın.
+    fullscreen_at: Option<std::time::Instant>,
 }
 
 fn explorer_pid() -> u32 {
@@ -328,6 +331,9 @@ fn check_fullscreen(h: &mut Host) {
         let class = if s.active { carlui_core::win::class_name(unsafe { GetForegroundWindow() }) } else { String::new() };
         info!("tam ekran: {} (özel: {}, monitör: {}, pencere: {class})", s.active, s.exclusive, s.monitor);
         h.bus.publish(&Event::Fullscreen { active: s.active, exclusive: s.exclusive, monitor: s.monitor.clone() });
+        if s.active || h.fullscreen.active {
+            h.fullscreen_at = Some(std::time::Instant::now());
+        }
         h.fullscreen = s;
     }
     follow_foreground(h);
@@ -376,7 +382,10 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                 let _ = KillTimer(hwnd, TIMER_WINDOWS_BACK);
                 with_host(|h| {
                     if h.cfg.tools.window_memory {
-                        h.windows.restore(h.fullscreen.active);
+                        // Oyun az önce tam ekrandaydı: geri koyma oyunun üstüne pencere getirip
+                        // onu arkaya atabilir (büyütülmüş pencere öne gelir).
+                        let recent = h.fullscreen_at.is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(30));
+                        h.windows.restore(h.fullscreen.active || recent);
                     }
                 });
                 LRESULT(0)
@@ -602,6 +611,7 @@ fn run() -> Result<()> {
                 follow_hook: HWINEVENTHOOK::default(),
                 follow_pid: 0,
                 windows: layouts::Memory::default(),
+                fullscreen_at: None,
             })
         });
         with_host(follow_foreground);

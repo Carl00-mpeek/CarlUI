@@ -1,5 +1,19 @@
 # Sürüm notları
 
+## v0.9.6 — Oyunda ses/şarkı göstergesi düzeltmesi (2026-11-08)
+
+**Düzeltme: Ses ya da şarkı değişince oyun arkaya düşüyordu.** Özel tam ekran
+(exclusive) oyunun üstünde herhangi bir pencere belirince Windows oyunu tam ekrandan
+düşürür; ses/şarkı göstergesi de bunu tetikliyor, oyun küçülüp arkaya geçiyordu.
+Artık oyun ekranı ele geçirmişse (ekran kartında özel sahiplik ya da masaüstünden
+farklı çözünürlük) gösterge çıkmaz. Kenarlıksız tam ekranda ve tam ekran videoda
+eskisi gibi odak almadan görünür. Ayrıca oyunun ekran kipi değişikliği "monitör
+değişti" sanılıp pencereler geri konmuyor: tam ekrandan sonraki 30 saniye boyunca
+pencere yerleri oynatılmaz.
+
+**SHA-256 (CarlUI-Setup.exe):**
+`cf5fd4103558c0013e7cefe5de82a8ad26617a3e85e37925d1412fda6f3a5565`
+
 ## v0.9.5 — Asistana döviz kuru (2026-11-08)
 
 **Yeni: "Dolar kaç TL?"** Sesli asistana kuru sorabilirsin: "dolar kaç", "100 euro kaç

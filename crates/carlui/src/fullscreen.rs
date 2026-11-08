@@ -45,9 +45,10 @@ pub fn query() -> State {
         return State::default();
     }
     let quns = unsafe { SHQueryUserNotificationState() }.unwrap_or(QUNS_ACCEPTS_NOTIFICATIONS);
-    let exclusive = quns == QUNS_RUNNING_D3D_FULL_SCREEN;
     let busy = quns == QUNS_BUSY || quns == QUNS_PRESENTATION_MODE;
-    let active = exclusive || busy || foreground_covers_monitor();
+    let covers = foreground_covers_monitor();
+    let exclusive = quns == QUNS_RUNNING_D3D_FULL_SCREEN || (covers && owns_display());
+    let active = exclusive || busy || covers;
     let monitor = if active { win::monitor_name(unsafe { GetForegroundWindow() }) } else { String::new() };
     State { active, exclusive, monitor }
 }
@@ -93,5 +94,36 @@ fn foreground_covers_monitor() -> bool {
             return r == m;
         }
         r.left <= m.left && r.top <= m.top && r.right >= m.right && r.bottom >= m.bottom
+    }
+}
+
+#[link(name = "gdi32")]
+extern "system" {
+    /// Bir süreç ekranı özel olarak ele geçirmiş mi (gerçek tam ekran, d3dkmthk.h)?
+    fn D3DKMTCheckExclusiveOwnership() -> u8;
+}
+
+/// Öndeki oyun ekranı ele geçirmiş mi (özel tam ekran)? Bu kipte oyunun üstünde
+/// beliren her pencere (ses göstergesi bile) Windows'un oyunu tam ekrandan
+/// düşürmesine, oyunun da küçülüp arkaya geçmesine yol açar. İki iz: ekran
+/// kartında özel sahiplik ya da öndeki pencerenin monitöründe çözünürlüğün /
+/// yenileme hızının masaüstü ayarından farklı olması (oyun kipi değiştirmiş).
+fn owns_display() -> bool {
+    unsafe {
+        if D3DKMTCheckExclusiveOwnership() != 0 {
+            return true;
+        }
+        let mon = MonitorFromWindow(GetForegroundWindow(), MONITOR_DEFAULTTONEAREST);
+        let mut mi = MONITORINFOEXW::default();
+        mi.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+        if !GetMonitorInfoW(mon, &mut mi as *mut _ as *mut MONITORINFO).as_bool() {
+            return false;
+        }
+        let dev = windows::core::PCWSTR(mi.szDevice.as_ptr());
+        let mode = |which| {
+            let mut d = DEVMODEW { dmSize: std::mem::size_of::<DEVMODEW>() as u16, ..Default::default() };
+            EnumDisplaySettingsW(dev, which, &mut d).as_bool().then(|| (d.dmPelsWidth, d.dmPelsHeight, d.dmDisplayFrequency))
+        };
+        matches!((mode(ENUM_CURRENT_SETTINGS), mode(ENUM_REGISTRY_SETTINGS)), (Some(now), Some(desk)) if now != desk)
     }
 }

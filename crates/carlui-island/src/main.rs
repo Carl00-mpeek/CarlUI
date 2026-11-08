@@ -480,7 +480,10 @@ impl App {
 
     /// Kısa göstergeyi açar; tam ekranda da görünür (ayar kapalı değilse).
     fn show_osd(&mut self, osd: Osd) {
-        if self.fullscreen && !self.cfg.game.show_osd {
+        // Ekranı ele geçirmiş (özel tam ekran) oyunun üstünde beliren her pencere
+        // Windows'un oyunu tam ekrandan düşürüp arkaya atmasına yol açar; orada
+        // gösterge çıkmaz. Pencereli tam ekranda odak almadan görünür.
+        if self.fullscreen && (self.exclusive || !self.cfg.game.show_osd) {
             return;
         }
         self.osd = Some(osd);
