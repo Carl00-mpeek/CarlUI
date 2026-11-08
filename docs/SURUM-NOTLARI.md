@@ -19,6 +19,9 @@ Bluetooth ve diğer kablosuz durumlarını artık sürekli sormak yerine değiş
 gösterge, oyunun olmadığı monitörde çıkar; oyun tam ekrandan düşmez. Tek monitörde
 gösterge yine çıkmaz.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`378be91eaed6cc652d6d9115b6364cb48af529395389e5379036b44850dce827`
+
 ## v0.9.6 — Oyunda ses/şarkı göstergesi düzeltmesi (2026-11-08)
 
 **Düzeltme: Ses ya da şarkı değişince oyun arkaya düşüyordu.** Özel tam ekran
