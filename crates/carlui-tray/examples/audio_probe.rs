@@ -1,5 +1,8 @@
 //! Tanı aracı: tray ses bölümünün göreceği çıkış aygıtlarını ve uygulama
 //! oturumlarını yazdırır (hiçbir şeyi değiştirmez).
+#[macro_use]
+extern crate carlui_core;
+
 #[path = "../src/audio.rs"]
 #[allow(dead_code)]
 mod audio;
