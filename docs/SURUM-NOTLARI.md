@@ -9,6 +9,9 @@ de okunur ("1 dolar, 50 lira 10 kuruş"). Kur, arama kutusundaki döviz çeviris
 yerden (Avrupa Merkez Bankası verisi, Frankfurter) gelir. Soru kurallarla anlaşılır,
 dil modeli beklenmez. "YouTube'da dolar kuru ara" yine arama yapar.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`2737243e176665eef011c505c01a698571835dfda7ffe025de03f4696c5ffc40`
+
 ## v0.9.4 — Akıllı asistan modeli düzeltmesi (2026-11-08)
 
 **Düzeltme: Akıllı asistan modeli kurulu görünmüyordu.** Qwen3 4B indirilip "hazır"
