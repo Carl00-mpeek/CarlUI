@@ -35,8 +35,8 @@ pub fn needs(m: &Model) -> Needs {
         "esrgan-x2" | "esrgan-anime" => n(8, 2),
         "esrgan-x4" => n(8, 4),
         "opus-en-tr" | "opus-tr-en" => n(8, 0),
-        "kokoro-fp32" => cpu(8),
-        "piper-kristin" | "piper-dfki-tr" | "kokoro-q8" | "vosk-tr" => cpu(4),
+        "kokoro-fp32" | "brain-qwen3-4b" => cpu(8),
+        "piper-kristin" | "piper-dfki-tr" | "kokoro-q8" => cpu(4),
         _ => n(8, 0),
     }
 }

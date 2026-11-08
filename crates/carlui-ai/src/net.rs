@@ -61,7 +61,10 @@ pub fn fetch(url: &str, dst: &Path, size: u64, sha256: &str, cancel: &AtomicBool
     };
     let mut child = Command::new(system32("curl.exe"))
         // -q en başta olmalı: kullanıcının .curlrc'si (vekil, --insecure vb.) okunmaz.
-        .args(["-q", "--location", "--fail", "--silent", "--proto", "=https", "--proto-redir", "=https", "--max-redirs", "5", "--tlsv1.2", "--retry", "3", "--connect-timeout", "20", "--max-filesize"])
+        .args(["-q", "--location", "--fail", "--silent", "--proto", "=https", "--proto-redir", "=https", "--max-redirs", "5", "--tlsv1.2", "--retry", "3", "--connect-timeout", "20"])
+        // Sunucu yanıt vermeyi keserse indirme sonsuza dek %0'da kalmasın:
+        // 30 sn boyunca 1 KB/sn altı kesilir (ve --retry ile yeniden denenir).
+        .args(["--speed-limit", "1024", "--speed-time", "30", "--max-filesize"])
         .arg(size.to_string())
         .arg("--output")
         .arg(&part)

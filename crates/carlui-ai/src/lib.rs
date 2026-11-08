@@ -8,13 +8,12 @@
 extern crate carlui_core;
 
 pub mod audio;
+pub mod brain;
 pub mod catalog;
-pub mod command;
 pub mod esrgan;
 pub mod g2p_en;
 pub mod g2p_tr;
 pub mod hw;
-pub mod listen;
 pub mod marian;
 pub mod mic;
 pub mod net;
@@ -25,7 +24,6 @@ pub mod runtime;
 pub mod spm;
 pub mod store;
 pub mod tts;
-pub mod vosk;
 pub mod weights;
 pub mod whisper;
 

@@ -101,6 +101,8 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     let r = f.row(p, t!("Dosya adı şablonu", "File name template"), &t!(format!("Örnek: {sample}"), format!("Example: {sample}")), 120.0);
     p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E70F}'), t!("Değiştir", "Change"), Act::Input(9), app.input.is_none(), false);
     super::form::draw(app, p, f, Form::ShotName, &[(t!("Şablon — {tarih} ve {saat} yerine konur; boş bırakılırsa varsayılan", "Template — {date} and {time} are filled in; leave empty for the default"), t!("Ekran görüntüsü {tarih} {saat}", "Screenshot {date} {time}"))]);
+    let r = f.row(p, t!("Alan kaydı klasörü", "Area recording folder"), &app.cfg.record.folder().display().to_string(), 120.0);
+    p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E838}'), t!("Aç", "Open"), Act::RecordFolder, true, false);
 
     f.section(p, t!("Görev yöneticisi", "Task manager"));
     let sel = if app.cfg.taskmgr.history_secs >= 120 { 1 } else { 0 };

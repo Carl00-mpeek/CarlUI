@@ -10,6 +10,8 @@
 extern crate carlui_core;
 
 pub mod actions;
+pub mod app_sound;
+mod arrange;
 pub mod calc;
 pub mod clipsearch;
 pub mod currency;
@@ -22,8 +24,10 @@ mod openwin;
 pub mod quickset;
 mod recent;
 pub mod search;
+mod spotify;
 pub mod timer;
 mod translate;
 pub mod usage;
 pub mod voice;
+pub mod voice_lines;
 mod whatsapp;

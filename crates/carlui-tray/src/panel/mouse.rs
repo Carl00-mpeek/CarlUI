@@ -124,6 +124,13 @@ impl Panel {
             return None;
         }
         match h {
+            Hit::Wifi if self.radios.ethernet_shown() => {
+                quick::to_wireless(self.radios, self.hwnd.0 as isize, WM_APP_RADIOS);
+                // Açılan Windows ağ listesi panelin altında kalmasın: panel kapanır.
+                unsafe {
+                    let _ = PostMessageW(self.hwnd, WM_APP_OUTSIDE, WPARAM(0), LPARAM(0));
+                }
+            }
             Hit::Wifi => {
                 let on = self.radios.wifi != Some(true);
                 quick::set_radio(false, on, self.hwnd.0 as isize, WM_APP_RADIOS);

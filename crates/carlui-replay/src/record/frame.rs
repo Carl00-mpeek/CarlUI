@@ -11,7 +11,7 @@ use windows::{
         Foundation::*,
         Graphics::Gdi::*,
         System::LibraryLoader::GetModuleHandleW,
-        UI::{Input::KeyboardAndMouse::*, WindowsAndMessaging::*},
+        UI::WindowsAndMessaging::*,
     },
 };
 
@@ -46,13 +46,7 @@ unsafe fn window(a: Area) -> Result<HWND> {
 
 unsafe fn listen(c: Option<Combo>) {
     let Some(c) = c else { return };
-    let mut mods = MOD_NOREPEAT;
-    for (on, m) in [(c.mods.ctrl, MOD_CONTROL), (c.mods.alt, MOD_ALT), (c.mods.shift, MOD_SHIFT), (c.mods.win, MOD_WIN)] {
-        if on {
-            mods |= m;
-        }
-    }
-    if let Err(e) = RegisterHotKey(None, HOTKEY, mods, c.vk) {
+    if let Err(e) = carlui_core::hotkey::register(HWND::default(), HOTKEY, c) {
         warn!("alan kaydı kısayolu kaydedilemedi: {e}");
     }
 }
@@ -79,7 +73,7 @@ pub fn run(area: Area, combo: Option<Combo>, shared: Arc<Shared>) {
             DispatchMessageW(&msg);
         }
         let _ = KillTimer(None, timer);
-        let _ = UnregisterHotKey(None, HOTKEY);
+        carlui_core::hotkey::unregister(HWND::default(), HOTKEY);
         if let Some(h) = hwnd {
             let _ = DestroyWindow(h);
         }

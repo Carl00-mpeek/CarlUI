@@ -16,7 +16,7 @@ use windows::Win32::{
 
 pub use crate::ai::AiConfig;
 pub use crate::theme::{Palette, ThemeMode};
-pub use crate::replay::{Cleanup, Clip, Codec, Quality, ReplayConfig, Resolution, SaveSignal};
+pub use crate::record::RecordConfig;
 pub use crate::tools::{exe_listed, CaseKind, ColorFormat, ExpandTrigger, RenameConfig, RenameMode, Snippet, ToolsConfig};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -38,7 +38,9 @@ pub struct Config {
     pub alerts: AlertsConfig,
     pub vault: VaultConfig,
     pub tools: ToolsConfig,
-    pub replay: ReplayConfig,
+    /// Alan kaydı; eski sürümlerin `[replay]` bölümü de okunur.
+    #[serde(alias = "replay")]
+    pub record: RecordConfig,
     pub taskmgr: TaskmgrConfig,
     pub shots: ShotsConfig,
     pub ai: AiConfig,
@@ -292,7 +294,7 @@ impl Default for ClipboardConfig {
 }
 
 /// Tüm genel kısayollar tek yerde. Boş metin = kapalı. Geçersiz değer
-/// (fare tuşu, değiştiricisiz tek tuş, Windows'un temel kısayolu …) gelirse
+/// (sol tık, değiştiricisiz tek tuş, Windows'un temel kısayolu …) gelirse
 /// varsayılan kullanılır ve loga yazılır; bkz. `keys` modülü.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
@@ -323,10 +325,6 @@ pub struct ShortcutsConfig {
     pub layouts: String,
     /// Süren alan kaydını durdurur.
     pub record_stop: String,
-    /// Anlık tekrar: son N dakikayı kaydet, ör. "Alt+F10".
-    pub replay: String,
-    /// Anlık tekrar panelini aç/kapat (kayıt, mikrofon, kalite), ör. "Alt+F8".
-    pub replay_panel: String,
     /// Sesle yazma (dikte): bas, konuş, yeniden bas; metin imlecin olduğu yere yazılır.
     pub dictate: String,
     /// Sesli okuma: seçili metni (yoksa panodakini) okur; yeniden basınca susar.
@@ -351,8 +349,6 @@ impl Default for ShortcutsConfig {
             unlock: "Ctrl+Alt+U".into(),
             layouts: "Ctrl+Alt+L".into(),
             record_stop: "Ctrl+Alt+R".into(),
-            replay: "Alt+F10".into(),
-            replay_panel: "Alt+F8".into(),
             dictate: "Ctrl+Alt+D".into(),
             speak: "Ctrl+Alt+S".into(),
             assist: "Ctrl+Alt+A".into(),

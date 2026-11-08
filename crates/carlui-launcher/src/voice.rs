@@ -7,10 +7,12 @@
 //! Eylemler aramanın kendi eylemleridir (`actions::run`, `quickset`).
 
 use crate::{
-    fuzzy,
+    app_sound::{self, Sound},
+    arrange, fuzzy,
     index::{self, App, Running},
     quickset::{self, Quick},
     search::{self, enc, norm, Act, Sys},
+    spotify,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -31,6 +33,15 @@ pub enum Intent {
     Step(i8),
     Media(Media),
     Lock,
+    /// Spotify'da şarkı, sanatçı ya da tür.
+    Play(String),
+    /// Yalnızca bir uygulamanın sesi.
+    AppSound { app: String, what: Sound },
+    /// Uygulamaları ekranda yan yana diz; 0 ekran söylenmedi demektir.
+    Split { apps: Vec<String>, screen: u8 },
+    Move { app: String, screen: u8 },
+    /// Dil modeli bunu komut saymadı.
+    Nothing,
     /// Fiil yok, kısa: büyük olasılıkla bir ad ("spotify").
     Guess(String),
     /// Anlaşılamadı; uzunsa web'de aranır.
@@ -150,6 +161,11 @@ fn site_of(said: &str) -> Option<(f32, &'static Site)> {
         .max_by(|a, b| a.0.total_cmp(&b.0))
 }
 
+/// Modelin yazdığı site adı; "web" ya da bilinmeyen ad genel aramadır.
+pub(crate) fn site_title(said: &str) -> Option<String> {
+    site_of(said).map(|(_, s)| s.title.to_string())
+}
+
 /// "youtube'da", "youtubeda" → YouTube.
 fn site_with_locative(t: &Tok) -> Option<&'static Site> {
     if LOCATIVE.contains(&t.suf.as_str()) {
@@ -230,6 +246,12 @@ pub fn parse(text: &str) -> Intent {
         }
         if has(&["ac", "unmute"]) || words.contains(&"on") {
             return Intent::Quick(Quick::Mute(false));
+        }
+    }
+    // Parlaklık: "parlaklığı yüzde elli yap", "brightness 70".
+    if has(&["parlak", "brightness"]) {
+        if let Some(n) = words.iter().find_map(|w| number(w)) {
+            return Intent::Quick(Quick::Brightness(n));
         }
     }
     if has(&["louder"]) {
@@ -345,7 +367,7 @@ fn app_score(vs: &[String], name: &str) -> f32 {
     full.max(word)
 }
 
-fn best_app<'a>(said: &str, apps: &'a [App]) -> Option<(f32, &'a App)> {
+pub(crate) fn best_app<'a>(said: &str, apps: &'a [App]) -> Option<(f32, &'a App)> {
     let vs = variants(said);
     let thr = fuzzy::threshold(said);
     apps.iter()
@@ -367,6 +389,13 @@ pub enum How {
     Quick(Quick),
     Step(i8),
     Media(Media),
+    /// `app` Spotify masaüstü uygulamasıdır; yoksa tarayıcıda aranır.
+    Play { query: String, app: Option<App> },
+    AppSound { app: App, what: Sound },
+    Split { apps: Vec<App>, screen: u8 },
+    Move { app: App, screen: u8 },
+    /// Sırayla yapılacak işler.
+    Seq(Vec<How>),
     /// Hiçbir şey yapılmaz (bulunamadı).
     None,
 }
@@ -379,7 +408,7 @@ pub struct Plan {
 }
 
 impl Plan {
-    fn new(title: String, how: How) -> Self {
+    pub(crate) fn new(title: String, how: How) -> Self {
         Self { title, how }
     }
 
@@ -428,6 +457,44 @@ pub fn plan(i: &Intent, apps: &[App], run: &[Running], web_search: &str) -> Plan
             None => not_found(s),
         },
         Intent::Search { site: None, query } => web(web_search, query),
+        Intent::Search { site: Some(site), query } if site == "Spotify" => plan(&Intent::Play(query.clone()), apps, run, web_search),
+        Intent::Play(q) => {
+            let app = best_app("spotify", apps).map(|(_, a)| a.clone());
+            let title = if app.is_some() { t!(format!("Spotify'da çalınıyor: {q}"), format!("Playing on Spotify: {q}")) } else { t!(format!("Spotify'da aranıyor: {q}"), format!("Searching Spotify: {q}")) };
+            Plan::new(title, How::Play { query: q.clone(), app })
+        }
+        Intent::AppSound { app, what } => match best_app(app, apps) {
+            Some((_, a)) => Plan::new(sound_title(&a.name, *what), How::AppSound { app: a.clone(), what: *what }),
+            None => not_found(app),
+        },
+        Intent::Split { apps: said, screen } => {
+            let mut found: Vec<App> = Vec::new();
+            for s in said {
+                match best_app(s, apps) {
+                    Some((_, a)) if !found.contains(a) => found.push(a.clone()),
+                    Some(_) => {}
+                    None => return not_found(s),
+                }
+            }
+            if found.len() < 2 {
+                return not_found(said.join(", ").as_str());
+            }
+            if !arrange::has_screen(*screen) {
+                return no_screen(*screen);
+            }
+            let names = found.iter().map(|a| a.name.as_str()).collect::<Vec<_>>().join(", ");
+            let title = match screen {
+                0 => t!(format!("Yan yana diziliyor: {names}"), format!("Placing side by side: {names}")),
+                n => t!(format!("{n}. ekrana diziliyor: {names}"), format!("Placing on screen {n}: {names}")),
+            };
+            Plan::new(title, How::Split { apps: found, screen: *screen })
+        }
+        Intent::Move { app, screen } => match best_app(app, apps) {
+            Some(_) if !arrange::has_screen(*screen) => no_screen(*screen),
+            Some((_, a)) => Plan::new(t!(format!("{} {screen}. ekrana taşınıyor", a.name), format!("Moving {} to screen {screen}", a.name)), How::Move { app: a.clone(), screen: *screen }),
+            None => not_found(app),
+        },
+        Intent::Nothing => Plan::new(t!("Anlaşılamadı", "Didn't catch that").into(), How::None),
         Intent::Search { site: Some(site), query } => match SITES.iter().find(|s| s.title == site) {
             Some(s) if !s.search.is_empty() => Plan::new(t!(format!("{}'da aranıyor: {query}", s.title), format!("Searching {}: {query}", s.title)), How::Act(Act::Open(fill(s.search, query)))),
             Some(s) => web(web_search, &format!("{} {query}", s.title)),
@@ -447,6 +514,20 @@ pub fn plan(i: &Intent, apps: &[App], run: &[Running], web_search: &str) -> Plan
         Intent::Lock => Plan::new(t!("Bilgisayar kilitleniyor", "Locking the PC").into(), How::Act(Act::System(Sys::Lock))),
         Intent::Unknown(s) if s.split_whitespace().count() >= 2 => web(web_search, s),
         Intent::Unknown(s) => Plan::new(if s.is_empty() { t!("Anlaşılamadı", "Didn't catch that").into() } else { t!(format!("Anlaşılamadı: {s}"), format!("Didn't understand: {s}")) }, How::None),
+    }
+}
+
+fn no_screen(n: u8) -> Plan {
+    Plan::new(t!(format!("{n}. ekran yok"), format!("There's no screen {n}")), How::None)
+}
+
+fn sound_title(app: &str, what: Sound) -> String {
+    match what {
+        Sound::Level(n) => t!(format!("{app} sesi %{n}"), format!("{app} volume {n}%")),
+        Sound::Step(d) if d > 0 => t!(format!("{app} sesi açılıyor"), format!("{app} volume up")),
+        Sound::Step(_) => t!(format!("{app} sesi kısılıyor"), format!("{app} volume down")),
+        Sound::Mute(true) => t!(format!("{app} sesi kapatıldı"), format!("{app} muted")),
+        Sound::Mute(false) => t!(format!("{app} sesi açıldı"), format!("{app} unmuted")),
     }
 }
 
@@ -492,6 +573,11 @@ pub fn execute(h: &How) {
                 SendInput(&[key(false), key(true)], std::mem::size_of::<INPUT>() as i32);
             }
         }
+        How::Play { query, app } => spotify::play(query, app.as_ref()),
+        How::AppSound { app, what } => app_sound::apply(app, *what),
+        How::Split { apps, screen } => arrange::split(apps, *screen),
+        How::Move { app, screen } => arrange::move_to(app, *screen),
+        How::Seq(list) => list.iter().for_each(execute),
         How::None => {}
     }
 }

@@ -15,6 +15,7 @@ mod dock;
 mod iconcache;
 mod input;
 mod jumplist;
+mod media;
 mod menu;
 mod popup;
 mod procs;
@@ -155,7 +156,10 @@ impl App {
             let key = self.popup.key.clone();
             match self.dock.entries.iter().position(|e| e.key == key && !e.windows.is_empty()) {
                 Some(i) if self.dock.entries[i].windows != self.popup.windows => self.show_preview(i),
-                Some(_) => {}
+                Some(i) => {
+                    let _ = self.popup.retitle(&self.gfx, &self.preview_items(i));
+                    media::refresh(self.hwnd);
+                }
                 None => self.popup.hide(),
             }
         }
@@ -174,12 +178,29 @@ impl App {
         self.dock.slide(covered);
     }
 
+    fn preview_items(&self, i: usize) -> Vec<(HWND, String)> {
+        self.dock.entries[i].windows.iter().map(|&h| (h, tracker::title(h))).collect()
+    }
+
     fn show_preview(&mut self, i: usize) {
+        let items = self.preview_items(i);
         let e = &self.dock.entries[i];
-        let items: Vec<(HWND, String)> = e.windows.iter().map(|&h| (h, tracker::title(h))).collect();
         let key = e.key.clone();
+        let session = media::find(&e.app);
         let anchor = self.dock.anchor(i);
-        let _ = self.popup.show_preview(&self.gfx, &key, &items, anchor);
+        let _ = self.popup.show_preview(&self.gfx, &key, &items, session, anchor);
+        media::refresh(self.hwnd);
+    }
+
+    /// Medya oturumları değişti: açık önizleme güncellensin.
+    fn media_changed(&mut self) {
+        if self.popup.mode != Mode::Preview {
+            return;
+        }
+        let Some(i) = self.dock.entries.iter().position(|e| e.key == self.popup.key) else { return };
+        if !self.popup.update_media(media::find(&self.dock.entries[i].app)) {
+            self.show_preview(i);
+        }
     }
 
     /// Fare dock üzerinde dolaştıkça etiket/önizleme durumunu günceller.
@@ -210,6 +231,8 @@ impl App {
                 }
                 if has_windows && self.dock.cfg.dock.show_previews {
                     SetTimer(hwnd, TIMER_PREVIEW, 450, None);
+                    // Önizleme açılana dek oturum listesi hazır olsun.
+                    media::refresh(hwnd);
                 }
             },
             None => unsafe {
@@ -621,6 +644,10 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
                 }
                 LRESULT(0)
             }
+            media::WM_APP_MEDIA => {
+                with_app(|a| a.media_changed());
+                LRESULT(0)
+            }
             tracker::WM_APP_LOCATION => {
                 tracker::location_handled();
                 with_app(|a| a.intellihide_check());
@@ -712,6 +739,12 @@ extern "system" fn popup_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
                         tracker::activate(w);
                     }
                     Some(popup::Action::Close(w)) => tracker::close(w),
+                    Some(popup::Action::Media(app, cmd)) => {
+                        if cmd == media::Cmd::PlayPause {
+                            a.popup.toggle_play();
+                        }
+                        media::send(app, cmd, a.hwnd);
+                    }
                     None => {}
                 });
                 LRESULT(0)

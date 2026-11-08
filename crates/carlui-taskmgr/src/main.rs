@@ -261,6 +261,10 @@ impl App {
                 let (name, rows) = self.targets();
                 if !rows.is_empty() {
                     let ok = rows.iter().filter(|r| carlui_sys::process::terminate(r.pid)).count();
+                    // CarlUI koruyucusuyla birlikte kapandıysa görev çubuğu gizli kalır.
+                    if let Some(r) = rows.iter().find(|r| r.name.eq_ignore_ascii_case("carlui.exe") && !r.path.is_empty()) {
+                        let _ = std::process::Command::new(&r.path).arg("--repair").spawn();
+                    }
                     self.say(if ok == rows.len() {
             t!(format!("{name} kapatıldı"), format!("{name} ended"))
         } else if ok > 0 {

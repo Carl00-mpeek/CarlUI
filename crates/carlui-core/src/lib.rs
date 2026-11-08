@@ -11,18 +11,20 @@ pub mod ai;
 pub mod bus;
 pub mod config;
 pub mod cursor;
+pub mod hotkey;
 pub mod keys;
 pub mod layouts;
 pub mod log;
 pub mod paths;
 pub mod power;
 pub mod quick;
-pub mod replay;
+pub mod record;
 pub mod theme;
 pub mod tools;
 pub mod vaultlink;
 pub mod vcard;
 pub mod win;
+pub mod wired;
 
 /// Modül bu kodla çıkarsa gözetmen onu çöküş saymadan hemen yeniden açar
 /// (ör. açık/koyu tema değişince cam yüzeyler baştan kurulsun diye).

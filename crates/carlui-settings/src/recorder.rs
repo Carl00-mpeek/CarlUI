@@ -1,8 +1,9 @@
 //! Kısayol kaydedici. Kayıt sürerken düşük seviyeli klavye kancası kurulur ve
 //! basılan tuşlar yutulur: böylece Win+V gibi bir kısayolu kaydederken
-//! Windows'un ya da dock'un kendi kısayolu tetiklenmez. Yalnızca klavye
-//! dinlenir; fare tuşları hiçbir zaman kısayol olamaz (kayıt sırasında
-//! tıklamak kaydı iptal eder). Sonuç pencereye `WM_APP_KEY` ile gelir:
+//! Windows'un ya da dock'un kendi kısayolu tetiklenmez. Fare tuşu alabilen
+//! kısayollarda fare kancası da kurulur ve sağ, orta, yan tuşlar yakalanır.
+//! Sol tık (Mouse1) hiçbir zaman kısayol olamaz; kayıt sırasında tıklamak
+//! kaydı iptal eder. Sonuç pencereye `WM_APP_KEY` ile gelir:
 //! wParam = değiştiriciler (1 Ctrl, 2 Alt, 4 Shift, 8 Win), lParam = sanal tuş
 //! (0: yalnızca değiştiriciler basılıp bırakıldı).
 
@@ -20,6 +21,9 @@ pub const WM_APP_UNHOOK: u32 = WM_APP + 6;
 
 static TARGET: AtomicIsize = AtomicIsize::new(0);
 static HOOK: AtomicIsize = AtomicIsize::new(0);
+static MOUSE_HOOK: AtomicIsize = AtomicIsize::new(0);
+/// Basışı yutulan, bırakışı beklenen fare tuşu (0: yok).
+static MOUSE_UP: AtomicU8 = AtomicU8::new(0);
 static RECORDING: AtomicBool = AtomicBool::new(false);
 static DOWN: AtomicU8 = AtomicU8::new(0);
 static PEAK: AtomicU8 = AtomicU8::new(0);
@@ -84,7 +88,42 @@ unsafe extern "system" fn proc(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     LRESULT(1)
 }
 
-pub fn start(hwnd: HWND) {
+/// Fare iletisinden sanal tuş ve basış bilgisi; sol tuş bilerek yok.
+fn mouse_button(msg: u32, data: u32) -> Option<(u8, bool)> {
+    let x = if data >> 16 == 1 { 0x05 } else { 0x06 };
+    match msg {
+        WM_RBUTTONDOWN => Some((0x02, true)),
+        WM_RBUTTONUP => Some((0x02, false)),
+        WM_MBUTTONDOWN => Some((0x04, true)),
+        WM_MBUTTONUP => Some((0x04, false)),
+        WM_XBUTTONDOWN => Some((x, true)),
+        WM_XBUTTONUP => Some((x, false)),
+        _ => None,
+    }
+}
+
+unsafe extern "system" fn mouse_proc(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    if code >= 0 {
+        let m = &*(lp.0 as *const MSLLHOOKSTRUCT);
+        if let Some((vk, down)) = mouse_button(wp.0 as u32, m.mouseData) {
+            if down && RECORDING.load(Ordering::SeqCst) {
+                MOUSE_UP.store(vk, Ordering::SeqCst);
+                PEAK.store(0, Ordering::SeqCst);
+                post(WM_APP_KEY, DOWN.load(Ordering::SeqCst) as usize, vk as isize);
+                return LRESULT(1);
+            }
+            // Basışı yutulan tuşun bırakışı da yutulur; yoksa sağ tık menüsü açılabilir.
+            if !down && MOUSE_UP.compare_exchange(vk, 0, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+                post(WM_APP_UNHOOK, 0, 0);
+                return LRESULT(1);
+            }
+        }
+    }
+    CallNextHookEx(None, code, wp, lp)
+}
+
+/// `mouse`: fare tuşları da yakalansın (yalnızca değiştirici alan kısayollarda kapalı).
+pub fn start(hwnd: HWND, mouse: bool) {
     TARGET.store(hwnd.0 as isize, Ordering::SeqCst);
     DOWN.store(0, Ordering::SeqCst);
     PEAK.store(0, Ordering::SeqCst);
@@ -96,6 +135,13 @@ pub fn start(hwnd: HWND) {
             }
         }
     }
+    if mouse && MOUSE_HOOK.load(Ordering::SeqCst) == 0 {
+        unsafe {
+            if let Ok(h) = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_proc), GetModuleHandleW(None).unwrap_or_default(), 0) {
+                MOUSE_HOOK.store(h.0 as isize, Ordering::SeqCst);
+            }
+        }
+    }
 }
 
 /// Kaydı bitirir; basılı tuş kalmadıysa kancayı hemen kaldırır (yoksa
@@ -103,19 +149,19 @@ pub fn start(hwnd: HWND) {
 pub fn stop() {
     RECORDING.store(false, Ordering::SeqCst);
     PEAK.store(0, Ordering::SeqCst);
-    if DOWN.load(Ordering::SeqCst) == 0 {
-        unhook();
-    }
+    unhook();
 }
 
 pub fn unhook() {
-    if RECORDING.load(Ordering::SeqCst) {
+    if RECORDING.load(Ordering::SeqCst) || DOWN.load(Ordering::SeqCst) != 0 || MOUSE_UP.load(Ordering::SeqCst) != 0 {
         return;
     }
-    let h = HOOK.swap(0, Ordering::SeqCst);
-    if h != 0 {
-        unsafe {
-            let _ = UnhookWindowsHookEx(HHOOK(h as _));
+    for hook in [&HOOK, &MOUSE_HOOK] {
+        let h = hook.swap(0, Ordering::SeqCst);
+        if h != 0 {
+            unsafe {
+                let _ = UnhookWindowsHookEx(HHOOK(h as _));
+            }
         }
     }
 }
@@ -145,6 +191,10 @@ pub fn mods_text(m: Mods) -> String {
 /// Sanal tuşun ayar metnindeki adı (`keys::parse_combo`'nun tanıdığı adlar).
 pub fn vk_name(vk: u32) -> Option<String> {
     Some(match vk {
+        0x02 => "Mouse2".into(),
+        0x04 => "Mouse3".into(),
+        0x05 => "Mouse4".into(),
+        0x06 => "Mouse5".into(),
         0x30..=0x39 | 0x41..=0x5A => char::from_u32(vk)?.to_string(),
         0x70..=0x87 => format!("F{}", vk - 0x6F),
         0x20 => "Space".into(),

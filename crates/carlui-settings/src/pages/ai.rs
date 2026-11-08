@@ -51,20 +51,13 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         lang,
         86.0,
     );
-    f.toggle(
-        p,
-        t!("Sesli komutla klip kaydet", "Save clips by voice"),
-        t!("\"Son iki dakikayı kaydet\" deyin; anlık tekrar açık olmalı. Ses bilgisayardan çıkmaz.", "Say \"save the last two minutes\"; instant replay must be on. Audio never leaves the PC."),
-        c.voice_command,
-        |c| c.ai.voice_command ^= true,
-    );
     let key = if app.cfg.shortcuts.assist.trim().is_empty() { t!("kısayol", "the shortcut").to_string() } else { app.cfg.shortcuts.assist.clone() };
     f.toggle(
         p,
         t!("Sesli asistan", "Voice assistant"),
         &t!(
-            format!("{key} basılıyken söyleyin, bırakın: \"YouTube'u aç\", \"YouTube'da lofi ara\", \"sesi 30 yap\". Sesli komut modelini (Whisper) ilk kullanımda indirir."),
-            format!("Hold {key}, speak, release: \"open YouTube\", \"search lofi on YouTube\", \"volume 30\". Downloads the voice command model (Whisper) on first use.")
+            format!("{key} basılıyken söyleyin, bırakın: \"YouTube'u aç\", \"YouTube'da lofi ara\", \"sesi 30 yap\". Whisper yalnızca tuş basılıyken çalışır, yazıya dökünce kapanır; ilk kullanımda indirilir."),
+            format!("Hold {key}, speak, release: \"open YouTube\", \"search lofi on YouTube\", \"volume 30\". Whisper runs only while the key is held and closes after transcribing; downloaded on first use.")
         ),
         c.assistant,
         |c| c.ai.assistant ^= true,
@@ -76,6 +69,42 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         c.assist_confirm,
         |c| c.ai.assist_confirm ^= true,
     );
+    let brain = catalog::recommended(Feature::Brain);
+    let smart_desc = if store::installed(brain) {
+        t!(
+            "Kuralların anlamadığı uzun cümleler (\"Discord ve Steam'i 1. ekranda böl\") yerel dil modeline gider. Model yalnızca tuşa basınca açılır, iş bitince kapanır. Kapalıyken yalnızca Whisper ve hazır komutlar çalışır.",
+            "Long sentences the rules don't get (\"split Discord and Steam on screen 1\") go to a local language model. It only starts when you press the key and closes when done. When off, only Whisper and built-in commands run."
+        )
+    } else {
+        t!(
+            "Uzun cümleler için yerel dil modeli. Önce aşağıdaki Akıllı asistan bölümünden modeli indirin. Kapalıyken yalnızca Whisper ve hazır komutlar çalışır.",
+            "A local language model for long sentences. Download it first in the Smart assistant section below. When off, only Whisper and built-in commands run."
+        )
+    };
+    f.toggle(p, t!("Akıllı asistan", "Smart assistant"), smart_desc, c.smart, |c| c.ai.smart ^= true);
+    if c.smart {
+        f.choice(
+            p,
+            t!("Akıllı asistan nerede çalışsın", "Where the smart assistant runs"),
+            t!(
+                "Ekran kartında yanıt çok daha hızlı gelir (yaklaşık 0,1 sn); işlemcide 1–1,5 sn sürer.",
+                "The graphics card answers much faster (about 0.1 s); the CPU takes 1–1.5 s."
+            ),
+            &[(t!("İşlemci", "CPU"), edit(|c| c.ai.smart_gpu = false)), (t!("Ekran kartı", "Graphics card"), edit(|c| c.ai.smart_gpu = true))],
+            c.smart_gpu as usize,
+            120.0,
+        );
+        f.toggle(
+            p,
+            t!("Oyundayken de kullan", "Use it in games too"),
+            t!(
+                "Kapalıyken tam ekran oyun öndeyken dil modeli açılmaz; yalnızca Whisper ve hazır komutlar çalışır. Açarsanız yukarıda seçtiğiniz aygıt kullanılır; ağır oyunlarda (CS2 gibi) oyun birkaç saniye yavaşlayabilir.",
+                "When off, the language model doesn't start while a full-screen game is in front; only Whisper and built-in commands run. When on, the device chosen above is used and heavy games (like CS2) may slow down for a few seconds."
+            ),
+            c.smart_in_game,
+            |c| c.ai.smart_in_game ^= true,
+        );
+    }
     if let Some(e) = &app.ai_error {
         f.row_c(p, t!("Model silinemedi", "Couldn't remove the model"), e, 0.0, Some(ORANGE));
     }

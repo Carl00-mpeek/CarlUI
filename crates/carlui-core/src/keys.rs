@@ -1,8 +1,9 @@
 //! Bu modül "kullanıcı kısayolu değiştirirken sistemi bozmasın" sorununu,
 //! tek bir ortak doğrulayıcıyla çözüyor. Tüm modüller (ve ileride Ayarlar
 //! penceresi) kısayolları buradan geçirir:
-//! - Fare tuşları (sol/sağ/orta tık …) asla kısayol olamaz.
-//! - Değiştiricisiz tek tuş olamaz (yazı yazarken tetiklenir); yalnızca F13–F24 serbest.
+//! - Sol tık (Mouse1) asla kısayol olamaz. Diğer fare tuşları Mouse2–Mouse5 adıyla
+//!   ana tuş olabilir; kaydı `hotkey` modülü yapar.
+//! - Değiştiricisiz tek tuş olamaz (yazı yazarken tetiklenir); F13–F24 ve fare tuşları serbest.
 //! - Windows'un kritik kısayolları ve kopyala/yapıştır gibi temel kısayollar alınamaz.
 //! Geçersiz değer gelirse çağıran taraf varsayılana döner ve loga yazar.
 
@@ -25,6 +26,13 @@ pub struct Combo {
     pub mods: Mods,
     /// Sanal tuş kodu (VK_*).
     pub vk: u32,
+}
+
+impl Combo {
+    /// Ana tuş bir fare tuşu mu (Mouse2–Mouse5)?
+    pub fn is_mouse(&self) -> bool {
+        matches!(self.vk, 0x02 | 0x04 | 0x05 | 0x06)
+    }
 }
 
 const MOUSE_WORDS: &[&str] = &[
@@ -72,6 +80,17 @@ fn word_to_vk(w: &str) -> Option<u32> {
     })
 }
 
+/// Kısayol olabilen fare tuşları; Mouse1 (sol tık) bilerek yok.
+fn mouse_vk(w: &str) -> Option<u32> {
+    Some(match w {
+        "mouse2" => 0x02,
+        "mouse3" => 0x04,
+        "mouse4" => 0x05,
+        "mouse5" => 0x06,
+        _ => return None,
+    })
+}
+
 fn is_mouse(w: &str) -> bool {
     MOUSE_WORDS.iter().any(|m| w == *m || w.contains(m) && w.len() > 3)
 }
@@ -81,7 +100,7 @@ pub fn parse_mods(s: &str) -> Result<Mods, String> {
     let mut m = Mods::default();
     for w in s.split('+').map(|p| p.trim().to_lowercase()).filter(|p| !p.is_empty()) {
         if is_mouse(&w) {
-            return Err(t!("fare tuşları kısayol olamaz", "mouse buttons can't be shortcuts").into());
+            return Err(t!("burada fare tuşu kullanılamaz", "mouse buttons can't be used here").into());
         }
         if !word_to_mod(&w, &mut m) {
             return Err(t!(format!("'{w}' bir değiştirici tuş değil (Ctrl, Alt, Shift, Win)"), format!("'{w}' is not a modifier key (Ctrl, Alt, Shift, Win)")));
@@ -101,8 +120,8 @@ pub fn parse_combo(s: &str) -> Result<Combo, String> {
     let mut m = Mods::default();
     let mut vk = None;
     for w in s.split('+').map(|p| p.trim().to_lowercase()).filter(|p| !p.is_empty()) {
-        if is_mouse(&w) {
-            return Err(t!("fare tuşları kısayol olamaz", "mouse buttons can't be shortcuts").into());
+        if is_mouse(&w) && mouse_vk(&w).is_none() {
+            return Err(t!("sol tık kısayol olamaz; fare için Mouse2–Mouse5 kullan", "left click can't be a shortcut; use Mouse2–Mouse5 for the mouse").into());
         }
         if word_to_mod(&w, &mut m) {
             continue;
@@ -110,12 +129,12 @@ pub fn parse_combo(s: &str) -> Result<Combo, String> {
         if vk.is_some() {
             return Err(t!("kısayolda yalnızca bir ana tuş olabilir", "a shortcut can have only one main key").into());
         }
-        vk = Some(word_to_vk(&w).ok_or_else(|| t!(format!("'{w}' tanınmayan bir tuş"), format!("'{w}' is an unknown key")))?);
+        vk = Some(mouse_vk(&w).or_else(|| word_to_vk(&w)).ok_or_else(|| t!(format!("'{w}' tanınmayan bir tuş"), format!("'{w}' is an unknown key")))?);
     }
     let vk = vk.ok_or(t!("kısayolda bir ana tuş olmalı (ör. Ctrl+Space)", "a shortcut needs a main key (e.g. Ctrl+Space)"))?;
     let c = Combo { mods: m, vk };
-    // F13–F24 ve PrintScreen yazı yazmaz; tek başına kullanılabilir.
-    let free_alone = (0x7C..=0x87).contains(&vk) || vk == 0x2C;
+    // F13–F24, PrintScreen ve fare tuşları yazı yazmaz; tek başına kullanılabilir.
+    let free_alone = (0x7C..=0x87).contains(&vk) || vk == 0x2C || c.is_mouse();
     if !m.any() && !free_alone {
         return Err(t!("değiştiricisiz tek tuş olamaz (yazı yazarken tetiklenir)", "a single key without modifiers isn't allowed (fires while typing)").into());
     }
@@ -155,6 +174,25 @@ mod tests {
         assert!(parse_combo("Ctrl+Alt+Del").is_err());
         assert!(parse_combo("Ctrl").is_err());
         assert!(parse_combo("Ctrl+A+B").is_err());
+    }
+
+    #[test]
+    fn mouse() {
+        for (s, vk) in [("Mouse2", 0x02), ("Mouse3", 0x04), ("Mouse4", 0x05), ("mouse5", 0x06)] {
+            let c = parse_combo(s).unwrap();
+            assert_eq!(c.vk, vk);
+            assert!(c.is_mouse());
+        }
+        assert!(parse_combo("Ctrl+Mouse4").is_ok_and(|c| c.mods.ctrl && c.is_mouse()));
+        assert!(parse_combo("Shift+Mouse5").is_ok());
+        assert!(!parse_combo("Ctrl+Space").unwrap().is_mouse());
+        // Mouse1 hiçbir biçimde olmaz.
+        for s in ["Mouse1", "Ctrl+Mouse1", "Win+Alt+Mouse1", "Sağ tık", "LeftClick", "Mouse6", "Mouse0"] {
+            assert!(parse_combo(s).is_err(), "{s}");
+        }
+        assert!(parse_combo("Mouse4+Mouse5").is_err());
+        assert!(parse_combo("A+Mouse4").is_err());
+        assert!(parse_mods("Ctrl+Mouse4").is_err());
     }
 
     #[test]

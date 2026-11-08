@@ -29,19 +29,35 @@ impl Panel {
             let (bg, _) = self.rrect(tile_w, tile_h, 14.0 * s * rs, &off_brush)?;
             let (on, _) = self.rrect(tile_w, tile_h, 14.0 * s * rs, &self.accent_brush(true)?)?;
             on.SetOpacity(0.0)?;
-            let g = self.text.glyph(gfx, *glyph, 16.0 * s, 0.95)?;
-            let l = self.text.render(gfx, label, 13.0 * s, true, tile_w - 50.0 * s, 0.95)?;
             let rk = row.Children()?;
             rk.InsertAtTop(&bg)?;
             rk.InsertAtTop(&on)?;
-            rk.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, 14.0 * s, (tile_h - g.height) / 2.0)?)?;
-            rk.InsertAtTop(&self.sprite(&l.surface, l.width, l.height, 42.0 * s, (tile_h - l.height) / 2.0)?)?;
+            // Wi-Fi kutucuğunun ikinci yüzü "Ethernet": kablolu bağlıyken o görünür.
+            let mut faces = Vec::new();
+            for (glyph, label) in if n == 0 { vec![(*glyph, *label), ('\u{E839}', "Ethernet")] } else { vec![(*glyph, *label)] } {
+                let face = self.comp.CreateContainerVisual()?;
+                face.SetSize(v2(tile_w, tile_h))?;
+                let g = self.text.glyph(gfx, glyph, 16.0 * s, 0.95)?;
+                let l = self.text.render(gfx, label, 13.0 * s, true, tile_w - 50.0 * s, 0.95)?;
+                let fk = face.Children()?;
+                fk.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, 14.0 * s, (tile_h - g.height) / 2.0)?)?;
+                fk.InsertAtTop(&self.sprite(&l.surface, l.width, l.height, 42.0 * s, (tile_h - l.height) / 2.0)?)?;
+                face.SetOpacity(if faces.is_empty() { 1.0 } else { 0.0 })?;
+                rk.InsertAtTop(&face)?;
+                faces.push(face);
+            }
             kids.InsertAtTop(&row)?;
             self.stagger.push(row.cast()?);
-            tiles.push(Tile { rect: rect(x, y, tile_w, tile_h), on_layer: on });
+            let faces = (faces.len() == 2).then(|| {
+                let eth = faces.pop().unwrap();
+                [faces.pop().unwrap(), eth]
+            });
+            tiles.push(Tile { rect: rect(x, y, tile_w, tile_h), on_layer: on, faces });
         }
         self.bt = tiles.pop();
         self.wifi = tiles.pop();
+        // İçerik yeniden kurulunca (ör. ses karıştırıcısı açıldı) son durum korunur.
+        self.set_radios(self.radios);
         y += tile_h + (12.0 * s).round();
 
         // Kaydırıcılar: ses ve (destekleniyorsa) parlaklık.

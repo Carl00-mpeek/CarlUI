@@ -8,6 +8,7 @@
 //!   carlui.exe                    normal başlangıç
 //!   carlui.exe --restore-taskbar  çalışanı kapat ve görev çubuğunu geri getir
 //!   carlui.exe --quit             çalışanı düzgünce kapat
+//!   carlui.exe --repair           CarlUI çalışmıyorsa görev çubuğunu ve imleci geri getir
 //!   carlui.exe --guard <pid>      (iç kullanım) koruyucu süreç
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -104,6 +105,7 @@ fn main() {
             log::init("carlui");
             quit_running(Duration::from_secs(3));
         }
+        Some("--repair") => repair(),
         _ => {
             if let Err(e) = run() {
                 carlui_core::error!("başlatma hatası: {e}");
@@ -155,6 +157,38 @@ fn quit_running(timeout: Duration) {
     while host_running() && start.elapsed() < timeout {
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// CarlUI ana süreci koruyucusuyla birlikte sonlandırıldıysa (Görev Yöneticisi'nde
+/// "carlui.exe (2)" grubunu kapatmak) geri getirecek kimse kalmaz. Çalışan bir
+/// CarlUI yoksa görev çubuğunu ve imleci geri getirir; varsa hiçbir şeye dokunmaz.
+/// Anlık tekrar ve sesli klip kaldırıldı (0.9.3). Eski sürümün bıraktığı
+/// geçici video parçalarını (birkaç GB olabilir) ve artık kullanılmayan Vosk
+/// modelini sil. Kullanıcının kaydettiği klipler (Videolar\CarlUI) kalır.
+fn remove_old_replay() {
+    let data = carlui_core::paths::data_dir();
+    for dir in [data.join("replay"), data.join("models").join("vosk-tr")] {
+        if dir.is_dir() {
+            match std::fs::remove_dir_all(&dir) {
+                Ok(()) => info!("eski anlık tekrar dosyaları silindi: {}", dir.display()),
+                Err(e) => warn!("{} silinemedi: {e}", dir.display()),
+            }
+        }
+    }
+}
+
+fn repair() {
+    log::init("carlui");
+    // Koruyucu hâlâ yaşıyorsa önce o davransın.
+    std::thread::sleep(Duration::from_millis(800));
+    if host_running() {
+        return;
+    }
+    if taskbar::hidden_by_us() {
+        warn!("CarlUI sonlandırılmış; görev çubuğu geri getiriliyor");
+        taskbar::restore();
+    }
+    carlui_core::cursor::restore();
 }
 
 /// Koruyucu: ana süreç bitene kadar bekler. Bittiğinde sistem hâlâ değiştirilmiş
@@ -529,8 +563,8 @@ fn run() -> Result<()> {
         sup.run_module("island", "carlui-island.exe");
         sup.run_module("start", "carlui-start.exe");
         sup.run_module("expand", "carlui-expand.exe");
-        sup.run_module("replay", "carlui-replay.exe");
         sup.run_module_with("assist", "carlui-convert.exe", &["--assist-warm"]);
+        std::thread::spawn(remove_old_replay);
 
         let pending_cfg: Arc<Mutex<Option<Config>>> = Arc::default();
         let pending = pending_cfg.clone();

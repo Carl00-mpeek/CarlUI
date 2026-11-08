@@ -22,9 +22,6 @@ pub struct AiConfig {
     pub translate: String,
     /// Konuşma dili ("tr", "en" …); boşsa otomatik bulunur.
     pub speech_lang: String,
-    /// Sesli komutla anlık tekrar kaydı ("son iki dakikayı kaydet"). Mikrofon
-    /// sürekli dinlendiği için varsayılan kapalı; ses hiçbir yere gitmez.
-    pub voice_command: bool,
     /// Sesli okuma (İngilizce ses) modeli; Türkçe metin her zaman Türkçe sesle okunur.
     pub speak: String,
     /// Okuma hızı (1.0 normal; 0.5–2.0).
@@ -33,11 +30,19 @@ pub struct AiConfig {
     pub assistant: bool,
     /// Asistan söyleneni uygulamadan önce arama kutusunda onay bekler.
     pub assist_confirm: bool,
+    /// Akıllı asistan: kuralların çözemediği cümle yerel dil modeline gider.
+    /// Kapalıyken yalnızca Whisper ve kurallar çalışır.
+    pub smart: bool,
+    /// Dil modeli ekran kartında çalışsın (çok daha hızlı yanıt); kapalıysa işlemci.
+    pub smart_gpu: bool,
+    /// Tam ekran oyun öndeyken de dil modeli açılsın mı. Kapalıyken (varsayılan)
+    /// oyunda yalnızca Whisper ve kurallar çalışır; oyun yavaşlamaz.
+    pub smart_in_game: bool,
 }
 
 impl Default for AiConfig {
     fn default() -> Self {
-        Self { gpu: true, upscale: String::new(), background: String::new(), speech: String::new(), command: String::new(), translate: String::new(), speech_lang: String::new(), voice_command: false, speak: String::new(), speak_speed: 1.0, assistant: false, assist_confirm: false }
+        Self { gpu: true, upscale: String::new(), background: String::new(), speech: String::new(), command: String::new(), translate: String::new(), speech_lang: String::new(), speak: String::new(), speak_speed: 1.0, assistant: false, assist_confirm: false, smart: false, smart_gpu: false, smart_in_game: false }
     }
 }
 

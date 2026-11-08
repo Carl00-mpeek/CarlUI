@@ -21,6 +21,55 @@ pub struct Volume {
     ep: IAudioEndpointVolume,
 }
 
+/// Sürecin exe yolu; açılamıyorsa boş.
+pub fn process_exe(pid: u32) -> String {
+    use windows::Win32::System::Threading::*;
+    unsafe {
+        let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else { return String::new() };
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len);
+        let _ = CloseHandle(h);
+        if ok.is_ok() { String::from_utf16_lossy(&buf[..len as usize]) } else { String::new() }
+    }
+}
+
+/// Store uygulamasının kimliği; değilse boş.
+pub fn process_aumid(pid: u32) -> String {
+    use windows::Win32::{Storage::Packaging::Appx::GetApplicationUserModelId, System::Threading::*};
+    unsafe {
+        let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else { return String::new() };
+        let mut buf = [0u16; 512];
+        let mut len = buf.len() as u32;
+        let rc = GetApplicationUserModelId(h, &mut len, PWSTR(buf.as_mut_ptr()));
+        let _ = CloseHandle(h);
+        if rc.is_ok() && len > 1 { String::from_utf16_lossy(&buf[..len as usize - 1]) } else { String::new() }
+    }
+}
+
+/// Varsayılan çıkıştaki ses oturumlarından sürecine göre seçilenlerin ses kontrolleri
+/// (Ses Karıştırıcısı'ndaki uygulama kaydırıcıları). COM başlatılmış olmalı.
+pub fn app_sessions(hit: impl Fn(u32) -> bool) -> Vec<ISimpleAudioVolume> {
+    let mut found = Vec::new();
+    unsafe {
+        let Ok(en) = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL) else { return found };
+        let Ok(dev) = en.GetDefaultAudioEndpoint(eRender, eMultimedia) else { return found };
+        let Ok(mgr) = dev.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None) else { return found };
+        let Ok(list) = mgr.GetSessionEnumerator() else { return found };
+        for i in 0..list.GetCount().unwrap_or(0) {
+            let Ok(ctl) = list.GetSession(i) else { continue };
+            let Ok(ctl2) = ctl.cast::<IAudioSessionControl2>() else { continue };
+            let pid = ctl2.GetProcessId().unwrap_or(0);
+            if pid != 0 && hit(pid) {
+                if let Ok(v) = ctl.cast::<ISimpleAudioVolume>() {
+                    found.push(v);
+                }
+            }
+        }
+    }
+    found
+}
+
 impl Volume {
     /// COM bu iş parçacığında başlatılmış olmalı.
     pub fn new() -> Option<Self> {

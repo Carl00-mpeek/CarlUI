@@ -1,6 +1,6 @@
 //! Bu modül CarlUI'nin ayarlar penceresi (`carlui-settings.exe`). Sorun: tüm
 //! ayarlar `config.toml`'daydı; değiştirmek için dosyayı elle düzenlemek
-//! gerekiyordu ve yanlış bir değer (ör. fare tuşu kısayolu) fark edilmiyordu.
+//! gerekiyordu ve yanlış bir değer (ör. sol tık kısayolu) fark edilmiyordu.
 //! Çözüm: görev yöneticisiyle aynı akrilik cam pencere; solda kategoriler,
 //! sağda anahtar/kaydırıcı/seçici satırları ve bir kısayol kaydedici. Her
 //! değişiklik hemen `config.toml`'a yazılır; tüm modüller dosyayı izlediği için
@@ -66,9 +66,8 @@ pub enum Act {
     Ext(u8),
     /// Araç programını (`carlui-tools.exe`) verilen bayrakla başlat.
     Tool(&'static str),
-    /// Anlık tekrar kayıtlarının klasörünü Gezgin'de aç.
-    ReplayFolder,
-    ReplayPanel,
+    /// Alan kaydı videolarının klasörünü Gezgin'de aç.
+    RecordFolder,
     /// Ses stüdyosunu (`carlui-convert --studio`) aç.
     Studio,
     /// Ayarları dosyaya aktar (true) ya da dosyadan al (false).
@@ -177,14 +176,14 @@ impl App {
                 } else {
                     self.error = None;
                     self.recording = Some(k);
-                    recorder::start(self.hwnd);
+                    recorder::start(self.hwnd, !k.mods_only());
                 }
             }
             Act::OpenFile => unsafe {
                 ShellExecuteW(HWND::default(), w!("open"), w!("notepad.exe"), &HSTRING::from(carlui_core::paths::config_file().as_os_str()), PCWSTR::null(), SW_SHOWNORMAL);
             },
-            Act::ReplayFolder => unsafe {
-                let dir = self.cfg.replay.folder();
+            Act::RecordFolder => unsafe {
+                let dir = self.cfg.record.folder();
                 let _ = std::fs::create_dir_all(&dir);
                 ShellExecuteW(HWND::default(), w!("open"), &HSTRING::from(dir.as_os_str()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
             },
@@ -204,9 +203,6 @@ impl App {
             Act::SensorsDriver => unsafe {
                 ShellExecuteW(HWND::default(), w!("open"), w!("https://pawnio.eu"), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
             },
-            Act::ReplayPanel => {
-                let _ = std::process::Command::new(carlui_core::paths::sibling_exe("carlui-replay.exe")).arg("--panel").spawn();
-            }
             Act::Studio => {
                 let _ = std::process::Command::new(carlui_core::paths::sibling_exe("carlui-convert.exe")).arg("--studio").spawn();
             }

@@ -99,6 +99,8 @@ struct Slider {
 struct Tile {
     rect: RECT,
     on_layer: ShapeVisual,
+    /// Yalnızca Wi-Fi kutucuğunda: [Wi-Fi yüzü, Ethernet yüzü] (simge + ad).
+    faces: Option<[ContainerVisual; 2]>,
 }
 
 struct Cell {
@@ -299,10 +301,17 @@ impl Panel {
 
     pub fn set_radios(&mut self, r: Radios) {
         self.radios = r;
-        for (tile, on) in [(&self.wifi, r.wifi), (&self.bt, r.bluetooth)] {
+        // Kablolu bağlıyken ve Wi-Fi açık değilken kutucuk "Ethernet" olur ve yanar.
+        let eth = r.ethernet_shown();
+        let wifi_lit = if eth { Some(true) } else { r.wifi };
+        for (tile, on) in [(&self.wifi, wifi_lit), (&self.bt, r.bluetooth)] {
             if let Some(t) = tile {
                 let _ = self.motion.fade(&t.on_layer, h!("Opacity"), if on == Some(true) { tile_on() } else { 0.0 }, 160, 0);
             }
+        }
+        if let Some([wifi_face, eth_face]) = self.wifi.as_ref().and_then(|t| t.faces.as_ref()) {
+            let _ = wifi_face.SetOpacity(if eth { 0.0 } else { 1.0 });
+            let _ = eth_face.SetOpacity(if eth { 1.0 } else { 0.0 });
         }
     }
 

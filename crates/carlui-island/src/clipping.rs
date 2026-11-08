@@ -275,26 +275,18 @@ impl App {
     /// kayıt başarısız olur; onları dock'un klavye kancası yakalar.
     pub(crate) fn set_clip_hotkey(&mut self) {
         let hwnd = self.island.hwnd;
-        unsafe {
-            if self.clip_hotkey_on {
-                let _ = UnregisterHotKey(hwnd, HOTKEY_CLIP);
-                self.clip_hotkey_on = false;
-            }
-            if !self.cfg.clipboard.enabled || self.fullscreen || self.game {
-                return;
-            }
-            let Some(c) = self.cfg.shortcuts.clipboard_combo() else { return };
-            let mut mods = MOD_NOREPEAT;
-            for (on, m) in [(c.mods.ctrl, MOD_CONTROL), (c.mods.alt, MOD_ALT), (c.mods.shift, MOD_SHIFT), (c.mods.win, MOD_WIN)] {
-                if on {
-                    mods |= m;
-                }
-            }
-            match RegisterHotKey(hwnd, HOTKEY_CLIP, mods, c.vk) {
-                Ok(()) => self.clip_hotkey_on = true,
-                Err(_) if c.mods.win => info!("pano kısayolu {} Windows'a ayrılmış; dock'un klavye kancası yakalayacak", self.cfg.shortcuts.clipboard),
-                Err(e) => carlui_core::warn!("pano kısayolu {} kaydedilemedi (başka bir uygulama kullanıyor olabilir): {e}", self.cfg.shortcuts.clipboard),
-            }
+        if self.clip_hotkey_on {
+            carlui_core::hotkey::unregister(hwnd, HOTKEY_CLIP);
+            self.clip_hotkey_on = false;
+        }
+        if !self.cfg.clipboard.enabled || self.fullscreen || self.game {
+            return;
+        }
+        let Some(c) = self.cfg.shortcuts.clipboard_combo() else { return };
+        match carlui_core::hotkey::register(hwnd, HOTKEY_CLIP, c) {
+            Ok(()) => self.clip_hotkey_on = true,
+            Err(_) if c.mods.win => info!("pano kısayolu {} Windows'a ayrılmış; dock'un klavye kancası yakalayacak", self.cfg.shortcuts.clipboard),
+            Err(e) => carlui_core::warn!("pano kısayolu {} kaydedilemedi (başka bir uygulama kullanıyor olabilir): {e}", self.cfg.shortcuts.clipboard),
         }
     }
 

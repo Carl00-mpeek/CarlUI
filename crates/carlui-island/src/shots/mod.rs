@@ -33,6 +33,8 @@ use windows::Win32::UI::Shell::{SHFileOperationW, ShellExecuteW, SHFILEOPSTRUCTW
 // WM_APP+40/41 carlui-core'da (WM_CARLUI_SEARCH/START) adaya gelen mesajlar;
 // çakışmasın diye ekran görüntüsü 60'tan başlar.
 const WM_APP_SHOT: u32 = WM_APP + 60;
+/// Fare tuşuna atanmış ekran görüntüsü kısayolunun kimliği.
+const HOTKEY_SHOT: i32 = 3;
 const WM_APP_SHOT_KEY: u32 = WM_APP + 61;
 const WM_APP_SHOT_CHAR: u32 = WM_APP + 62;
 const WM_APP_SHOT_MOUSE: u32 = WM_APP + 63;
@@ -257,7 +259,14 @@ impl Shots {
     }
 
     pub fn set_combo(&self, cfg: &Config) {
+        let island = HWND(HWND_ISLAND.load(Ordering::Relaxed) as _);
+        carlui_core::hotkey::unregister(island, HOTKEY_SHOT);
         match cfg.shortcuts.screenshot_combo() {
+            // Klavye kancası fare tuşunu görmez.
+            Some(c) if c.is_mouse() => {
+                SHOT_VK.store(0, Ordering::Relaxed);
+                carlui_core::hotkey::register_as(island, HOTKEY_SHOT, c, WM_APP_SHOT);
+            }
             Some(c) => {
                 let m = c.mods;
                 SHOT_VK.store(c.vk, Ordering::Relaxed);
@@ -714,6 +723,8 @@ impl App {
 
 pub(crate) fn window_message(_hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> Option<LRESULT> {
     match msg {
+        // Düzenleyici oyun üstünde açıkken kısayol yeni bir görüntü başlatmaz.
+        WM_APP_SHOT if PASSIVE.load(Ordering::Relaxed) => {}
         WM_APP_SHOT => {
             with_app(|a| a.shot_start());
         }

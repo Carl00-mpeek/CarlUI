@@ -8,7 +8,7 @@
 <p align="center">
   A lightweight, fast desktop shell for Windows 11, written in Rust.<br>
   Floating dock, a top island for the clock, notifications and media, search, clipboard history, a control center,<br>
-  the Carl Vault password manager, instant replay and on-device AI.
+  the Carl Vault password manager and on-device AI.
 </p>
 
 <p align="center">
@@ -70,7 +70,7 @@
   editing, hidden passwords that delete themselves. Opens over fullscreen
   games without minimizing them.
 - **Control center:** Tray icons, volume (output device and per-app volume),
-  Wi-Fi, Bluetooth, brightness.
+  Wi-Fi (Ethernet when wired), Bluetooth, brightness.
 - **Alerts:** A notification when the CPU, GPU or an SSD passes the
   temperature you set, or when a drive is almost full. Limits are in
   **Settings → Island and notifications → Alerts**.
@@ -103,13 +103,6 @@
     andOTP, otpauth lists and the Google Authenticator export QR.
   - Locks itself after a period of inactivity, on sleep and when Windows
     locks.
-- **Instant replay (Alt+F10):** While on, the screen and sound are recorded in
-  the background and only the last 1–30 minutes are kept. Press the shortcut
-  and that stretch is saved as an MP4 in `Videos\CarlUI`. Encoded on the
-  graphics card (H.264 / H.265), so games don't slow down; works in exclusive
-  fullscreen too. Settings for microphone, noise suppression, quality,
-  resolution, frame rate and deleting old clips. **Alt+F8** opens a small
-  control panel that doesn't steal focus from the game.
 - **Area recording:** Select an area in the screenshot tool and press the
   record button (Ctrl+R). The area is recorded to an MP4 with sound until you
   press Stop or **Ctrl+Alt+R**, and the result can be turned into a GIF.
@@ -159,7 +152,6 @@
 | Win+Alt | File converter |
 | Ctrl+Alt+P | Carl Vault |
 | Ctrl+Shift+R | Batch rename |
-| Alt+F10 / Alt+F8 | Instant replay: save the last minutes / open the panel |
 | Ctrl+Alt+R | Stop area recording |
 | Ctrl+Alt+U | File unlocker |
 | Ctrl+Alt+L | Window layouts |
@@ -168,7 +160,7 @@
 | Ctrl+Alt+A (hold) | Voice assistant |
 
 The color picker and disk analyzer have no shortcut by default; you can set one
-in Settings.
+in Settings. Any shortcut can also be a mouse button (middle, back, forward).
 
 ### Search commands
 
@@ -197,11 +189,15 @@ Everything runs on your PC; nothing goes to the cloud. Options are in
   "open YouTube", "set volume to 30", "search lofi on YouTube". It does by
   voice anything search can do. It never listens all the time; optional in the
   installer and in Settings.
+  - **Smart assistant (optional, 2.5 GB):** A small language model on your PC
+    understands full sentences: "put Discord and Steam side by side on screen
+    1", "turn Spotify down to 20", "play lofi on Spotify". Download it in
+    **Settings → AI → Smart assistant**. Turn it on there; it starts only while
+    you hold the shortcut and closes once the command is done. Pick the CPU or
+    the graphics card (much faster); in a full-screen game the model stays off unless allowed.
 - **Screen translation:** Select an area in the screenshot tool and press
   **Ctrl+Shift+T**; English text on screen is translated to Turkish (or the
   other way round) and copied to the clipboard.
-- **Voice-triggered clips:** With instant replay on, say "save the last two
-  minutes" to save a clip.
 - **Background removal** and **Image quality enhancement:** Sharpens blurry or
   small photos 2-4×. Both are in the file converter's "AI" section ("Remove background", "Enhance quality").
 
@@ -279,7 +275,7 @@ the Recycle Bin. You choose whether to keep your settings.
 | Settings | `%APPDATA%\CarlUI\config.toml` (edited from the Settings window, applied instantly) |
 | Clipboard history, cache | `%LOCALAPPDATA%\CarlUI\` |
 | Carl Vault | `%APPDATA%\CarlUI\vault\vault.json` (encrypted with your master password) |
-| Instant replay clips | `Videos\CarlUI\` (folder can be changed in Settings) |
+| Area recordings | `Videos\CarlUI\` (`[record] folder` in `config.toml` changes it) |
 | AI models | `%LOCALAPPDATA%\CarlUI\models\` (remove them from the Voice studio) |
 | Logs | `%LOCALAPPDATA%\CarlUI\logs\` (kept for 7 days) |
 

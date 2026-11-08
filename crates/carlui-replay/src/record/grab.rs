@@ -1,13 +1,13 @@
 //! Alanı okuyup MP4'e yazar. Masaüstü çoğaltma yalnızca bir ekranı verdiği ve
 //! imleci içermediği için burada GDI kullanılır: alan birkaç ekrana yayılabilir,
-//! imleç kareye çizilir. Kare ekran kartına yüklenir, kodlamayı anlık tekrarın
+//! imleç kareye çizilir. Kare ekran kartına yüklenir, kodlamayı `writer.rs`teki
 //! `Writer`'ı yapar. Ses ayrı iş parçacığında gelir; bilgisayar sessizken Windows
 //! paket göndermediği için boşluk sessizlikle doldurulur.
 
 use super::{Area, Phase, Shared};
 use crate::{
     audio::Loopback,
-    ring,
+    clock,
     writer::{frames_to_100ns, Format, Writer, AUDIO_CH, AUDIO_RATE},
 };
 use std::{
@@ -162,7 +162,7 @@ fn audio_loop(out: Out, shared: Arc<Shared>, start: i64) {
                 }
                 None => {}
             }
-            let behind = (ring::now() - start) * rate / 10_000_000 - pos - pcm.len() as i64 / AUDIO_CH as i64;
+            let behind = (clock::now() - start) * rate / 10_000_000 - pos - pcm.len() as i64 / AUDIO_CH as i64;
             if behind > rate / 10 {
                 pcm.resize(pcm.len() + (behind - rate / 20) as usize * AUDIO_CH as usize, 0);
             }
@@ -184,7 +184,7 @@ unsafe fn video_loop(area: Area, ctx: &ID3D11DeviceContext, pool: &[ID3D11Textur
     let mut next = start;
     let mut frames = 0u32;
     while !shared.stop.load(Ordering::SeqCst) {
-        let now = ring::now();
+        let now = clock::now();
         if now < next {
             std::thread::sleep(Duration::from_millis(((next - now) / 10_000).clamp(1, 33) as u64));
             continue;
@@ -224,7 +224,7 @@ unsafe fn record(area: Area, shared: &Arc<Shared>) -> Result<()> {
     let pool = (0..POOL).map(|_| texture(&dev, area)).collect::<Result<Vec<_>>>()?;
     let out: Out = Arc::new(Mutex::new(Some(Writer::open(&shared.path, &fmt, &dm)?)));
 
-    let start = ring::now();
+    let start = clock::now();
     let sound = audio.then(|| {
         let (o, s) = (out.clone(), shared.clone());
         std::thread::spawn(move || audio_loop(o, s, start))

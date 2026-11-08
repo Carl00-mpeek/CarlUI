@@ -6,18 +6,19 @@
 //! eylemiyle uygular. Kısayola basıp hemen bırakılırsa susunca biter.
 //! Ada açıksa asistan aramanın içinde görünür (bkz. `assist_panel`): söylenenler
 //! konuşurken arama kutusuna düşer, ayar açıksa uygulamadan önce onay bekler.
-//! Model `assist_warm` sürecinde hazır bekler; o süreç yoksa her basışta açılır.
+//! Whisper tuşa basınca açılır, yazıya dökünce kapanır. Akıllı asistan açıksa
+//! dil modeli konuşurken açılır, yanıt verince kapanır; bellekte model beklemez.
 //! Sürekli dinleme yoktur; mikrofon yalnızca kısayoldan sonra açılır. Ses buluta gitmez.
 
 use crate::{
     ai,
     assist_panel::Panel,
-    assist_warm::{self, Held, Warm},
+    assist_warm,
     dictate::{loudest, short, wait_modifiers_up, SILENCE},
     progress::Shared,
 };
-use carlui_ai::{catalog, mic::Mic, whisper::{self, Whisper}};
-use carlui_launcher::{index, voice};
+use carlui_ai::{brain::Brain, catalog, mic::Mic, store, whisper::{self, Whisper}};
+use carlui_launcher::{index, voice, voice_lines};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -31,7 +32,6 @@ use windows::{
     Win32::{
         Foundation::*,
         System::{Com::*, Threading::*},
-        UI::Input::KeyboardAndMouse::GetAsyncKeyState,
     },
 };
 
@@ -46,11 +46,9 @@ const TAP_MAX: Duration = Duration::from_secs(10);
 /// Canlı yazı: bu kadar yeni ses birikince konuşma yeniden yazıya dökülür.
 const LIVE_STEP: usize = whisper::SR * 6 / 10;
 
-/// Komut için model: sesli komutta seçili Whisper; Vosk seçiliyse (yalnızca
-/// anlık tekrar cümlelerini tanır) önerilen Whisper.
+/// Komut için model: sesli komutta seçili Whisper (eski ayarlarda kalan Vosk seçimi önerilene döner).
 pub(crate) fn model(cfg: &carlui_core::config::Config) -> &'static catalog::Model {
-    let m = catalog::chosen(&cfg.ai, catalog::Feature::Command);
-    if m.id.starts_with("vosk") { catalog::recommended(catalog::Feature::Command) } else { m }
+    catalog::chosen(&cfg.ai, catalog::Feature::Command)
 }
 
 /// Konuşma sürerken açık duran kilit; ikinci basış bunu görüp konuşmayı bitirir.
@@ -70,6 +68,7 @@ pub(crate) fn opts(cfg: &carlui_core::config::Config, m: &'static catalog::Model
         web: cfg.launcher.web_search.clone(),
         key: cfg.shortcuts.assist.clone(),
         confirm: cfg.ai.assist_confirm,
+        smart: smart(cfg),
     }
 }
 
@@ -116,7 +115,7 @@ pub fn run(owner: HWND, accent: Option<u32>, cold: bool) -> Result<()> {
             let worker = Shared::new();
             let _ = std::thread::spawn(move || {
                 let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-                work(&worker, &opts, HANDLE(stop_h as _), Some(&p), None);
+                work(&worker, &opts, HANDLE(stop_h as _), Some(&p), false);
             })
             .join();
             return Ok(());
@@ -127,7 +126,7 @@ pub fn run(owner: HWND, accent: Option<u32>, cold: bool) -> Result<()> {
         crate::progress::run(shared, accent.unwrap_or(0x4CC2FF), move || {
             std::thread::spawn(move || {
                 let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-                work(&worker, &opts, HANDLE(stop_h as _), None, None);
+                work(&worker, &opts, HANDLE(stop_h as _), None, false);
             });
         })
     }
@@ -142,10 +141,47 @@ pub(crate) struct Opts {
     key: String,
     /// Uygulamadan önce onay beklensin (yalnızca aramada görünürken).
     confirm: bool,
+    /// Akıllı asistan açık ve model kurulu: `Some(ekran kartında mı)`.
+    smart: Option<bool>,
+}
+
+/// Akıllı asistan bu komutta kullanılacak mı, nerede (true = ekran kartı).
+/// Oyunlar işlemciyi de ekran kartını da kullandığı için (CS2 gibi) oyunda
+/// aygıt değiştirmek işe yaramaz: oyun öndeyken model, kullanıcı ayrıca izin
+/// vermedikçe hiç açılmaz; yalnızca Whisper ve kurallar çalışır.
+fn smart(cfg: &carlui_core::config::Config) -> Option<bool> {
+    let ai = &cfg.ai;
+    let on = ai.assistant && ai.smart && store::installed(catalog::recommended(catalog::Feature::Brain)) && (ai.smart_in_game || !carlui_core::win::game_in_front());
+    on.then_some(ai.smart_gpu)
+}
+
+type Starting = JoinHandle<std::result::Result<Brain, String>>;
+
+/// Dil modelini bu komut için açar; konuşma sürerken hazırlanır.
+fn wake(gpu: bool) -> Starting {
+    std::thread::spawn(move || Brain::start(catalog::recommended(catalog::Feature::Brain), gpu))
+}
+
+/// Gerekmediyse ya da iş bittiyse dil modeli beklemeden kapatılır.
+fn sleep(b: Option<Starting>) {
+    if let Some(h) = b {
+        std::thread::spawn(move || drop(h.join()));
+    }
+}
+
+/// Açılması bekleyip cümleyi sorar; açılamazsa kurallar çözer.
+fn ask(b: &mut Option<Starting>, text: &str) -> Option<String> {
+    match b.take()?.join().unwrap_or_else(|_| Err("panik".into())) {
+        Ok(brain) => brain.ask(text),
+        Err(e) => {
+            carlui_core::warn!("asistan: dil modeli açılamadı: {e}");
+            None
+        }
+    }
 }
 
 fn held(vk: u32) -> bool {
-    vk != 0 && unsafe { GetAsyncKeyState(vk as i32) } as u16 & 0x8000 != 0
+    carlui_core::hotkey::held(vk)
 }
 
 /// Model hazır olunca konuşma sürerken biriken sesi yazıya döküp adaya yollar.
@@ -174,10 +210,19 @@ fn live(loader: Loader, p: Arc<Panel>, heard: Arc<Mutex<Vec<f32>>>, halt: Arc<At
     })
 }
 
-pub(crate) fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<Panel>>, warm: Option<Warm>) {
+/// `lasting`: süreç iş bitince kapanmaz; uzun eylem (uygulama açılışı) beklenmez.
+pub(crate) fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<Panel>>, lasting: bool) {
     if !ai::ensure(w, o.m) {
         return;
     }
+    // Dil modeli konuşma sürerken açılır; nasıl biterse bitsin kapanır.
+    struct Asleep(Option<Starting>);
+    impl Drop for Asleep {
+        fn drop(&mut self) {
+            sleep(self.0.take());
+        }
+    }
+    let mut brain = Asleep(o.smart.map(wake));
     let m = o.m;
     let fail = |e: String| {
         if let Some(p) = panel {
@@ -193,18 +238,21 @@ pub(crate) fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<P
             s.done = true;
         }),
     };
-    // Model ve uygulama listesi konuşurken arka planda hazırlanır.
-    let (loader, keep) = match warm {
-        Some(x) => (x.loader, Some(x.keep)),
-        None => (load(m), None),
-    };
+    // Whisper ve uygulama listesi konuşurken arka planda hazırlanır.
     let heard = Arc::new(Mutex::new(Vec::new()));
     let halt = Arc::new(AtomicBool::new(false));
+    // Konuşma nasıl biterse bitsin canlı yazı durur.
+    struct Halt(Arc<AtomicBool>);
+    impl Drop for Halt {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+    let _halt = Halt(halt.clone());
     let loader = match panel {
-        Some(p) => live(loader, p.clone(), heard.clone(), halt.clone(), o.lang.clone()),
-        None => loader,
+        Some(p) => live(load(m), p.clone(), heard.clone(), halt.clone(), o.lang.clone()),
+        None => load(m),
     };
-    let mut held_model = Held { loader: Some(loader), keep, halt: halt.clone() };
     let apps = std::thread::spawn(|| {
         let c = index::cached();
         if !c.is_empty() {
@@ -317,7 +365,7 @@ pub(crate) fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<P
         s.file = o.m.name.into();
         s.frac = 0.0;
     });
-    let mut wh = match held_model.take() {
+    let mut wh = match loader.join().unwrap_or_else(|_| Err("panik".into())) {
         Ok(wh) => wh,
         Err(e) => {
             carlui_core::warn!("asistan: model açılamadı: {e}");
@@ -325,17 +373,9 @@ pub(crate) fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<P
         }
     };
     let t1 = Instant::now();
-    let write = |wh: &mut Whisper| wh.transcribe(&pcm, Some(&o.lang), false, &w.cancel, &|f| w.update(|s| s.frac = f)).map(|(segs, _)| whisper::to_text(&segs).trim().to_string());
-    let mut written = write(&mut wh);
-    // Uyku ya da sürücü güncellemesi bekleyen modeli bozabilir: bir kez baştan aç.
-    if written.is_err() && held_model.warm() && !w.cancel.load(Ordering::SeqCst) {
-        carlui_core::warn!("asistan: hazır model çalışmadı, yeniden açılıyor");
-        if let Ok(fresh) = open(m) {
-            wh = fresh;
-            written = write(&mut wh);
-        }
-    }
-    held_model.give_back(wh);
+    let written = wh.transcribe(&pcm, Some(&o.lang), false, &w.cancel, &|f| w.update(|s| s.frac = f)).map(|(segs, _)| whisper::to_text(&segs).trim().to_string());
+    // Whisper'ın işi bitti: bellek hemen geri verilir.
+    drop(wh);
     let mut text = match written {
         Ok(text) => text,
         Err(_) if w.cancel.load(Ordering::SeqCst) => return,
@@ -358,9 +398,11 @@ pub(crate) fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<P
         }
     }
     let apps = apps.join().unwrap_or_default();
-    let intent = voice::parse(&text);
-    let plan = voice::plan(&intent, &apps, &index::running(), &o.web);
-    carlui_core::info!("asistan: \"{text}\" → {intent:?} → {} ({} ms)", plan.title, t1.elapsed().as_millis());
+    let intents = voice_lines::understand(&text, |t| ask(&mut brain.0, t));
+    // Kurallar yettiyse ya da yanıt geldiyse dil modeli kapanır.
+    drop(brain);
+    let plan = voice_lines::check(voice_lines::plan_all(&intents, &apps, &index::running(), &o.web));
+    carlui_core::info!("asistan: \"{text}\" → {intents:?} → {} ({} ms)", plan.title, t1.elapsed().as_millis());
     let ok = plan.ok();
     match panel {
         // Onaydan sonra arama kapanmıştır; olmayan iş bildirimle söylenir.
@@ -384,10 +426,12 @@ pub(crate) fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<P
         wait_modifiers_up();
         // Kabuk eylemleri (uygulama başlatma) tek iş parçacıklı COM ister.
         let how = plan.how.clone();
-        let _ = std::thread::spawn(move || {
+        let job = std::thread::spawn(move || {
             let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
             voice::execute(&how);
-        })
-        .join();
+        });
+        if !lasting {
+            let _ = job.join();
+        }
     }
 }

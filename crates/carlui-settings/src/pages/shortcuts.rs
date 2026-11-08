@@ -1,6 +1,7 @@
 //! Kısayollar: her genel kısayol tuş kapakları olarak gösterilir; tıklayınca
 //! kayıt başlar, basılan tuşlar `keys` doğrulayıcısından geçerse kaydedilir.
-//! Fare tuşları, değiştiricisiz tek tuş, Windows'un temel kısayolları ve başka
+//! Sağ, orta ve yan fare tuşları da atanabilir. Sol tık, değiştiricisiz tek tuş,
+//! Windows'un temel kısayolları ve başka
 //! bir CarlUI kısayoluyla çakışan değerler reddedilir. Her satırda "Kapat" ve
 //! "Varsayılan" düğmeleri vardır.
 
@@ -29,15 +30,13 @@ pub enum Key {
     Unlock,
     Layouts,
     RecordStop,
-    Replay,
-    ReplayPanel,
     Dictate,
     Speak,
     Assist,
 }
 
 impl Key {
-    const COMBOS: [Key; 15] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk, Key::Unlock, Key::Layouts, Key::RecordStop, Key::Replay, Key::ReplayPanel, Key::Dictate, Key::Speak, Key::Assist];
+    const COMBOS: [Key; 13] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk, Key::Unlock, Key::Layouts, Key::RecordStop, Key::Dictate, Key::Speak, Key::Assist];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -53,8 +52,6 @@ impl Key {
             Key::Unlock => t!("Dosya kilidi açıcı", "File unlocker"),
             Key::Layouts => t!("Pencere düzenleri", "Window layouts"),
             Key::RecordStop => t!("Alan kaydını durdur", "Stop area recording"),
-            Key::Replay => t!("Anlık tekrarı kaydet", "Save instant replay"),
-            Key::ReplayPanel => t!("Anlık tekrar paneli", "Instant replay panel"),
             Key::Dictate => t!("Sesle yazma", "Voice typing"),
             Key::Speak => t!("Sesli okuma", "Read aloud"),
             Key::Assist => t!("Sesli asistan", "Voice assistant"),
@@ -75,8 +72,6 @@ impl Key {
             Key::Unlock => t!("Gezgin'de seçili öğeyi hangi uygulamanın tuttuğunu gösterir.", "Shows which app holds the item selected in Explorer."),
             Key::Layouts => t!("Pencere düzenini kaydeder ya da kayıtlı düzeni uygular.", "Saves the window layout or applies a saved one."),
             Key::RecordStop => t!("Ekran görüntüsü aracından başlatılan kaydı bitirir.", "Ends a recording started from the screenshot tool."),
-            Key::Replay => t!("Son dakikaları video olarak kaydeder (oyun içinde de).", "Saves the last minutes as a video (in games too)."),
-            Key::ReplayPanel => t!("Kaydı başlatma, mikrofon ve kalite paneli; oyunun odağını almaz.", "Panel for recording, microphone and quality; never takes focus from the game."),
             Key::Dictate => t!("Bas, konuş, yeniden bas; söylediğin imlecin olduğu yere yazılır (yerel, buluta gitmez).", "Press, speak, press again; what you said is typed at the cursor (local, never sent to the cloud)."),
             Key::Speak => t!("Seçili metni (yoksa panodakini) yerel sesle okur; yeniden basınca susar.", "Reads the selected text (or the clipboard) with a local voice; press again to stop."),
             Key::Assist => t!("Basılı tutup komutu söyleyin, bırakın (\"YouTube'u aç\"). Yapay zekâ ayarlarından açılır.", "Hold, say a command, release (\"open YouTube\"). Turn it on in AI settings."),
@@ -103,8 +98,6 @@ impl Key {
             Key::Unlock => s.unlock.clone(),
             Key::Layouts => s.layouts.clone(),
             Key::RecordStop => s.record_stop.clone(),
-            Key::Replay => s.replay.clone(),
-            Key::ReplayPanel => s.replay_panel.clone(),
             Key::Dictate => s.dictate.clone(),
             Key::Speak => s.speak.clone(),
             Key::Assist => s.assist.clone(),
@@ -126,8 +119,6 @@ impl Key {
             Key::Unlock => s.unlock = v,
             Key::Layouts => s.layouts = v,
             Key::RecordStop => s.record_stop = v,
-            Key::Replay => s.replay = v,
-            Key::ReplayPanel => s.replay_panel = v,
             Key::Dictate => s.dictate = v,
             Key::Speak => s.speak = v,
             Key::Assist => s.assist = v,
@@ -165,12 +156,13 @@ impl Key {
     }
 }
 
-fn keycaps(p: &mut P, r: R, value: &str, recording: bool) {
+fn keycaps(p: &mut P, r: R, value: &str, recording: bool, mouse: bool) {
     let hot = p.hover(r);
     if recording {
         p.round(r, 7.0, p.accent, 0.18);
         p.outline(r, 7.0, p.accent, 0.9);
-        p.text(t!("Tuşlara bas…  Esc: iptal", "Press keys…  Esc: cancel"), r, 12.5, false, TEXT, 0.9, Align::Center);
+        let hint = if mouse { t!("Tuş ya da fare tuşu…  Esc: iptal", "Key or mouse button…  Esc: cancel") } else { t!("Tuşlara bas…  Esc: iptal", "Press keys…  Esc: cancel") };
+        p.text(hint, r, 12.5, false, TEXT, 0.9, Align::Center);
         return;
     }
     p.round(r, 7.0, 0xFFFFFF, if hot { 0.08 } else { 0.0 });
@@ -209,7 +201,7 @@ fn key_row(app: &App, p: &mut P, f: &mut Flow, key: Key) {
     let off = R::new(reset.x - 4.0 - 32.0, reset.y, 32.0, 32.0);
     let caps = R::new(off.x - 8.0 - 210.0, r.y + (r.h - 36.0) / 2.0, 210.0, 36.0);
     let recording = app.recording == Some(key);
-    keycaps(p, caps, &value, recording);
+    keycaps(p, caps, &value, recording, !key.mods_only());
     p.hit(caps, Act::Record(key));
     icon_button(p, off, '\u{E711}', edit(move |c| key.set(c, String::new())));
     icon_button(p, reset, '\u{E777}', edit(move |c| key.set(c, key.default_value())));
@@ -247,8 +239,6 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     key_row(app, p, f, Key::Unlock);
     key_row(app, p, f, Key::Layouts);
     key_row(app, p, f, Key::RecordStop);
-    key_row(app, p, f, Key::Replay);
-    key_row(app, p, f, Key::ReplayPanel);
     key_row(app, p, f, Key::Dictate);
     key_row(app, p, f, Key::Speak);
     key_row(app, p, f, Key::Assist);
@@ -256,5 +246,5 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     key_row(app, p, f, Key::AppNumbers);
     f.flush(p);
     f.y += 6.0;
-    f.note(p, t!("Fare tuşları kısayol olamaz. Değiştiricisiz tek tuş ve Windows'un temel kısayolları (Ctrl+C, Alt+Tab, Win+L …) kabul edilmez.", "Mouse buttons can't be shortcuts. A single key without modifiers and core Windows shortcuts (Ctrl+C, Alt+Tab, Win+L …) are not accepted."));
+    f.note(p, t!("Sağ, orta ve yan fare tuşları tek başına ya da Ctrl gibi bir tuşla atanabilir; atanan tuş başka işe yaramaz, bu yüzden sağ ve orta tık için Ctrl+Mouse2 gibi bir birleşim daha iyidir. Sol tık, değiştiricisiz tek tuş ve Windows'un temel kısayolları (Ctrl+C, Alt+Tab, Win+L …) kabul edilmez.", "Right, middle and side mouse buttons can be assigned alone or with a key like Ctrl. An assigned button does nothing else, so a combination like Ctrl+Mouse2 is better for right and middle click. Left click, a single key without modifiers and core Windows shortcuts (Ctrl+C, Alt+Tab, Win+L …) are not accepted."));
 }

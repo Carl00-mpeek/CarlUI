@@ -1,5 +1,45 @@
 # Sürüm notları
 
+## v0.9.3 — Akıllı asistan, anlık tekrar kaldırıldı (2026-11-08)
+
+**Kaldırıldı: Anlık tekrar ve sesli komutla klip.** Açıkken ekranı ve sesi durmadan
+kaydediyor, sesli komut için mikrofonu sürekli dinliyordu. Hiçbir şey kaydedilmezken
+bile yaklaşık %26 işlemci ve 1,7 GB bellek tuttu. Bu, hafif kalma sözüne aykırı.
+`carlui-replay` artık arka planda çalışmaz. Eski geçici video parçaları ve Vosk modeli
+ilk açılışta silinir. Kaydedilmiş klipler `Videolar\CarlUI`'da kalır. Alan kaydı
+(Ctrl+R, Ctrl+Alt+R) yerinde.
+
+**Yeni: Asistan uzun cümleleri anlar.** Bilgisayarında çalışan küçük bir dil modeli
+(Qwen3 4B) söylediğini komuta çevirir:
+- "Discord ve Steam'i 1. ekranda bölerek ayarla": iki pencere o ekranda yan yana dizilir.
+- "Spotify'ın sesini 20 yap": yalnızca o uygulamanın sesi değişir.
+- "Spotify'da lofi aç": şarkı Spotify'da çalar.
+- Tek cümlede birden fazla komut da olur: "Not Defteri'ni aç ve sesi 30 yap".
+
+Model isteğe bağlıdır (2,5 GB), **Ayarlar → Yapay zekâ → Akıllı asistan** bölümünden
+indirilip açılır. Arka planda hiçbir model beklemez: Whisper yalnızca kısayol basılıyken
+çalışır, yazıya dökünce kapanır; dil modeli de yalnızca kuralların anlamadığı cümlede
+kullanılır, iş bitince kapanır. İşlemci ya da ekran kartı (yanıt ~0,1 sn) seçilebilir;
+tam ekran oyunda, izin verilmedikçe model açılmaz (Ayarlar → Oyundayken de kullan). Kapalıyken yalnızca Whisper ve hazır komutlar çalışır.
+Kısa komutlar ("YouTube'u aç", "sesi 30 yap") eskisi gibi modele gitmeden anında çalışır.
+
+**Yeni: Fare tuşu kısayolları.** Her kısayol orta, geri ya da ileri fare tuşu olabilir.
+Sol tık kısayol yapılamaz.
+
+**Yeni: Dock önizlemesinde müzik düğmeleri.** Şarkı çalan uygulamanın önizlemesinde
+önceki / oynat / sonraki düğmeleri çıkar.
+
+**Yeni: Hızlı panelde Ethernet.** Kabloyla bağlıyken Wi-Fi kutucuğu "Ethernet" olarak
+yanar (Wi-Fi kartı olmayan bilgisayarda boş kalmaz). Tıklayınca Wi-Fi kartı varsa Wi-Fi
+açılır ve kablosuz ağ listesi gelir; yoksa ağ ayarları açılır.
+
+**Düzeltmeler**
+- **Model indirme:** Sunucu yanıt vermeyi kesince indirme %0'da takılı kalıyordu; artık
+  kesilip yeniden denenir. Önceden inmiş dosyalar yeniden indirilmez.
+- **Görev çubuğu:** CarlUI görev yöneticisinden sonlandırılınca ya da çökünce Windows'un
+  görev çubuğu geri gelmiyordu.
+- **Asistan:** "Parlaklığı yüzde elli yap" anlaşılmıyordu.
+
 ## v0.9.2 — Tam ekranda şarkı ve ses göstergesi (2026-11-07)
 
 **Yeni: Ada tam ekranda da görünür.** Şarkı değişince ya da ses açılıp kısılınca ada

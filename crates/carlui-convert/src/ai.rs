@@ -95,10 +95,7 @@ pub fn missing_bytes(m: &Model) -> u64 {
     if !runtime::installed() {
         n += 12_400_000;
     }
-    if !store::installed(m) {
-        n += m.size();
-    }
-    n
+    n + store::missing(m)
 }
 
 pub fn mb(n: u64) -> String {
@@ -182,7 +179,8 @@ pub fn ensure(w: &Shared, m: &Model) -> bool {
     if !store::installed(m) {
         w.update(|s| {
             s.title = t!(format!("{} indiriliyor", m.name), format!("Downloading {}", m.name));
-            s.file = format!("{} · {}", mb(m.size()), m.source.trim_start_matches("https://"));
+            // Gösterilen boyut yalnızca inecek kısım (eski kurulumda yeni eklenen dosya gibi).
+            s.file = format!("{} · {}", mb(store::missing(m).max(1)), m.source.trim_start_matches("https://"));
             s.frac = 0.0;
         });
         if let Err(e) = store::install(m, &cancel, &|f| w.update(|s| s.frac = f)) {

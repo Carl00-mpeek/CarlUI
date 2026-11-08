@@ -8,7 +8,7 @@
 <p align="center">
   Windows 11 için Rust ile yazılmış, hafif ve hızlı bir masaüstü kabuğu.<br>
   Yüzen dock, üstte saat/bildirim/medya adası, arama, pano geçmişi, kontrol merkezi,<br>
-  Carl Vault parola kasası, anlık tekrar ve yerel yapay zekâ.
+  Carl Vault parola kasası ve yerel yapay zekâ.
 </p>
 
 <p align="center">
@@ -70,7 +70,7 @@
   düzenleme, şifreleri gizleme ve kendiliğinden silme. Tam ekran oyunda da
   oyunu küçültmeden açılır.
 - **Kontrol merkezi:** Tepsi ikonları, ses (çıkış aygıtı ve uygulama başına
-  ses), Wi-Fi, Bluetooth, parlaklık.
+  ses), Wi-Fi (kabloyla bağlıyken Ethernet), Bluetooth, parlaklık.
 - **Uyarılar:** CPU, GPU ya da SSD belirlediğin sıcaklığı geçince veya bir
   sürücü dolmak üzereyken bildirim gelir. Sınırlar **Ayarlar → Ada ve
   bildirimler → Uyarılar** bölümünde.
@@ -102,12 +102,6 @@
     otpauth listeleri ve Google Authenticator aktarım QR'ı.
   - Bir süre kullanılmayınca, uykuda ve Windows kilitlenince kendiliğinden
     kilitlenir.
-- **Anlık tekrar (Alt+F10):** Açıkken ekran ve ses arka planda kaydedilir,
-  yalnızca son 1–30 dakika tutulur. Kısayola basınca o süre MP4 olarak
-  `Videolar\CarlUI` klasörüne kaydedilir. Ekran kartında kodlanır (H.264 /
-  H.265), oyunu yavaşlatmaz, özel tam ekranda da çalışır. Mikrofon, gürültü
-  engelleme, kalite, çözünürlük, kare hızı ve eski klipleri silme ayarları var.
-  **Alt+F8** oyunun odağını almayan küçük denetim panelini açar.
 - **Alan kaydı:** Ekran görüntüsü aracında alan seçip kayıt düğmesine bas
   (Ctrl+R). Alan, Durdur'a ya da **Ctrl+Alt+R**'ye basana dek sesiyle MP4
   olarak kaydedilir; sonuç GIF'e de çevrilebilir.
@@ -156,7 +150,6 @@
 | Win+Alt | Dosya dönüştürücü |
 | Ctrl+Alt+P | Carl Vault |
 | Ctrl+Shift+R | Toplu yeniden adlandırma |
-| Alt+F10 / Alt+F8 | Anlık tekrar: son dakikaları kaydet / paneli aç |
 | Ctrl+Alt+R | Alan kaydını durdur |
 | Ctrl+Alt+U | Dosya kilidi açıcı |
 | Ctrl+Alt+L | Pencere düzenleri |
@@ -165,6 +158,7 @@
 | Ctrl+Alt+A (basılı tut) | Sesli asistan |
 
 Renk seçici ve disk analizörü için kısayol yok; istersen Ayarlar'dan atarsın.
+Her kısayol bir fare tuşu da olabilir (orta, geri, ileri).
 
 ### Arama komutları
 
@@ -191,10 +185,14 @@ Yapay zekâ** sayfasında.
 - **Sesli asistan (Ctrl+Alt+A):** Kısayolu basılı tut, komutu söyle, bırak:
   "YouTube'u aç", "sesi 30 yap", "YouTube'da lofi ara". Aramanın yaptığı
   her şeyi sesle yapar. Sürekli dinlemez; kurucuda ve Ayarlar'da isteğe bağlı.
+  - **Akıllı asistan (isteğe bağlı, 2,5 GB):** Bilgisayarında çalışan küçük bir
+    dil modeli uzun cümleleri anlar: "Discord ve Steam'i 1. ekranda bölerek
+    ayarla", "Spotify'ın sesini 20 yap", "Spotify'da lofi aç". **Ayarlar →
+    Yapay zekâ → Akıllı asistan** bölümünden indirilir. Oradan açılır; yalnızca
+    kısayol basılıyken çalışır, komut bitince kapanır. İşlemci ya da (çok daha
+    hızlı) ekran kartı seçilebilir; tam ekran oyunda, izin verilmedikçe model açılmaz.
 - **Ekran çevirisi:** Ekran görüntüsü aracında alan seçip **Ctrl+Shift+T**'ye
   bas; ekrandaki İngilizce yazı Türkçeye (ya da tersi) çevrilip panoya konur.
-- **Sesli komutla klip:** Anlık tekrar açıkken "son iki dakikayı kaydet" de,
-  klip kaydedilsin.
 - **Arka plan silme** ve **Resim kalite artırma:** Bulanık ya da küçük
   fotoğrafları 2-4 kat netleştirir. İkisi de dosya dönüştürücünün "Yapay zekâ"
   bölümünde ("Arka planı sil", "Kaliteyi artır").
@@ -274,7 +272,7 @@ Kutusu'na taşınır. Ayarların kalmasını ya da silinmesini sen seçersin.
 | Ayarlar | `%APPDATA%\CarlUI\config.toml` (Ayarlar penceresinden değiştirilir, anında uygulanır) |
 | Pano geçmişi, önbellek | `%LOCALAPPDATA%\CarlUI\` |
 | Carl Vault kasası | `%APPDATA%\CarlUI\vault\vault.json` (ana parolayla şifreli) |
-| Anlık tekrar klipleri | `Videolar\CarlUI\` (klasör Ayarlar'dan değiştirilebilir) |
+| Alan kayıtları | `Videolar\CarlUI\` (`config.toml` içinde `[record] folder` ile değişir) |
 | Yapay zekâ modelleri | `%LOCALAPPDATA%\CarlUI\models\` (Ses stüdyosundan silinebilir) |
 | Loglar | `%LOCALAPPDATA%\CarlUI\logs\` (7 gün saklanır) |
 

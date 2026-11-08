@@ -63,12 +63,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anymap3"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb5dfbc6d8d2675589ccbe4d0fd61df2419075625f8c1a62325e718e2b0049f9"
-
-[[package]]
 name = "argon2"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -80,12 +74,6 @@ dependencies = [
  "password-hash",
  "zeroize",
 ]
-
-[[package]]
-name = "array-init"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d62b7694a562cdf5a74227903507c56ab2cc8bdd1f781ed5cb4cf9c9f810bfc"
 
 [[package]]
 name = "atoi_simd"
@@ -198,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "carlui"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-core",
  "serde",
@@ -208,7 +196,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-ai"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-core",
  "ort",
@@ -218,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-clip"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-core",
  "serde",
@@ -228,7 +216,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-convert"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-ai",
  "carlui-clip",
@@ -241,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-core"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -251,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-dock"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-core",
  "carlui-sys",
@@ -262,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-expand"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-clip",
  "carlui-core",
@@ -271,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-island"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-clip",
  "carlui-core",
@@ -288,7 +276,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-launcher"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-core",
  "serde",
@@ -298,7 +286,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-office"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "calamine",
  "carlui-core",
@@ -313,7 +301,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-remover"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-clip",
  "carlui-core",
@@ -325,19 +313,17 @@ dependencies = [
 
 [[package]]
 name = "carlui-replay"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
- "carlui-ai",
  "carlui-core",
  "carlui-ui",
- "nnnoiseless",
  "serde_json",
  "windows",
 ]
 
 [[package]]
 name = "carlui-sensors"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-core",
  "carlui-sys",
@@ -346,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-settings"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-ai",
  "carlui-core",
@@ -357,7 +343,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-setup"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-core",
  "carlui-ui",
@@ -368,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-start"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-core",
  "carlui-launcher",
@@ -380,7 +366,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-sys"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-core",
  "windows",
@@ -388,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-taskmgr"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-core",
  "carlui-sys",
@@ -398,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-tools"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-clip",
  "carlui-core",
@@ -409,7 +395,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-tray"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-core",
  "carlui-ui",
@@ -419,7 +405,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-ui"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "carlui-core",
  "windows",
@@ -427,7 +413,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-vault"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "argon2",
  "carlui-core",
@@ -711,19 +697,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "easyfft"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "767e39eef2ad8a3b6f1d733be3ec70364d21d437d06d4f18ea76ce08df20b75f"
-dependencies = [
- "array-init",
- "generic_singleton",
- "num-complex",
- "realfft",
- "rustfft",
-]
-
-[[package]]
 name = "ecb"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -888,16 +861,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "generic_singleton"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab6e923c8e978e57cf63e2e200ca967d1d20f0ea2662b28f6d4e11c44aa6ab16"
-dependencies = [
- "anymap3",
- "parking_lot",
-]
-
-[[package]]
 name = "getrandom"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1057,15 +1020,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lock_api"
-version = "0.4.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
-dependencies = [
- "scopeguard",
-]
-
-[[package]]
 name = "log"
 version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1186,16 +1140,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nnnoiseless"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "805d5964d1e7a0006a7fdced7dae75084d66d18b35f1dfe81bd76929b1f8da0c"
-dependencies = [
- "easyfft",
- "once_cell",
-]
-
-[[package]]
 name = "nom"
 version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1235,7 +1179,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
 dependencies = [
  "num-traits",
- "serde",
 ]
 
 [[package]]
@@ -1321,29 +1264,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "parking_lot"
-version = "0.12.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93857453250e3077bd71ff98b6a65ea6621a19bb0f559a85248955ac12c45a1a"
-dependencies = [
- "lock_api",
- "parking_lot_core",
-]
-
-[[package]]
-name = "parking_lot_core"
-version = "0.9.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2621685985a2ebf1c516881c026032ac7deafcda1a2c9b7850dc81e3dfcb64c1"
-dependencies = [
- "cfg-if",
- "libc",
- "redox_syscall",
- "smallvec",
- "windows-link",
-]
-
-[[package]]
 name = "password-hash"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1400,15 +1320,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10ab3eb7f3becc3a1cbc4f2c6f20267996cfc1a6467a873763411b136a122715"
 dependencies = [
  "portable-atomic",
-]
-
-[[package]]
-name = "primal-check"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc0d895b311e3af9902528fbb8f928688abbd95872819320517cc24ca6b2bd08"
-dependencies = [
- "num-integer",
 ]
 
 [[package]]
@@ -1499,24 +1410,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60a357793950651c4ed0f3f52338f53b2f809f32d83a07f72909fa13e4c6c1e3"
 
 [[package]]
-name = "realfft"
-version = "3.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "538895ccf2006b473aafbe8d72770e21038961ab67aae34f3c577485fc703a7d"
-dependencies = [
- "rustfft",
-]
-
-[[package]]
-name = "redox_syscall"
-version = "0.5.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
-dependencies = [
- "bitflags",
-]
-
-[[package]]
 name = "regex"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1563,20 +1456,6 @@ checksum = "8d084c50c5cfa397a081850da329566c8667b0b6c4e81da16abff1fef27de93b"
 dependencies = [
  "g2p",
  "lru",
-]
-
-[[package]]
-name = "rustfft"
-version = "6.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21db5f9893e91f41798c88680037dba611ca6674703c1a18601b01a72c8adb89"
-dependencies = [
- "num-complex",
- "num-integer",
- "num-traits",
- "primal-check",
- "strength_reduce",
- "transpose",
 ]
 
 [[package]]
@@ -1769,12 +1648,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "strength_reduce"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe895eb47f22e2ddd4dabc02bce419d2e643c8e3b585c78158b349195bc24d82"
-
-[[package]]
 name = "stringprep"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1897,16 +1770,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
-]
-
-[[package]]
-name = "transpose"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ad61aed86bc3faea4300c7aee358b4c6d0c8d6ccc36524c96e4c92ccf26e77e"
-dependencies = [
- "num-integer",
- "strength_reduce",
 ]
 
 [[package]]

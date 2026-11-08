@@ -1,15 +1,14 @@
 //! Bu modül "ekranın yalnızca bir bölümünü videoya almak istiyorum" sorununu
 //! çözüyor. Ekran görüntüsü aracında alan seçilip kayıt düğmesine basılınca
-//! `carlui-replay.exe --area x,y,g,y` ayrı bir süreç olarak açılır; anlık
-//! tekrardan bağımsızdır, ikisi aynı anda çalışabilir.
+//! `carlui-replay.exe --area x,y,g,y` ayrı bir süreç olarak açılır, kayıt
+//! bitince kapanır.
 //!
 //! - `grab.rs`: alanı imleçle birlikte okur, ekran kartında MP4'e kodlar, sesi ekler.
 //! - `frame.rs`: alanın çevresindeki kırmızı çerçeve ve durdurma kısayolu.
 //! - `pill.rs`: süre, boyut, Durdur; bitince Aç / Klasörde göster / GIF yap.
 //!
 //! Çerçeve ve hap kayda girmez (`WDA_EXCLUDEFROMCAPTURE`), odak almaz. Aynı anda
-//! tek alan kaydı olur. Özel tam ekran oyunlar GDI ile okunamaz; onlar için
-//! anlık tekrar var.
+//! tek alan kaydı olur. Özel tam ekran oyunlar GDI ile okunamaz.
 
 mod frame;
 mod grab;
@@ -150,7 +149,7 @@ pub fn run(spec: &str) -> Result<()> {
         MFStartup(MF_VERSION, MFSTARTUP_FULL)?;
         let cfg = config::load();
         carlui_ui::tone::follow(&cfg.theme);
-        let shared = Arc::new(Shared::new(target(&cfg.replay.folder())));
+        let shared = Arc::new(Shared::new(target(&cfg.record.folder())));
         info!("alan kaydı başladı: {area:?} → {}", shared.path.display());
 
         let s = shared.clone();

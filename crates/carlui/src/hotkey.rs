@@ -4,16 +4,16 @@
 //! (`shortcuts.rename`), dosya kilidi açıcı (`shortcuts.unlock`), pencere
 //! düzenleri (`shortcuts.layouts`), sesle yazma (`shortcuts.dictate`) ve sesli okuma (`shortcuts.speak`). Yeniden adlandırma kısayolu yalnızca Gezgin ya da
 //! masaüstü öndeyken kaydedilir; böylece tarayıcıdaki Ctrl+Shift+R gibi
-//! kısayollar elinden alınmaz. Doğrulama (fare tuşu, tek tuş, Windows kısayolu
-//! reddi) ortak `keys` modülündedir; ayar değişince kısayollar yeniden kaydedilir.
+//! kısayollar elinden alınmaz. Doğrulama (sol tık, tek tuş, Windows kısayolu
+//! reddi) ortak `keys` modülünde, kayıt (fare tuşları dahil) `hotkey` modülündedir; ayar değişince kısayollar yeniden kaydedilir.
 
-use carlui_core::{config::Config, info, keys::Combo, paths, warn};
+use carlui_core::{config::Config, hotkey, info, keys::Combo, paths, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use windows::{
     core::*,
     Win32::{
         Foundation::HWND,
-        UI::{Input::KeyboardAndMouse::*, Shell::ShellExecuteW, WindowsAndMessaging::*},
+        UI::{Shell::ShellExecuteW, WindowsAndMessaging::*},
     },
 };
 
@@ -32,24 +32,14 @@ static UNLOCK_ON: AtomicBool = AtomicBool::new(false);
 
 fn reg(hwnd: HWND, id: i32, c: Option<Combo>, name: &str, text: &str) {
     let Some(c) = c else { return };
-    let mut mods = MOD_NOREPEAT;
-    for (on, m) in [(c.mods.ctrl, MOD_CONTROL), (c.mods.alt, MOD_ALT), (c.mods.shift, MOD_SHIFT), (c.mods.win, MOD_WIN)] {
-        if on {
-            mods |= m;
-        }
-    }
-    unsafe {
-        if let Err(e) = RegisterHotKey(hwnd, id, mods, c.vk) {
-            warn!("{name} kısayolu {text} kaydedilemedi (başka bir uygulama kullanıyor olabilir): {e}");
-        }
+    if let Err(e) = hotkey::register(hwnd, id, c) {
+        warn!("{name} kısayolu {text} kaydedilemedi (başka bir uygulama kullanıyor olabilir): {e}");
     }
 }
 
 pub fn register(hwnd: HWND, cfg: &Config) {
-    unsafe {
-        for id in [VAULT, PICKER, DISK, RENAME, DICTATE, SPEAK, ASSIST, UNLOCK, LAYOUTS] {
-            let _ = UnregisterHotKey(hwnd, id);
-        }
+    for id in [VAULT, PICKER, DISK, RENAME, DICTATE, SPEAK, ASSIST, UNLOCK, LAYOUTS] {
+        hotkey::unregister(hwnd, id);
     }
     RENAME_ON.store(false, Ordering::SeqCst);
     UNLOCK_ON.store(false, Ordering::SeqCst);
@@ -90,9 +80,7 @@ fn sync_one(hwnd: HWND, id: i32, on: &AtomicBool, want: bool, c: Option<Combo>, 
     if want {
         reg(hwnd, id, c, name, text);
     } else {
-        unsafe {
-            let _ = UnregisterHotKey(hwnd, id);
-        }
+        hotkey::unregister(hwnd, id);
     }
 }
 

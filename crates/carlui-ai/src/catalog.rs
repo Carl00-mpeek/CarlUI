@@ -16,16 +16,18 @@ pub enum Feature {
     Background,
     /// Konuşmayı yazıya dökme ve dikte (Whisper)
     Speech,
-    /// Sesli komut: "klibi kaydet" (Vosk / Whisper)
+    /// Sesli komut: asistanın bas-konuş komutları (Whisper)
     Command,
     /// Ekran çevirisi (Opus-MT)
     Translate,
     /// Sesli okuma (Piper, Kokoro)
     Speak,
+    /// Asistanın uzun cümleleri anlaması (yerel dil modeli)
+    Brain,
 }
 
 impl Feature {
-    pub const ALL: [Feature; 6] = [Feature::Speech, Feature::Speak, Feature::Command, Feature::Background, Feature::Upscale, Feature::Translate];
+    pub const ALL: [Feature; 7] = [Feature::Speech, Feature::Brain, Feature::Speak, Feature::Command, Feature::Background, Feature::Upscale, Feature::Translate];
     pub fn key(self) -> &'static str {
         match self {
             Feature::Upscale => "upscale",
@@ -34,6 +36,7 @@ impl Feature {
             Feature::Command => "command",
             Feature::Translate => "translate",
             Feature::Speak => "speak",
+            Feature::Brain => "brain",
         }
     }
 }
@@ -148,26 +151,27 @@ pub static MODELS: &[Model] = &[
         1036558, "e2aa043ef015641d363d8288e7c241c85e36a5c761fb303598e0710233344387", 1256, "c5b526b3e3cd64cd8940dabb45e8ba726629e22d8ed389c29b552f9140daf04a",
         "En doğru sonuç; uzun kayıtlar ve altyazı için. Ekran kartı ve 4 GB+ bellek ister.",
         "Most accurate; for long recordings and subtitles. Wants a graphics card and 4 GB+ of memory.", "MIT (OpenAI)"),
-    // ---- Sesli komut
+    // ---- Akıllı asistan
     Model {
-        id: "vosk-tr",
-        feature: Feature::Command,
-        tier: Tier::Small,
-        name: "Vosk small TR",
-        about_tr: "Anlık tekrar komutları için. 50 MB, sürekli dinlerken işlemciyi yormaz. Sesli asistan bunun yerine Whisper base kullanır.",
-        about_en: "For instant replay commands. 50 MB, barely touches the CPU. The voice assistant uses Whisper base instead.",
-        license: "Apache-2.0 (Alpha Cephei)",
+        id: "brain-qwen3-4b",
+        feature: Feature::Brain,
+        tier: Tier::Medium,
+        name: "Qwen3 4B Instruct",
+        about_tr: "Asistan uzun cümleleri anlar: uygulamaları ekrana böler, uygulama başına ses ayarlar, Spotify'da şarkı açar. İşlemcide ya da ekran kartında çalışır; yalnızca komut sırasında açılır.",
+        about_en: "Lets the assistant understand full sentences: splits apps on a screen, sets per-app volume, plays songs on Spotify. Runs on the CPU or graphics card; only starts for a command.",
+        license: "Apache-2.0 (Qwen), MIT (llama.cpp)",
         restricted: false,
-        source: "https://alphacephei.com/vosk/models",
+        source: "https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507",
         files: &[
-            File { url: "https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip", name: "model.zip", size: 36855784, sha256: "8c8d07cec1bce31add14967c16891c84152cdf76d391e33c08278119b9ea96e5", unzip: true },
-            File { url: "https://github.com/alphacep/vosk-api/releases/download/v0.3.45/vosk-win64-0.3.45.zip", name: "vosk.zip", size: 14882445, sha256: "f1dcc9cca460630f81ea8f71794f69c80bed6556d2a4e6237b5785e1d2dff34b", unzip: true },
+            File { url: "https://github.com/ggml-org/llama.cpp/releases/download/b12179/llama-b12179-bin-win-vulkan-x64.zip", name: "llama-vulkan.zip", size: 37706800, sha256: "3f623006832b39384c926aee0b70ddd8568fa7623660457b8e5ede519d0aa143", unzip: true },
+            File { url: "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf", name: "model.gguf", size: 2497281120, sha256: "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597", unzip: false },
         ],
     },
+    // ---- Sesli komut
     Model {
         id: "cmd-whisper-tiny",
         feature: Feature::Command,
-        tier: Tier::Medium,
+        tier: Tier::Small,
         name: "Whisper tiny",
         about_tr: "En hafif Whisper; her dilde çalışır, komutları daha sık karıştırır. Yalnızca konuşma bitince çalışır.",
         about_en: "The lightest Whisper; any language, mixes up commands more often. Only runs once you stop talking.",
@@ -183,7 +187,7 @@ pub static MODELS: &[Model] = &[
     Model {
         id: "cmd-whisper-base",
         feature: Feature::Command,
-        tier: Tier::Large,
+        tier: Tier::Medium,
         name: "Whisper base",
         about_tr: "Sesli asistan için önerilen. Komutları az karıştırır. Dikte için indirildiyse ek yer kaplamaz.",
         about_en: "Recommended for the voice assistant. Mixes up few commands. No extra space if downloaded for dictation.",
@@ -197,8 +201,8 @@ pub static MODELS: &[Model] = &[
         feature: Feature::Command,
         tier: Tier::Large,
         name: "Whisper small",
-        about_tr: "Base'den daha doğru, ama asistan her basışta birkaç saniye yükler. Anlık tekrar komutları açıksa oyunda da bellekte kalır.",
-        about_en: "More accurate than base, but the assistant takes a few seconds to load it on every press. Stays in memory during games if replay commands are on.",
+        about_tr: "Base'den daha doğru, ama asistan her basışta birkaç saniye yükler.",
+        about_en: "More accurate than base, but the assistant takes a few seconds to load it on every press.",
         license: "Apache-2.0 (OpenAI)",
         restricted: false,
         source: "https://huggingface.co/openai/whisper-small",
@@ -209,8 +213,8 @@ pub static MODELS: &[Model] = &[
         feature: Feature::Command,
         tier: Tier::Large,
         name: "Whisper large-v3-turbo",
-        about_tr: "En doğru sonuç, ama asistan her basışta 10 saniyeden uzun yükleyebilir. Anlık tekrar komutları açıksa oyunda da bellekte kalır.",
-        about_en: "Most accurate, but the assistant can take over 10 seconds to load it on every press. Stays in memory during games if replay commands are on.",
+        about_tr: "En doğru sonuç, ama asistan her basışta 10 saniyeden uzun yükleyebilir.",
+        about_en: "Most accurate, but the assistant can take over 10 seconds to load it on every press.",
         license: "MIT (OpenAI)",
         restricted: false,
         source: "https://huggingface.co/openai/whisper-large-v3-turbo",
@@ -426,6 +430,7 @@ pub fn recommended(f: Feature) -> &'static Model {
         Feature::Command => "cmd-whisper-base",
         Feature::Translate => "opus-en-tr",
         Feature::Speak => "kokoro-q8",
+        Feature::Brain => "brain-qwen3-4b",
     };
     get(id).expect("katalogda önerilen model yok")
 }
@@ -433,7 +438,7 @@ pub fn recommended(f: Feature) -> &'static Model {
 /// Ayarlarda "Seç" düğmesi var mı: çeviride iki yön de kullanılır, Türkçe ses
 /// Türkçe metinde kendiliğinden devreye girer.
 pub fn selectable(m: &Model) -> bool {
-    m.feature != Feature::Translate && m.id != TURKISH_VOICE
+    !matches!(m.feature, Feature::Translate | Feature::Brain) && m.id != TURKISH_VOICE
 }
 
 /// Ayarlarda seçili model (geçersiz ya da boşsa önerilen).
@@ -441,14 +446,6 @@ pub fn chosen(cfg: &carlui_core::config::AiConfig, f: Feature) -> &'static Model
     get(cfg.chosen(f.key())).filter(|m| m.feature == f && selectable(m)).unwrap_or_else(|| recommended(f))
 }
 
-/// Anlık tekrarın sürekli dinleyen modeli. Seçim yapılmadıysa Vosk kalır:
-/// oyun sürerken işlemciyi ve belleği en az o yorar.
-pub fn replay_command(cfg: &carlui_core::config::AiConfig) -> &'static Model {
-    if cfg.chosen(Feature::Command.key()).is_empty() {
-        return get("vosk-tr").expect("katalogda Vosk yok");
-    }
-    chosen(cfg, Feature::Command)
-}
 
 impl Tier {
     pub fn label(self) -> &'static str {
@@ -470,6 +467,7 @@ impl Feature {
             Feature::Command => t!("Sesli komut", "Voice command"),
             Feature::Translate => t!("Ekran çevirisi", "Screen translation"),
             Feature::Speak => t!("Sesli okuma", "Read aloud"),
+            Feature::Brain => t!("Akıllı asistan", "Smart assistant"),
         }
     }
 }

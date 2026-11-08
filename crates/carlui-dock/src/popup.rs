@@ -4,10 +4,12 @@
 //!   her pencere için başlık + canlı küçük resim. Küçük resimler DWM
 //!   thumbnail'larıdır: içerik Windows'un compositor'ünde canlı çizilir, bu
 //!   süreç kare kopyalamaz. Karta tıklamak pencereyi öne getirir, × kapatır.
+//!   Uygulamanın medya oturumu varsa altta önceki / oynat / sonraki düğmeleri olur.
 //!
 //! Ayrı bir pencere kullanılmasının sebebi, dock penceresinin tıklanabilir
 //! bölgesinin pill ile sınırlı olmasıdır.
 
+use crate::media::{Cmd, Session};
 use carlui_core::theme::Theme;
 use carlui_ui::{
     gfx::Gfx,
@@ -41,6 +43,31 @@ pub enum Mode {
 pub enum Action {
     Activate(HWND),
     Close(HWND),
+    Media(String, Cmd),
+}
+
+/// Medya simgesi: fırça hazır tutulur, oynat / duraklat değişiminde yeniden çizilmez.
+struct Glyph {
+    brush: CompositionSurfaceBrush,
+    w: f32,
+    h: f32,
+}
+
+impl Glyph {
+    fn put(&self, v: &SpriteVisual, center: (f32, f32)) -> Result<()> {
+        v.SetBrush(&self.brush)?;
+        v.SetSize(v2(self.w, self.h))?;
+        v.SetOffset(v3((center.0 - self.w / 2.0).round(), (center.1 - self.h / 2.0).round()))
+    }
+}
+
+struct Button {
+    cmd: Cmd,
+    rect: RECT,
+    center: (f32, f32),
+    on: bool,
+    hl: ShapeVisual,
+    icon: SpriteVisual,
 }
 
 struct Card {
@@ -51,6 +78,10 @@ struct Card {
     thumb_rect: RECT,
     hl: ShapeVisual,
     close: SpriteVisual,
+    title: String,
+    title_v: SpriteVisual,
+    title_max: f32,
+    buttons: Vec<Button>,
 }
 
 pub struct Popup {
@@ -67,8 +98,13 @@ pub struct Popup {
     pub windows: Vec<HWND>,
     cards: Vec<Card>,
     hovered: Option<usize>,
+    /// (kart, düğme) sırası.
+    hovered_button: Option<(usize, usize)>,
     pub mouse_inside: bool,
     close_surface: CompositionDrawingSurface,
+    media: Option<Session>,
+    /// [oynat, duraklat]
+    play_glyphs: Vec<Glyph>,
 }
 
 fn contains(r: &RECT, x: i32, y: i32) -> bool {
@@ -97,8 +133,11 @@ impl Popup {
             windows: Vec::new(),
             cards: Vec::new(),
             hovered: None,
+            hovered_button: None,
             mouse_inside: false,
             close_surface,
+            media: None,
+            play_glyphs: Vec::new(),
         })
     }
 
@@ -112,6 +151,7 @@ impl Popup {
             let _ = k.RemoveAll();
         }
         self.hovered = None;
+        self.hovered_button = None;
         unsafe {
             let _ = KillTimer(self.hwnd, TIMER_HIDE);
             let _ = KillTimer(self.hwnd, TIMER_THUMBS);
@@ -172,7 +212,27 @@ impl Popup {
         Ok(())
     }
 
-    pub fn show_preview(&mut self, gfx: &Gfx, key: &str, items: &[(HWND, String)], anchor: (i32, i32)) -> Result<()> {
+    fn glyph(&self, gfx: &Gfx, code: char, size: f32) -> Result<Glyph> {
+        let g = self.text.glyph(gfx, code, (size * self.s).round(), 0.95)?;
+        Ok(Glyph { brush: self.comp.CreateSurfaceBrushWithSurface(&g.surface)?, w: g.width, h: g.height })
+    }
+
+    /// Fare üstündeyken beliren yuvarlak köşeli zemin.
+    fn highlight(&self, brush: &CompositionColorBrush, w: f32, h: f32, radius: f32, x: f32, y: f32) -> Result<ShapeVisual> {
+        let geom = self.comp.CreateRoundedRectangleGeometry()?;
+        geom.SetSize(v2(w, h))?;
+        geom.SetCornerRadius(v2(radius, radius))?;
+        let shape = self.comp.CreateSpriteShapeWithGeometry(&geom)?;
+        shape.SetFillBrush(brush)?;
+        let v = self.comp.CreateShapeVisual()?;
+        v.SetSize(v2(w, h))?;
+        v.SetOffset(v3(x, y))?;
+        v.Shapes()?.Append(&shape)?;
+        v.SetOpacity(0.0)?;
+        Ok(v)
+    }
+
+    pub fn show_preview(&mut self, gfx: &Gfx, key: &str, items: &[(HWND, String)], media: Option<Session>, anchor: (i32, i32)) -> Result<()> {
         let animate = self.mode != Mode::Preview || self.key != key;
         self.clear();
         self.mode = Mode::Preview;
@@ -183,31 +243,36 @@ impl Popup {
         let (card_w, thumb_h, title_h) = ((220.0 * s).round(), (124.0 * s).round(), (22.0 * s).round());
         let (pad, gap, inner, margin) = ((8.0 * s).round(), (6.0 * s).round(), (8.0 * s).round(), (8.0 * s).round());
         let close_px = (18.0 * s).round();
+        let (btn_w, btn_h, btn_gap) = ((48.0 * s).round(), (30.0 * s).round(), (4.0 * s).round());
         let w = n as f32 * card_w + (n - 1) as f32 * gap + pad * 2.0;
-        let card_h = inner + title_h + 4.0 * s + thumb_h + inner;
+        let row = if media.is_some() { 4.0 * s + btn_h } else { 0.0 };
+        let card_h = inner + title_h + 4.0 * s + thumb_h + row + inner;
         let h = card_h + pad * 2.0;
 
         let glass = Glass::new(&self.comp, &self.theme, (18.0 * s * self.theme.radius_scale).round())?;
         let content = glass.content.Children()?;
         let hl_brush = self.comp.CreateColorBrushWithColor(carlui_ui::glass::exact(self.theme.hover))?;
         let close_brush = self.comp.CreateSurfaceBrushWithSurface(&self.close_surface)?;
+        let skips = if media.is_some() {
+            self.play_glyphs = vec![self.glyph(gfx, '\u{E768}', 15.0)?, self.glyph(gfx, '\u{E769}', 15.0)?];
+            Some((self.glyph(gfx, '\u{E892}', 13.0)?, self.glyph(gfx, '\u{E893}', 13.0)?))
+        } else {
+            None
+        };
+        let to_win = |l: f32, t: f32, r: f32, b: f32| RECT {
+            left: (margin + l) as i32,
+            top: (margin + t) as i32,
+            right: (margin + r) as i32,
+            bottom: (margin + b) as i32,
+        };
 
         for (i, (src, title)) in items.iter().take(n).enumerate() {
             let x0 = pad + i as f32 * (card_w + gap);
-            let hl_geom = self.comp.CreateRoundedRectangleGeometry()?;
-            hl_geom.SetSize(v2(card_w, card_h))?;
-            let r = 12.0 * s * self.theme.radius_scale;
-            hl_geom.SetCornerRadius(v2(r, r))?;
-            let shape = self.comp.CreateSpriteShapeWithGeometry(&hl_geom)?;
-            shape.SetFillBrush(&hl_brush)?;
-            let hl = self.comp.CreateShapeVisual()?;
-            hl.SetSize(v2(card_w, card_h))?;
-            hl.SetOffset(v3(x0, pad))?;
-            hl.Shapes()?.Append(&shape)?;
-            hl.SetOpacity(0.0)?;
+            let hl = self.highlight(&hl_brush, card_w, card_h, 12.0 * s * self.theme.radius_scale, x0, pad)?;
             content.InsertAtTop(&hl)?;
 
-            let t = self.text.render(gfx, title, 12.5 * s, false, card_w - inner * 2.0 - close_px - 4.0 * s, 0.92)?;
+            let title_max = card_w - inner * 2.0 - close_px - 4.0 * s;
+            let t = self.text.render(gfx, title, 12.5 * s, false, title_max, 0.92)?;
             let tv = self.comp.CreateSpriteVisual()?;
             tv.SetSize(v2(t.width, t.height))?;
             tv.SetBrush(&self.comp.CreateSurfaceBrushWithSurface(&t.surface)?)?;
@@ -234,12 +299,23 @@ impl Popup {
                 let top = margin + pad + inner + title_h + 4.0 * s + (ah - th) / 2.0;
                 (thumb, RECT { left: left as i32, top: top as i32, right: (left + tw) as i32, bottom: (top + th) as i32 })
             };
-            let to_win = |l: f32, t: f32, r: f32, b: f32| RECT {
-                left: (margin + l) as i32,
-                top: (margin + t) as i32,
-                right: (margin + r) as i32,
-                bottom: (margin + b) as i32,
-            };
+            let mut buttons = Vec::new();
+            if let Some((prev, next)) = &skips {
+                let y = pad + inner + title_h + 4.0 * s + thumb_h + 4.0 * s;
+                let left = x0 + ((card_w - btn_w * 3.0 - btn_gap * 2.0) / 2.0).round();
+                for (k, (cmd, glyph)) in [(Cmd::Prev, Some(prev)), (Cmd::PlayPause, None), (Cmd::Next, Some(next))].into_iter().enumerate() {
+                    let x = left + k as f32 * (btn_w + btn_gap);
+                    let hl = self.highlight(&hl_brush, btn_w, btn_h, 8.0 * s * self.theme.radius_scale, x, y)?;
+                    content.InsertAtTop(&hl)?;
+                    let icon = self.comp.CreateSpriteVisual()?;
+                    let center = (x + btn_w / 2.0, y + btn_h / 2.0);
+                    if let Some(g) = glyph {
+                        g.put(&icon, center)?;
+                    }
+                    content.InsertAtTop(&icon)?;
+                    buttons.push(Button { cmd, rect: to_win(x, y, x + btn_w, y + btn_h), center, on: true, hl, icon });
+                }
+            }
             self.cards.push(Card {
                 src: *src,
                 rect: to_win(x0, pad, x0 + card_w, pad + card_h),
@@ -248,14 +324,69 @@ impl Popup {
                 thumb_rect,
                 hl,
                 close,
+                title: title.clone(),
+                title_v: tv,
+                title_max,
+                buttons,
             });
         }
+        self.media = media;
+        self.paint_media();
         self.root.Children()?.InsertAtTop(&glass.root)?;
         self.reveal(&glass, w, h, margin, animate)?;
         self.show_window(self.place(w, h, margin, anchor));
         // Küçük resimler DWM'de çizilir, animasyona katılamaz; panel yerine oturunca belirsinler.
         unsafe {
             SetTimer(self.hwnd, TIMER_THUMBS, if animate { 140 } else { 1 }, None);
+        }
+        Ok(())
+    }
+
+    /// Düğmeleri `media` durumuna getirir.
+    fn paint_media(&mut self) {
+        let Some(m) = &self.media else { return };
+        for b in self.cards.iter_mut().flat_map(|c| &mut c.buttons) {
+            b.on = match b.cmd {
+                Cmd::Prev => m.can_prev,
+                Cmd::Next => m.can_next,
+                Cmd::PlayPause => true,
+            };
+            let _ = b.icon.SetOpacity(if b.on { 1.0 } else { 0.3 });
+            if b.cmd == Cmd::PlayPause {
+                if let Some(g) = self.play_glyphs.get(m.playing as usize) {
+                    let _ = g.put(&b.icon, b.center);
+                }
+            }
+        }
+    }
+
+    /// Yeni medya durumunu açık önizlemeye işler. Düğme sırası eklenip kalkacaksa
+    /// kart boyu değişir: `false` döner, önizleme yeniden kurulmalı.
+    pub fn update_media(&mut self, media: Option<Session>) -> bool {
+        if self.media.is_some() != media.is_some() {
+            return false;
+        }
+        self.media = media;
+        self.paint_media();
+        true
+    }
+
+    /// Oynat / duraklat simgesini komutun sonucunu beklemeden çevirir.
+    pub fn toggle_play(&mut self) {
+        if let Some(m) = &mut self.media {
+            m.playing = !m.playing;
+        }
+        self.paint_media();
+    }
+
+    /// Değişen pencere başlıklarını yeniler (şarkı geçince başlık da değişir).
+    pub fn retitle(&mut self, gfx: &Gfx, items: &[(HWND, String)]) -> Result<()> {
+        for c in &mut self.cards {
+            let Some((_, title)) = items.iter().find(|(h, t)| *h == c.src && *t != c.title) else { continue };
+            let t = self.text.render(gfx, title, 12.5 * self.s, false, c.title_max, 0.92)?;
+            c.title_v.SetSize(v2(t.width, t.height))?;
+            c.title_v.SetBrush(&self.comp.CreateSurfaceBrushWithSurface(&t.surface)?)?;
+            c.title = title.clone();
         }
         Ok(())
     }
@@ -309,7 +440,24 @@ impl Popup {
 
     pub fn mouse_move(&mut self, x: i32, y: i32) {
         self.mouse_inside = true;
-        self.set_hover(self.cards.iter().position(|c| contains(&c.rect, x, y)));
+        let card = self.cards.iter().position(|c| contains(&c.rect, x, y));
+        self.set_hover(card);
+        let button = card.and_then(|i| Some((i, self.cards[i].buttons.iter().position(|b| b.on && contains(&b.rect, x, y))?)));
+        self.set_button_hover(button);
+    }
+
+    fn set_button_hover(&mut self, idx: Option<(usize, usize)>) {
+        if idx == self.hovered_button {
+            return;
+        }
+        let at = |i: Option<(usize, usize)>| i.and_then(|(c, b)| self.cards.get(c)?.buttons.get(b));
+        if let Some(old) = at(self.hovered_button) {
+            let _ = self.motion.animate(&old.hl, h!("Opacity"), 0.0, 1.0, 35, 0);
+        }
+        if let Some(new) = at(idx) {
+            let _ = self.motion.animate(&new.hl, h!("Opacity"), 1.0, 1.0, 35, 0);
+        }
+        self.hovered_button = idx;
     }
 
     fn set_hover(&mut self, idx: Option<usize>) {
@@ -330,10 +478,15 @@ impl Popup {
     pub fn mouse_leave(&mut self) {
         self.mouse_inside = false;
         self.set_hover(None);
+        self.set_button_hover(None);
     }
 
     pub fn click(&self, x: i32, y: i32) -> Option<Action> {
         let c = self.cards.iter().find(|c| contains(&c.rect, x, y))?;
+        // Düğme sırasına tıklamak pencereyi öne getirmez, soluk düğme de bir şey yapmaz.
+        if let Some(b) = c.buttons.iter().find(|b| contains(&b.rect, x, y)) {
+            return self.media.as_ref().filter(|_| b.on).map(|m| Action::Media(m.app.clone(), b.cmd));
+        }
         Some(if contains(&c.close_rect, x, y) { Action::Close(c.src) } else { Action::Activate(c.src) })
     }
 }

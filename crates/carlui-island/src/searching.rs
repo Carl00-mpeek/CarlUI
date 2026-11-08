@@ -144,26 +144,18 @@ impl App {
     pub(crate) fn set_hotkey(&mut self) {
         self.set_clip_hotkey();
         let hwnd = self.island.hwnd;
-        unsafe {
-            if self.hotkey_on {
-                let _ = UnregisterHotKey(hwnd, HOTKEY_SEARCH);
-                self.hotkey_on = false;
-            }
-            if !self.cfg.launcher.enabled || self.game {
-                return;
-            }
-            // Doğrulama (fare tuşu, tek tuş, sistem kısayolu reddi) ortak `keys` modülünde.
-            let Some(c) = self.cfg.shortcuts.search_combo() else { return };
-            let mut mods = MOD_NOREPEAT;
-            for (on, m) in [(c.mods.ctrl, MOD_CONTROL), (c.mods.alt, MOD_ALT), (c.mods.shift, MOD_SHIFT), (c.mods.win, MOD_WIN)] {
-                if on {
-                    mods |= m;
-                }
-            }
-            match RegisterHotKey(hwnd, HOTKEY_SEARCH, mods, c.vk) {
-                Ok(()) => self.hotkey_on = true,
-                Err(e) => carlui_core::warn!("arama kısayolu {} kaydedilemedi (başka bir uygulama kullanıyor olabilir): {e}", self.cfg.shortcuts.search),
-            }
+        if self.hotkey_on {
+            carlui_core::hotkey::unregister(hwnd, HOTKEY_SEARCH);
+            self.hotkey_on = false;
+        }
+        if !self.cfg.launcher.enabled || self.game {
+            return;
+        }
+        // Doğrulama (sol tık, tek tuş, sistem kısayolu reddi) ortak `keys` modülünde.
+        let Some(c) = self.cfg.shortcuts.search_combo() else { return };
+        match carlui_core::hotkey::register(hwnd, HOTKEY_SEARCH, c) {
+            Ok(()) => self.hotkey_on = true,
+            Err(e) => carlui_core::warn!("arama kısayolu {} kaydedilemedi (başka bir uygulama kullanıyor olabilir): {e}", self.cfg.shortcuts.search),
         }
     }
 

@@ -292,8 +292,12 @@ win_key = "menu"               # "menu": CarlUI Win menüsü, "search": arama, "
 app_numbers = "Win"            # "Ctrl+Alt" → Ctrl+Alt+1…9, boş → kapalı
 ```
 
-Kısayollar bozulmasın diye doğrulanır: fare tuşları (sol/sağ/orta tık),
-değiştiricisiz tek tuş (F13–F24 hariç), yalnızca Shift, Windows'un temel
+Fare tuşları `Mouse2` (sağ), `Mouse3` (orta), `Mouse4` ve `Mouse5` (yan) adıyla
+ana tuş olabilir: `layouts = "Mouse4"`, `search = "Ctrl+Mouse3"`. Dönüştürücü ve
+uygulama numaraları yalnızca değiştirici aldığı için klavyede kalır.
+
+Kısayollar bozulmasın diye doğrulanır: sol tık (Mouse1),
+değiştiricisiz tek tuş (F13–F24 ve fare tuşları hariç), yalnızca Shift, Windows'un temel
 kısayolları (Ctrl+Alt+Del, Alt+Tab, Alt+F4, Win+L, Win+D…) ve Ctrl+C/V/X/Z/A/S
 kabul edilmez. Geçersiz değer girilirse varsayılan kullanılır ve loga yazılır.
 

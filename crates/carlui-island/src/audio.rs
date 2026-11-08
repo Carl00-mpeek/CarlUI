@@ -5,12 +5,12 @@
 //! eşlenir. Tarayıcıda ses sekme başına değil tarayıcı başına ayarlanabilir;
 //! YouTube çalıyorsa tarayıcının sesi değişir, sistem sesi değişmez.
 
+use carlui_core::quick::{app_sessions, process_aumid, process_exe};
 use windows::{
-    core::*,
     Win32::{
         Foundation::*,
         Media::Audio::{Endpoints::IAudioEndpointVolume, *},
-        System::{Com::*, Threading::*},
+        System::Com::*,
         UI::WindowsAndMessaging::*,
     },
 };
@@ -76,29 +76,6 @@ pub fn watch_master(hwnd: isize, msg: u32) {
     });
 }
 
-fn process_exe(pid: u32) -> String {
-    unsafe {
-        let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else { return String::new() };
-        let mut buf = [0u16; 1024];
-        let mut len = buf.len() as u32;
-        let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len);
-        let _ = CloseHandle(h);
-        if ok.is_ok() { String::from_utf16_lossy(&buf[..len as usize]) } else { String::new() }
-    }
-}
-
-fn process_aumid(pid: u32) -> String {
-    use windows::Win32::Storage::Packaging::Appx::GetApplicationUserModelId;
-    unsafe {
-        let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else { return String::new() };
-        let mut buf = [0u16; 512];
-        let mut len = buf.len() as u32;
-        let rc = GetApplicationUserModelId(h, &mut len, PWSTR(buf.as_mut_ptr()));
-        let _ = CloseHandle(h);
-        if rc.is_ok() && len > 1 { String::from_utf16_lossy(&buf[..len as usize - 1]) } else { String::new() }
-    }
-}
-
 pub fn stem(path: &str) -> String {
     std::path::Path::new(path).file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default()
 }
@@ -148,30 +125,11 @@ pub fn app_volumes(app: &str) -> Vec<ISimpleAudioVolume> {
     let id = app.to_lowercase();
     let mut stems: Vec<String> = expected_stem(app).into_iter().collect();
     let mut found = Vec::new();
-    let pass = |stems: &[String], found: &mut Vec<ISimpleAudioVolume>| unsafe {
-        let Ok(en) = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL) else { return };
-        let Ok(dev) = en.GetDefaultAudioEndpoint(eRender, eMultimedia) else { return };
-        let Ok(mgr) = dev.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None) else { return };
-        let Ok(list) = mgr.GetSessionEnumerator() else { return };
-        let n = list.GetCount().unwrap_or(0);
-        for i in 0..n {
-            let Ok(ctl) = list.GetSession(i) else { continue };
-            let Ok(ctl2) = ctl.cast::<IAudioSessionControl2>() else { continue };
-            let pid = ctl2.GetProcessId().unwrap_or(0);
-            if pid == 0 {
-                continue;
-            }
-            let exe = process_exe(pid);
-            let s = stem(&exe);
-            let hit = stems.contains(&s)
-                || (!s.is_empty() && s.len() >= 4 && id.contains(&s))
-                || process_aumid(pid).eq_ignore_ascii_case(app);
-            if hit {
-                if let Ok(v) = ctl.cast::<ISimpleAudioVolume>() {
-                    found.push(v);
-                }
-            }
-        }
+    let pass = |stems: &[String], found: &mut Vec<ISimpleAudioVolume>| {
+        found.extend(app_sessions(|pid| {
+            let s = stem(&process_exe(pid));
+            stems.contains(&s) || (!s.is_empty() && s.len() >= 4 && id.contains(&s)) || process_aumid(pid).eq_ignore_ascii_case(app)
+        }));
     };
     pass(&stems, &mut found);
     if found.is_empty() {

@@ -30,8 +30,22 @@ pub fn dir(m: &Model) -> PathBuf {
     root().join(real_id(m.id))
 }
 
+/// `.ok` yazılmış ve katalogdaki her dosya yerinde: katalog bir dosyayı
+/// değiştirdiyse (ör. yeni motor paketi) model yeniden indirilecek sayılır.
 pub fn installed(m: &Model) -> bool {
-    dir(m).join(".ok").is_file()
+    let d = dir(m);
+    let files = crate::catalog::get(real_id(m.id)).map_or(m.files, |b| b.files);
+    d.join(".ok").is_file() && files.iter().all(|f| d.join(f.name).is_file())
+}
+
+/// İndirilecek bayt: yerinde olmayan dosyalar (kurulu olsa da yeni dosya eklenmiş olabilir).
+pub fn missing(m: &Model) -> u64 {
+    if installed(m) {
+        return 0;
+    }
+    let d = dir(m);
+    let files = crate::catalog::get(real_id(m.id)).map_or(m.files, |b| b.files);
+    files.iter().filter(|f| std::fs::metadata(d.join(f.name)).map_or(true, |x| x.len() != f.size)).map(|f| f.size).sum()
 }
 
 /// Diskte kapladığı yer (kurulu değilse 0).
@@ -112,19 +126,31 @@ pub fn install(m: &Model, cancel: &AtomicBool, progress: &dyn Fn(f32)) -> Result
     let d = dir(m);
     std::fs::create_dir_all(&d).map_err(|e| e.to_string())?;
     let _ = std::fs::remove_file(d.join(".ok"));
-    let total = m.size().max(1) as f64;
+    if m.files.iter().any(|f| !crate::net::plain_name(f.name)) {
+        return Err(t!("Model dosya adı geçersiz.", "Invalid model file name.").into());
+    }
+    // Önceki kurulumdan doğrulanmış dosya kalmışsa yeniden indirilmez; ilerleme
+    // yalnızca gerçekten inecek baytlara göre gösterilir.
+    let kept: Vec<bool> = m
+        .files
+        .iter()
+        .map(|f| {
+            let dst = d.join(f.name);
+            std::fs::metadata(&dst).is_ok_and(|x| x.len() == f.size) && sha256_file(&dst).is_ok_and(|h| h.eq_ignore_ascii_case(f.sha256))
+        })
+        .collect();
+    let total = m.files.iter().zip(&kept).filter(|(_, k)| !**k).map(|(f, _)| f.size).sum::<u64>().max(1) as f64;
     let mut done = 0u64;
-    for f in m.files {
-        if !crate::net::plain_name(f.name) {
-            return Err(t!("Model dosya adı geçersiz.", "Invalid model file name.").into());
-        }
+    for (f, kept) in m.files.iter().zip(kept) {
         let dst = d.join(f.name);
-        let base = done;
-        crate::net::fetch(f.url, &dst, f.size, f.sha256, cancel, &|n| progress(((base + n.min(f.size)) as f64 / total).min(0.99) as f32))?;
+        if !kept {
+            let base = done;
+            crate::net::fetch(f.url, &dst, f.size, f.sha256, cancel, &|n| progress(((base + n.min(f.size)) as f64 / total).min(0.99) as f32))?;
+            done += f.size;
+        }
         if f.unzip {
             crate::net::unzip(&dst, &d, None)?;
         }
-        done += f.size;
     }
     std::fs::write(d.join(".ok"), m.id).map_err(|e| e.to_string())?;
     progress(1.0);

@@ -4,7 +4,7 @@
 //! Direct2D çizimi, tıklama/klavye/tekerlek yönlendirmesi buradadır. Çizim
 //! Ayarlar penceresindeki anlık modlu `Painter` ile yapılır.
 //!
-//! `noactivate` pencereler (anlık tekrar paneli) tıklanınca bile etkinleşmez:
+//! `noactivate` pencereler (alan kaydı hapı) tıklanınca bile etkinleşmez:
 //! öndeki oyun odağı kaybetmez, tam ekrandan düşmez.
 
 use crate::{

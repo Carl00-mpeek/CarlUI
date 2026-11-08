@@ -35,7 +35,7 @@ fn version_rc() -> String {
         Ok("carlui-remover") => "CarlUI Uninstaller",
         Ok("carlui-tools") => "CarlUI Tools",
         Ok("carlui-expand") => "CarlUI Text expander",
-        Ok("carlui-replay") => "CarlUI Instant replay",
+        Ok("carlui-replay") => "CarlUI Area recording",
         Ok("carlui-setup") => "CarlUI Setup",
         _ => "CarlUI",
     };

@@ -63,7 +63,6 @@ enum Sample {
 pub struct Loopback {
     client: IAudioClient,
     cap: IAudioCaptureClient,
-    pub id: String,
     ch: usize,
     kind: Sample,
     rs: Resampler,
@@ -78,26 +77,12 @@ fn flow(mic: bool) -> EDataFlow {
     }
 }
 
-pub unsafe fn default_id(mic: bool) -> Option<String> {
-    let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
-    let dev = en.GetDefaultAudioEndpoint(flow(mic), eConsole).ok()?;
-    let p = dev.GetId().ok()?;
-    let s = p.to_string().ok();
-    CoTaskMemFree(Some(p.0 as _));
-    s
-}
 
 impl Loopback {
     /// `mic`: varsayılan mikrofon; değilse varsayılan çıkışın geri döngüsü.
     pub unsafe fn open(mic: bool) -> Result<Self> {
         let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
         let dev = en.GetDefaultAudioEndpoint(flow(mic), eConsole)?;
-        let id = {
-            let p = dev.GetId()?;
-            let s = p.to_string().unwrap_or_default();
-            CoTaskMemFree(Some(p.0 as _));
-            s
-        };
         let client: IAudioClient = dev.Activate(CLSCTX_ALL, None)?;
         let wf = client.GetMixFormat()?;
         let f = &*wf;
@@ -125,7 +110,7 @@ impl Loopback {
         };
         let cap: IAudioCaptureClient = client.GetService()?;
         client.Start()?;
-        Ok(Self { client, cap, id, ch, kind, rs: Resampler::new(rate), tmp: Vec::new() })
+        Ok(Self { client, cap, ch, kind, rs: Resampler::new(rate), tmp: Vec::new() })
     }
 
     /// Bekleyen tüm paketleri okur; her paket için (48k stereo i16, QPC 100 ns)
@@ -165,7 +150,7 @@ impl Loopback {
             self.cap.ReleaseBuffer(frames)?;
             out.clear();
             self.rs.push(&self.tmp, &mut out);
-            let t = if flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR.0 as u32 != 0 || qpc == 0 { crate::ring::now() } else { qpc as i64 };
+            let t = if flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR.0 as u32 != 0 || qpc == 0 { crate::clock::now() } else { qpc as i64 };
             if !out.is_empty() {
                 f(&out, t);
                 any = true;

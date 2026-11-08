@@ -12,7 +12,7 @@ use carlui_core::{info, paths, warn};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -413,11 +413,22 @@ pub fn running() -> Vec<Running> {
 
 /// Uygulamanın açık penceresi (en öndeki).
 pub fn window_of(app: &App, run: &[Running]) -> Option<Running> {
-    let aumid = if app.aumid.is_empty() && !app.parsing.contains('\\') { app.parsing.to_lowercase() } else { app.aumid.to_lowercase() };
+    run.iter().find(|r| owns(app, &r.exe, &r.aumid)).cloned()
+}
+
+/// Bu süreç (küçük harf exe yolu, kimlik) bu uygulamanın mı? Discord gibi uygulamalarda
+/// kısayol güncelleyiciyi gösterir (Update.exe), bu yüzden exe adı uygulama adıyla da karşılaştırılır.
+pub fn owns(app: &App, exe: &str, aumid: &str) -> bool {
+    let id = if app.aumid.is_empty() && !app.parsing.contains('\\') { app.parsing.as_str() } else { app.aumid.as_str() };
+    if !id.is_empty() && aumid.eq_ignore_ascii_case(id) {
+        return true;
+    }
     let target = app.target.to_lowercase();
-    run.iter()
-        .find(|r| (!aumid.is_empty() && r.aumid == aumid) || (!target.is_empty() && target.ends_with(".exe") && r.exe == target))
-        .cloned()
+    if !target.is_empty() && target.ends_with(".exe") && exe == target {
+        return true;
+    }
+    let stem = Path::new(exe).file_stem().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
+    stem.chars().count() >= 4 && crate::fuzzy::compact(&crate::search::norm(&app.name)) == crate::fuzzy::compact(&stem)
 }
 
 /// Eski CarlSpotlight'ın kullanım sayılarını bir kez içeri aktarmak için.
