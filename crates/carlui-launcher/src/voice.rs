@@ -40,6 +40,8 @@ pub enum Intent {
     /// Uygulamaları ekranda yan yana diz; 0 ekran söylenmedi demektir.
     Split { apps: Vec<String>, screen: u8 },
     Move { app: String, screen: u8 },
+    /// Döviz kuru sorusu: "dolar kaç TL" (kodlar: USD, TRY…).
+    Rate { amount: f64, from: &'static str, to: &'static str },
     /// Dil modeli bunu komut saymadı.
     Nothing,
     /// Fiil yok, kısa: büyük olasılıkla bir ad ("spotify").
@@ -229,6 +231,10 @@ pub fn parse(text: &str) -> Intent {
     if has(&["kilitle", "lock"]) {
         return Intent::Lock;
     }
+    let origs: Vec<&str> = toks.iter().map(|t| t.orig.as_str()).collect();
+    if let Some((amount, from, to)) = crate::voice_rate::parse(&words, &origs) {
+        return Intent::Rate { amount, from, to };
+    }
     // Ses düzeyi.
     let vol = words.iter().any(|w| (w.starts_with("ses") && !w.starts_with("sessiz")) || matches!(*w, "volume" | "sound"));
     if vol {
@@ -394,6 +400,10 @@ pub enum How {
     AppSound { app: App, what: Sound },
     Split { apps: Vec<App>, screen: u8 },
     Move { app: App, screen: u8 },
+    /// Kur sorulur (`voice_lines::check` yanıta çevirir).
+    Rate { amount: f64, from: &'static str, to: &'static str },
+    /// Yalnızca söylenecek yanıt; yapılacak iş yok.
+    Say(String),
     /// Sırayla yapılacak işler.
     Seq(Vec<How>),
     /// Hiçbir şey yapılmaz (bulunamadı).
@@ -512,6 +522,7 @@ pub fn plan(i: &Intent, apps: &[App], run: &[Running], web_search: &str) -> Plan
             How::Media(*m),
         ),
         Intent::Lock => Plan::new(t!("Bilgisayar kilitleniyor", "Locking the PC").into(), How::Act(Act::System(Sys::Lock))),
+        Intent::Rate { amount, from, to } => Plan::new(t!("Kur alınıyor…", "Getting the rate…").into(), How::Rate { amount: *amount, from: *from, to: *to }),
         Intent::Unknown(s) if s.split_whitespace().count() >= 2 => web(web_search, s),
         Intent::Unknown(s) => Plan::new(if s.is_empty() { t!("Anlaşılamadı", "Didn't catch that").into() } else { t!(format!("Anlaşılamadı: {s}"), format!("Didn't understand: {s}")) }, How::None),
     }
@@ -578,7 +589,7 @@ pub fn execute(h: &How) {
         How::Split { apps, screen } => arrange::split(apps, *screen),
         How::Move { app, screen } => arrange::move_to(app, *screen),
         How::Seq(list) => list.iter().for_each(execute),
-        How::None => {}
+        How::Rate { .. } | How::Say(_) | How::None => {}
     }
 }
 

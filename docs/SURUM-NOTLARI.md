@@ -1,5 +1,14 @@
 # Sürüm notları
 
+## v0.9.5 — Asistana döviz kuru (2026-11-08)
+
+**Yeni: "Dolar kaç TL?"** Sesli asistana kuru sorabilirsin: "dolar kaç", "100 euro kaç
+TL", "iki yüz elli euro ne kadar", "euro kaç dolar", "how much is a dollar in lira".
+Yanıt ekranda görünür ("1 dolar = 50,10 TL · 08.11.2026"); Türkçe ses kuruluysa sesli
+de okunur ("1 dolar, 50 lira 10 kuruş"). Kur, arama kutusundaki döviz çevirisiyle aynı
+yerden (Avrupa Merkez Bankası verisi, Frankfurter) gelir. Soru kurallarla anlaşılır,
+dil modeli beklenmez. "YouTube'da dolar kuru ara" yine arama yapar.
+
 ## v0.9.4 — Akıllı asistan modeli düzeltmesi (2026-11-08)
 
 **Düzeltme: Akıllı asistan modeli kurulu görünmüyordu.** Qwen3 4B indirilip "hazır"
@@ -10,7 +19,7 @@ denetim ona bakar. 0.9.3 ile indirmiş olanlar yalnızca 37 MB'lık paketi bir k
 indirir; 2,5 GB'lık model yeniden inmez.
 
 **SHA-256 (CarlUI-Setup.exe):**
-`80a70f97a486258d316f25c2fc349e84cdb26d4fe00ba4a1dff721c10f3edd3c`
+`52ab27a0260ee50ed43f7c1b969cc59cf26faa7a9b6dfc8c2893755dc9aba661`
 
 ## v0.9.3 — Akıllı asistan, anlık tekrar kaldırıldı (2026-11-08)
 

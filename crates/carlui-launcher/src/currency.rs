@@ -23,7 +23,7 @@ pub struct Rates {
     cache: Arc<Mutex<HashMap<(String, String), (Rate, Instant)>>>,
 }
 
-fn fetch(from: &str, to: &str) -> Option<(f64, String)> {
+pub(crate) fn fetch(from: &str, to: &str) -> Option<(f64, String)> {
     let url = format!("https://api.frankfurter.dev/v2/rate/{from}/{to}");
     let client = HttpClient::new().ok()?;
     let text = client.GetStringAsync(&Uri::CreateUri(&HSTRING::from(url)).ok()?).ok()?.get().ok()?.to_string();

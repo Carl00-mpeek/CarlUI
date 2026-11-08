@@ -85,7 +85,7 @@ pub fn read_lines(out: &str) -> Vec<Intent> {
 /// (Wi-Fi, parlaklık…) ona gitmez; yoksa "Wi-Fi'yi kapat" bir uygulama sanılır.
 fn rules_enough(text: &str, rule: &Intent) -> bool {
     use Quick::{Bluetooth, Brightness, Dark, Wifi};
-    matches!(rule, Intent::Lock | Intent::Quick(Bluetooth(_) | Brightness(_) | Dark(_) | Wifi(_))) || text.split_whitespace().count() <= SHORT
+    matches!(rule, Intent::Lock | Intent::Rate { .. } | Intent::Quick(Bluetooth(_) | Brightness(_) | Dark(_) | Wifi(_))) || text.split_whitespace().count() <= SHORT
 }
 
 /// Cümleyi eylemlere çevirir. `ask` modele sorar; hazır değilse `None` döner.
@@ -134,6 +134,10 @@ pub fn plan_all(list: &[Intent], apps: &[App], run: &[Running], web: &str) -> Pl
 /// olmayan uygulamanın düzeyini tutmaz. COM bu iş parçacığında başlatılmış olmalı.
 pub fn check(p: Plan) -> Plan {
     match &p.how {
+        How::Rate { amount, from, to } => match crate::voice_rate::answer(*amount, from, to) {
+            Some((shown, spoken)) => Plan { title: shown, how: How::Say(spoken) },
+            None => Plan { title: t!("Kur alınamadı, bağlantıyı kontrol et", "Couldn't get the rate, check your connection").into(), how: How::None },
+        },
         How::AppSound { app, .. } if !app_sound::has_sound(app) => Plan { title: t!(format!("{} şu an ses çıkarmıyor", app.name), format!("{} isn't playing any sound", app.name)), how: How::None },
         _ => p,
     }

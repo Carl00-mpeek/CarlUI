@@ -386,7 +386,7 @@ pub fn convert_units(q: &str) -> Option<(f64, String)> {
 
 // ---- Döviz ----
 
-const CURRENCIES: &[(&[&str], &str)] = &[
+pub(crate) const CURRENCIES: &[(&[&str], &str)] = &[
     (&["try", "tl", "lira", "₺"], "TRY"),
     (&["usd", "dolar", "dollar", "$"], "USD"),
     (&["eur", "euro", "avro", "€"], "EUR"),
@@ -414,7 +414,7 @@ const CURRENCIES: &[(&[&str], &str)] = &[
     (&["azn", "manat"], "AZN"),
 ];
 
-fn currency(name: &str) -> Option<&'static str> {
+pub(crate) fn currency_code(name: &str) -> Option<&'static str> {
     let n = name.trim().to_lowercase();
     CURRENCIES.iter().find(|c| c.0.contains(&n.as_str())).map(|c| c.1)
 }
@@ -422,14 +422,14 @@ fn currency(name: &str) -> Option<&'static str> {
 /// Döviz isteği: (miktar, kaynak, hedef). "100 dolar" tek başına TL'ye çevrilir.
 pub fn currency_request(q: &str) -> Option<(f64, &'static str, &'static str)> {
     if let Some((v, a, b)) = split_conversion(q) {
-        let (x, y) = (currency(&a)?, currency(&b)?);
+        let (x, y) = (currency_code(&a)?, currency_code(&b)?);
         return (x != y).then_some((v, x, y));
     }
     // "100 usd"
     let q = q.trim().to_lowercase();
     let (num, cur) = q.rsplit_once(' ')?;
     let v = parse_num(num)?;
-    let c = currency(cur)?;
+    let c = currency_code(cur)?;
     (c != "TRY").then_some((v, c, "TRY"))
 }
 

@@ -30,4 +30,5 @@ mod translate;
 pub mod usage;
 pub mod voice;
 pub mod voice_lines;
+mod voice_rate;
 mod whatsapp;

@@ -81,6 +81,21 @@ pub fn run(owner: HWND, accent: Option<u32>, target: HWND) -> Result<()> {
     }
 }
 
+/// Asistanın kısa yanıtını okur ("1 dolar, 42 lira"). Ses modeli kurulu
+/// değilse sessiz kalır (yanıt zaten ekranda); indirme sorulmaz.
+pub(crate) fn say(text: &str) {
+    let cfg = carlui_core::config::load();
+    let m = if translate::is_turkish(text) || carlui_core::lang::is_tr() { catalog::get(catalog::TURKISH_VOICE).unwrap_or_else(|| catalog::chosen(&cfg.ai, catalog::Feature::Speak)) } else { catalog::chosen(&cfg.ai, catalog::Feature::Speak) };
+    if !store::installed(m) {
+        return carlui_core::info!("asistan: {} kurulu değil, yanıt okunmadı", m.id);
+    }
+    let Ok(stop) = (unsafe { CreateEventW(None, true, false, None) }) else { return };
+    speak(m, text, cfg.ai.speak_speed, stop);
+    unsafe {
+        let _ = CloseHandle(stop);
+    }
+}
+
 /// Metni okur; `stop` olayı gelince hemen susar.
 fn speak(m: &'static catalog::Model, text: &str, speed: f32, stop: HANDLE) {
     let halt = Arc::new(AtomicBool::new(false));

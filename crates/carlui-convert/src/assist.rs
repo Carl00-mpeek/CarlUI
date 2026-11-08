@@ -407,7 +407,8 @@ pub(crate) fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<P
     match panel {
         // Onaydan sonra arama kapanmıştır; olmayan iş bildirimle söylenir.
         Some(_) if reviewed.is_some() => {
-            if !ok {
+            // Kur gibi yanıtlar da kapanan panelde görünmez; bildirimle söylenir.
+            if !ok || matches!(plan.how, voice::How::Say(_)) {
                 let data = serde_json::json!({ "app": "CarlUI", "title": plan.title, "body": text });
                 carlui_core::bus::BusClient::send_once(&carlui_core::bus::Event::Custom { name: "island-note".into(), data });
             }
@@ -422,6 +423,10 @@ pub(crate) fn work(w: &Arc<Shared>, o: &Opts, stop: HANDLE, panel: Option<&Arc<P
         s.done = true;
         s.frac = 1.0;
     });
+    if let voice::How::Say(answer) = &plan.how {
+        // Yalnızca yanıt: yapılacak iş yok, yanıt sesli okunur.
+        return crate::speak::say(answer);
+    }
     if ok {
         wait_modifiers_up();
         // Kabuk eylemleri (uygulama başlatma) tek iş parçacıklı COM ister.
