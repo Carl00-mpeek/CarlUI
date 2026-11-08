@@ -147,22 +147,26 @@ pub fn brightness_set(v: f32) -> bool {
     .is_some()
 }
 
-fn radios() -> Result<Vec<Radio>> {
+/// Radyo erişimini ister ve bilgisayardaki radyoları listeler. WinRT başlatılmış olmalı.
+pub fn radios() -> Result<Vec<Radio>> {
     let _ = Radio::RequestAccessAsync()?.get();
     Ok(Radio::GetRadiosAsync()?.get()?.into_iter().collect())
 }
 
 /// (Wi-Fi, Bluetooth) durumu; aygıt yoksa None. WinRT başlatılmış olmalı.
 pub fn radio_states() -> (Option<bool>, Option<bool>) {
+    radios().map(|list| states_of(&list)).unwrap_or((None, None))
+}
+
+/// Verilen radyoların (Wi-Fi, Bluetooth) durumu; o türden radyo yoksa None.
+pub fn states_of(list: &[Radio]) -> (Option<bool>, Option<bool>) {
     let (mut wifi, mut bt) = (None, None);
-    if let Ok(list) = radios() {
-        for radio in list {
-            let on = radio.State().map(|s| s == RadioState::On).unwrap_or(false);
-            match radio.Kind() {
-                Ok(RadioKind::WiFi) => wifi = Some(wifi.unwrap_or(false) || on),
-                Ok(RadioKind::Bluetooth) => bt = Some(bt.unwrap_or(false) || on),
-                _ => {}
-            }
+    for radio in list {
+        let on = radio.State().map(|s| s == RadioState::On).unwrap_or(false);
+        match radio.Kind() {
+            Ok(RadioKind::WiFi) => wifi = Some(wifi.unwrap_or(false) || on),
+            Ok(RadioKind::Bluetooth) => bt = Some(bt.unwrap_or(false) || on),
+            _ => {}
         }
     }
     (wifi, bt)

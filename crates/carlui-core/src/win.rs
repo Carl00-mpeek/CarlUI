@@ -59,8 +59,12 @@ pub struct Monitor {
 /// Pencerenin bulunduğu monitörün aygıt adı (`\\.\DISPLAY1`). Süreçler farklı
 /// DPI farkındalığında olabildiği için monitörler dikdörtgenle değil adla karşılaştırılır.
 pub fn monitor_name(hwnd: HWND) -> String {
+    device_name(unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) })
+}
+
+/// Monitörün aygıt adı (ör. `\\.\DISPLAY1`); `monitor_name` ile karşılaştırılabilir.
+pub fn device_name(mon: HMONITOR) -> String {
     unsafe {
-        let mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
         let mut mi = MONITORINFOEXW::default();
         mi.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
         if !GetMonitorInfoW(mon, &mut mi as *mut MONITORINFOEXW as *mut MONITORINFO).as_bool() {

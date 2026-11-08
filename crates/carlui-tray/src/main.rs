@@ -14,6 +14,7 @@ mod audio;
 mod host;
 mod panel;
 mod quick;
+mod radio_watch;
 
 use carlui_core::{
     bus::{BusClient, Event},
@@ -241,6 +242,10 @@ extern "system" fn panel_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
     unsafe {
         match msg {
             WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
+            WM_DEVICECHANGE => {
+                radio_watch::rescan();
+                LRESULT(1)
+            }
             WM_MOUSEMOVE => {
                 let mut tme = TRACKMOUSEEVENT { cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32, dwFlags: TME_LEAVE, hwndTrack: hwnd, dwHoverTime: 0 };
                 let _ = TrackMouseEvent(&mut tme);
@@ -412,6 +417,7 @@ fn main() -> Result<()> {
             let _ = PostMessageW(HWND(hwnd_raw as _), WM_APP_BUS, WPARAM(0), LPARAM(0));
         });
         APP.with(|a| *a.borrow_mut() = Some(App { gfx, host, panel, bus, inbox, icons_pending: false }));
+        radio_watch::start(panel_hwnd.0 as isize, panel::WM_APP_RADIOS);
         with_app(|a| a.host.request_icons());
         // Bazı ikonlar (ör. explorer'ın ses ikonu) ilk yayını kaçırıyor; kısa süre sonra bir kez daha iste.
         SetTimer(hwnd, TIMER_REQUEST, 2000, None);

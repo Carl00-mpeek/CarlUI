@@ -1,5 +1,24 @@
 # Sürüm notları
 
+## v0.9.7 — Dock, Bluetooth ve oyunda gösterge düzeltmeleri (2026-11-08)
+
+**Düzeltme: Dock'tan "Programı kapat" masaüstünü siyah bırakıyordu.** Dosya Gezgini
+penceresinde bu komut explorer.exe'yi kapatıyordu; masaüstü ve görev çubuğu da aynı
+süreç olduğu için ekran kararıyordu. Artık Gezgin hiçbir yoldan durdurulmaz ya da
+kapatılmaz; klasör pencereleri "Pencereyi kapat" ile kapanır.
+
+**Düzeltme: Küçültme animasyonu dock'a gidiyor.** Pencere küçülürken ve geri açılırken
+animasyon gizli Windows görev çubuğundaki düğmeye gidiyordu. Artık dock'taki ikonuna
+küçülüp oradan büyüyor; Gezgin yeniden başlasa da öyle kalıyor.
+
+**Düzeltme: Bluetooth döşemesi açık olduğu hâlde kapalı görünüyordu.** Hızlı ayarlar
+Bluetooth ve diğer kablosuz durumlarını artık sürekli sormak yerine değişim olduğunda
+öğreniyor: hem doğru görünüyor hem daha hafif.
+
+**Yeni: Özel tam ekran oyunda gösterge diğer monitörde.** Ses ya da şarkı değişince
+gösterge, oyunun olmadığı monitörde çıkar; oyun tam ekrandan düşmez. Tek monitörde
+gösterge yine çıkmaz.
+
 ## v0.9.6 — Oyunda ses/şarkı göstergesi düzeltmesi (2026-11-08)
 
 **Düzeltme: Ses ya da şarkı değişince oyun arkaya düşüyordu.** Özel tam ekran
@@ -12,7 +31,7 @@ değişti" sanılıp pencereler geri konmuyor: tam ekrandan sonraki 30 saniye bo
 pencere yerleri oynatılmaz.
 
 **SHA-256 (CarlUI-Setup.exe):**
-`cf5fd4103558c0013e7cefe5de82a8ad26617a3e85e37925d1412fda6f3a5565`
+`c2c9e5cbee14e492ff5a6dc9a9a0ffab3bae00601305dc3a030348c0e7035fc4`
 
 ## v0.9.5 — Asistana döviz kuru (2026-11-08)
 

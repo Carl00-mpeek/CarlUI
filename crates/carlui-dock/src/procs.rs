@@ -10,8 +10,15 @@ use carlui_sys::process;
 use windows::Win32::{Foundation::HWND, UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL}};
 use windows::core::*;
 
+/// Girdinin süreçleri. explorer.exe hiç verilmez: masaüstü ve görev çubuğu da
+/// odur, durdurmak her şeyi dondurur, kapatmak ekranı siyah bırakır.
 pub fn pids(e: &Entry) -> Vec<u32> {
-    let mut v: Vec<u32> = e.windows.iter().map(|&h| apps::process_id_of_window(h)).filter(|&p| p != 0).collect();
+    let mut v: Vec<u32> = e
+        .windows
+        .iter()
+        .map(|&h| apps::process_id_of_window(h))
+        .filter(|&p| p != 0 && !carlui_core::win::process_exe(p).ends_with("\\explorer.exe"))
+        .collect();
     v.sort();
     v.dedup();
     v

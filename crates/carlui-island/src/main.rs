@@ -30,6 +30,7 @@ mod offering;
 mod downloads;
 mod editor;
 mod epic;
+mod gamescreen;
 mod hubbing;
 mod island;
 mod launcher;
@@ -92,6 +93,8 @@ const WM_APP_VOLUME: u32 = WM_APP + 13;
 /// Şarkı ve ses göstergesinin ekranda kaldığı süre.
 const OSD_MS: u32 = 2500;
 const TIMER_OSD: usize = 19;
+/// Başka monitörde gösterilen gösterge bitti: ada kendi monitörüne döner.
+const TIMER_HOME: usize = 22;
 const WM_APP_CONFIG: u32 = WM_APP + 4;
 const WM_APP_FG: u32 = WM_APP + 5;
 const WM_APP_PEEK: u32 = WM_APP + 6;
@@ -173,6 +176,8 @@ struct App {
     game: bool,
     /// Özel (exclusive) tam ekran D3D: üstüne pencere çizilemez.
     exclusive: bool,
+    /// Özel tam ekran oyunun monitörü (aygıt adı); boşsa bilinmiyor.
+    game_monitor: String,
     /// Oyundayken gelen bildirimler; oyundan çıkınca gösterilir.
     missed: VecDeque<Note>,
     /// Üstüne gelince açılan hâl ve saklanan bildirimler.
@@ -480,11 +485,16 @@ impl App {
 
     /// Kısa göstergeyi açar; tam ekranda da görünür (ayar kapalı değilse).
     fn show_osd(&mut self, osd: Osd) {
-        // Ekranı ele geçirmiş (özel tam ekran) oyunun üstünde beliren her pencere
-        // Windows'un oyunu tam ekrandan düşürüp arkaya atmasına yol açar; orada
-        // gösterge çıkmaz. Pencereli tam ekranda odak almadan görünür.
-        if self.fullscreen && (self.exclusive || !self.cfg.game.show_osd) {
+        if (self.fullscreen || self.exclusive) && !self.cfg.game.show_osd {
             return;
+        }
+        // Özel tam ekran oyunun monitöründe beliren her pencere oyunu düşürür:
+        // gösterge oyunun olmadığı monitörde çıkar (tek monitörde hiç çıkmaz).
+        if self.exclusive {
+            let Some(rect) = gamescreen::osd_monitor(&self.cfg, &self.game_monitor) else { return };
+            if rect != self.mon {
+                self.move_to(rect);
+            }
         }
         self.osd = Some(osd);
         unsafe {
@@ -532,7 +542,18 @@ impl App {
     }
 
     fn place_window(&mut self) {
-        self.mon = pick_monitor(&self.cfg);
+        self.move_to(pick_monitor(&self.cfg));
+    }
+
+    /// Ada gösterge için başka monitöre taşındıysa yerine döner.
+    fn restore_monitor(&mut self) {
+        if self.mon != pick_monitor(&self.cfg) {
+            self.place_window();
+        }
+    }
+
+    fn move_to(&mut self, mon: RECT) {
+        self.mon = mon;
         let (w, h) = self.island.window_size();
         let x = self.mon.left + ((self.mon.right - self.mon.left) - w) / 2;
         unsafe {
@@ -639,6 +660,10 @@ impl App {
             },
             Event::Fullscreen { active, exclusive, monitor } => {
                 self.exclusive = active && exclusive;
+                self.game_monitor = if self.exclusive { monitor.clone() } else { String::new() };
+                if !self.exclusive && self.osd.is_none() {
+                    self.restore_monitor();
+                }
                 // Başka monitördeki tam ekran video adayı gizlemesin (Windows görev
                 // çubuğu gibi); özel tam ekran oyun ise her yerde oyun modudur.
                 let active = active && (exclusive || carlui_core::win::fullscreen_here(self.island.hwnd, &monitor));
@@ -1007,6 +1032,15 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
                         let _ = KillTimer(hwnd, TIMER_OSD);
                         a.osd = None;
                         a.refresh(false);
+                        // Gösterge başka monitördeyse sönme bittikten sonra yerine dön:
+                        // görünür hâliyle oyunun monitörüne girmesin.
+                        SetTimer(hwnd, TIMER_HOME, 600, None);
+                    }
+                    TIMER_HOME => {
+                        let _ = KillTimer(hwnd, TIMER_HOME);
+                        if a.osd.is_none() {
+                            a.restore_monitor();
+                        }
                     }
                     TIMER_MISSED => {
                         let _ = KillTimer(hwnd, TIMER_MISSED);
@@ -1304,6 +1338,7 @@ fn main() -> Result<()> {
                 viewer,
                 game: false,
                 exclusive: false,
+                game_monitor: String::new(),
                 missed: VecDeque::new(),
                 hub: Default::default(),
                 shots: shots::Shots::new(hwnd),

@@ -169,6 +169,10 @@ impl Dock {
         Ok(())
     }
 
+    pub fn suppressed(&self) -> bool {
+        self.suppressed
+    }
+
     /// Tam ekran/oyun sırasında dock'u tamamen kapatır; bitince açılış animasyonuyla döner.
     pub fn set_suppressed(&mut self, on: bool) {
         if on == self.suppressed {

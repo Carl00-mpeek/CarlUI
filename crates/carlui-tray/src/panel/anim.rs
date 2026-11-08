@@ -162,7 +162,10 @@ impl Panel {
                 self.hook = SetWindowsHookExW(WH_MOUSE_LL, Some(outside_proc), GetModuleHandleW(None).unwrap_or_default(), 0).unwrap_or_default();
             }
         }
-        quick::query_radios(self.hwnd.0 as isize, WM_APP_RADIOS);
+        // Durum olaylarla güncel tutulur; izleyici kurulamadıysa bir kez sorulur.
+        if !crate::radio_watch::running() {
+            quick::query_radios(self.hwnd.0 as isize, WM_APP_RADIOS);
+        }
         quick::query_brightness(self.hwnd.0 as isize, WM_APP_BRIGHT);
         Ok(())
     }

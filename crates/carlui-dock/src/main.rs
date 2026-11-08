@@ -17,6 +17,7 @@ mod input;
 mod jumplist;
 mod media;
 mod menu;
+mod minrect;
 mod popup;
 mod procs;
 mod resolver;
@@ -164,6 +165,16 @@ impl App {
             }
         }
         self.intellihide_check();
+    }
+
+    /// Küçülen/büyüyen pencerenin animasyon hedefi: dock'taki ikonu.
+    fn min_rect(&self, w: HWND) -> Option<RECT> {
+        if self.dock.suppressed() {
+            return None;
+        }
+        let root = unsafe { GetAncestor(w, GA_ROOTOWNER) };
+        let i = self.dock.entries.iter().position(|e| e.windows.iter().any(|&h| h == w || h == root))?;
+        Some(self.dock.tray_button(i).0)
     }
 
     fn intellihide_check(&mut self) {
@@ -440,7 +451,12 @@ impl App {
                     self.intellihide_check();
                 }
             }
-            Event::ShowDesktop | Event::ExplorerRestarted => self.dock.reassert(),
+            Event::ShowDesktop => self.dock.reassert(),
+            Event::ExplorerRestarted => {
+                self.dock.reassert();
+                // Yeni görev çubuğu kancası bizimkinden sonra gelip hedefi ezmesin.
+                minrect::register(self.hwnd);
+            }
             Event::Custom { name, data } if name == "tray-state" => {
                 let open = data.get("open").and_then(|v| v.as_bool()).unwrap_or(false);
                 self.tray_open = open;
@@ -500,6 +516,17 @@ impl App {
 
 extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     unsafe {
+        if let Some(w) = minrect::asked(msg, wp, lp) {
+            let mut rc = None;
+            with_app(|a| rc = a.min_rect(w));
+            return match rc {
+                Some(r) => {
+                    minrect::answer(lp, r);
+                    LRESULT(1)
+                }
+                None => LRESULT(0),
+            };
+        }
         match msg {
             // Dock'a tıklamak odaktaki pencereden odağı çalmasın.
             WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
@@ -834,6 +861,7 @@ fn main() -> Result<()> {
 
         let hwnd = create_window(w!("CarlUI.Dock"), Some(dock_proc), w!("CarlUI Dock"))?;
         let popup_hwnd = create_window(w!("CarlUI.DockPopup"), Some(popup_proc), w!("CarlUI Dock Popup"))?;
+        minrect::register(hwnd);
         let hwnd_raw = hwnd.0 as isize;
         let gfx = Gfx::new()?;
         let target = gfx.comp.cast::<ICompositorDesktopInterop>()?.CreateDesktopWindowTarget(hwnd, true)?;

@@ -98,8 +98,12 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// Gezgin girdisi mi? Anahtar her zaman `explorer_key` olmuyor (klasör
+    /// pencereleri kendi kimliğiyle gelebiliyor); pencerelerden biri
+    /// explorer.exe'ninse de Gezgin sayılır — süreci masaüstü ve görev
+    /// çubuğuyla ortak, durdurulmamalı ve kapatılmamalı.
     pub fn is_explorer(&self) -> bool {
-        self.key == explorer_key()
+        self.key == explorer_key() || self.windows.iter().any(|&h| carlui_core::win::is_explorer_window(h))
     }
 }
 
