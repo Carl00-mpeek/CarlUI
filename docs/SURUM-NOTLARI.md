@@ -40,6 +40,9 @@ açılır ve kablosuz ağ listesi gelir; yoksa ağ ayarları açılır.
   görev çubuğu geri gelmiyordu.
 - **Asistan:** "Parlaklığı yüzde elli yap" anlaşılmıyordu.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`0b235f231a8ed19d57aa900077cb33733624feface87b24e50199180e93a7a02`
+
 ## v0.9.2 — Tam ekranda şarkı ve ses göstergesi (2026-11-07)
 
 **Yeni: Ada tam ekranda da görünür.** Şarkı değişince ya da ses açılıp kısılınca ada
