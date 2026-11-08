@@ -1,5 +1,14 @@
 # Sürüm notları
 
+## v0.9.4 — Akıllı asistan modeli düzeltmesi (2026-11-08)
+
+**Düzeltme: Akıllı asistan modeli kurulu görünmüyordu.** Qwen3 4B indirilip "hazır"
+bildirimi çıktığı halde Ayarlar yine "İndir" gösteriyor, asistan modeli kullanmıyordu.
+İndirilen llama.cpp paketi açıldıktan sonra silinir; kurulum denetimi ise paketin
+klasörde durmasını bekliyordu. Artık açılan paketin yerine SHA-256 damgası kalır ve
+denetim ona bakar. 0.9.3 ile indirmiş olanlar yalnızca 37 MB'lık paketi bir kez daha
+indirir; 2,5 GB'lık model yeniden inmez.
+
 ## v0.9.3 — Akıllı asistan, anlık tekrar kaldırıldı (2026-11-08)
 
 **Kaldırıldı: Anlık tekrar ve sesli komutla klip.** Açıkken ekranı ve sesi durmadan

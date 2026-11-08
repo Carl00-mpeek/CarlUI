@@ -35,7 +35,25 @@ pub fn dir(m: &Model) -> PathBuf {
 pub fn installed(m: &Model) -> bool {
     let d = dir(m);
     let files = crate::catalog::get(real_id(m.id)).map_or(m.files, |b| b.files);
-    d.join(".ok").is_file() && files.iter().all(|f| d.join(f.name).is_file())
+    d.join(".ok").is_file() && files.iter().all(|f| present(&d, f))
+}
+
+/// Açılan arşiv silinir; yerine SHA'sını taşıyan damga kalır. Katalog başka
+/// bir paket gösterirse damga tutmaz ve paket yeniden indirilir.
+fn stamp(d: &Path, f: &crate::catalog::File) -> PathBuf {
+    d.join(format!(".{}.sha256", f.name))
+}
+
+fn unpacked(d: &Path, f: &crate::catalog::File) -> bool {
+    std::fs::read_to_string(stamp(d, f)).is_ok_and(|s| s.trim().eq_ignore_ascii_case(f.sha256))
+}
+
+fn present(d: &Path, f: &crate::catalog::File) -> bool {
+    if f.unzip {
+        unpacked(d, f)
+    } else {
+        d.join(f.name).is_file()
+    }
 }
 
 /// İndirilecek bayt: yerinde olmayan dosyalar (kurulu olsa da yeni dosya eklenmiş olabilir).
@@ -45,7 +63,11 @@ pub fn missing(m: &Model) -> u64 {
     }
     let d = dir(m);
     let files = crate::catalog::get(real_id(m.id)).map_or(m.files, |b| b.files);
-    files.iter().filter(|f| std::fs::metadata(d.join(f.name)).map_or(true, |x| x.len() != f.size)).map(|f| f.size).sum()
+    files
+        .iter()
+        .filter(|f| if f.unzip { !unpacked(&d, f) } else { std::fs::metadata(d.join(f.name)).map_or(true, |x| x.len() != f.size) })
+        .map(|f| f.size)
+        .sum()
 }
 
 /// Diskte kapladığı yer (kurulu değilse 0).
@@ -136,7 +158,7 @@ pub fn install(m: &Model, cancel: &AtomicBool, progress: &dyn Fn(f32)) -> Result
         .iter()
         .map(|f| {
             let dst = d.join(f.name);
-            std::fs::metadata(&dst).is_ok_and(|x| x.len() == f.size) && sha256_file(&dst).is_ok_and(|h| h.eq_ignore_ascii_case(f.sha256))
+            (f.unzip && unpacked(&d, f)) || std::fs::metadata(&dst).is_ok_and(|x| x.len() == f.size) && sha256_file(&dst).is_ok_and(|h| h.eq_ignore_ascii_case(f.sha256))
         })
         .collect();
     let total = m.files.iter().zip(&kept).filter(|(_, k)| !**k).map(|(f, _)| f.size).sum::<u64>().max(1) as f64;
@@ -148,8 +170,10 @@ pub fn install(m: &Model, cancel: &AtomicBool, progress: &dyn Fn(f32)) -> Result
             crate::net::fetch(f.url, &dst, f.size, f.sha256, cancel, &|n| progress(((base + n.min(f.size)) as f64 / total).min(0.99) as f32))?;
             done += f.size;
         }
-        if f.unzip {
+        if f.unzip && !(kept && unpacked(&d, f)) {
+            let _ = std::fs::remove_file(stamp(&d, f));
             crate::net::unzip(&dst, &d, None)?;
+            std::fs::write(stamp(&d, f), f.sha256).map_err(|e| e.to_string())?;
         }
     }
     std::fs::write(d.join(".ok"), m.id).map_err(|e| e.to_string())?;
@@ -171,4 +195,30 @@ pub fn find(dir: &Path, name: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::catalog::File;
+
+    const ZIP: File = File { url: "", name: "engine.zip", size: 1, sha256: "AB12", unzip: true };
+    const PLAIN: File = File { url: "", name: "model.bin", size: 1, sha256: "cd34", unzip: false };
+
+    #[test]
+    fn unzipped_file_counts_by_stamp() {
+        let d = std::env::temp_dir().join(format!("carlui-store-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        // Açılan zip silinir: damga yokken eksik sayılır.
+        assert!(!present(&d, &ZIP));
+        std::fs::write(stamp(&d, &ZIP), "ab12").unwrap();
+        assert!(present(&d, &ZIP));
+        // Katalog başka paket gösterirse damga tutmaz.
+        std::fs::write(stamp(&d, &ZIP), "ffff").unwrap();
+        assert!(!present(&d, &ZIP));
+        assert!(!present(&d, &PLAIN));
+        std::fs::write(d.join(PLAIN.name), "x").unwrap();
+        assert!(present(&d, &PLAIN));
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }
