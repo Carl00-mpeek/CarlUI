@@ -47,3 +47,47 @@ pub fn relaunch(tab: usize) -> bool {
     };
     unsafe { ShellExecuteExW(&mut info).is_ok() }
 }
+
+/// Tek kopya kilidi (`Local\CarlUI.TaskMgr`), sahibi ana iş parçacığı.
+static INSTANCE: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+
+/// Tek kopya denetimi; `false` dönerse zaten açık olan kopya öne getirilmeli,
+/// bu kopya kapanmalı. `replace` (yönetici olarak yeniden açılış): eski kopyanın
+/// kilidi bırakması 20 saniyeye kadar beklenir; yine bırakmazsa bu kopya yine de
+/// açılır. Eskiden 5 saniyede vazgeçip sessizce kapanıyordu: eski kopya da
+/// kapandığı için görev yöneticisi ortadan kayboluyordu.
+pub fn single_instance(replace: bool) -> bool {
+    use windows::Win32::{
+        Foundation::{GetLastError, ERROR_ALREADY_EXISTS, WAIT_ABANDONED, WAIT_OBJECT_0},
+        System::Threading::{CreateMutexW, WaitForSingleObject},
+    };
+    unsafe {
+        let m = CreateMutexW(None, true, w!("Local\\CarlUI.TaskMgr"));
+        let exists = GetLastError() == ERROR_ALREADY_EXISTS;
+        let Ok(m) = m else { return true };
+        INSTANCE.store(m.0 as isize, std::sync::atomic::Ordering::SeqCst);
+        if !exists {
+            return true;
+        }
+        if !replace {
+            return false;
+        }
+        let r = WaitForSingleObject(m, 20_000);
+        if r != WAIT_OBJECT_0 && r != WAIT_ABANDONED {
+            carlui_core::warn!("eski kopya kilidi bırakmadı; yine de açılıyor");
+        }
+        true
+    }
+}
+
+/// Kilidi bırakır (yönetici kopyası açılmadan hemen önce, ana iş parçacığında).
+pub fn release_instance() {
+    let h = INSTANCE.swap(0, std::sync::atomic::Ordering::SeqCst);
+    if h != 0 {
+        unsafe {
+            let h = HANDLE(h as _);
+            let _ = windows::Win32::System::Threading::ReleaseMutex(h);
+            let _ = CloseHandle(h);
+        }
+    }
+}

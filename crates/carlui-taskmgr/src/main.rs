@@ -44,7 +44,7 @@ use windows::{
             Dxgi::Common::*,
             Gdi::*,
         },
-        System::{Com::*, LibraryLoader::GetModuleHandleW, Threading::CreateMutexW},
+        System::{Com::*, LibraryLoader::GetModuleHandleW},
         UI::{Controls::MARGINS, HiDpi::*, Input::KeyboardAndMouse::*, WindowsAndMessaging::*},
     },
 };
@@ -355,6 +355,9 @@ impl App {
                 let tab = TABS.iter().position(|t| *t == self.tab).unwrap_or(0);
                 if admin::relaunch(tab) {
                     info!("yönetici olarak yeniden açılıyor");
+                    // Yeni (yönetici) kopya kilidi hemen alsın: bu kopyanın kapanışı
+                    // (ör. süren imza denetimi yüzünden) gecikse bile o açılır.
+                    admin::release_instance();
                     unsafe {
                         let _ = DestroyWindow(self.hwnd);
                     }
@@ -694,14 +697,7 @@ fn main() -> Result<()> {
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-        let m = CreateMutexW(None, true, w!("Local\\CarlUI.TaskMgr"));
-        // Yönetici olarak yeniden açılırken eski kopya kapanana kadar bekle.
-        let exists = GetLastError() == ERROR_ALREADY_EXISTS;
-        let taken = replace && exists && m.as_ref().is_ok_and(|m| {
-            let r = windows::Win32::System::Threading::WaitForSingleObject(*m, 5000);
-            r == WAIT_OBJECT_0 || r == WAIT_ABANDONED
-        });
-        if exists && !taken {
+        if !admin::single_instance(replace) {
             if let Ok(h) = FindWindowW(w!("CarlUI.TaskMgr"), None) {
                 let _ = ShowWindow(h, SW_RESTORE);
                 let _ = SetForegroundWindow(h);
