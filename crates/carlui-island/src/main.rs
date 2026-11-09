@@ -566,7 +566,7 @@ impl App {
         let theme = Theme::from_config(&cfg.theme);
         self.island.apply_theme(&theme);
         self.pop.apply_theme(&theme);
-        self.island.set_top(cfg.island.top_margin);
+        self.island.set_style(cfg.island.style, cfg.island.top_margin);
         let monitor_changed = cfg.general.top_monitor != self.cfg.general.top_monitor;
         let banners = cfg.notify.enabled && cfg.notify.hide_windows_banners;
         if banners != (self.cfg.notify.enabled && self.cfg.notify.hide_windows_banners) {
@@ -1227,7 +1227,8 @@ fn main() -> Result<()> {
         let hmon = MonitorFromPoint(POINT { x: mon.left + 10, y: mon.top + 10 }, MONITOR_DEFAULTTOPRIMARY);
         let _ = GetDpiForMonitor(hmon, MDT_EFFECTIVE_DPI, &mut dpi.0, &mut dpi.1);
         let s = dpi.0 as f32 / 96.0;
-        let island = Island::new(&gfx, hwnd, &theme, s, cfg.island.top_margin)?;
+        let mut island = Island::new(&gfx, hwnd, &theme, s, cfg.island.top_margin)?;
+        island.set_style(cfg.island.style, cfg.island.top_margin);
 
         let hwnd_raw = hwnd.0 as isize;
         let inbox: Arc<Mutex<VecDeque<Event>>> = Arc::default();

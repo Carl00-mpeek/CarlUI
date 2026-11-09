@@ -5,12 +5,29 @@ use crate::{
     App,
 };
 use crate::input::Form;
-use carlui_core::config::{ClockMode, DateFormat, NotifySound};
+use carlui_core::config::{ClockMode, DateFormat, IslandStyle, NotifySound};
 use carlui_ui::paint::R;
 
 pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     let cfg = &app.cfg;
     f.section(p, t!("Ada", "Island"));
+    let sel = match cfg.island.style {
+        IslandStyle::Pill => 0,
+        IslandStyle::Notch => 1,
+        IslandStyle::Card => 2,
+    };
+    f.choice(
+        p,
+        t!("Görünüm", "Style"),
+        t!("Hap: üstte yüzen yuvarlak ada. Çentik: ekranın üst kenarına yapışık, alt köşeleri yuvarlak. Kart: yüzen, köşeleri az yuvarlak.", "Pill: a rounded island floating at the top. Notch: attached to the top edge with rounded bottom corners. Card: floating with slightly rounded corners."),
+        &[
+            (t!("Hap", "Pill"), edit(|c| c.island.style = IslandStyle::Pill)),
+            (t!("Çentik", "Notch"), edit(|c| c.island.style = IslandStyle::Notch)),
+            (t!("Kart", "Card"), edit(|c| c.island.style = IslandStyle::Card)),
+        ],
+        sel,
+        90.0,
+    );
     let sel = match cfg.clock.mode {
         ClockMode::Always => 0,
         ClockMode::WhenAppActive => 1,

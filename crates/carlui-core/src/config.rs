@@ -729,11 +729,25 @@ pub struct IslandConfig {
     pub hide_over_maximized: bool,
     /// Şarkı/video çalarken ada, kapağın rengini alsın.
     pub media_tint: bool,
+    /// Adanın görünümü.
+    pub style: IslandStyle,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum IslandStyle {
+    /// Ekranın biraz altında yüzen yuvarlak hap.
+    #[default]
+    Pill,
+    /// Ekranın üst kenarına yapışık; üst köşeler düz, alt köşeler yuvarlak.
+    Notch,
+    /// Yüzen ama köşeleri az yuvarlak, kart gibi.
+    Card,
 }
 
 impl Default for IslandConfig {
     fn default() -> Self {
-        Self { top_margin: 6.0, hide_over_maximized: false, media_tint: true }
+        Self { top_margin: 6.0, hide_over_maximized: false, media_tint: true, style: IslandStyle::Pill }
     }
 }
 

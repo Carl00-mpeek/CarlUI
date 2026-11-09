@@ -8,7 +8,10 @@
 //! hapın üstünde alınır (pencere bölgesi), geri kalanı alttaki pencerelere geçer.
 
 use crate::{media::Snap, notify::Note};
-use carlui_core::theme::{Rgba, Theme};
+use carlui_core::{
+    config::IslandStyle,
+    theme::{Rgba, Theme},
+};
 use carlui_ui::{
     gfx::Gfx,
     glass::{color, v2, v3, Glass},
@@ -234,6 +237,9 @@ pub struct Island {
     pub win_w: f32,
     win_h: f32,
     top: f32,
+    /// Görünüm; çentikte cam ekranın üstünden `lift` kadar taşar ki üst köşeler görünmesin.
+    style: IslandStyle,
+    lift: f32,
     pub slid_up: bool,
     hits: Vec<(Hit, RECT)>,
     progress: Option<Bar>,
@@ -310,6 +316,8 @@ impl Island {
             win_w,
             win_h,
             top: (top_margin * s).round(),
+            style: IslandStyle::Pill,
+            lift: 0.0,
             slid_up: false,
             hits: Vec::new(),
             progress: None,
@@ -347,10 +355,43 @@ impl Island {
     }
 
     pub fn set_top(&mut self, top_margin: f32) {
-        self.top = (top_margin * self.s).round();
+        self.top = if self.style == IslandStyle::Notch { 0.0 } else { (top_margin * self.s).round() };
         if !self.slid_up {
-            let _ = self.glass.root.SetOffset(v3(self.win_w / 2.0, self.top));
+            let _ = self.glass.root.SetOffset(v3(self.win_w / 2.0, self.glass_y()));
         }
+    }
+
+    /// Görünümü değiştirir (yalnızca ana ada; pano balonu hap kalır).
+    pub fn set_style(&mut self, style: IslandStyle, top_margin: f32) {
+        let changed = style != self.style;
+        self.style = style;
+        self.lift = if style == IslandStyle::Notch { (30.0 * self.s).round() } else { 0.0 };
+        self.set_top(top_margin);
+        if changed && self.view != View::Hidden {
+            let (w, h) = self.size;
+            let _ = self.glass.root.SetSize(v2(w, h + self.lift));
+            let _ = self.glass.set_radius(self.radius_for(h));
+            if let Some(c) = &self.content {
+                let _ = self.follow_content(c, w);
+            }
+            if !self.slid_up {
+                self.region_done();
+            }
+        }
+    }
+
+    /// Camın Offset.Y'si: çentikte ekranın üstüne taşar.
+    fn glass_y(&self) -> f32 {
+        self.top - self.lift
+    }
+
+    /// İçerik camın ortasında, çentikte taşan kısmın altında durur.
+    fn follow_content(&self, c: &ContainerVisual, w: f32) -> Result<()> {
+        let follow = self.comp.CreateExpressionAnimationWithExpression(h!("Vector3(r.Size.X / 2 - W / 2, L, 0)"))?;
+        follow.SetReferenceParameter(h!("r"), &self.glass.root)?;
+        follow.SetScalarParameter(h!("W"), w)?;
+        follow.SetScalarParameter(h!("L"), self.lift)?;
+        c.StartAnimation(h!("Offset"), &follow)
     }
 
     // ---- Yardımcılar ----
@@ -839,7 +880,16 @@ impl Island {
 
     fn radius_for(&self, h: f32) -> f32 {
         let compact = h <= 32.0 * self.s;
-        if compact { h / 2.0 } else { (26.0 * self.s * self.theme.radius_scale).min(h / 2.0).round() }
+        let rs = self.theme.radius_scale;
+        match self.style {
+            IslandStyle::Pill if compact => h / 2.0,
+            IslandStyle::Pill => (26.0 * self.s * rs).min(h / 2.0).round(),
+            // Çentik: alt köşeler yuvarlak; kısa hâlde hap gibi tam yuvarlak değil.
+            IslandStyle::Notch if compact => (12.0 * self.s * rs).min(h / 2.0).round(),
+            IslandStyle::Notch => (22.0 * self.s * rs).min(h / 2.0).round(),
+            IslandStyle::Card if compact => (8.0 * self.s * rs).min(h / 2.0).round(),
+            IslandStyle::Card => (12.0 * self.s * rs).min(h / 2.0).round(),
+        }
     }
 
     /// Görünümü değiştirir. `animate` false ise içerik yerinde yenilenir
@@ -877,13 +927,12 @@ impl Island {
         }
 
         let (c, w, h) = self.build(gfx, view, m)?;
-        let follow = self.comp.CreateExpressionAnimationWithExpression(h!("Vector3(r.Size.X / 2 - W / 2, 0, 0)"))?;
-        follow.SetReferenceParameter(h!("r"), &self.glass.root)?;
-        follow.SetScalarParameter(h!("W"), w)?;
-        c.StartAnimation(h!("Offset"), &follow)?;
+        self.follow_content(&c, w)?;
         c.SetSize(v2(w, h))?;
         self.glass.content.Children()?.InsertAtTop(&c)?;
         let radius = self.radius_for(h);
+        // Camın yüksekliği: çentikte ekranın üstüne taşan kısım da dahil.
+        let gh = h + self.lift;
         let grow = view != was;
 
         if !animate || !grow {
@@ -892,7 +941,7 @@ impl Island {
             }
             if (w, h) != self.size && was != View::Hidden {
                 mo.animate(&self.glass.root, h!("Size.X"), w, 0.85, 50, 0)?;
-                mo.animate(&self.glass.root, h!("Size.Y"), h, 0.85, 50, 0)?;
+                mo.animate(&self.glass.root, h!("Size.Y"), gh, 0.85, 50, 0)?;
                 self.glass.animate_radius(&self.comp, radius, 200, 0)?;
             }
         } else {
@@ -918,9 +967,9 @@ impl Island {
                 self.glass.root.SetScale(Vector3 { X: 1.0, Y: 1.0, Z: 1.0 })?;
                 mo.fade(&self.glass.root, h!("Opacity"), 1.0, 60, 0)?;
                 mo.animate(&self.glass.root, h!("Offset.X"), self.win_w / 2.0, 1.0, 26, 0)?;
-                mo.animate(&self.glass.root, h!("Offset.Y"), self.top, 1.0, 26, 0)?;
+                mo.animate(&self.glass.root, h!("Offset.Y"), self.glass_y(), 1.0, 26, 0)?;
                 mo.animate(&self.glass.root, h!("Size.X"), w, 0.8, 34, 95)?;
-                mo.animate(&self.glass.root, h!("Size.Y"), h, 0.8, 36, 95)?;
+                mo.animate(&self.glass.root, h!("Size.Y"), gh, 0.8, 36, 95)?;
                 self.glass.animate_radius(&self.comp, radius, 140, 95)?;
                 // Buzlu cam: içerik süt beyazı bir camın ardından belirir, panel
                 // büyüdükçe cam açılır. Tek renkli bir katman; ek yük yok denecek kadar az.
@@ -931,8 +980,8 @@ impl Island {
                 mo.fade(&veil, h!("Opacity"), 0.0, 240, 150)?;
             } else if was == View::Hidden {
                 // Ada belirirken: küçük bir haptan büyüyerek gelir.
-                self.glass.root.SetSize(v2(w * 0.6, h))?;
-                self.glass.set_radius(h / 2.0)?;
+                self.glass.root.SetSize(v2(w * 0.6, gh))?;
+                self.glass.set_radius(if self.style == IslandStyle::Pill { h / 2.0 } else { radius })?;
                 mo.fade(&self.glass.root, h!("Opacity"), 1.0, 140, 0)?;
                 self.glass.root.SetScale(Vector3 { X: 0.7, Y: 0.7, Z: 1.0 })?;
                 mo.scale(&self.glass.root, 1.0, 0.65, 50, 0)?;
@@ -942,12 +991,12 @@ impl Island {
                 let expanding = h > self.size.1 || w > self.size.0;
                 let damp = if expanding { 0.72 } else { 0.86 };
                 mo.animate(&self.glass.root, h!("Size.X"), w, damp, 55, 0)?;
-                mo.animate(&self.glass.root, h!("Size.Y"), h, damp, 60, 0)?;
+                mo.animate(&self.glass.root, h!("Size.Y"), gh, damp, 60, 0)?;
                 self.glass.animate_radius(&self.comp, radius, 220, 0)?;
             }
         }
         if was == View::Hidden && !(animate && grow) {
-            self.glass.root.SetSize(v2(w, h))?;
+            self.glass.root.SetSize(v2(w, gh))?;
             self.glass.set_radius(radius)?;
             self.glass.root.SetOpacity(1.0)?;
             self.glass.root.SetScale(Vector3 { X: 1.0, Y: 1.0, Z: 1.0 })?;
@@ -978,7 +1027,7 @@ impl Island {
             return;
         }
         self.slid_up = up;
-        let y = if up { -(self.size.1 + 12.0 * self.s) } else { self.top };
+        let y = if up { -(self.size.1 + self.lift + 12.0 * self.s) } else { self.glass_y() };
         let _ = self.motion.animate(&self.glass.root, h!("Offset.Y"), y, if up { 1.0 } else { 0.75 }, 50, 0);
         if up {
             self.set_region(None);
@@ -1033,7 +1082,9 @@ impl Island {
                     // görünmeyen saydam alana düşsün, yumuşak kenarı Composition çizsin.
                     const PAD: i32 = 2;
                     let d = (self.radius_for((r.bottom - r.top) as f32) * 2.0) as i32 + PAD * 2;
-                    CreateRoundRectRgn(r.left - PAD, r.top - PAD, r.right + PAD + 1, r.bottom + PAD + 1, d, d)
+                    // Çentikte üst köşeler düz: bölgenin üstü pencerenin dışına taşar.
+                    let top = if self.lift > 0.0 { r.top - d } else { r.top - PAD };
+                    CreateRoundRectRgn(r.left - PAD, top, r.right + PAD + 1, r.bottom + PAD + 1, d, d)
                 }
                 Some((r, false)) => CreateRectRgn(r.left, r.top, r.right, r.bottom),
             };
