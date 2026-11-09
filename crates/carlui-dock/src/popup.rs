@@ -9,7 +9,7 @@
 //! Ayrı bir pencere kullanılmasının sebebi, dock penceresinin tıklanabilir
 //! bölgesinin pill ile sınırlı olmasıdır.
 
-use crate::media::{Cmd, Session};
+use crate::media::{self, Cmd, Session};
 use carlui_core::theme::Theme;
 use carlui_ui::{
     gfx::Gfx,
@@ -103,6 +103,8 @@ pub struct Popup {
     pub mouse_inside: bool,
     close_surface: CompositionDrawingSurface,
     media: Option<Session>,
+    /// Medya düğmelerinin durduğu kart (medyası olan pencere).
+    media_card: Option<usize>,
     /// [oynat, duraklat]
     play_glyphs: Vec<Glyph>,
 }
@@ -137,6 +139,7 @@ impl Popup {
             mouse_inside: false,
             close_surface,
             media: None,
+            media_card: None,
             play_glyphs: Vec::new(),
         })
     }
@@ -240,6 +243,9 @@ impl Popup {
         self.windows = items.iter().map(|(h, _)| *h).collect();
         let s = self.s;
         let n = items.len().clamp(1, 6);
+        // Düğmeler yalnızca medyası açık olan pencerenin kartında.
+        let media_card = media.as_ref().and_then(|m| media::pick(&items.iter().take(n).map(|(_, t)| t.as_str()).collect::<Vec<_>>(), m));
+        let media = media.filter(|_| media_card.is_some());
         let (card_w, thumb_h, title_h) = ((220.0 * s).round(), (124.0 * s).round(), (22.0 * s).round());
         let (pad, gap, inner, margin) = ((8.0 * s).round(), (6.0 * s).round(), (8.0 * s).round(), (8.0 * s).round());
         let close_px = (18.0 * s).round();
@@ -300,7 +306,7 @@ impl Popup {
                 (thumb, RECT { left: left as i32, top: top as i32, right: (left + tw) as i32, bottom: (top + th) as i32 })
             };
             let mut buttons = Vec::new();
-            if let Some((prev, next)) = &skips {
+            if let Some((prev, next)) = skips.as_ref().filter(|_| media_card == Some(i)) {
                 let y = pad + inner + title_h + 4.0 * s + thumb_h + 4.0 * s;
                 let left = x0 + ((card_w - btn_w * 3.0 - btn_gap * 2.0) / 2.0).round();
                 for (k, (cmd, glyph)) in [(Cmd::Prev, Some(prev)), (Cmd::PlayPause, None), (Cmd::Next, Some(next))].into_iter().enumerate() {
@@ -331,6 +337,7 @@ impl Popup {
             });
         }
         self.media = media;
+        self.media_card = media_card;
         self.paint_media();
         self.root.Children()?.InsertAtTop(&glass.root)?;
         self.reveal(&glass, w, h, margin, animate)?;
@@ -363,9 +370,12 @@ impl Popup {
     /// Yeni medya durumunu açık önizlemeye işler. Düğme sırası eklenip kalkacaksa
     /// kart boyu değişir: `false` döner, önizleme yeniden kurulmalı.
     pub fn update_media(&mut self, media: Option<Session>) -> bool {
-        if self.media.is_some() != media.is_some() {
+        let titles: Vec<&str> = self.cards.iter().map(|c| c.title.as_str()).collect();
+        let card = media.as_ref().and_then(|m| media::pick(&titles, m));
+        if card != self.media_card {
             return false;
         }
+        let media = media.filter(|_| card.is_some());
         self.media = media;
         self.paint_media();
         true

@@ -35,6 +35,22 @@ pub struct Session {
     pub playing: bool,
     pub can_prev: bool,
     pub can_next: bool,
+    /// Çalan / duraklatılan parçanın ya da videonun adı (boş olabilir).
+    pub title: String,
+}
+
+/// Düğmeler hangi pencerenin kartında dursun? Medyanın adı pencere başlığında
+/// geçiyorsa o pencere (tarayıcıda video sekmesi, Spotify'da şarkı); uygulamanın
+/// tek penceresi varsa o. Birden çok pencereden hangisinin çaldığı belli
+/// değilse hiçbiri: düğmeler medyası olmayan pencerelerde görünmesin.
+pub fn pick(titles: &[&str], m: &Session) -> Option<usize> {
+    let name = m.title.trim().to_lowercase();
+    if !name.is_empty() {
+        if let Some(i) = titles.iter().position(|t| t.to_lowercase().contains(&name)) {
+            return Some(i);
+        }
+    }
+    (titles.len() == 1).then_some(0)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,12 +94,20 @@ fn scan() -> Vec<Session> {
             if status != Status::Playing && status != Status::Paused {
                 return None;
             }
+            let props = s.TryGetMediaPropertiesAsync().and_then(|op| op.get()).ok();
+            let title = props.as_ref().and_then(|p| p.Title().ok()).map(|t| t.to_string()).unwrap_or_default();
+            // Duraklatılmış ama adı olmayan oturum: açık bir video/şarkı yok,
+            // uygulama yalnızca eski oturumunu bırakmamış.
+            if status == Status::Paused && title.trim().is_empty() {
+                return None;
+            }
             let c = info.Controls().ok()?;
             Some(Session {
                 app: s.SourceAppUserModelId().ok()?.to_string(),
                 playing: status == Status::Playing,
                 can_prev: c.IsPreviousEnabled().unwrap_or(false),
                 can_next: c.IsNextEnabled().unwrap_or(false),
+                title,
             })
         })
         .collect()
@@ -168,4 +192,19 @@ mod tests {
         assert!(!belongs(&app("", ""), "Spotify.exe"));
         assert!(!belongs(&app("", r"C:\x\spot.exe"), "Spotify.exe"));
     }
+
+    #[test]
+    fn dugmeler_dogru_kartta() {
+        let m = |title: &str| Session { app: "Chrome".into(), playing: true, can_prev: false, can_next: false, title: title.into() };
+        let wins = ["Gmail - Google Chrome", "Lo-fi Beats - YouTube - Google Chrome", "Yeni Sekme - Google Chrome"];
+        assert_eq!(pick(&wins, &m("Lo-fi Beats")), Some(1));
+        assert_eq!(pick(&wins, &m("lo-fi beats")), Some(1), "büyük/küçük harf fark etmez");
+        // Hangi pencerede çaldığı belli değil: hiçbir kartta düğme yok.
+        assert_eq!(pick(&wins, &m("Başka Şarkı")), None);
+        assert_eq!(pick(&wins, &m("")), None);
+        // Tek pencere (Spotify duraklatınca başlığı "Spotify" olur): o pencere.
+        assert_eq!(pick(&["Spotify Premium"], &m("Song")), Some(0));
+        assert_eq!(pick(&[], &m("Song")), None);
+    }
 }
+

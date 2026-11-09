@@ -255,9 +255,20 @@ pub fn is_minimized(hwnd: HWND) -> bool {
 pub fn activate(hwnd: HWND) {
     unsafe {
         if IsIconic(hwnd).as_bool() {
+            // Küçültülmüş pencere: Alt+Tab'ın yolu. Yönetici olarak çalışan
+            // pencereye (çoğu oyun istemcisi) ShowWindow ulaşmayabiliyor; eskiden
+            // pencere öne geçip simge durumunda kalıyordu. Ağır yük altındaki
+            // oyun geri yüklemeyi geç işlese de istek kuyrukta bekler.
+            SwitchToThisWindow(hwnd, true);
             let _ = ShowWindowAsync(hwnd, SW_RESTORE);
         }
-        if !SetForegroundWindow(hwnd).as_bool() {
+        // Pencerenin açık bir iletişim kutusu varsa o öne gelsin (giriş ekranı vb.).
+        let popup = GetLastActivePopup(hwnd);
+        let target = if !popup.is_invalid() && popup != hwnd && IsWindowVisible(popup).as_bool() { popup } else { hwnd };
+        if GetForegroundWindow() != target {
+            carlui_core::win::force_foreground(target);
+        }
+        if GetForegroundWindow() != target && GetForegroundWindow() != hwnd {
             SwitchToThisWindow(hwnd, true);
         }
     }
@@ -285,5 +296,55 @@ pub fn window_icon(hwnd: HWND) -> HICON {
             res = GetClassLongPtrW(hwnd, GCLP_HICON);
         }
         HICON(res as _)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::core::w;
+
+    fn pump(ms: u64) {
+        let end = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+        while std::time::Instant::now() < end {
+            unsafe {
+                let mut m = MSG::default();
+                while PeekMessageW(&mut m, None, 0, 0, PM_REMOVE).as_bool() {
+                    let _ = TranslateMessage(&m);
+                    DispatchMessageW(&m);
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    /// Elle: `cargo test -p carlui-dock uc_pencere -- --ignored`. Aynı uygulamanın
+    /// üç penceresi (kendi test pencerelerimiz, 2. ekranda) küçültülmüşken her
+    /// biri ayrı ayrı öne gelip açılmalı.
+    #[test]
+    #[ignore]
+    fn uc_pencere_kucultulmusken_acilir() {
+        unsafe {
+            let wins: Vec<HWND> = (0..3)
+                .map(|i| CreateWindowExW(WINDOW_EX_STYLE(0), w!("STATIC"), w!("CarlUI test"), WS_OVERLAPPEDWINDOW | WS_VISIBLE, 2000 + i * 260, 200, 240, 160, None, None, None, None).unwrap())
+                .collect();
+            pump(200);
+            for &h in &wins {
+                let _ = ShowWindow(h, SW_MINIMIZE);
+            }
+            pump(300);
+            for (i, &h) in wins.iter().enumerate() {
+                assert!(IsIconic(h).as_bool());
+                activate(h);
+                pump(400);
+                assert!(!IsIconic(h).as_bool(), "{i}. pencere açılmadı");
+                assert_eq!(GetForegroundWindow(), h, "{i}. pencere öne gelmedi");
+                let _ = ShowWindow(h, SW_MINIMIZE);
+                pump(300);
+            }
+            for h in wins {
+                let _ = DestroyWindow(h);
+            }
+        }
     }
 }

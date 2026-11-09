@@ -159,6 +159,8 @@ impl App {
                 Some(i) if self.dock.entries[i].windows != self.popup.windows => self.show_preview(i),
                 Some(i) => {
                     let _ = self.popup.retitle(&self.gfx, &self.preview_items(i));
+                    // Başlık değişince (sekme geçişi) düğmeler başka karta geçebilir.
+                    self.media_changed();
                     media::refresh(self.hwnd);
                 }
                 None => self.popup.hide(),
