@@ -23,6 +23,8 @@ use windows::{
 
 pub const WM_APP_WINDOWS: u32 = WM_APP + 10;
 pub const WM_APP_LOCATION: u32 = WM_APP + 11;
+/// wparam: pencere, lparam: 1 küçülüyor / 0 açılıyor.
+pub const WM_APP_MINMAX: u32 = WM_APP + 13;
 static NOTIFY: AtomicIsize = AtomicIsize::new(0);
 static PENDING: AtomicBool = AtomicBool::new(false);
 static PENDING_LOC: AtomicBool = AtomicBool::new(false);
@@ -61,6 +63,11 @@ unsafe extern "system" fn on_event(_: HWINEVENTHOOK, event: u32, hwnd: HWND, id_
             let _ = PostMessageW(HWND(NOTIFY.load(Ordering::SeqCst) as _), WM_APP_LOCATION, WPARAM(0), LPARAM(0));
         }
         return;
+    }
+    // Küçülme/açılma: dock'a giden/dock'tan gelen uçuş için ayrıca bildirilir.
+    if event == EVENT_SYSTEM_MINIMIZESTART || event == EVENT_SYSTEM_MINIMIZEEND {
+        let start = (event == EVENT_SYSTEM_MINIMIZESTART) as isize;
+        let _ = PostMessageW(HWND(NOTIFY.load(Ordering::SeqCst) as _), WM_APP_MINMAX, WPARAM(hwnd.0 as usize), LPARAM(start));
     }
     // Aynı anda gelen olay yığınını tek bir yenilemede birleştir.
     if !PENDING.swap(true, Ordering::SeqCst) {

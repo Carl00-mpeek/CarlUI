@@ -17,7 +17,7 @@ mod input;
 mod jumplist;
 mod media;
 mod menu;
-mod minrect;
+mod fly;
 mod popup;
 mod procs;
 mod resolver;
@@ -177,6 +177,18 @@ impl App {
         let root = unsafe { GetAncestor(w, GA_ROOTOWNER) };
         let i = self.dock.entries.iter().position(|e| e.windows.iter().any(|&h| h == w || h == root))?;
         Some(self.dock.tray_button(i).0)
+    }
+
+    /// Küçülen pencere dock'taki simgesine uçar, açılan pencere simgeden çıkar.
+    /// Dock gizliyken (otomatik gizleme, tam ekran) uçacak yer olmadığından
+    /// Windows'un kendi animasyonu kalır.
+    fn fly(&self, w: HWND, minimizing: bool) {
+        if self.dock.slid_away || !fly::enabled() {
+            return;
+        }
+        if let Some(icon) = self.min_rect(w) {
+            fly::start(w, icon, minimizing);
+        }
     }
 
     fn intellihide_check(&mut self) {
@@ -454,11 +466,7 @@ impl App {
                 }
             }
             Event::ShowDesktop => self.dock.reassert(),
-            Event::ExplorerRestarted => {
-                self.dock.reassert();
-                // Yeni görev çubuğu kancası bizimkinden sonra gelip hedefi ezmesin.
-                minrect::register(self.hwnd);
-            }
+            Event::ExplorerRestarted => self.dock.reassert(),
             Event::Custom { name, data } if name == "tray-state" => {
                 let open = data.get("open").and_then(|v| v.as_bool()).unwrap_or(false);
                 self.tray_open = open;
@@ -518,17 +526,6 @@ impl App {
 
 extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     unsafe {
-        if let Some(w) = minrect::asked(msg, wp, lp) {
-            let mut rc = None;
-            with_app(|a| rc = a.min_rect(w));
-            return match rc {
-                Some(r) => {
-                    minrect::answer(lp, r);
-                    LRESULT(1)
-                }
-                None => LRESULT(0),
-            };
-        }
         match msg {
             // Dock'a tıklamak odaktaki pencereden odağı çalmasın.
             WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
@@ -671,6 +668,10 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
                 if !with_app(|a| a.refresh_windows()) {
                     SetTimer(hwnd, TIMER_REFRESH, 150, None);
                 }
+                LRESULT(0)
+            }
+            tracker::WM_APP_MINMAX => {
+                with_app(|a| a.fly(HWND(wp.0 as _), lp.0 != 0));
                 LRESULT(0)
             }
             media::WM_APP_MEDIA => {
@@ -863,7 +864,6 @@ fn main() -> Result<()> {
 
         let hwnd = create_window(w!("CarlUI.Dock"), Some(dock_proc), w!("CarlUI Dock"))?;
         let popup_hwnd = create_window(w!("CarlUI.DockPopup"), Some(popup_proc), w!("CarlUI Dock Popup"))?;
-        minrect::register(hwnd);
         let hwnd_raw = hwnd.0 as isize;
         let gfx = Gfx::new()?;
         let target = gfx.comp.cast::<ICompositorDesktopInterop>()?.CreateDesktopWindowTarget(hwnd, true)?;
