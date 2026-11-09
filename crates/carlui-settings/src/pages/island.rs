@@ -5,7 +5,7 @@ use crate::{
     App,
 };
 use crate::input::Form;
-use carlui_core::config::{ClockMode, DateFormat, IslandStyle, NotifySound};
+use carlui_core::config::{ClockMode, DateFormat, HourFormat, IslandStyle, NotifySound};
 use carlui_ui::paint::R;
 
 pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
@@ -45,22 +45,43 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         sel,
         104.0,
     );
-    let sel = match cfg.clock.date {
-        DateFormat::Long => 0,
-        DateFormat::Short => 1,
-        DateFormat::Hidden => 2,
+    let sel = match cfg.clock.hour {
+        HourFormat::H24 => 0,
+        HourFormat::H12 => 1,
+        HourFormat::H12Plain => 2,
     };
     f.choice(
         p,
-        t!("Tarih", "Date"),
-        t!("Saate tıklayınca ve merkezde görünen tarih.", "The date shown when you click the clock and in the hub."),
+        t!("Saat biçimi", "Time format"),
+        t!("24 saat: 15:47. 12 saat: 3:47 PM. ÖÖ/ÖS'siz: 3:47.", "24-hour: 15:47. 12-hour: 3:47 PM. No AM/PM: 3:47."),
         &[
-            (t!("Uzun", "Long"), edit(|c| c.clock.date = DateFormat::Long)),
-            (t!("Kısa", "Short"), edit(|c| c.clock.date = DateFormat::Short)),
-            (t!("Gizli", "Hidden"), edit(|c| c.clock.date = DateFormat::Hidden)),
+            (t!("24 saat", "24-hour"), edit(|c| c.clock.hour = HourFormat::H24)),
+            (t!("12 saat", "12-hour"), edit(|c| c.clock.hour = HourFormat::H12)),
+            (t!("ÖÖ/ÖS'siz", "No AM/PM"), edit(|c| c.clock.hour = HourFormat::H12Plain)),
         ],
         sel,
         104.0,
+    );
+    const FORMATS: [DateFormat; 6] = [DateFormat::Long, DateFormat::Full, DateFormat::Short, DateFormat::Numeric, DateFormat::Iso, DateFormat::Hidden];
+    let names = [t!("Uzun", "Long"), t!("Tam", "Full"), t!("Kısa", "Short"), t!("Sayı", "Numeric"), "ISO", t!("Gizli", "Hidden")];
+    let pos = |d: DateFormat| FORMATS.iter().position(|x| *x == d).unwrap_or(0);
+    let items: Vec<_> = FORMATS.iter().zip(names).map(|(d, n)| (n, { let d = *d; edit(move |c| c.clock.date = d) })).collect();
+    f.choice(
+        p,
+        t!("Tarih", "Date"),
+        t!("Saate tıklayınca görünen tarih. Uzun: 9 Kasım Pazartesi. Tam: 9 Kasım 2026 Pazartesi. Kısa: Pzt 09.11. Sayı: 09.11.2026. ISO: 2026-11-09.", "The date shown when you click the clock. Long: Monday, November 9. Full: Monday, November 9, 2026. Short: Mon 11/09. Numeric: 11/09/2026. ISO: 2026-11-09."),
+        &items,
+        pos(cfg.clock.date),
+        66.0,
+    );
+    let items: Vec<_> = FORMATS.iter().zip(names).map(|(d, n)| (n, { let d = *d; edit(move |c| c.clock.hub_date = d) })).collect();
+    f.choice(
+        p,
+        t!("Açılan kısımda tarih", "Date in the hub"),
+        t!("Fare adanın üstüne gelince açılan kısımdaki tarih.", "The date in the panel that opens when you hover the island."),
+        &items,
+        pos(cfg.clock.hub_date),
+        66.0,
     );
     f.slider(p, t!("Üst kenardan uzaklık", "Distance from top edge"), "", cfg.island.top_margin, 0.0, 40.0, 1.0, |v| format!("{v:.0} px"), |c, v| c.island.top_margin = v);
     f.toggle(p, t!("Tam ekran pencerede yukarı saklan", "Hide over maximized windows"), t!("Fare üst kenara gelince geri çıkar.", "Comes back when the mouse reaches the top edge."), cfg.island.hide_over_maximized, |c| c.island.hide_over_maximized ^= true);

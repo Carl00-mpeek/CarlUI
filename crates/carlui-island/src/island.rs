@@ -9,7 +9,7 @@
 
 use crate::{media::Snap, notify::Note};
 use carlui_core::{
-    config::IslandStyle,
+    config::{DateFormat, HourFormat, IslandStyle},
     theme::{Rgba, Theme},
 };
 use carlui_ui::{
@@ -149,37 +149,47 @@ const DAYS: [&str; 7] = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe
 const MONTHS_EN: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS_EN: [&str; 7] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-/// Tarih biçimi (0 uzun, 1 kısa, 2 gizli); ayar değişince `set_date_format` ile güncellenir.
-static DATE_FORMAT: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+const DAYS_SHORT: [&str; 7] = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
 
-pub fn set_date_format(f: carlui_core::config::DateFormat) {
-    use carlui_core::config::DateFormat as F;
-    let v = match f {
-        F::Long => 0,
-        F::Short => 1,
-        F::Hidden => 2,
-    };
-    DATE_FORMAT.store(v, std::sync::atomic::Ordering::Relaxed);
+/// Saat ve tarih biçimleri; ayar değişince `set_date_format` ile güncellenir.
+static CLOCK_FMT: std::sync::Mutex<(HourFormat, DateFormat, DateFormat)> = std::sync::Mutex::new((HourFormat::H24, DateFormat::Long, DateFormat::Long));
+
+fn clock_fmt() -> (HourFormat, DateFormat, DateFormat) {
+    *CLOCK_FMT.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+pub fn set_date_format(c: &carlui_core::config::ClockConfig) {
+    *CLOCK_FMT.lock().unwrap_or_else(|e| e.into_inner()) = (c.hour, c.date, c.hub_date);
 }
 
 /// Tarih gizli mi (saate tıklayınca tarih görünümü açılmaz).
 pub fn date_hidden() -> bool {
-    DATE_FORMAT.load(std::sync::atomic::Ordering::Relaxed) == 2
+    clock_fmt().1 == DateFormat::Hidden
 }
 
+fn fmt_date(t: &windows::Win32::Foundation::SYSTEMTIME, f: DateFormat) -> String {
+    let (m, d) = ((t.wMonth as usize).clamp(1, 12) - 1, t.wDayOfWeek as usize % 7);
+    match f {
+        DateFormat::Long => t!(format!("{} {} {}", t.wDay, MONTHS[m], DAYS[d]), format!("{}, {} {}", DAYS_EN[d], MONTHS_EN[m], t.wDay)),
+        DateFormat::Full => t!(format!("{} {} {} {}", t.wDay, MONTHS[m], t.wYear, DAYS[d]), format!("{}, {} {}, {}", DAYS_EN[d], MONTHS_EN[m], t.wDay, t.wYear)),
+        DateFormat::Short => t!(format!("{} {:02}.{:02}", DAYS_SHORT[d], t.wDay, t.wMonth), format!("{} {:02}/{:02}", &DAYS_EN[d][..3], t.wMonth, t.wDay)),
+        DateFormat::Numeric => t!(format!("{:02}.{:02}.{}", t.wDay, t.wMonth, t.wYear), format!("{:02}/{:02}/{}", t.wMonth, t.wDay, t.wYear)),
+        DateFormat::Iso => format!("{}-{:02}-{:02}", t.wYear, t.wMonth, t.wDay),
+        DateFormat::Hidden => String::new(),
+    }
+}
+
+/// (dakika, saniye, saat yazısı, saate tıklayınca görünen tarih)
 pub fn now_hm() -> (u16, u16, String, String) {
     let t = unsafe { GetLocalTime() };
-    let time = format!("{:02}:{:02}", t.wHour, t.wMinute);
-    let (m, d) = ((t.wMonth as usize).clamp(1, 12) - 1, t.wDayOfWeek as usize % 7);
-    let date = match DATE_FORMAT.load(std::sync::atomic::Ordering::Relaxed) {
-        1 => {
-            let short = |s: &str| s.chars().take(3).collect::<String>();
-            t!(format!("{} {:02}.{:02}", short(DAYS[d]), t.wDay, t.wMonth), format!("{} {:02}/{:02}", short(DAYS_EN[d]), t.wMonth, t.wDay))
-        }
-        2 => String::new(),
-        _ => t!(format!("{} {} {}", t.wDay, MONTHS[m], DAYS[d]), format!("{}, {} {}", DAYS_EN[d], MONTHS_EN[m], t.wDay)),
-    };
-    (t.wMinute, t.wSecond, time, date)
+    let (hour, date, _) = clock_fmt();
+    (t.wMinute, t.wSecond, hour.time(t.wHour, t.wMinute), fmt_date(&t, date))
+}
+
+/// Fare üstüne gelince açılan kısımdaki tarih.
+pub fn hub_date() -> String {
+    let t = unsafe { GetLocalTime() };
+    fmt_date(&t, clock_fmt().2)
 }
 
 pub fn fmt_time(sec: f64) -> String {

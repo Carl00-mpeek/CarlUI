@@ -95,7 +95,7 @@ impl Island {
     fn hub_top_fill(&self, gfx: &Gfx, kids: &VisualCollection, w: f32, stats: &[Stat]) -> Result<()> {
         let s = self.s;
         let h = (TOP_H * s).round();
-        let (_, _, _, date) = now_hm();
+        let date = super::hub_date();
         let (d, dw, dh) = self.label(gfx, &date, 12.5, false, 170.0 * s, 0.72)?;
         Self::place(&d, PAD * s, (h - dh) / 2.0)?;
         kids.InsertAtTop(&d)?;

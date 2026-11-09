@@ -703,8 +703,36 @@ pub enum ClockMode {
 #[serde(default)]
 pub struct ClockConfig {
     pub mode: ClockMode,
-    /// Adada saate tıklayınca ve merkezde görünen tarihin biçimi.
+    /// Saatin biçimi: 24 saat ya da 12 saat (ÖÖ/ÖS).
+    pub hour: HourFormat,
+    /// Adada saate tıklayınca görünen tarihin biçimi.
     pub date: DateFormat,
+    /// Fare adanın üstüne gelince açılan kısımdaki tarihin biçimi.
+    pub hub_date: DateFormat,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum HourFormat {
+    /// "15:47"
+    #[default]
+    H24,
+    /// "3:47 PM"
+    H12,
+    /// "3:47" (ÖÖ/ÖS yazmadan)
+    H12Plain,
+}
+
+impl HourFormat {
+    /// Saat ve dakikayı bu biçimde yazar.
+    pub fn time(self, h: u16, m: u16) -> String {
+        let h12 = if h % 12 == 0 { 12 } else { h % 12 };
+        match self {
+            Self::H24 => format!("{h:02}:{m:02}"),
+            Self::H12 => format!("{h12}:{m:02} {}", if h < 12 { "AM" } else { "PM" }),
+            Self::H12Plain => format!("{h12}:{m:02}"),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -717,6 +745,12 @@ pub enum DateFormat {
     Short,
     /// Tarih gösterilmez.
     Hidden,
+    /// "5 Kasım 2026 Perşembe"
+    Full,
+    /// "05.11.2026"
+    Numeric,
+    /// "2026-11-05"
+    Iso,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

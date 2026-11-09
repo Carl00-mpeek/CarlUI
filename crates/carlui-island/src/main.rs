@@ -562,7 +562,7 @@ impl App {
     }
 
     fn apply_config(&mut self, cfg: Config) {
-        island::set_date_format(cfg.clock.date);
+        island::set_date_format(&cfg.clock);
         let theme = Theme::from_config(&cfg.theme);
         self.island.apply_theme(&theme);
         self.pop.apply_theme(&theme);
@@ -1217,7 +1217,7 @@ fn main() -> Result<()> {
 
         let cfg = config::load();
         carlui_ui::tone::follow(&cfg.theme);
-        island::set_date_format(cfg.clock.date);
+        island::set_date_format(&cfg.clock);
         let theme = Theme::from_config(&cfg.theme);
         let gfx = Gfx::new()?;
         let hwnd = create_window()?;
