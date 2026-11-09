@@ -581,6 +581,8 @@ pub struct DockConfig {
     pub separators: bool,
     /// Açık uygulama göstergesi: false = noktalar, true = pencere sayısınca bölünen çizgi.
     pub line_indicator: bool,
+    /// GÃ¶rev Ã§ubuÄŸu gÃ¶rÃ¼nÃ¼mÃ¼ (yalnÄ±zca altta): kenar boyu cam, ortada sÄ±k simgeler, saÄŸda durum ve saat.
+    pub taskbar: bool,
     /// Diğer ekranlarda da kendi pencerelerini gösteren ayrı bir dock.
     pub other_screens: bool,
     /// Çark dock: kısayolla (`shortcuts.radial`) imlecin çevresinde açılır.
@@ -632,6 +634,7 @@ impl Default for DockConfig {
             position: DockPosition::Bottom,
             separators: true,
             line_indicator: false,
+            taskbar: false,
             other_screens: false,
             radial: false,
             stacks: Vec::new(),

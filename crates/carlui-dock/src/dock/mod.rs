@@ -13,13 +13,17 @@
 
 //!
 //! Dosyalar: `layout` (dizilim, bölge, noktalar, açılış, gizleme), `mouse`
-//! (hover, tıklama, sürükle-bırak, sabitleme), `actions` (başlat/öne getir).
+//! (hover, tıklama, sürükle-bırak, sabitleme), `actions` (başlat/öne getir),
+//! `places` (yığınlar, çöp kutusu), `status` (görev çubuğu görünümünde sağ uç:
+//! ağ, ses, pil, saat).
 
 mod actions;
 mod layout;
 mod mouse;
 mod places;
-pub use places::TIMER_TRASH;
+mod status;
+pub use places::{open as open_uri, TIMER_TRASH};
+pub use status::{Part, TIMER_STATUS};
 
 use crate::{
     apps::{self, AppId},
@@ -167,6 +171,8 @@ pub struct Dock {
     pub menu_open: bool,
     /// Çöp kutusu son bakıldığında dolu muydu (simge değişince yenilenir).
     trash_full: Option<bool>,
+    /// Görev çubuğu görünümünde sağ uçtaki ağ/ses/pil ve saat alanı.
+    status: Option<status::Status>,
 }
 
 fn explorer_key() -> String {
@@ -204,7 +210,8 @@ impl Dock {
         let s = unsafe { GetDpiForWindow(hwnd) } as f32 / 96.0;
         let icon = (cfg.dock.icon_size.clamp(20.0, 64.0) * s).round();
         let k = icon / (30.0 * s); // diğer ölçüler ikon boyutuyla orantılı
-        let m = Metrics {
+        let taskbar = cfg.dock.taskbar && cfg.dock.position == DockPosition::Bottom;
+        let mut m = Metrics {
             s,
             icon,
             slot: (50.0 * s * k).round(),
@@ -216,6 +223,16 @@ impl Dock {
             radius: (24.0 * s * k * theme.radius_scale).round(),
             hl: (44.0 * s * k).round(),
         };
+        if taskbar {
+            // Görev çubuğu: kenara yapışık, köşesiz, simgeler arası daha dar.
+            m.slot = (42.0 * s * k).round();
+            m.h = (50.0 * s * k).round().max((44.0 * s).round());
+            m.pad = (8.0 * s).round();
+            m.sep = (10.0 * s).round();
+            m.bottom = 0.0;
+            m.radius = 0.0;
+            m.hl = (38.0 * s * k).round();
+        }
         let comp = gfx.comp.clone();
         let motion = Motion::new(&comp, &theme);
 
@@ -313,7 +330,18 @@ impl Dock {
             mouse_inside: false,
             menu_open: false,
             trash_full: None,
+            status: None,
         };
+        if taskbar {
+            let mut st = status::Status::new(&dock.comp)?;
+            st.refresh(gfx, m.h, s, true)?;
+            dock.items.Children()?.InsertAtTop(&st.visual)?;
+            dock.status = Some(st);
+            dock.place_status()?;
+            unsafe {
+                SetTimer(hwnd, TIMER_STATUS, 2000, None);
+            }
+        }
         dock.sync(gfx, tracker, false)?;
         dock.intro()?;
         Ok(dock)

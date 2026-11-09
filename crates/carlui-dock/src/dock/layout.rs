@@ -18,8 +18,15 @@ impl Dock {
         let mut sep_xs = Vec::new();
         let mut centers = Vec::with_capacity(order.len());
         let separators = self.cfg.dock.separators;
+        let taskbar = self.taskbar();
+        // Görev çubuğunda tray düğmesi ortadaki dizilime girmez, sağ uçta durur.
+        let mut tray = Vec::new();
         for &i in order {
             let g = self.entries[i].group;
+            if taskbar && g == 3 {
+                tray.push(i);
+                continue;
+            }
             if separators && last.is_some_and(|l| l != g) {
                 sep_xs.push(x + m.sep / 2.0);
                 x += m.sep;
@@ -28,8 +35,25 @@ impl Dock {
             x += m.slot;
             last = Some(g);
         }
-        let width = x + m.pad;
+        let mut width = x + m.pad;
         let half = width / 2.0;
+        let mut order = order.to_vec();
+        if taskbar {
+            // Ortadaki öğeler kendi genişliklerine göre ortalı kalır; cam tüm kenarı kaplar.
+            // Sağdan sola: durum alanı, tray düğmesi, (varsa) ayırıcı.
+            let mut right = self.status_left() + half;
+            for &i in tray.iter().rev() {
+                centers.push(right - m.slot / 2.0);
+                order.retain(|&o| o != i);
+                order.push(i);
+                right -= m.slot;
+            }
+            if separators && !tray.is_empty() {
+                sep_xs.push(right - m.sep / 2.0);
+            }
+            width = self.len;
+        }
+        let order = &order[..];
         let dragging = self.drag.as_ref().map(|d| d.index);
         let (vert, along) = (self.vert(), self.along_prop());
 
@@ -87,7 +111,9 @@ impl Dock {
             }
         }
 
-        if animate {
+        if self.taskbar() {
+            self.glass.root.SetSize(self.ps(width, m.h))?;
+        } else if animate {
             self.motion.animate(&self.glass.root, &self.size_prop(), width, 0.78, 50, 0)?;
         } else {
             self.glass.root.SetSize(self.ps(width, m.h))?;

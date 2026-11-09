@@ -26,6 +26,13 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         pos,
         80.0,
     );
+    f.toggle(
+        p,
+        t!("Görev çubuğu görünümü", "Taskbar style"),
+        t!("Altta kenardan kenara cam şerit: simgeler ortada ve sık, sağda ağ, ses, pil ve saat. Yalnızca alt konumda.", "An edge-to-edge glass bar at the bottom: icons centered and close together, network, volume, battery and clock on the right. Bottom position only."),
+        c.taskbar,
+        |c| c.dock.taskbar ^= true,
+    );
     f.slider(p, t!("Simge boyutu", "Icon size"), "", c.icon_size, 20.0, 64.0, 1.0, |v| format!("{v:.0} px"), |c, v| c.dock.icon_size = v);
     f.slider(p, t!("Kenardan uzaklık", "Distance from edge"), "", c.bottom_margin, 0.0, 60.0, 1.0, |v| format!("{v:.0} px"), |c, v| c.dock.bottom_margin = v);
     let sel = match c.behavior {

@@ -90,7 +90,7 @@ impl Glass {
 
         // 4) İnce kenar yansıması
         let rim_geom = comp.CreateRoundedRectangleGeometry()?;
-        rim_geom.SetCornerRadius(v2(radius - 0.5, radius - 0.5))?;
+        rim_geom.SetCornerRadius(v2((radius - 0.5).max(0.0), (radius - 0.5).max(0.0)))?;
         rim_geom.SetOffset(v2(0.5, 0.5))?;
         let rim_follow = comp.CreateExpressionAnimationWithExpression(h!("r.Size - Vector2(1, 1)"))?;
         rim_follow.SetReferenceParameter(h!("r"), &root)?;

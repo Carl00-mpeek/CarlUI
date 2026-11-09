@@ -679,6 +679,22 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
                 with_app(|a| {
                     let clicked = a.dock.mouse_up(&a.gfx, &a.tracker, x, y);
                     a.update_span();
+                    if clicked.is_none() {
+                        // Görev çubuğu görünümünde sağ uçtaki durum alanı.
+                        match a.dock.status_hit(x, y) {
+                            Some(dock::Part::Quick) if screens::child().is_none() => {
+                                a.popup.hide();
+                                let (r, top) = a.dock.status_rect();
+                                a.bus.send(&Event::Custom {
+                                    name: "tray-toggle".into(),
+                                    data: serde_json::json!({ "l": r.left, "t": r.top, "r": r.right, "b": r.bottom, "dock_top": top, "side": a.dock.side() as u8 }),
+                                });
+                            }
+                            Some(dock::Part::Quick) => dock::open_uri("ms-actioncenter:controlcenter/&showFooter=true"),
+                            Some(dock::Part::Clock) => dock::open_uri("ms-actioncenter:"),
+                            None => {}
+                        }
+                    }
                     if let Some(i) = clicked {
                         a.popup.hide();
                         if a.dock.entries[i].kind == Kind::Tray {
@@ -739,6 +755,13 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
                         a.dock.cleanup();
                     }
                     dock::TIMER_AUTOHIDE => a.autohide_tick(),
+                    dock::TIMER_STATUS => {
+                        if a.dock.taskbar() {
+                            a.dock.status_tick(&a.gfx);
+                        } else {
+                            let _ = KillTimer(hwnd, id);
+                        }
+                    }
                     dock::TIMER_TRASH => {
                         if a.dock.cfg.dock.recycle_bin {
                             SetTimer(hwnd, dock::TIMER_TRASH, 3000, None);
