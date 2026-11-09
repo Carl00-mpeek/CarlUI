@@ -10,7 +10,7 @@
 //! bölgesinin pill ile sınırlı olmasıdır.
 
 use crate::media::{self, Cmd, Session};
-use carlui_core::theme::Theme;
+use carlui_core::{config::DockPosition, theme::Theme};
 use carlui_ui::{
     gfx::Gfx,
     glass::{v2, v3, Glass},
@@ -107,6 +107,8 @@ pub struct Popup {
     media_card: Option<usize>,
     /// [oynat, duraklat]
     play_glyphs: Vec<Glyph>,
+    /// Dock'un kenarı: yüzey ikonun üstüne mi yanına mı açılır.
+    pub side: DockPosition,
 }
 
 fn contains(r: &RECT, x: i32, y: i32) -> bool {
@@ -141,6 +143,7 @@ impl Popup {
             media: None,
             media_card: None,
             play_glyphs: Vec::new(),
+            side: DockPosition::Bottom,
         })
     }
 
@@ -162,14 +165,28 @@ impl Popup {
     }
 
     /// Pencereyi içeriğin etrafına yerleştirir: `anchor` = ikonun üst-orta noktası.
+    /// Yan dock'ta `anchor` ikonun iç kenarının ortasıdır; yüzey yanına açılır.
     fn place(&self, w: f32, h: f32, margin: f32, anchor: (i32, i32)) -> (i32, i32, i32, i32) {
         let ww = (w + margin * 2.0).ceil() as i32;
         let wh = (h + margin * 2.0).ceil() as i32;
-        let mut x = anchor.0 - ww / 2;
-        let y = anchor.1 - (6.0 * self.s) as i32 - wh;
-        let mon = carlui_core::win::primary_monitor().map(|m| m.rect).unwrap_or_default();
-        x = x.clamp(mon.left + 4, (mon.right - ww - 4).max(mon.left));
-        (x, y, ww, wh)
+        let gap = (6.0 * self.s) as i32;
+        let mon = carlui_core::win::monitors()
+            .into_iter()
+            .find(|m| anchor.0 >= m.rect.left - 2 && anchor.0 <= m.rect.right + 2 && anchor.1 >= m.rect.top - 2 && anchor.1 <= m.rect.bottom + 2)
+            .or_else(carlui_core::win::primary_monitor)
+            .map(|m| m.rect)
+            .unwrap_or_default();
+        match self.side {
+            DockPosition::Bottom => {
+                let x = (anchor.0 - ww / 2).clamp(mon.left + 4, (mon.right - ww - 4).max(mon.left));
+                (x, anchor.1 - gap - wh, ww, wh)
+            }
+            side => {
+                let x = if side == DockPosition::Left { anchor.0 + gap } else { anchor.0 - gap - ww };
+                let y = (anchor.1 - wh / 2).clamp(mon.top + 4, (mon.bottom - wh - 4).max(mon.top));
+                (x, y, ww, wh)
+            }
+        }
     }
 
     fn reveal(&self, glass: &Glass, w: f32, h: f32, margin: f32, animate: bool) -> Result<()> {

@@ -33,10 +33,11 @@ pub enum Key {
     Dictate,
     Speak,
     Assist,
+    Radial,
 }
 
 impl Key {
-    const COMBOS: [Key; 13] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk, Key::Unlock, Key::Layouts, Key::RecordStop, Key::Dictate, Key::Speak, Key::Assist];
+    const COMBOS: [Key; 14] = [Key::Search, Key::Clipboard, Key::Screenshot, Key::Vault, Key::ColorPicker, Key::Rename, Key::Disk, Key::Unlock, Key::Layouts, Key::RecordStop, Key::Dictate, Key::Speak, Key::Assist, Key::Radial];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -55,6 +56,7 @@ impl Key {
             Key::Dictate => t!("Sesle yazma", "Voice typing"),
             Key::Speak => t!("Sesli okuma", "Read aloud"),
             Key::Assist => t!("Sesli asistan", "Voice assistant"),
+            Key::Radial => t!("Çark dock", "Radial dock"),
         }
     }
 
@@ -75,6 +77,7 @@ impl Key {
             Key::Dictate => t!("Bas, konuş, yeniden bas; söylediğin imlecin olduğu yere yazılır (yerel, buluta gitmez).", "Press, speak, press again; what you said is typed at the cursor (local, never sent to the cloud)."),
             Key::Speak => t!("Seçili metni (yoksa panodakini) yerel sesle okur; yeniden basınca susar.", "Reads the selected text (or the clipboard) with a local voice; press again to stop."),
             Key::Assist => t!("Basılı tutup komutu söyleyin, bırakın (\"YouTube'u aç\"). Yapay zekâ ayarlarından açılır.", "Hold, say a command, release (\"open YouTube\"). Turn it on in AI settings."),
+            Key::Radial => t!("Basılı tutup bir simgeye doğru götür, bırak; ya da bas bırak, tıkla. Dock ayarlarından açılır.", "Hold, move toward an icon, release; or press, release and click. Turn it on in Dock settings."),
         }
     }
 
@@ -101,6 +104,7 @@ impl Key {
             Key::Dictate => s.dictate.clone(),
             Key::Speak => s.speak.clone(),
             Key::Assist => s.assist.clone(),
+            Key::Radial => s.radial.clone(),
         }
     }
 
@@ -122,6 +126,7 @@ impl Key {
             Key::Dictate => s.dictate = v,
             Key::Speak => s.speak = v,
             Key::Assist => s.assist = v,
+            Key::Radial => s.radial = v,
         }
     }
 
@@ -244,6 +249,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     key_row(app, p, f, Key::Assist);
     f.section(p, "Dock");
     key_row(app, p, f, Key::AppNumbers);
+    key_row(app, p, f, Key::Radial);
     f.flush(p);
     f.y += 6.0;
     f.note(p, t!("Sağ, orta ve yan fare tuşları tek başına ya da Ctrl gibi bir tuşla atanabilir; atanan tuş başka işe yaramaz, bu yüzden sağ ve orta tık için Ctrl+Mouse2 gibi bir birleşim daha iyidir. Sol tık, değiştiricisiz tek tuş ve Windows'un temel kısayolları (Ctrl+C, Alt+Tab, Win+L …) kabul edilmez.", "Right, middle and side mouse buttons can be assigned alone or with a key like Ctrl. An assigned button does nothing else, so a combination like Ctrl+Mouse2 is better for right and middle click. Left click, a single key without modifiers and core Windows shortcuts (Ctrl+C, Alt+Tab, Win+L …) are not accepted."));

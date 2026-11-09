@@ -331,6 +331,9 @@ pub struct ShortcutsConfig {
     pub speak: String,
     /// Sesli asistan: basılı tut, komutu söyle, bırak ("YouTube'u aç", "sesi 30 yap").
     pub assist: String,
+    /// Çark dock: basılı tutunca imlecin çevresinde uygulamalar açılır
+    /// (yalnızca dock ayarlarında çark açıksa). Varsayılan yan fare tuşu.
+    pub radial: String,
 }
 
 impl Default for ShortcutsConfig {
@@ -352,6 +355,7 @@ impl Default for ShortcutsConfig {
             dictate: "Ctrl+Alt+D".into(),
             speak: "Ctrl+Alt+S".into(),
             assist: "Ctrl+Alt+A".into(),
+            radial: "Mouse5".into(),
         }
     }
 }
@@ -416,6 +420,14 @@ impl ShortcutsConfig {
             crate::warn!("Vault kısayolu '{}' kullanılamaz: {e}; varsayılan (Ctrl+Alt+P) kullanılıyor", self.vault);
             crate::keys::parse_combo(&Self::default().vault)
         }).ok()
+    }
+
+    /// Çark dock kısayolu (kapalıysa ya da geçersizse None).
+    pub fn radial_combo(&self) -> Option<crate::keys::Combo> {
+        if self.radial.trim().is_empty() {
+            return None;
+        }
+        crate::keys::parse_combo(&self.radial).map_err(|e| crate::warn!("çark dock kısayolu '{}' kullanılamaz: {e}", self.radial)).ok()
     }
 
     /// Uygulama numaraları değiştiricisi (kapalıysa None).
@@ -539,9 +551,42 @@ pub enum DockBehavior {
     AutoHide,
 }
 
+/// Dock'un yaslandığı ekran kenarı.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockPosition {
+    #[default]
+    Bottom,
+    /// Sol kenarda dikey.
+    Left,
+    /// Sağ kenarda dikey.
+    Right,
+}
+
+impl DockPosition {
+    pub fn vertical(self) -> bool {
+        self != DockPosition::Bottom
+    }
+}
+
+/// Dock'a eklenebilen hazır klasör yığınları (`stacks` içinde ad ya da tam yol).
+pub const STACK_PRESETS: [&str; 5] = ["desktop", "documents", "pictures", "music", "videos"];
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct DockConfig {
+    /// Ekranın hangi kenarında (alt, sol, sağ).
+    pub position: DockPosition,
+    /// Başlat/arama ile uygulamalar ve yerler arasındaki ince bölme çizgileri.
+    pub separators: bool,
+    /// Açık uygulama göstergesi: false = noktalar, true = pencere sayısınca bölünen çizgi.
+    pub line_indicator: bool,
+    /// Diğer ekranlarda da kendi pencerelerini gösteren ayrı bir dock.
+    pub other_screens: bool,
+    /// Çark dock: kısayolla (`shortcuts.radial`) imlecin çevresinde açılır.
+    pub radial: bool,
+    /// Klasör yığınları: hazır adlar (`STACK_PRESETS`) ya da tam klasör yolları.
+    pub stacks: Vec<String>,
     /// Simge boyutu (DIP, 100% ölçekte piksel).
     pub icon_size: f32,
     /// Ekranın alt kenarından uzaklık (DIP).
@@ -584,6 +629,12 @@ impl DockConfig {
 impl Default for DockConfig {
     fn default() -> Self {
         Self {
+            position: DockPosition::Bottom,
+            separators: true,
+            line_indicator: false,
+            other_screens: false,
+            radial: false,
+            stacks: Vec::new(),
             icon_size: 30.0,
             bottom_margin: 12.0,
             behavior: DockBehavior::AlwaysVisible,

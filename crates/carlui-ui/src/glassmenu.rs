@@ -74,18 +74,18 @@ thread_local! {
     static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
 }
 
-fn exact(c: u32, a: f32) -> D2D1_COLOR_F {
+pub(crate) fn exact(c: u32, a: f32) -> D2D1_COLOR_F {
     D2D1_COLOR_F { r: ((c >> 16) & 0xFF) as f32 / 255.0, g: ((c >> 8) & 0xFF) as f32 / 255.0, b: (c & 0xFF) as f32 / 255.0, a }
 }
 
 /// Dolgu rengi (açık temada cama çevrilir).
-fn rgb(c: u32, a: f32) -> D2D1_COLOR_F {
+pub(crate) fn rgb(c: u32, a: f32) -> D2D1_COLOR_F {
     let (c, a) = crate::tone::fill(c, a);
     exact(c, a)
 }
 
 /// Yazı ve simge rengi (açık temada mürekkebe çevrilir).
-fn pen(c: u32, a: f32) -> D2D1_COLOR_F {
+pub(crate) fn pen(c: u32, a: f32) -> D2D1_COLOR_F {
     let (c, a) = crate::tone::ink(c, a);
     exact(c, a)
 }
@@ -110,7 +110,7 @@ pub fn system_accent() -> u32 {
     0x60CDFF
 }
 
-fn text_format(dw: &IDWriteFactory, size: f32, weight: DWRITE_FONT_WEIGHT) -> Result<IDWriteTextFormat> {
+pub(crate) fn text_format(dw: &IDWriteFactory, size: f32, weight: DWRITE_FONT_WEIGHT) -> Result<IDWriteTextFormat> {
     unsafe {
         let f = dw.CreateTextFormat(w!("Segoe UI Variable Text"), None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr")).or_else(|_| dw.CreateTextFormat(w!("Segoe UI"), None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr")))?;
         f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
@@ -370,6 +370,12 @@ fn register() -> PCWSTR {
 /// Menüyü `at` noktasının üstüne, yatayda ortalı açar; seçilen öğenin kimliği.
 /// `accent`: başlık rengi (0xRRGGBB), `None` ise renksiz (soluk beyaz).
 pub fn run(owner: HWND, rows: Vec<Row>, accent: Option<u32>, at: (i32, i32)) -> Option<usize> {
+    run_side(owner, rows, accent, at, 0)
+}
+
+/// `run` gibi; `side` 0: noktanın üstünde ortalı, 1: noktanın sağında,
+/// -1: noktanın solunda (dikeyde ortalı) — yan dock için.
+pub fn run_side(owner: HWND, rows: Vec<Row>, accent: Option<u32>, at: (i32, i32), side: i32) -> Option<usize> {
     let factory: ID2D1Factory = unsafe { D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None).ok()? };
     let dw: IDWriteFactory = unsafe { DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED).ok()? };
     let scale = unsafe { GetDpiForWindow(owner) }.max(96) as f32 / 96.0;
@@ -400,8 +406,14 @@ pub fn run(owner: HWND, rows: Vec<Row>, accent: Option<u32>, at: (i32, i32)) -> 
     unsafe {
         let _ = GetMonitorInfoW(MonitorFromPoint(POINT { x: at.0, y: at.1 }, MONITOR_DEFAULTTONEAREST), &mut mi);
     }
-    let x = (at.0 - pw / 2).clamp(mi.rcMonitor.left + 4, mi.rcMonitor.right - pw - 4);
-    let y = (at.1 - ph).max(mi.rcMonitor.top + 4);
+    let mr = mi.rcMonitor;
+    let (x, y) = match side {
+        0 => ((at.0 - pw / 2).clamp(mr.left + 4, mr.right - pw - 4), (at.1 - ph).max(mr.top + 4)),
+        s => {
+            let x = if s > 0 { at.0 } else { at.0 - pw };
+            (x.clamp(mr.left + 4, (mr.right - pw - 4).max(mr.left)), (at.1 - ph / 2).clamp(mr.top + 4, (mr.bottom - ph - 4).max(mr.top)))
+        }
+    };
     STATE.with(|s| *s.borrow_mut() = Some(st));
     let class = register();
     unsafe {

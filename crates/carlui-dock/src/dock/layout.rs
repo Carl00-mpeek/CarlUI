@@ -17,9 +17,10 @@ impl Dock {
         let mut last = None;
         let mut sep_xs = Vec::new();
         let mut centers = Vec::with_capacity(order.len());
+        let separators = self.cfg.dock.separators;
         for &i in order {
             let g = self.entries[i].group;
-            if last.is_some_and(|l| l != g) {
+            if separators && last.is_some_and(|l| l != g) {
                 sep_xs.push(x + m.sep / 2.0);
                 x += m.sep;
             }
@@ -30,6 +31,7 @@ impl Dock {
         let width = x + m.pad;
         let half = width / 2.0;
         let dragging = self.drag.as_ref().map(|d| d.index);
+        let (vert, along) = (self.vert(), self.along_prop());
 
         for (&i, &c) in order.iter().zip(&centers) {
             let rel = c - half;
@@ -39,9 +41,9 @@ impl Dock {
                 continue; // sürüklenen öğe imleci izler
             }
             if animate && !e.fresh {
-                self.motion.animate(&e.slot, h!("Offset.X"), rel - m.slot / 2.0, 0.78, 50, 0)?;
+                self.motion.animate(&e.slot, &along, rel - m.slot / 2.0, 0.78, 50, 0)?;
             } else {
-                e.slot.SetOffset(v3(rel - m.slot / 2.0, 0.0))?;
+                e.slot.SetOffset(if vert { v3(0.0, rel - m.slot / 2.0) } else { v3(rel - m.slot / 2.0, 0.0) })?;
             }
             if e.fresh {
                 e.fresh = false;
@@ -60,11 +62,12 @@ impl Dock {
         let sep_brush = self.comp.CreateColorBrushWithColor(carlui_ui::glass::exact(self.theme.separator))?;
         let sep_h = (24.0 * m.s).round();
         let sep_w = m.s.round().max(1.0);
+        let sep_c = ((m.h - sep_h) / 2.0).round();
         while self.seps.len() < sep_xs.len() {
             let v = self.comp.CreateSpriteVisual()?;
             v.SetBrush(&sep_brush)?;
-            v.SetSize(v2(sep_w, sep_h))?;
-            v.SetOffset(v3(sep_xs[self.seps.len()] - half, ((m.h - sep_h) / 2.0).round()))?;
+            v.SetSize(self.ps(sep_w, sep_h))?;
+            v.SetOffset(self.pv(sep_xs[self.seps.len()] - half, sep_c))?;
             self.items.Children()?.InsertAtBottom(&v)?;
             self.seps.push(v);
         }
@@ -73,10 +76,10 @@ impl Dock {
                 Some(sx) => {
                     let to = (sx - half).round();
                     if animate {
-                        self.motion.animate(v, h!("Offset.X"), to, 0.78, 50, 0)?;
+                        self.motion.animate(v, &along, to, 0.78, 50, 0)?;
                         self.motion.fade(v, h!("Opacity"), 1.0, 150, 0)?;
                     } else {
-                        v.SetOffset(v3(to, ((m.h - sep_h) / 2.0).round()))?;
+                        v.SetOffset(self.pv(to, sep_c))?;
                         v.SetOpacity(1.0)?;
                     }
                 }
@@ -85,9 +88,9 @@ impl Dock {
         }
 
         if animate {
-            self.motion.animate(&self.glass.root, h!("Size.X"), width, 0.78, 50, 0)?;
+            self.motion.animate(&self.glass.root, &self.size_prop(), width, 0.78, 50, 0)?;
         } else {
-            self.glass.root.SetSize(v2(width, m.h))?;
+            self.glass.root.SetSize(self.ps(width, m.h))?;
         }
         self.width = width;
         // Büyürken bölge hemen genişler; küçülürken animasyon bitince daralır.
@@ -105,9 +108,9 @@ impl Dock {
             let rgn = if self.slid_away {
                 CreateRectRgn(0, 0, 0, 0)
             } else {
-                let l = ((self.win_w - w) / 2.0).floor() as i32;
-                let t = self.m.top as i32;
-                CreateRectRgn(l, t, l + w.ceil() as i32 + 1, t + self.m.h as i32 + 1)
+                let r = self.pill_rect(w);
+                let (wx, wy) = self.wpos;
+                CreateRectRgn(r.left - wx, r.top - wy, r.right - wx + 1, r.bottom - wy + 1)
             };
             SetWindowRgn(self.hwnd, rgn, true);
         }
@@ -134,15 +137,32 @@ impl Dock {
             e.dots_sig = (n, active);
             let kids = e.dots.Children()?;
             kids.RemoveAll()?;
+            let y = if self.side == DockPosition::Left { (7.0 * m.s - dh).round() } else { (m.h - 7.0 * m.s).round() };
+            if !self.line_brushes.is_empty() {
+                // Çizgi: boy sabit, pencere sayısınca çapraz kesikle bölünür.
+                if n > 0 {
+                    let (len, thick) = ((26.0 * m.s).round(), (3.0 * m.s).round().max(2.0));
+                    let x = ((m.slot - len) / 2.0).round();
+                    let y = if self.side == DockPosition::Left { (7.0 * m.s - thick).round() } else { (m.h - 6.0 * m.s).round() };
+                    let d = self.comp.CreateSpriteVisual()?;
+                    d.SetSize(if self.side.vertical() { v2(thick, len) } else { v2(len, thick) })?;
+                    d.SetBrush(&self.line_brushes[(n - 1) * 2 + active as usize])?;
+                    d.SetOffset(if self.side.vertical() { v3(y, x) } else { v3(x, y) })?;
+                    kids.InsertAtTop(&d)?;
+                }
+                e.dots.SetOpacity(0.0)?;
+                self.motion.fade(&e.dots, h!("Opacity"), 1.0, 160, 0)?;
+                continue;
+            }
             let widths: Vec<f32> = (0..n).map(|i| if active && i == 0 { aw } else { dw }).collect();
             let total: f32 = widths.iter().sum::<f32>() + gap * n.saturating_sub(1) as f32;
             let mut x = ((m.slot - total) / 2.0).round();
-            let y = (m.h - 7.0 * m.s).round();
+            // Noktalar ekran kenarı tarafında (y yukarıda).
             for (i, w) in widths.iter().enumerate() {
                 let d = self.comp.CreateSpriteVisual()?;
-                d.SetSize(v2(*w, dh))?;
+                d.SetSize(if self.side.vertical() { v2(dh, *w) } else { v2(*w, dh) })?;
                 d.SetBrush(if active && i == 0 { &self.active_brush } else { &self.dot_brush })?;
-                d.SetOffset(v3(x, y))?;
+                d.SetOffset(if self.side.vertical() { v3(y, x) } else { v3(x, y) })?;
                 kids.InsertAtTop(&d)?;
                 x += w + gap;
             }
@@ -156,7 +176,7 @@ impl Dock {
     pub fn intro(&self) -> Result<()> {
         let mo = &self.motion;
         self.glass.root.SetSize(v2(self.m.h, self.m.h))?;
-        mo.animate(&self.glass.root, h!("Size.X"), self.width, 0.72, 55, 80)?;
+        mo.animate(&self.glass.root, &self.size_prop(), self.width, 0.72, 55, 80)?;
         self.glass.root.SetOpacity(0.0)?;
         mo.fade(&self.glass.root, h!("Opacity"), 1.0, 180, 0)?;
         for (i, e) in self.entries.iter().filter(|e| e.leaving.is_none()).enumerate() {
@@ -220,8 +240,8 @@ impl Dock {
         }
         carlui_core::info!("dock {}", if away { "gizlendi" } else { "gösterildi" });
         self.slid_away = away;
-        let y = if away { self.win_h + 8.0 * self.m.s } else { self.m.top };
-        let _ = self.motion.animate(&self.glass.root, h!("Offset.Y"), y, if away { 1.0 } else { 0.75 }, if away { 70 } else { 45 }, 0);
+        let y = if away { self.c_hidden() } else { self.c0() };
+        let _ = self.motion.animate(&self.glass.root, &self.across_prop(), y, if away { 1.0 } else { 0.75 }, if away { 70 } else { 45 }, 0);
         if away {
             let _ = self.set_hover(None);
             // Bölge hemen sıfırlanırsa dock kaymayı beklemeden "pat" diye kaybolur:
@@ -242,7 +262,11 @@ impl Dock {
         }
         self.slid_away = true;
         if let Ok(mut o) = self.glass.root.Offset() {
-            o.Y = self.win_h + 8.0 * self.m.s;
+            if self.vert() {
+                o.X = self.c_hidden();
+            } else {
+                o.Y = self.c_hidden();
+            }
             let _ = self.glass.root.SetOffset(o);
         }
         self.set_region(self.width);
@@ -250,19 +274,21 @@ impl Dock {
 
     /// Intellihide: dock'un alanıyla çakışan (küçültülmemiş) bir pencere var mı?
     pub fn overlapped(&self, tracker: &Tracker) -> bool {
-        let l = self.mon.left + ((self.win_w - self.width) / 2.0) as i32;
-        let r = l + self.width as i32;
-        let b = self.mon.bottom - self.m.bottom as i32;
-        let t = b - self.m.h as i32;
+        let RECT { left: l, top: t, right: r, bottom: b } = self.pill_rect(self.width);
         tracker.windows.iter().any(|w| {
             !tracker::is_minimized(w.hwnd)
                 && window_bounds(w.hwnd).is_some_and(|wr| wr.left < r && wr.right > l && wr.top < b && wr.bottom > t)
         })
     }
 
-    /// Ekranın alt kenarında dock'un yatay aralığı (girdi iş parçacığı için).
-    pub fn edge_span(&self) -> (i32, i32, i32) {
-        let l = self.mon.left + ((self.win_w - self.width) / 2.0) as i32;
-        (l, l + self.width as i32, self.mon.bottom - 1)
+    /// Dock'un yaslandığı ekran kenarında boyuna aralığı ve kenarın konumu
+    /// (girdi iş parçacığı için): (baş, son, kenar, taraf).
+    pub fn edge_span(&self) -> (i32, i32, i32, DockPosition) {
+        let r = self.pill_rect(self.width);
+        match self.side {
+            DockPosition::Bottom => (r.left, r.right, self.mon.bottom - 1, self.side),
+            DockPosition::Left => (r.top, r.bottom, self.mon.left, self.side),
+            DockPosition::Right => (r.top, r.bottom, self.mon.right - 1, self.side),
+        }
     }
 }

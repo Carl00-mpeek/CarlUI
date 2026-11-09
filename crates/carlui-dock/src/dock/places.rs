@@ -1,13 +1,16 @@
 //! Bu modül dock'un sağ ucundaki iki "yer"i çözüyor:
-//! - **İndirilenler yığını:** tıklayınca son indirilen 12 dosya (en yeni
-//!   altta, ikona en yakın) kendi simgeleriyle cam menüde açılır; seçilen
-//!   dosya açılır, en üstteki satır klasörün kendisini açar.
+//! - **Klasör yığınları (İndirilenler vb.):** tıklayınca klasördeki en yeni
+//!   15 dosya/klasör/kısayol kendi simgeleriyle yan yana bir cam ızgarada
+//!   açılır; seçilen öğe açılır, üstteki düğme klasörün kendisini açar.
 //! - **Geri Dönüşüm Kutusu:** tıklayınca açılır; sağ tıkta "Boşalt" vardır.
 //!   Boşaltma Windows'un kendi onay penceresini gösterir (CarlUI sormadan
 //!   hiçbir şeyi kalıcı silmez).
 
 use super::*;
-use carlui_ui::glassmenu::{self, Icon, Row};
+use carlui_ui::{
+    glassgrid::{self, Cell},
+    glassmenu::{self, Icon, Row},
+};
 use std::{
     path::PathBuf,
     sync::{
@@ -18,7 +21,7 @@ use std::{
 use windows::Win32::UI::Shell::{SHEmptyRecycleBinW, SHQueryRecycleBinW, SHQUERYRBINFO};
 
 pub const RECYCLE_BIN: &str = "::{645FF040-5081-101B-9F08-00AA002F954E}";
-const MAX: usize = 12;
+const MAX: usize = 15;
 /// Çöp kutusu dolu/boş yoklaması (simge değişsin; Gezgin'den boşaltılsa da).
 pub const TIMER_TRASH: usize = 77;
 
@@ -29,8 +32,21 @@ pub fn open(target: &str) {
     }
 }
 
-/// İndirilenler'deki en yeni dosyalar (yarım indirmeler hariç).
-fn recent_downloads(dir: &std::path::Path) -> Vec<PathBuf> {
+/// Yığının dock'ta görünen adı.
+pub fn stack_label(name: &str, dir: &std::path::Path) -> String {
+    match name {
+        "desktop" => t!("Masaüstü", "Desktop").into(),
+        "documents" => t!("Belgeler", "Documents").into(),
+        "pictures" => t!("Resimler", "Pictures").into(),
+        "music" => t!("Müzik", "Music").into(),
+        "videos" => t!("Videolar", "Videos").into(),
+        _ => dir.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| dir.display().to_string()),
+    }
+}
+
+/// Klasördeki en yeni dosyalar (yarım indirmeler hariç). İndirilenler'de
+/// oluşturulma, diğer klasörlerde değiştirilme zamanına göre.
+fn recent_files(dir: &std::path::Path, by_created: bool) -> Vec<PathBuf> {
     let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
     let mut v: Vec<(std::time::SystemTime, PathBuf)> = rd
         .flatten()
@@ -41,7 +57,8 @@ fn recent_downloads(dir: &std::path::Path) -> Vec<PathBuf> {
                 return None;
             }
             let md = e.metadata().ok()?;
-            Some((md.created().or_else(|_| md.modified()).ok()?, p))
+            let t = if by_created { md.created().or_else(|_| md.modified()) } else { md.modified() };
+            Some((t.ok()?, p))
         })
         .collect();
     v.sort_by(|a, b| b.0.cmp(&a.0));
@@ -83,6 +100,53 @@ fn trash_watch(hwnd: HWND) {
     });
 }
 
+/// Dolu/boş simgesinin kaynağı (ör. `imageres.dll,-54`). Kabuğun simge
+/// önbelleğine sorulmaz: o önbellek bayat kalabiliyor ve dock'taki kutu
+/// Gezgin'dekiyle ters (biri dolu biri boş) görünüyordu. Kullanıcının
+/// özel simgesi (HKCU) varsa o, yoksa sistemin varsayılanı.
+fn trash_icon_source(full: bool) -> Option<(String, i32)> {
+    use windows::Win32::System::Registry::*;
+    let name = if full { w!("Full") } else { w!("Empty") };
+    let keys = [
+        (HKEY_CURRENT_USER, w!("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\CLSID\\{645FF040-5081-101B-9F08-00AA002F954E}\\DefaultIcon")),
+        (HKEY_CLASSES_ROOT, w!("CLSID\\{645FF040-5081-101B-9F08-00AA002F954E}\\DefaultIcon")),
+    ];
+    for (root, key) in keys {
+        let mut buf = [0u16; 520];
+        let mut size = (buf.len() * 2) as u32;
+        let ok = unsafe { RegGetValueW(root, key, name, RRF_RT_REG_SZ, None, Some(buf.as_mut_ptr() as _), Some(&mut size)) };
+        if ok.is_err() {
+            continue;
+        }
+        // Genişletilmiş değerde bildirilen boy güvenilmez; ilk boş karaktere kadar oku.
+        let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        let s = String::from_utf16_lossy(&buf[..end]);
+        let s = s.trim();
+        let (path, idx) = match s.rsplit_once(',') {
+            Some((p, i)) => (p, i.trim().parse().unwrap_or(0)),
+            None => (s, 0),
+        };
+        let path = path.trim().trim_matches('"');
+        if !path.is_empty() {
+            return Some((path.to_string(), idx));
+        }
+    }
+    None
+}
+
+fn trash_icon(gfx: &Gfx, full: bool, px: i32) -> Option<windows::Win32::Graphics::Imaging::IWICFormatConverter> {
+    use windows::Win32::UI::{Shell::SHDefExtractIconW, WindowsAndMessaging::DestroyIcon};
+    let (path, idx) = trash_icon_source(full)?;
+    let req = (px * 2).clamp(64, 256) as u32;
+    let mut icon = HICON::default();
+    unsafe {
+        SHDefExtractIconW(&HSTRING::from(path), idx, 0, Some(&mut icon), None, req).ok().ok()?;
+        let r = icons::hicon_bitmap(&gfx.wic, icon).ok();
+        let _ = DestroyIcon(icon);
+        r
+    }
+}
+
 /// Yoklayıcıya "hemen yeniden say" der (boşaltmadan sonra).
 fn trash_poke() {
     let (m, cv) = &TRASH_WAKE;
@@ -113,7 +177,7 @@ impl Dock {
         self.trash_full = Some(full);
         let Some(e) = self.entries.iter().find(|e| e.kind == Kind::Trash && e.leaving.is_none()) else { return };
         let px = self.m.icon;
-        let Ok(src) = icons::shell_icon(&gfx.wic, RECYCLE_BIN, px as i32) else { return };
+        let Some(src) = trash_icon(gfx, full, px as i32).or_else(|| icons::shell_icon(&gfx.wic, RECYCLE_BIN, px as i32).ok()) else { return };
         let Ok(surface) = gfx.surface(px, px, |dc| icons::draw_bitmap(dc, &src, px)) else { return };
         if let Ok(b) = self.comp.CreateSurfaceBrushWithSurface(&surface) {
             let _ = b.SetStretch(CompositionStretch::Fill);
@@ -126,10 +190,9 @@ impl Dock {
     }
 
     fn menu(&mut self, i: usize, rows: Vec<Row>) -> usize {
-        let at = self.anchor(i);
-        let at = (at.0, at.1 - (6.0 * self.m.s) as i32);
+        let (at, side) = self.menu_at(i);
         self.menu_open = true;
-        let id = glassmenu::run(self.hwnd, rows, self.cfg.dock.menu_accent_color(glassmenu::accent), at).unwrap_or(0);
+        let id = glassmenu::run_side(self.hwnd, rows, self.cfg.dock.menu_accent_color(glassmenu::accent), at, side).unwrap_or(0);
         self.menu_open = false;
         unsafe {
             let _ = PostMessageW(self.hwnd, WM_NULL, WPARAM(0), LPARAM(0));
@@ -137,25 +200,40 @@ impl Dock {
         id
     }
 
-    /// İndirilenler yığını: son dosyalar menüsü.
+    /// Klasör yığını (İndirilenler ya da ayarlardan eklenen): klasördeki en
+    /// yeni dosya, klasör ve kısayollar yan yana simge ızgarasında.
     pub fn stack_menu(&mut self, i: usize) {
-        let Some(dir) = win::downloads_dir() else { return };
-        let files = recent_downloads(&dir);
-        // Simgeler saklanır; USB/ağdaki İndirilenler menüyü bekletmez.
-        let icon = |p: &str| crate::iconcache::shell(p, 24).map(Icon::Image).unwrap_or(Icon::None);
-        let mut rows = vec![Row::Item { id: 1, text: t!("İndirilenler klasörünü aç", "Open Downloads folder").into(), icon: Icon::Glyph('\u{E838}', None) }];
-        if files.is_empty() {
-            rows.push(Row::Sep);
-            rows.push(Row::Label(t!("Henüz indirilen dosya yok", "No downloads yet").into(), Icon::None));
-        } else {
-            rows.push(Row::Header(t!("Son indirilenler", "Recent downloads").into()));
-            // En yeni en altta: ikona en yakın.
-            for (n, p) in files.iter().enumerate().rev() {
-                let name = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-                rows.push(Row::Item { id: 10 + n, text: name, icon: icon(&p.display().to_string()) });
-            }
+        let Some(e) = self.entries.get(i) else { return };
+        let downloads = e.key == "downloads";
+        let dir = if e.exe.is_empty() { win::downloads_dir() } else { Some(PathBuf::from(&e.exe)) };
+        let Some(dir) = dir else { return };
+        let name = e.name.clone();
+        let files = recent_files(&dir, downloads);
+        // Simgeler saklanır; USB/ağdaki İndirilenler pencereyi bekletmez.
+        let icon = |p: &str| crate::iconcache::shell(p, 64).map(Icon::Image).unwrap_or(Icon::None);
+        let cells: Vec<Cell> = files
+            .iter()
+            .enumerate()
+            .map(|(n, p)| {
+                let mut text = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+                // Kısayolların uzantısı gösterilmez (Gezgin gibi).
+                for ext in [".lnk", ".url"] {
+                    if text.to_lowercase().ends_with(ext) {
+                        text.truncate(text.len() - ext.len());
+                    }
+                }
+                Cell { id: 10 + n, text, icon: icon(&p.display().to_string()) }
+            })
+            .collect();
+        let empty = if downloads { t!("Henüz indirilen dosya yok", "No downloads yet") } else { t!("Klasör boş", "Folder is empty") };
+        let (at, side) = self.menu_at(i);
+        self.menu_open = true;
+        let id = glassgrid::run_side(self.hwnd, &name, (1, t!("Klasörü aç", "Open folder").into()), empty, cells, self.cfg.dock.menu_accent_color(glassmenu::accent), at, side).unwrap_or(0);
+        self.menu_open = false;
+        unsafe {
+            let _ = PostMessageW(self.hwnd, WM_NULL, WPARAM(0), LPARAM(0));
         }
-        match self.menu(i, rows) {
+        match id {
             1 => open(&dir.display().to_string()),
             id if id >= 10 => {
                 if let Some(p) = files.get(id - 10) {

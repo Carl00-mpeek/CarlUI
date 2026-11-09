@@ -16,7 +16,7 @@ use std::{
 use windows::{
     Win32::{
         Foundation::*,
-        Graphics::Dwm::*,
+        Graphics::{Dwm::*, Gdi::{MonitorFromWindow, HMONITOR, MONITOR_DEFAULTTONEAREST}},
         UI::{Accessibility::*, WindowsAndMessaging::*},
     },
 };
@@ -28,6 +28,8 @@ pub const WM_APP_MINMAX: u32 = WM_APP + 13;
 static NOTIFY: AtomicIsize = AtomicIsize::new(0);
 static PENDING: AtomicBool = AtomicBool::new(false);
 static PENDING_LOC: AtomicBool = AtomicBool::new(false);
+/// Yalnızca bir monitörün pencereleri gösteriliyor: taşınan pencere listeyi değiştirir.
+static FILTERED: AtomicBool = AtomicBool::new(false);
 
 /// Konum mesajı işlendi; bir sonraki konum olayı yeni mesaj atabilir.
 pub fn location_handled() {
@@ -51,6 +53,9 @@ pub struct Tracker {
     watching: bool,
     follow_hook: HWINEVENTHOOK,
     follow_pid: u32,
+    /// Birden çok ekranda dock varken: yalnızca bu monitördeki pencereler.
+    monitor: Option<HMONITOR>,
+    move_hook: HWINEVENTHOOK,
 }
 
 unsafe extern "system" fn on_event(_: HWINEVENTHOOK, event: u32, hwnd: HWND, id_object: i32, id_child: i32, _: u32, _: u32) {
@@ -59,6 +64,9 @@ unsafe extern "system" fn on_event(_: HWINEVENTHOOK, event: u32, hwnd: HWND, id_
     }
     // Konum değişimleri yalnızca intellihide için: pencere listesini yeniden okumaya gerek yok.
     if event == EVENT_OBJECT_LOCATIONCHANGE || event == EVENT_SYSTEM_MOVESIZEEND {
+        if event == EVENT_SYSTEM_MOVESIZEEND && FILTERED.load(Ordering::SeqCst) && !PENDING.swap(true, Ordering::SeqCst) {
+            let _ = PostMessageW(HWND(NOTIFY.load(Ordering::SeqCst) as _), WM_APP_WINDOWS, WPARAM(0), LPARAM(0));
+        }
         if !PENDING_LOC.swap(true, Ordering::SeqCst) {
             let _ = PostMessageW(HWND(NOTIFY.load(Ordering::SeqCst) as _), WM_APP_LOCATION, WPARAM(0), LPARAM(0));
         }
@@ -156,9 +164,30 @@ impl Tracker {
             watching: false,
             follow_hook: HWINEVENTHOOK::default(),
             follow_pid: 0,
+            monitor: None,
+            move_hook: HWINEVENTHOOK::default(),
         };
         t.refresh();
         t
+    }
+
+    /// Yalnızca verilen monitördeki pencereleri listele (`None`: hepsi).
+    /// Pencere başka ekrana sürüklenince liste yenilensin diye taşıma bitişi dinlenir.
+    pub fn set_monitor(&mut self, m: Option<HMONITOR>) {
+        if self.monitor == m {
+            return;
+        }
+        self.monitor = m;
+        FILTERED.store(m.is_some(), Ordering::SeqCst);
+        unsafe {
+            if m.is_some() && self.move_hook.is_invalid() {
+                self.move_hook = SetWinEventHook(EVENT_SYSTEM_MOVESIZEEND, EVENT_SYSTEM_MOVESIZEEND, None, Some(on_event), 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            } else if m.is_none() && !self.move_hook.is_invalid() {
+                let _ = UnhookWinEvent(self.move_hook);
+                self.move_hook = HWINEVENTHOOK::default();
+            }
+        }
+        self.refresh();
     }
 
     /// Intellihide açıkken pencere taşıma/boyutlandırma olaylarını da dinle.
@@ -219,7 +248,12 @@ impl Tracker {
         unsafe {
             let _ = EnumWindows(Some(cb), LPARAM(&mut found as *mut _ as isize));
         }
-        let live: Vec<HWND> = found.into_iter().filter(|&h| is_app_window(h, self.own_pid)).collect();
+        let mon = self.monitor;
+        let live: Vec<HWND> = found
+            .into_iter()
+            .filter(|&h| is_app_window(h, self.own_pid))
+            .filter(|&h| mon.is_none_or(|m| unsafe { MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST) } == m))
+            .collect();
 
         let mut next: Vec<Window> = self
             .windows
@@ -250,6 +284,11 @@ impl Drop for Tracker {
             }
         }
         self.unhook_follow();
+        if !self.move_hook.is_invalid() {
+            unsafe {
+                let _ = UnhookWinEvent(self.move_hook);
+            }
+        }
     }
 }
 

@@ -197,6 +197,8 @@ pub struct Panel {
     height: f32,
     /// Yeniden kurulumda cam bu yükseklikten yeni yüksekliğe uzasın.
     grow_from: Option<f32>,
+    /// Dock hangi kenarda: 0 alt, 1 sol, 2 sağ (panel dock'un iç yanında açılır).
+    pub side: u8,
 }
 
 impl Panel {
@@ -252,6 +254,7 @@ impl Panel {
             rebuild: false,
             height: 0.0,
             grow_from: None,
+            side: 0,
         })
     }
 

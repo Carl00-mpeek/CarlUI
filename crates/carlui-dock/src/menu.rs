@@ -125,7 +125,7 @@ fn jump_icon(icon: &(String, i32), target: &str) -> Option<Icon> {
 /// `suspended`: uygulamanın çalışan süreci varsa durdurulmuş mu (yoksa `None`).
 /// `jump`: uygulamanın kendi görevleri (Firefox: gizli pencere vb.).
 /// `cfg`: başlık rengi ayarı (`dock.menu_accent`).
-pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Option<bool>, jump: &[Group], at: (i32, i32)) -> Cmd {
+pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Option<bool>, jump: &[Group], at: (i32, i32), side: i32) -> Cmd {
     let item =|id: usize, text: &str, icon: Icon| Row::Item { id, text: text.to_string(), icon };
     let glyph = |c: char| Icon::Glyph(c, None);
     let mut rows = Vec::new();
@@ -173,7 +173,7 @@ pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Opti
         }
     }
 
-    let id = glassmenu::run(hwnd, rows, cfg.menu_accent_color(glassmenu::accent), at).unwrap_or(0);
+    let id = glassmenu::run_side(hwnd, rows, cfg.menu_accent_color(glassmenu::accent), at, side).unwrap_or(0);
     unsafe {
         // Menü kapandı; odağı alttaki pencereye geri bırak.
         let _ = PostMessageW(hwnd, WM_NULL, WPARAM(0), LPARAM(0));

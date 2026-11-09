@@ -5,6 +5,7 @@
 
 pub mod gfx;
 pub mod glass;
+pub mod glassgrid;
 pub mod glassmenu;
 pub mod icons;
 pub mod motion;

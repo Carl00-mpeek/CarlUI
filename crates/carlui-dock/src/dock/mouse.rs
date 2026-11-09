@@ -49,46 +49,81 @@ impl Dock {
         }
     }
 
-    pub(super) fn local_x(&self, x: i32) -> f32 {
-        x as f32 - self.win_w / 2.0
+    /// Boyuna istemci konumunu dock ortasına göre çevirir.
+    pub(super) fn local_a(&self, a: i32) -> f32 {
+        a as f32 - self.len / 2.0
     }
 
     pub fn hit(&self, x: i32, y: i32) -> Option<usize> {
-        let lx = self.local_x(x);
-        let ly = y as f32 - self.m.top;
-        if !(0.0..=self.m.h).contains(&ly) || self.slid_away {
+        let la = self.local_a(self.along_of(x, y));
+        let across = if self.vert() { x } else { y };
+        let lc = across as f32 - self.c0();
+        if !(0.0..=self.m.h).contains(&lc) || self.slid_away {
             return None;
         }
-        self.entries.iter().position(|e| e.leaving.is_none() && (lx - e.x).abs() <= self.m.slot / 2.0)
+        self.entries.iter().position(|e| e.leaving.is_none() && (la - e.x).abs() <= self.m.slot / 2.0)
     }
 
-    /// Bir öğenin üstündeki ekran noktası (etiket/önizleme/menü konumu için).
+    /// Bir öğenin dock'un iç kenarındaki ekran noktası (etiket/önizleme/menü
+    /// konumu için): altta üst kenar, solda sağ kenar, sağda sol kenar.
     pub fn anchor(&self, i: usize) -> (i32, i32) {
-        let x = self.mon.left + (self.win_w / 2.0 + self.entries[i].x) as i32;
-        let y = self.mon.bottom - (self.m.bottom + self.m.h) as i32;
-        (x, y)
+        let a = (self.len / 2.0 + self.entries[i].x) as i32;
+        let c0 = self.c0() as i32;
+        let (wx, wy) = self.wpos;
+        match self.side {
+            DockPosition::Bottom => (wx + a, wy + c0),
+            DockPosition::Left => (wx + c0 + self.m.h as i32, wy + a),
+            DockPosition::Right => (wx + c0, wy + a),
+        }
     }
 
-    /// Tray düğmesinin ekran dikdörtgeni ve dock'un üst kenarı (tray paneli balonu buradan çıkar).
+    /// Menünün açılacağı nokta ve yönü (glassmenu::run_side için).
+    pub fn menu_at(&self, i: usize) -> ((i32, i32), i32) {
+        let (x, y) = self.anchor(i);
+        let g = (6.0 * self.m.s) as i32;
+        match self.side {
+            DockPosition::Bottom => ((x, y - g), 0),
+            DockPosition::Left => ((x + g, y), 1),
+            DockPosition::Right => ((x - g, y), -1),
+        }
+    }
+
+    /// Tray düğmesinin ekran dikdörtgeni ve dock'un iç kenarı (tray paneli balonu buradan çıkar).
     pub fn tray_button(&self, i: usize) -> (RECT, i32) {
         let (cx, cy) = self.icon_center(i);
         let half = (self.m.icon * 0.62) as i32;
         let r = RECT { left: cx - half, top: cy - half, right: cx + half, bottom: cy + half };
-        (r, self.anchor(i).1)
+        let (ax, ay) = self.anchor(i);
+        (r, if self.vert() { ax } else { ay })
     }
 
     /// Tray paneli açıkken düğmenin oku aşağı döner: yer boş kalmaz ve
     /// "buraya tıklayınca kapanır" der. Kapanınca yeniden yukarı bakar.
     pub fn set_tray_open(&self, open: bool) {
         if let Some(e) = self.entries.iter().find(|e| e.kind == Kind::Tray && e.leaving.is_none()) {
-            let _ = self.motion.animate(&e.slot, h!("RotationAngleInDegrees"), if open { 180.0 } else { 0.0 }, 0.85, 70, 0);
+            let _ = self.motion.animate(&e.slot, h!("RotationAngleInDegrees"), self.tray_angle(open), 0.85, 70, 0);
         }
+    }
+
+    /// Tray okunun açısı: dock'un iç tarafına (panelin açılacağı yöne) bakar.
+    pub(super) fn tray_angle(&self, open: bool) -> f32 {
+        let base = match self.side {
+            DockPosition::Bottom => 0.0,
+            DockPosition::Left => 90.0,
+            DockPosition::Right => -90.0,
+        };
+        if open { base + 180.0 } else { base }
     }
 
     /// İkonun ekran üzerindeki merkezi (test ve tanı için).
     pub fn icon_center(&self, i: usize) -> (i32, i32) {
-        let (x, top) = self.anchor(i);
-        (x, top + (self.m.h / 2.0) as i32)
+        let (x, y) = self.anchor(i);
+        let half = (self.m.h / 2.0) as i32;
+        match self.side {
+            DockPosition::Bottom => (x, y + half),
+            DockPosition::Left => (x - half, y),
+            DockPosition::Right => (x + half, y),
+        }
     }
 
     pub fn scale(&self) -> f32 {
@@ -97,16 +132,17 @@ impl Dock {
 
     pub fn mouse_move(&mut self, x: i32, y: i32) {
         self.mouse_inside = true;
-        if let Some((i, px, _)) = self.press {
+        if let Some((i, px, py)) = self.press {
             let draggable = self.entries[i].kind == Kind::App;
-            if self.drag.is_none() && draggable && (x - px).abs() as f32 > 6.0 * self.m.s {
-                let grab = self.local_x(px) - self.entries[i].x;
+            let (a, pa) = (self.along_of(x, y), self.along_of(px, py));
+            if self.drag.is_none() && draggable && (a - pa).abs() as f32 > 6.0 * self.m.s {
+                let grab = self.local_a(pa) - self.entries[i].x;
                 self.drag = Some(Drag { index: i, grab, insert: None });
                 let _ = self.motion.scale(&self.entries[i].slot, 1.12, 0.7, 40, 0);
                 let _ = self.set_hover(None);
             }
             if self.drag.is_some() {
-                let _ = self.drag_to(x);
+                let _ = self.drag_to(a);
             }
             return;
         }
@@ -160,11 +196,12 @@ impl Dock {
         order.iter().rposition(|&i| self.entries[i].group == 0)
     }
 
-    pub(super) fn drag_to(&mut self, x: i32) -> Result<()> {
+    /// `a`: imlecin boyuna istemci konumu.
+    pub(super) fn drag_to(&mut self, a: i32) -> Result<()> {
         let Some(drag) = self.drag.as_ref() else { return Ok(()) };
         let di = drag.index;
-        let lx = self.local_x(x) - drag.grab;
-        self.entries[di].slot.SetOffset(v3(lx - self.m.slot / 2.0, 0.0))?;
+        let lx = self.local_a(a) - drag.grab;
+        self.entries[di].slot.SetOffset(self.pv(lx - self.m.slot / 2.0, 0.0))?;
 
         // Hedef sıra: imlecin geçtiği sabitlenmiş öğe merkezlerine göre.
         let pinned: Vec<usize> = self.pinned_indices().into_iter().filter(|&i| i != di).collect();

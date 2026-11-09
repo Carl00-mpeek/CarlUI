@@ -44,15 +44,33 @@ impl Panel {
             self.stagger = all;
         }
 
-        let mon = carlui_core::win::primary_monitor().map(|m| m.rect).unwrap_or_default();
-        let bcx = (button.left + button.right) / 2;
-        let px = (bcx as f32 - w / 2.0).clamp(mon.left as f32 + 12.0 * s, mon.right as f32 - 12.0 * s - w).round() as i32;
-        let pbottom = dock_top - (10.0 * s) as i32;
-        let ptop = pbottom - h as i32;
-        let wl = px.min(button.left) - margin as i32;
-        let wr = (px + w as i32).max(button.right) + margin as i32;
-        let wt = ptop - margin as i32;
-        let wb = button.bottom;
+        // Düğmenin bulunduğu monitör (dock başka ekranda da olabilir).
+        let (bcx, bcy) = ((button.left + button.right) / 2, (button.top + button.bottom) / 2);
+        let mons = carlui_core::win::monitors();
+        let mon = mons
+            .iter()
+            .find(|m| bcx >= m.rect.left && bcx < m.rect.right && bcy >= m.rect.top && bcy < m.rect.bottom)
+            .or_else(|| mons.iter().find(|m| m.primary))
+            .map(|m| m.rect)
+            .unwrap_or_default();
+        let gap = (10.0 * s) as i32;
+        let edge = 12.0 * s;
+        let clamp_x = |x: f32| x.clamp(mon.left as f32 + edge, mon.right as f32 - edge - w).round() as i32;
+        let clamp_y = |y: f32| y.clamp(mon.top as f32 + edge, (mon.bottom as f32 - edge - h).max(mon.top as f32 + edge)).round() as i32;
+        // `dock_top`: dock camının iç kenarı (alt dock'ta üst kenarın y'si,
+        // yan dock'ta iç kenarın x'i).
+        let (px, ptop) = match self.side {
+            1 => (dock_top + gap, clamp_y(bcy as f32 - h / 2.0)),
+            2 => (dock_top - gap - w as i32, clamp_y(bcy as f32 - h / 2.0)),
+            _ => (clamp_x(bcx as f32 - w / 2.0), dock_top - gap - h as i32),
+        };
+        let pbottom = ptop + h as i32;
+        let m = margin as i32;
+        let (wl, wr, wt, wb) = if self.side == 0 {
+            (px.min(button.left) - m, (px + w as i32).max(button.right) + m, ptop - m, button.bottom)
+        } else {
+            (px.min(button.left) - m, (px + w as i32).max(button.right) + m, ptop.min(button.top) - m, pbottom.max(button.bottom) + m)
+        };
         self.panel = RECT { left: px - wl, top: ptop - wt, right: px - wl + w as i32, bottom: pbottom - wt };
         self.button = RECT { left: button.left - wl, top: button.top - wt, right: button.right - wl, bottom: button.bottom - wt };
         OUT_L.store(wl, Ordering::SeqCst);
@@ -189,7 +207,12 @@ impl Panel {
                 CreateRectRgn(0, 0, self.win_size.0, self.win_size.1)
             } else {
                 let r1 = CreateRectRgn(self.panel.left, self.panel.top, self.panel.right + 1, self.panel.bottom + 1);
-                let r2 = CreateRectRgn(self.button.left, self.panel.bottom - 2, self.button.right, self.button.bottom);
+                // Alt dock'ta panelden düğmeye inen şerit; yan dock'ta yalnızca düğme.
+                let r2 = if self.side == 0 {
+                    CreateRectRgn(self.button.left, self.panel.bottom - 2, self.button.right, self.button.bottom)
+                } else {
+                    CreateRectRgn(self.button.left, self.button.top, self.button.right, self.button.bottom)
+                };
                 let _ = CombineRgn(r1, r1, r2, RGN_OR);
                 let _ = DeleteObject(r2);
                 r1

@@ -26,7 +26,7 @@ use crate::{
     tracker::{self, Tracker},
 };
 use carlui_core::{
-    config::{expand_env, Config, DockBehavior, Pinned},
+    config::{expand_env, Config, DockBehavior, DockPosition, Pinned},
     theme::Theme,
     win,
 };
@@ -142,11 +142,19 @@ pub struct Dock {
     seps: Vec<SpriteVisual>,
     dot_brush: CompositionSurfaceBrush,
     active_brush: CompositionSurfaceBrush,
+    /// Çizgi göstergesi fırçaları, `(n - 1) * 2 + önde` sırasıyla; noktalı modda boş.
+    line_brushes: Vec<CompositionSurfaceBrush>,
     hl_brush: CompositionColorBrush,
     m: Metrics,
     mon: RECT,
+    /// Yaslandığı kenar; dikeyde "boyuna" eksen Y'dir (bkz. `pv`, `ps`).
+    side: DockPosition,
+    /// Pencerenin ekrandaki sol-üst köşesi.
+    wpos: (i32, i32),
     win_w: f32,
     win_h: f32,
+    /// Pencerenin boyuna uzunluğu (yatayda genişlik, dikeyde yükseklik).
+    len: f32,
     width: f32,
     region_w: f32,
     hovered: Option<usize>,
@@ -190,7 +198,8 @@ fn window_bounds(hwnd: HWND) -> Option<RECT> {
 }
 
 impl Dock {
-    pub fn new(gfx: &Gfx, hwnd: HWND, target: &DesktopWindowTarget, cfg: &Config, tracker: &Tracker) -> Result<Self> {
+    /// `screen`: dock'un durduğu monitörün dikdörtgeni (ana dock'ta ana monitör).
+    pub fn new(gfx: &Gfx, hwnd: HWND, target: &DesktopWindowTarget, cfg: &Config, tracker: &Tracker, screen: RECT) -> Result<Self> {
         let theme = Theme::from_config(&cfg.theme);
         let s = unsafe { GetDpiForWindow(hwnd) } as f32 / 96.0;
         let icon = (cfg.dock.icon_size.clamp(20.0, 64.0) * s).round();
@@ -210,27 +219,42 @@ impl Dock {
         let comp = gfx.comp.clone();
         let motion = Motion::new(&comp, &theme);
 
-        // Ana monitörün tamamı: görev çubuğu gizliyken çalışma alanı da tam ekran.
-        let mon = win::primary_monitor().map(|m| m.rect).unwrap_or_default();
-        let win_w = (mon.right - mon.left) as f32;
-        let win_h = m.top + m.h + m.bottom;
+        // Monitörün tamamı: görev çubuğu gizliyken çalışma alanı da tam ekran.
+        let mon = screen;
+        let side = cfg.dock.position;
+        let thick = m.top + m.h + m.bottom;
+        let (mw, mh) = ((mon.right - mon.left) as f32, (mon.bottom - mon.top) as f32);
+        let (wpos, win_w, win_h, len) = match side {
+            DockPosition::Bottom => ((mon.left, mon.bottom - thick as i32), mw, thick, mw),
+            DockPosition::Left => ((mon.left, mon.top), thick, mh, mh),
+            DockPosition::Right => ((mon.right - thick as i32, mon.top), thick, mh, mh),
+        };
         unsafe {
-            SetWindowPos(hwnd, HWND_TOPMOST, mon.left, mon.bottom - win_h as i32, win_w as i32, win_h as i32, SWP_NOACTIVATE)?;
+            SetWindowPos(hwnd, HWND_TOPMOST, wpos.0, wpos.1, win_w as i32, win_h as i32, SWP_NOACTIVATE)?;
         }
+        let vert = side.vertical();
+        // Pill'in enine konumu: altta ve sağda üst/iç boşluktan sonra, solda kenar boşluğundan sonra.
+        let c0 = if side == DockPosition::Left { m.bottom } else { m.top };
 
         let root = comp.CreateContainerVisual()?;
         target.SetRoot(&root)?;
 
         let glass = Glass::new(&comp, &theme, m.radius)?;
-        // Ortadan büyüsün diye anchor ortada.
-        glass.root.SetAnchorPoint(v2(0.5, 0.0))?;
-        glass.root.SetOffset(v3(win_w / 2.0, m.top))?;
+        // Ortadan büyüsün diye anchor boyuna eksende ortada.
+        if vert {
+            glass.root.SetAnchorPoint(v2(0.0, 0.5))?;
+            glass.root.SetOffset(v3(c0, len / 2.0))?;
+        } else {
+            glass.root.SetAnchorPoint(v2(0.5, 0.0))?;
+            glass.root.SetOffset(v3(len / 2.0, c0))?;
+        }
         glass.root.SetSize(v2(m.h, m.h))?;
         root.Children()?.InsertAtTop(&glass.root)?;
 
         // Öğe katmanı gövdenin ortasına bağlı; slotların konumu ortaya göre.
         let items = comp.CreateContainerVisual()?;
-        let center = comp.CreateExpressionAnimationWithExpression(h!("Vector3(r.Size.X / 2, 0, 0)"))?;
+        let expr = HSTRING::from(if vert { "Vector3(0, r.Size.Y / 2, 0)" } else { "Vector3(r.Size.X / 2, 0, 0)" });
+        let center = comp.CreateExpressionAnimationWithExpression(&expr)?;
         center.SetReferenceParameter(h!("r"), &glass.root)?;
         items.StartAnimation(h!("Offset"), &center)?;
         glass.content.Children()?.InsertAtTop(&items)?;
@@ -238,11 +262,25 @@ impl Dock {
         let (dw, dh) = ((4.0 * s).round(), (4.0 * s).round());
         let dot = gfx.surface(dw, dh, |dc| icons::draw_dot(dc, dw, dh, None))?;
         let (aw, ah) = ((14.0 * s).round(), (4.0 * s).round());
+        let (aw, ah) = if vert { (ah, aw) } else { (aw, ah) };
         let (a0, a1) = theme.accent;
         let accent = gfx.surface(aw, ah, |dc| icons::draw_dot(dc, aw, ah, Some(((a0.0, a0.1, a0.2), (a1.0, a1.1, a1.2)))))?;
         let dot_brush = comp.CreateSurfaceBrushWithSurface(&dot)?;
         let active_brush = comp.CreateSurfaceBrushWithSurface(&accent)?;
         let hl_brush = comp.CreateColorBrushWithColor(carlui_ui::glass::exact(theme.hover))?;
+        // Çizgi göstergesi: 1-4 pencere x (arka plan, önde) için hazır yüzeyler.
+        let mut line_brushes = Vec::new();
+        if cfg.dock.line_indicator {
+            let (len, thick) = ((26.0 * s).round(), (3.0 * s).round().max(2.0));
+            let (lw, lh) = if vert { (thick, len) } else { (len, thick) };
+            for n in 1..=4usize {
+                for active in [false, true] {
+                    let acc = active.then_some(((a0.0, a0.1, a0.2), (a1.0, a1.1, a1.2)));
+                    let sf = gfx.surface(lw, lh, |dc| icons::draw_split_line(dc, len, thick, n, acc, vert))?;
+                    line_brushes.push(comp.CreateSurfaceBrushWithSurface(&sf)?);
+                }
+            }
+        }
 
         let mut dock = Self {
             hwnd,
@@ -256,11 +294,15 @@ impl Dock {
             seps: Vec::new(),
             dot_brush,
             active_brush,
+            line_brushes,
             hl_brush,
             m,
             mon,
+            side,
+            wpos,
             win_w,
             win_h,
+            len,
             width: m.h,
             region_w: 0.0,
             hovered: None,
@@ -275,6 +317,80 @@ impl Dock {
         dock.sync(gfx, tracker, false)?;
         dock.intro()?;
         Ok(dock)
+    }
+
+    // ---- eksen yardımcıları: a = boyuna (öğelerin dizildiği), c = enine ----
+
+    pub fn side(&self) -> DockPosition {
+        self.side
+    }
+
+    /// Çark dock'ta gösterilecek uygulamalar (dock sırasıyla, en çok `max`).
+    pub fn radial_items(&self, max: usize) -> Vec<usize> {
+        (0..self.entries.len()).filter(|&i| self.entries[i].kind == Kind::App && self.entries[i].leaving.is_none()).take(max).collect()
+    }
+
+    /// Öğenin simge fırçası (çark dock aynı simgeyi yeniden çizmeden paylaşır).
+    pub fn icon_brush(&self, i: usize) -> Option<CompositionBrush> {
+        self.entries.get(i)?.icon.Brush().ok()
+    }
+
+    fn vert(&self) -> bool {
+        self.side.vertical()
+    }
+
+    /// Boyuna/enine konumdan görsel konumu.
+    fn pv(&self, a: f32, c: f32) -> Vector3 {
+        if self.vert() { v3(c, a) } else { v3(a, c) }
+    }
+
+    /// Boyuna/enine boyuttan görsel boyutu.
+    fn ps(&self, a: f32, c: f32) -> windows::Foundation::Numerics::Vector2 {
+        if self.vert() { v2(c, a) } else { v2(a, c) }
+    }
+
+    fn along_prop(&self) -> HSTRING {
+        HSTRING::from(if self.vert() { "Offset.Y" } else { "Offset.X" })
+    }
+
+    fn across_prop(&self) -> HSTRING {
+        HSTRING::from(if self.vert() { "Offset.X" } else { "Offset.Y" })
+    }
+
+    fn size_prop(&self) -> HSTRING {
+        HSTRING::from(if self.vert() { "Size.Y" } else { "Size.X" })
+    }
+
+    /// Pill'in pencere içindeki enine konumu (görünürken).
+    fn c0(&self) -> f32 {
+        if self.side == DockPosition::Left { self.m.bottom } else { self.m.top }
+    }
+
+    /// Otomatik gizlemede pill'in kaydığı enine konum (ekranın dışı).
+    fn c_hidden(&self) -> f32 {
+        let gap = 8.0 * self.m.s;
+        match self.side {
+            DockPosition::Bottom => self.win_h + gap,
+            DockPosition::Left => -(self.m.h + gap),
+            DockPosition::Right => self.win_w + gap,
+        }
+    }
+
+    /// İstemci noktasının boyuna bileşeni.
+    fn along_of(&self, x: i32, y: i32) -> i32 {
+        if self.vert() { y } else { x }
+    }
+
+    /// Pill'in ekran dikdörtgeni (verilen boyuna uzunlukla).
+    fn pill_rect(&self, w: f32) -> RECT {
+        let a0 = ((self.len - w) / 2.0).floor() as i32;
+        let c0 = self.c0() as i32;
+        let (l, t, r, b) = if self.vert() {
+            (c0, a0, c0 + self.m.h as i32, a0 + w.ceil() as i32)
+        } else {
+            (a0, c0, a0 + w.ceil() as i32, c0 + self.m.h as i32)
+        };
+        RECT { left: self.wpos.0 + l, top: self.wpos.1 + t, right: self.wpos.0 + r, bottom: self.wpos.1 + b }
     }
 
     fn pins(&self) -> Vec<Pinned> {
@@ -307,8 +423,13 @@ impl Dock {
 
         let comp = &self.comp;
         let slot = comp.CreateContainerVisual()?;
-        slot.SetSize(v2(m.slot, m.h))?;
-        slot.SetCenterPoint(Vector3 { X: m.slot / 2.0, Y: m.h / 2.0, Z: 0.0 })?;
+        let sz = self.ps(m.slot, m.h);
+        let (sw, sh) = (sz.X, sz.Y);
+        slot.SetSize(sz)?;
+        slot.SetCenterPoint(Vector3 { X: sw / 2.0, Y: sh / 2.0, Z: 0.0 })?;
+        if kind == Kind::Tray {
+            slot.SetRotationAngleInDegrees(self.tray_angle(false))?;
+        }
         let kids = slot.Children()?;
 
         let hl_geom = comp.CreateRoundedRectangleGeometry()?;
@@ -321,7 +442,7 @@ impl Dock {
         hl.SetSize(v2(m.hl, m.hl))?;
         hl.Shapes()?.Append(&hl_shape)?;
         hl.SetOpacity(0.0)?;
-        hl.SetOffset(v3((m.slot - m.hl) / 2.0, (m.h - m.hl) / 2.0))?;
+        hl.SetOffset(v3((sw - m.hl) / 2.0, (sh - m.hl) / 2.0))?;
         kids.InsertAtTop(&hl)?;
 
         let brush = comp.CreateSurfaceBrushWithSurface(&surface)?;
@@ -329,8 +450,14 @@ impl Dock {
         let icon = comp.CreateSpriteVisual()?;
         icon.SetSize(v2(px, px))?;
         icon.SetBrush(&brush)?;
-        icon.SetOffset(v3((m.slot - px) / 2.0, (m.h - px) / 2.0))?;
-        icon.SetCenterPoint(Vector3 { X: px / 2.0, Y: px * 0.85, Z: 0.0 })?;
+        icon.SetOffset(v3((sw - px) / 2.0, (sh - px) / 2.0))?;
+        // Hover büyümesi ekran kenarına yakın taraftan (yukarı/içeri doğru) olsun.
+        let cp = match self.side {
+            DockPosition::Bottom => (px / 2.0, px * 0.85),
+            DockPosition::Left => (px * 0.15, px / 2.0),
+            DockPosition::Right => (px * 0.85, px / 2.0),
+        };
+        icon.SetCenterPoint(Vector3 { X: cp.0, Y: cp.1, Z: 0.0 })?;
         kids.InsertAtTop(&icon)?;
 
         let dots = comp.CreateContainerVisual()?;
@@ -453,13 +580,36 @@ impl Dock {
         };
         if self.cfg.dock.downloads_stack {
             if let Some(d) = win::downloads_dir() {
-                want.push(place("downloads", Kind::Folder, t!("İndirilenler", "Downloads"), d.display().to_string()));
+                let p = d.display().to_string();
+                let mut w = place("downloads", Kind::Folder, t!("İndirilenler", "Downloads"), p.clone());
+                w.exe = p;
+                want.push(w);
             }
+        }
+        // Klasör yığınları: Kind::Folder, klasör yolu `exe` alanında.
+        for name in &self.cfg.dock.stacks {
+            let name = name.trim();
+            if name.is_empty() || name == "downloads" {
+                continue;
+            }
+            let Some(dir) = win::stack_dir(name) else { continue };
+            let p = dir.display().to_string();
+            let key = format!("stack:{}", p.to_lowercase());
+            if want.iter().any(|w| w.key == key) {
+                continue;
+            }
+            let label = places::stack_label(name, &dir);
+            let mut w = place(&key, Kind::Folder, &label, p.clone());
+            w.exe = p;
+            want.push(w);
         }
         if self.cfg.dock.recycle_bin {
             want.push(place("trash", Kind::Trash, t!("Geri Dönüşüm Kutusu", "Recycle Bin"), places::RECYCLE_BIN.into()));
         }
-        want.push(glyph("tray", Kind::Tray, 3, "Tray"));
+        // Tray paneli tek: düğmesi yalnızca ana dock'ta.
+        if crate::screens::child().is_none() {
+            want.push(glyph("tray", Kind::Tray, 3, "Tray"));
+        }
 
         let hovered_key = self.hovered.and_then(|i| self.entries.get(i)).map(|e| e.key.clone());
         let mut old: Vec<Entry> = std::mem::take(&mut self.entries);

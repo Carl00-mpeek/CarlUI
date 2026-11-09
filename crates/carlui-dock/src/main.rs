@@ -20,7 +20,9 @@ mod menu;
 mod fly;
 mod popup;
 mod procs;
+mod radial;
 mod resolver;
+mod screens;
 mod tracker;
 
 use carlui_core::{
@@ -67,6 +69,8 @@ struct App {
     hwnd: HWND,
     dock: Dock,
     popup: Popup,
+    /// Çark dock (yalnızca ana dock; ek ekran kopyalarında yok).
+    radial: Option<radial::Radial>,
     tracker: Tracker,
     input: Option<Input>,
     bus: BusClient,
@@ -121,10 +125,88 @@ impl App {
             WinKey::Search if cfg.launcher.enabled => 1,
             _ => 0,
         };
-        self.input = Input::start(self.hwnd, edge, k.app_number_mods(), start, cfg.clipboard.enabled.then(|| k.clipboard_combo()).flatten(), k.converter_mods());
+        // Ek ekran dock'u yalnızca kenar algılar; kısayollar ana dock'ta.
+        self.input = if screens::child().is_some() {
+            Input::start(self.hwnd, edge, None, 0, None, None)
+        } else {
+            Input::start(self.hwnd, edge, k.app_number_mods(), start, cfg.clipboard.enabled.then(|| k.clipboard_combo()).flatten(), k.converter_mods())
+        };
         input::set_fullscreen(self.fullscreen);
         self.watch_locations();
         self.update_span();
+        self.register_radial();
+    }
+
+    /// Çark dock kısayolunu ayara göre kaydeder ya da kaldırır.
+    fn register_radial(&mut self) {
+        let Some(r) = self.radial.as_mut() else { return };
+        carlui_core::hotkey::unregister(self.hwnd, radial::HOTKEY_ID);
+        r.vk = 0;
+        if !self.dock.cfg.dock.radial {
+            return;
+        }
+        if let Some(c) = self.dock.cfg.shortcuts.radial_combo() {
+            match carlui_core::hotkey::register(self.hwnd, radial::HOTKEY_ID, c) {
+                Ok(()) => {
+                    r.vk = c.vk;
+                    info!("çark dock kısayolu: {}", self.dock.cfg.shortcuts.radial);
+                }
+                Err(e) => carlui_core::warn!("çark dock kısayolu alınamadı: {e}"),
+            }
+        }
+    }
+
+    /// Kısayol: kapalıysa imleçte açar, açıksa kapatır.
+    fn toggle_radial(&mut self, sticky: bool, at: Option<(i32, i32)>) {
+        let hwnd = self.hwnd;
+        let Some(r) = self.radial.as_mut() else { return };
+        if r.open {
+            r.hide(hwnd);
+            self.popup.hide();
+            return;
+        }
+        if self.fullscreen {
+            return;
+        }
+        self.popup.hide();
+        if let Err(e) = r.show(&self.gfx, &self.dock, hwnd, at) {
+            carlui_core::warn!("çark dock açılamadı: {e}");
+        }
+        if sticky {
+            r.set_sticky();
+        }
+    }
+
+    fn radial_tick(&mut self) {
+        let hwnd = self.hwnd;
+        let Some(r) = self.radial.as_mut() else { return };
+        match r.tick() {
+            radial::Tick::Idle => {}
+            radial::Tick::Hover => match r.hovered() {
+                Some((k, i)) => {
+                    let anchor = r.label_anchor(k);
+                    let e = &self.dock.entries[i];
+                    let (key, name) = (e.key.clone(), e.name.clone());
+                    let side = self.popup.side;
+                    self.popup.side = config::DockPosition::Bottom;
+                    let _ = self.popup.show_label(&self.gfx, &key, &name, anchor);
+                    self.popup.side = side;
+                }
+                None => self.popup.hide(),
+            },
+            radial::Tick::Activate(i) => {
+                r.hide(hwnd);
+                self.popup.hide();
+                if i < self.dock.entries.len() {
+                    let fg = unsafe { GetForegroundWindow() };
+                    self.dock.activate(i, fg);
+                }
+            }
+            radial::Tick::Close => {
+                r.hide(hwnd);
+                self.popup.hide();
+            }
+        }
     }
 
     /// Tam ekranda dock gizli: oyunun imleç/pencere kıpırtılarını dinlemeye gerek yok.
@@ -132,9 +214,10 @@ impl App {
         self.tracker.watch_locations(!self.fullscreen && self.dock.behavior() == DockBehavior::Intellihide);
     }
 
-    fn update_span(&self) {
-        let (l, r, y) = self.dock.edge_span();
-        input::set_span(l, r, y);
+    fn update_span(&mut self) {
+        let (l, r, edge, side) = self.dock.edge_span();
+        input::set_span(l, r, edge, side);
+        self.popup.side = side;
     }
 
     fn refresh_windows(&mut self) {
@@ -313,21 +396,22 @@ impl App {
             }
             _ => {}
         }
-        let at = match idx {
-            Some(i) => self.dock.anchor(i),
+        let (at, side) = match idx {
+            Some(i) => self.dock.menu_at(i),
             None => {
                 let mut pt = POINT::default();
                 unsafe {
                     let _ = GetCursorPos(&mut pt);
                 }
-                (pt.x, self.dock.anchor(0).1)
+                // Boş yere sağ tık: imlecin hizasında, dock'un iç kenarında.
+                let ((x, y), side) = self.dock.menu_at(0);
+                (if side == 0 { (pt.x, y) } else { (x, pt.y) }, side)
             }
         };
-        let at = (at.0, at.1 - (6.0 * self.dock.scale()) as i32);
         self.dock.menu_open = true;
         let pids = idx.map(|i| procs::pids(&self.dock.entries[i])).unwrap_or_default();
         let jump = idx.filter(|&i| self.dock.entries[i].kind == Kind::App).map(|i| jumplist::load(&self.dock.entries[i])).unwrap_or_default().into_iter().filter(|g| g.title.is_empty() || self.dock.cfg.dock.menu_lists).collect::<Vec<_>>();
-        let cmd = menu::show(self.hwnd, &self.dock.cfg.dock, idx.map(|i| &self.dock.entries[i]), procs::suspended(&pids), &jump, at);
+        let cmd = menu::show(self.hwnd, &self.dock.cfg.dock, idx.map(|i| &self.dock.entries[i]), procs::suspended(&pids), &jump, at, side);
         self.dock.menu_open = false;
         if let menu::Cmd::Jump(n) = cmd {
             if let Some(it) = jump.iter().flat_map(|g| &g.items).nth(n) {
@@ -434,7 +518,11 @@ impl App {
             "input": self.input.is_some(),
             "menu_accent": format!("{:?} {:06x?}", self.dock.cfg.dock.menu_accent, self.dock.cfg.dock.menu_accent_color(carlui_ui::glassmenu::accent)),
         });
-        let path = paths::log_dir().join("..").join("dock-state.json");
+        let file = match screens::child() {
+            Some(n) => format!("dock-state-screen{n}.json"),
+            None => "dock-state.json".into(),
+        };
+        let path = paths::log_dir().join("..").join(file);
         let _ = std::fs::write(path, serde_json::to_vec_pretty(&state).unwrap_or_default());
     }
 
@@ -476,7 +564,19 @@ impl App {
                 }
             }
             Event::Custom { name, .. } if name == "dock-dump" => self.dump_state(),
+            // Test: çark dock imleçte, tıklama bekleyen kipte açılır.
+            Event::Custom { name, data } if name == "dock-radial" => {
+                let at = data.get("x").and_then(|x| x.as_i64()).zip(data.get("y").and_then(|y| y.as_i64())).map(|(x, y)| (x as i32, y as i32));
+                self.toggle_radial(true, at)
+            }
             Event::Custom { name, data } if name == "dock-cmd" => self.cmd_event(&data),
+            // Test: klasör yığınını (anahtarıyla, ör. "downloads") açar.
+            Event::Custom { name, data } if name == "dock-stack" => {
+                let key = data.get("key").and_then(|v| v.as_str()).unwrap_or("downloads");
+                if let Some(i) = self.dock.entries.iter().position(|e| e.kind == Kind::Folder && (e.key == key || e.key.contains(key))) {
+                    self.dock.stack_menu(i);
+                }
+            }
             // Test: enjekte edilen Win tuşu kancada yok sayıldığı için akor bus ile de tetiklenebilir.
             Event::Custom { name, .. } if name == "dock-convert" => procs::converter(),
             Event::Custom { name, .. } if name == "dock-stall-input" => {
@@ -507,8 +607,23 @@ impl App {
             self.dock.cfg = cfg;
             return;
         }
+        // Ek ekran dock'u: seçenek kapandıysa ya da monitörü yoksa kapan.
+        if screens::child().is_some() && (!cfg.dock.other_screens || screens::monitor().is_none()) {
+            info!("ek ekran dock'u kapanıyor");
+            unsafe {
+                let _ = DestroyWindow(self.hwnd);
+            }
+            return;
+        }
+        if cfg.dock.other_screens && !self.dock.cfg.dock.other_screens {
+            screens::spawn(true);
+        }
+        self.tracker.set_monitor(screens::filter(cfg.dock.other_screens));
         self.popup.hide();
-        match Dock::new(&self.gfx, self.hwnd, &self.target, &cfg, &self.tracker) {
+        if let Some(r) = self.radial.as_mut() {
+            r.hide(self.hwnd);
+        }
+        match Dock::new(&self.gfx, self.hwnd, &self.target, &cfg, &self.tracker, screens::rect()) {
             Ok(mut d) => {
                 d.set_suppressed(self.fullscreen);
                 self.dock = d;
@@ -570,7 +685,7 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
                             let (r, top) = a.dock.tray_button(i);
                             a.bus.send(&Event::Custom {
                                 name: "tray-toggle".into(),
-                                data: serde_json::json!({ "l": r.left, "t": r.top, "r": r.right, "b": r.bottom, "dock_top": top }),
+                                data: serde_json::json!({ "l": r.left, "t": r.top, "r": r.right, "b": r.bottom, "dock_top": top, "side": a.dock.side() as u8 }),
                             });
                         } else if a.dock.entries[i].kind == Kind::Folder {
                             a.dock.stack_menu(i);
@@ -602,6 +717,10 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
                 });
                 LRESULT(0)
             }
+            WM_HOTKEY if wp.0 as i32 == radial::HOTKEY_ID => {
+                with_app(|a| a.toggle_radial(false, None));
+                LRESULT(0)
+            }
             WM_RBUTTONUP => {
                 let (x, y) = xy(lp);
                 with_app(|a| {
@@ -613,6 +732,7 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
             WM_TIMER => {
                 let id = wp.0;
                 with_app(|a| match id {
+                    radial::TIMER => a.radial_tick(),
                     dock::TIMER_REGION => a.dock.fit_region(),
                     dock::TIMER_CLEANUP => {
                         let _ = KillTimer(hwnd, id);
@@ -721,6 +841,8 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
             WM_DISPLAYCHANGE | WM_DPICHANGED => {
                 // Çözünürlük/ölçek değişince dock aynı ayarlarla yeniden kurulsun.
                 with_app(|a| {
+                    // Monitör takıldıysa onun dock'u da gelsin (çalışanlar kendiliğinden çıkar).
+                    screens::spawn(a.dock.cfg.dock.other_screens);
                     let mut cfg = a.dock.cfg.clone();
                     cfg.dock.icon_size += 0.0001; // eşitlik kontrolünü atlat
                     a.apply_config(cfg);
@@ -843,7 +965,8 @@ fn first_run_import(cfg: &mut Config) {
 fn main() -> Result<()> {
     log::init("dock");
     unsafe {
-        let _mutex = CreateMutexW(None, true, w!("Local\\CarlUI.Dock"))?;
+        let child = screens::child();
+        let _mutex = CreateMutexW(None, true, &screens::mutex_name())?;
         if GetLastError() == ERROR_ALREADY_EXISTS {
             info!("dock zaten çalışıyor");
             return Ok(());
@@ -860,20 +983,34 @@ fn main() -> Result<()> {
 
         let mut cfg = config::load();
         carlui_ui::tone::follow(&cfg.theme);
-        first_run_import(&mut cfg);
+        if let Some(n) = child {
+            if !cfg.dock.other_screens || screens::monitor().is_none() {
+                info!("ek ekran dock'u ({}) gerekmiyor", n + 1);
+                return Ok(());
+            }
+            info!("ek ekran dock'u ({}) açılıyor", n + 1);
+        } else {
+            first_run_import(&mut cfg);
+        }
 
-        let hwnd = create_window(w!("CarlUI.Dock"), Some(dock_proc), w!("CarlUI Dock"))?;
-        let popup_hwnd = create_window(w!("CarlUI.DockPopup"), Some(popup_proc), w!("CarlUI Dock Popup"))?;
+        // Ek ekran dock'u ayrı sınıf adı kullanır: Win menüsü ve diğer
+        // modüller ana dock'u sınıf adıyla bulur.
+        let (class, popup_class) = if child.is_some() { (w!("CarlUI.Dock2"), w!("CarlUI.Dock2Popup")) } else { (w!("CarlUI.Dock"), w!("CarlUI.DockPopup")) };
+        let hwnd = create_window(class, Some(dock_proc), w!("CarlUI Dock"))?;
+        let popup_hwnd = create_window(popup_class, Some(popup_proc), w!("CarlUI Dock Popup"))?;
         let hwnd_raw = hwnd.0 as isize;
         let gfx = Gfx::new()?;
         let target = gfx.comp.cast::<ICompositorDesktopInterop>()?.CreateDesktopWindowTarget(hwnd, true)?;
-        let tracker = Tracker::new(hwnd);
-        let dock = Dock::new(&gfx, hwnd, &target, &cfg, &tracker)?;
+        let mut tracker = Tracker::new(hwnd);
+        tracker.set_monitor(screens::filter(cfg.dock.other_screens));
+        let dock = Dock::new(&gfx, hwnd, &target, &cfg, &tracker, screens::rect())?;
         let popup = Popup::new(&gfx, popup_hwnd, &dock.theme, dock.scale())?;
+        let radial = if child.is_none() { radial::Radial::new(&gfx, &dock.theme).map_err(|e| carlui_core::warn!("çark dock kurulamadı: {e}")).ok() } else { None };
 
         let inbox: Arc<Mutex<VecDeque<Event>>> = Arc::default();
         let inbox_bus = inbox.clone();
-        let bus = BusClient::connect("dock", move |ev| {
+        let bus_name = child.map(|n| format!("dock2-{n}")).unwrap_or_else(|| "dock".into());
+        let bus = BusClient::connect(&bus_name, move |ev| {
             if let Ok(mut q) = inbox_bus.lock() {
                 q.push_back(ev);
             }
@@ -897,6 +1034,7 @@ fn main() -> Result<()> {
                 hwnd,
                 dock,
                 popup,
+                radial,
                 tracker,
                 input: None,
                 bus,
@@ -913,6 +1051,7 @@ fn main() -> Result<()> {
             a.arm_autohide(1500);
         });
         let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        screens::spawn(cfg.dock.other_screens);
 
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {

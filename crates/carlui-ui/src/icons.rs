@@ -73,6 +73,72 @@ pub fn draw_close(dc: &ID2D1DeviceContext, px: f32, stroke: &ID2D1StrokeStyle) -
     Ok(())
 }
 
+/// Çizgi göstergesi: `len` x `thick` boyunda, uçları yuvarlak bir çizgi; pencere
+/// sayısı kadar (`n`) parçaya çapraz kesiklerle bölünür. Toplam boy hep aynıdır.
+/// `accent` verilirse degrade, yoksa yarı saydam beyaz (gri görünür).
+/// `vertical`: yüzey `thick` x `len` boyundadır, çizgi dikey çizilir.
+pub fn draw_split_line(dc: &ID2D1DeviceContext, len: f32, thick: f32, n: usize, accent: Option<((u8, u8, u8), (u8, u8, u8))>, vertical: bool) -> Result<()> {
+    unsafe {
+        if vertical {
+            // Yatay çiziz, 90° döndürürüz: (x, y) -> (thick - y, x).
+            let mut t = windows::Foundation::Numerics::Matrix3x2::default();
+            dc.GetTransform(&mut t);
+            let r = windows::Foundation::Numerics::Matrix3x2 { M11: 0.0, M12: 1.0, M21: -1.0, M22: 0.0, M31: thick + t.M31, M32: t.M32 };
+            dc.SetTransform(&r);
+        }
+        let brush: ID2D1Brush = match accent {
+            Some((a, b)) => {
+                let stops = [
+                    D2D1_GRADIENT_STOP { position: 0.0, color: color(a.0, a.1, a.2, 1.0) },
+                    D2D1_GRADIENT_STOP { position: 1.0, color: color(b.0, b.1, b.2, 1.0) },
+                ];
+                let rt: &ID2D1RenderTarget = dc;
+                let coll = rt.CreateGradientStopCollection(&stops, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP)?;
+                let props = D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES { startPoint: pt(0.0, 0.0), endPoint: pt(len, 0.0) };
+                dc.CreateLinearGradientBrush(&props, None, &coll)?.cast()?
+            }
+            None => dc.CreateSolidColorBrush(&color(255, 255, 255, 0.55), None)?.cast()?,
+        };
+        let n = n.max(1);
+        let rr = D2D1_ROUNDED_RECT { rect: D2D_RECT_F { left: 0.0, top: 0.0, right: len, bottom: thick }, radiusX: thick / 2.0, radiusY: thick / 2.0 };
+        if n == 1 {
+            dc.FillRoundedRectangle(&rr, &brush);
+            return Ok(());
+        }
+        // Parçalar paralelkenar; dış uçları yuvarlak hatlı maske keser.
+        let factory = dc.GetFactory()?;
+        let mask = factory.CreateRoundedRectangleGeometry(&rr)?;
+        let path = factory.CreatePathGeometry()?;
+        let sink = path.Open()?;
+        let slant = thick * 0.9;
+        let gap = (thick * 0.7).max(1.5);
+        let cut = |j: usize| j as f32 * len / n as f32;
+        for i in 0..n {
+            // Sol kenar: ilk parçada düz (maskenin dışına taşar), sonra "/" kesik.
+            let (tl, bl) = if i == 0 { (-thick, -thick) } else { (cut(i) + slant / 2.0 + gap / 2.0, cut(i) - slant / 2.0 + gap / 2.0) };
+            let (tr, br) = if i + 1 == n { (len + thick, len + thick) } else { (cut(i + 1) + slant / 2.0 - gap / 2.0, cut(i + 1) - slant / 2.0 - gap / 2.0) };
+            sink.BeginFigure(pt(tl, 0.0), D2D1_FIGURE_BEGIN_FILLED);
+            sink.AddLines(&[pt(tr, 0.0), pt(br, thick), pt(bl, thick)]);
+            sink.EndFigure(D2D1_FIGURE_END_CLOSED);
+        }
+        sink.Close()?;
+        let params = D2D1_LAYER_PARAMETERS1 {
+            contentBounds: D2D_RECT_F { left: -1e6, top: -1e6, right: 1e6, bottom: 1e6 },
+            geometricMask: std::mem::ManuallyDrop::new(Some(mask.cast()?)),
+            maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+            maskTransform: windows::Foundation::Numerics::Matrix3x2::identity(),
+            opacity: 1.0,
+            opacityBrush: std::mem::ManuallyDrop::new(None),
+            layerOptions: D2D1_LAYER_OPTIONS1_NONE,
+        };
+        dc.PushLayer(&params, None);
+        dc.FillGeometry(&path, &brush, None);
+        dc.PopLayer();
+        let _ = std::mem::ManuallyDrop::into_inner(params.geometricMask);
+    }
+    Ok(())
+}
+
 /// Dock göstergesi: yuvarlak nokta veya (genişse) hap. `accent` verilirse degrade.
 pub fn draw_dot(dc: &ID2D1DeviceContext, w: f32, h: f32, accent: Option<((u8, u8, u8), (u8, u8, u8))>) -> Result<()> {
     unsafe {

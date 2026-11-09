@@ -95,6 +95,7 @@ impl App {
         } else {
             let g = |k: &str| data.get(k).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             let button = RECT { left: g("l"), top: g("t"), right: g("r"), bottom: g("b") };
+            self.panel.side = g("side").clamp(0, 2) as u8;
             if let Err(e) = self.panel.open(&self.gfx, &mut self.host, button, g("dock_top")) {
                 carlui_core::error!("panel açılamadı: {e}");
             }

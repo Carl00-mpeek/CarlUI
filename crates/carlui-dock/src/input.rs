@@ -87,11 +87,24 @@ pub struct Input {
     stop: Arc<AtomicBool>,
 }
 
-/// Dock'un alt kenardaki yatay aralığı değişince güncellenir.
-pub fn set_span(l: i32, r: i32, edge_y: i32) {
+/// Kenar: 0 alt, 1 sol, 2 sağ (yan dock'ta aralık dikeydir, EDGE_Y kenarın x'i).
+static EDGE_SIDE: AtomicU8 = AtomicU8::new(0);
+
+/// Dock'un kenardaki aralığı değişince güncellenir: alt dock'ta (sol, sağ, alt
+/// kenarın y'si), yan dock'ta (üst, alt, kenarın x'i).
+pub fn set_span(l: i32, r: i32, edge: i32, side: carlui_core::config::DockPosition) {
+    use carlui_core::config::DockPosition;
     SPAN_L.store(l, Ordering::SeqCst);
     SPAN_R.store(r, Ordering::SeqCst);
-    EDGE_Y.store(edge_y, Ordering::SeqCst);
+    EDGE_Y.store(edge, Ordering::SeqCst);
+    EDGE_SIDE.store(
+        match side {
+            DockPosition::Bottom => 0,
+            DockPosition::Left => 1,
+            DockPosition::Right => 2,
+        },
+        Ordering::SeqCst,
+    );
 }
 
 fn post(msg: u32, wp: usize) {
@@ -109,9 +122,14 @@ unsafe extern "system" fn mouse_proc(code: i32, wp: WPARAM, lp: LPARAM) -> LRESU
         if WANT_EDGE.load(Ordering::Relaxed) {
             let info = &*(lp.0 as *const MSLLHOOKSTRUCT);
             let slack = 24;
-            let at = info.pt.y >= EDGE_Y.load(Ordering::Relaxed)
-                && info.pt.x >= SPAN_L.load(Ordering::Relaxed) - slack
-                && info.pt.x <= SPAN_R.load(Ordering::Relaxed) + slack;
+            let edge = EDGE_Y.load(Ordering::Relaxed);
+            let (along, at_edge) = match EDGE_SIDE.load(Ordering::Relaxed) {
+                0 => (info.pt.x, info.pt.y >= edge),
+                // Yan kenarın ötesinde başka bir monitör olabilir: yalnızca kenar pikselleri.
+                1 => (info.pt.y, info.pt.x <= edge && info.pt.x >= edge - 1),
+                _ => (info.pt.y, info.pt.x >= edge && info.pt.x <= edge + 1),
+            };
+            let at = at_edge && along >= SPAN_L.load(Ordering::Relaxed) - slack && along <= SPAN_R.load(Ordering::Relaxed) + slack;
             if AT_EDGE.swap(at, Ordering::Relaxed) != at {
                 post(WM_APP_EDGE, at as usize);
             }

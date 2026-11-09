@@ -198,9 +198,15 @@ impl App {
         let k = cfg.dock.icon_size.clamp(20.0, 64.0) / 30.0;
         let mon = carlui_core::win::primary_monitor().map(|m| m.rect).unwrap_or_default();
         let (w, h) = ((view::W * s) as i32, (view::H * s) as i32);
-        let dock_top = mon.bottom - ((62.0 * k + cfg.dock.bottom_margin.clamp(0.0, 200.0)) * s) as i32;
-        let x = mon.left + (mon.right - mon.left - w) / 2;
-        let y = (dock_top - (12.0 * s) as i32 - h).max(mon.top + 8);
+        // Dock'un kalınlığı + kenardan uzaklığı: menü dock'un iç yanında açılır.
+        let reach = ((62.0 * k + cfg.dock.bottom_margin.clamp(0.0, 200.0)) * s) as i32;
+        let gap = (12.0 * s) as i32;
+        let mid_y = (mon.top + (mon.bottom - mon.top - h) / 2).max(mon.top + 8);
+        let (x, y) = match cfg.dock.position {
+            config::DockPosition::Left => (mon.left + reach + gap, mid_y),
+            config::DockPosition::Right => (mon.right - reach - gap - w, mid_y),
+            config::DockPosition::Bottom => (mon.left + (mon.right - mon.left - w) / 2, (mon.bottom - reach - gap - h).max(mon.top + 8)),
+        };
         self.home_y = y;
         self.home_x = x;
         // Kapanırken yeniden açılırsa o anki yerden devam eder.

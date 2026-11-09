@@ -156,6 +156,30 @@ pub fn videos_dir() -> Option<std::path::PathBuf> {
     }
 }
 
+/// Dock yığını için klasör: hazır ad ("desktop", "documents", "pictures",
+/// "music", "videos", "downloads") ya da tam yol. Bulunamazsa None.
+pub fn stack_dir(name: &str) -> Option<std::path::PathBuf> {
+    use windows::Win32::UI::Shell::*;
+    let id = match name {
+        "desktop" => &FOLDERID_Desktop,
+        "documents" => &FOLDERID_Documents,
+        "pictures" => &FOLDERID_Pictures,
+        "music" => &FOLDERID_Music,
+        "videos" => &FOLDERID_Videos,
+        "downloads" => &FOLDERID_Downloads,
+        _ => {
+            let p = std::path::PathBuf::from(crate::config::expand_env(name));
+            return p.is_dir().then_some(p);
+        }
+    };
+    unsafe {
+        let p = SHGetKnownFolderPath(id, KNOWN_FOLDER_FLAG(0), None).ok()?;
+        let s = p.to_string().ok();
+        windows::Win32::System::Com::CoTaskMemFree(Some(p.0 as _));
+        s.map(std::path::PathBuf::from)
+    }
+}
+
 /// Pencerenin sürecinin exe yolu, küçük harfle (erişilemezse boş).
 pub fn window_exe(hwnd: HWND) -> String {
     let mut pid = 0;
