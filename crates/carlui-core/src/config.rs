@@ -551,6 +551,19 @@ pub enum DockBehavior {
     AutoHide,
 }
 
+/// Görev çubuğu görünümünün boyutu.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum TaskbarSize {
+    /// Ortada, küçük ölçülerle; sağı solu kesik.
+    Minimal,
+    /// Ortada, normal ölçülerle; sağı solu kesik.
+    Compact,
+    /// Kenardan kenara.
+    #[default]
+    Full,
+}
+
 /// Dock'un yaslandığı ekran kenarı.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -581,8 +594,10 @@ pub struct DockConfig {
     pub separators: bool,
     /// Açık uygulama göstergesi: false = noktalar, true = pencere sayısınca bölünen çizgi.
     pub line_indicator: bool,
-    /// GÃ¶rev Ã§ubuÄŸu gÃ¶rÃ¼nÃ¼mÃ¼ (yalnÄ±zca altta): kenar boyu cam, ortada sÄ±k simgeler, saÄŸda durum ve saat.
+    /// Görev çubuğu görünümü (yalnızca altta): ortada sık simgeler, sağda durum ve saat.
     pub taskbar: bool,
+    /// Görev çubuğu görünümünün boyutu: minimal, compact, full.
+    pub taskbar_size: TaskbarSize,
     /// Diğer ekranlarda da kendi pencerelerini gösteren ayrı bir dock.
     pub other_screens: bool,
     /// Çark dock: kısayolla (`shortcuts.radial`) imlecin çevresinde açılır.
@@ -635,6 +650,7 @@ impl Default for DockConfig {
             separators: true,
             line_indicator: false,
             taskbar: false,
+            taskbar_size: TaskbarSize::Full,
             other_screens: false,
             radial: false,
             stacks: Vec::new(),

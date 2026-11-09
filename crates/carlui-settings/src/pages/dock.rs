@@ -4,7 +4,7 @@ use crate::{
     ui::{edit, Flow, P},
     App,
 };
-use carlui_core::config::{DockBehavior, DockPosition, STACK_PRESETS};
+use carlui_core::config::{DockBehavior, DockPosition, TaskbarSize, STACK_PRESETS};
 
 pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     let c = &app.cfg.dock;
@@ -29,10 +29,29 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.toggle(
         p,
         t!("Görev çubuğu görünümü", "Taskbar style"),
-        t!("Altta kenardan kenara cam şerit: simgeler ortada ve sık, sağda ağ, ses, pil ve saat. Yalnızca alt konumda.", "An edge-to-edge glass bar at the bottom: icons centered and close together, network, volume, battery and clock on the right. Bottom position only."),
+        t!("Altta görev çubuğu gibi bir cam şerit: simgeler ortada ve sık, sağda ağ, ses, pil ve saat. Yalnızca alt konumda.", "A taskbar-like glass bar at the bottom: icons centered and close together, network, volume, battery and clock on the right. Bottom position only."),
         c.taskbar,
         |c| c.dock.taskbar ^= true,
     );
+    if c.taskbar {
+        let sel = match c.taskbar_size {
+            TaskbarSize::Minimal => 0,
+            TaskbarSize::Compact => 1,
+            TaskbarSize::Full => 2,
+        };
+        f.choice(
+            p,
+            t!("Görev çubuğu boyutu", "Taskbar size"),
+            t!("Minimal ve Compact ortada durur, sağı solu kesiktir; Full kenardan kenaradır.", "Minimal and Compact sit in the middle with cut-off ends; Full runs edge to edge."),
+            &[
+                ("Minimal", edit(|c| c.dock.taskbar_size = TaskbarSize::Minimal)),
+                ("Compact", edit(|c| c.dock.taskbar_size = TaskbarSize::Compact)),
+                ("Full", edit(|c| c.dock.taskbar_size = TaskbarSize::Full)),
+            ],
+            sel,
+            90.0,
+        );
+    }
     f.slider(p, t!("Simge boyutu", "Icon size"), "", c.icon_size, 20.0, 64.0, 1.0, |v| format!("{v:.0} px"), |c, v| c.dock.icon_size = v);
     f.slider(p, t!("Kenardan uzaklık", "Distance from edge"), "", c.bottom_margin, 0.0, 60.0, 1.0, |v| format!("{v:.0} px"), |c, v| c.dock.bottom_margin = v);
     let sel = match c.behavior {

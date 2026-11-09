@@ -30,7 +30,7 @@ use crate::{
     tracker::{self, Tracker},
 };
 use carlui_core::{
-    config::{expand_env, Config, DockBehavior, DockPosition, Pinned},
+    config::{expand_env, Config, DockBehavior, DockPosition, Pinned, TaskbarSize},
     theme::Theme,
     win,
 };
@@ -223,15 +223,24 @@ impl Dock {
             radius: (24.0 * s * k * theme.radius_scale).round(),
             hl: (44.0 * s * k).round(),
         };
+        let tsize = cfg.dock.taskbar_size;
         if taskbar {
-            // Görev çubuğu: kenara yapışık, köşesiz, simgeler arası daha dar.
+            // Görev çubuğu: simgeler arası daha dar. Full kenara yapışık ve köşesiz;
+            // Minimal ve Compact ortada yüzer. Minimal her şeyi biraz küçültür.
+            let f = if tsize == TaskbarSize::Minimal { 0.84 } else { 1.0 };
+            m.icon = (icon * f).round();
+            let k = k * f;
             m.slot = (42.0 * s * k).round();
-            m.h = (50.0 * s * k).round().max((44.0 * s).round());
-            m.pad = (8.0 * s).round();
-            m.sep = (10.0 * s).round();
-            m.bottom = 0.0;
-            m.radius = 0.0;
+            m.h = (50.0 * s * k).round().max((40.0 * s).round());
+            m.pad = (8.0 * s * f).round();
+            m.sep = (10.0 * s * f).round();
             m.hl = (38.0 * s * k).round();
+            if tsize == TaskbarSize::Full {
+                m.bottom = 0.0;
+                m.radius = 0.0;
+            } else {
+                m.radius = (14.0 * s * k * theme.radius_scale).round();
+            }
         }
         let comp = gfx.comp.clone();
         let motion = Motion::new(&comp, &theme);
@@ -333,7 +342,8 @@ impl Dock {
             status: None,
         };
         if taskbar {
-            let mut st = status::Status::new(&dock.comp)?;
+            let f = if tsize == TaskbarSize::Minimal { 0.9 } else { 1.0 };
+            let mut st = status::Status::new(&dock.comp, f, tsize == TaskbarSize::Full)?;
             st.refresh(gfx, m.h, s, true)?;
             dock.items.Children()?.InsertAtTop(&st.visual)?;
             dock.status = Some(st);

@@ -35,10 +35,31 @@ impl Dock {
             x += m.slot;
             last = Some(g);
         }
+        let mut order = order.to_vec();
+        let mut status_x = None;
+        if taskbar && !self.taskbar_full() {
+            // Minimal/Compact: tray düğmesi ve durum alanı dizilimin sonuna eklenir,
+            // bütün şerit ortada kalır.
+            if separators && last.is_some() {
+                sep_xs.push(x + m.sep / 2.0);
+                x += m.sep;
+            }
+            for &i in &tray {
+                centers.push(x + m.slot / 2.0);
+                order.retain(|&o| o != i);
+                order.push(i);
+                x += m.slot;
+            }
+            x += (4.0 * m.s).round();
+            status_x = Some(x);
+            x += self.status_w();
+        }
         let mut width = x + m.pad;
         let half = width / 2.0;
-        let mut order = order.to_vec();
-        if taskbar {
+        if let (Some(sx), Some(st)) = (status_x, self.status.as_mut()) {
+            st.at = sx - half;
+        }
+        if taskbar && self.taskbar_full() {
             // Ortadaki öğeler kendi genişliklerine göre ortalı kalır; cam tüm kenarı kaplar.
             // Sağdan sola: durum alanı, tray düğmesi, (varsa) ayırıcı.
             let mut right = self.status_left() + half;
@@ -111,7 +132,15 @@ impl Dock {
             }
         }
 
-        if self.taskbar() {
+        if let Some(st) = &self.status {
+            let to = self.status_left();
+            if animate && !st.full {
+                self.motion.animate(&st.visual, &along, to, 0.78, 50, 0)?;
+            } else {
+                st.visual.SetOffset(v3(to, 0.0))?;
+            }
+        }
+        if self.taskbar_full() {
             self.glass.root.SetSize(self.ps(width, m.h))?;
         } else if animate {
             self.motion.animate(&self.glass.root, &self.size_prop(), width, 0.78, 50, 0)?;

@@ -43,6 +43,12 @@ pub struct Status {
     /// Yüzey genişliği ve simgelerin bittiği yer (saatin sol kenarı), piksel.
     pub width: f32,
     pub quick_w: f32,
+    /// Yazı ve simge ölçeği (Minimal biraz küçük).
+    scale: f32,
+    /// Full: sağ kenara yaslı; değilse dizilimin sonunda (`at`).
+    pub full: bool,
+    /// Ortadaki dizilimde sol kenarı (dock ortasına göre); dizilim yazar.
+    pub at: f32,
 }
 
 fn battery() -> Option<(u8, bool)> {
@@ -61,7 +67,7 @@ fn now() -> (String, String) {
 }
 
 impl Status {
-    pub fn new(comp: &Compositor) -> Result<Self> {
+    pub fn new(comp: &Compositor, scale: f32, full: bool) -> Result<Self> {
         Ok(Self {
             dw: unsafe { DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)? },
             volume: Volume::new(),
@@ -70,6 +76,9 @@ impl Status {
             visual: comp.CreateSpriteVisual()?,
             width: 0.0,
             quick_w: 0.0,
+            scale,
+            full,
+            at: 0.0,
         })
     }
 
@@ -97,7 +106,7 @@ impl Status {
         }
         self.sig = sig;
         let old = self.width;
-        self.draw(gfx, h, s)?;
+        self.draw(gfx, h, s * self.scale)?;
         Ok((self.width - old).abs() > 0.5)
     }
 
@@ -183,10 +192,22 @@ impl Dock {
         self.status.is_some()
     }
 
-    /// Sağ uçtaki durum alanının sol kenarı (dock ortasına göre).
+    /// Kenardan kenara (Full) görev çubuğu mu?
+    pub(super) fn taskbar_full(&self) -> bool {
+        self.status.as_ref().is_some_and(|s| s.full)
+    }
+
+    /// Durum alanının genişliği (yoksa 0).
+    pub(super) fn status_w(&self) -> f32 {
+        self.status.as_ref().map_or(0.0, |s| s.width)
+    }
+
+    /// Durum alanının sol kenarı (dock ortasına göre): Full'da sağ uçta,
+    /// Minimal/Compact'ta ortadaki dizilimin sonunda.
     pub(super) fn status_left(&self) -> f32 {
         match &self.status {
-            Some(st) => self.len / 2.0 - self.m.pad - st.width,
+            Some(st) if st.full => self.len / 2.0 - self.m.pad - st.width,
+            Some(st) => st.at,
             None => self.len / 2.0,
         }
     }
@@ -197,7 +218,6 @@ impl Dock {
         let Some(st) = self.status.as_mut() else { return };
         match st.refresh(gfx, h, s, false) {
             Ok(true) => {
-                let _ = self.place_status();
                 let _ = self.relayout(true);
             }
             Ok(false) => {}
