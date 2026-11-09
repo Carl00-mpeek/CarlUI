@@ -54,8 +54,8 @@ const WM_APP_APPS: u32 = WM_APP + 1;
 /// Gizliyken simgeleri parça parça önceden oku.
 const WM_APP_WARM: u32 = WM_APP + 7;
 const WM_APP_FRAME: u32 = WM_APP + 2;
-const OPEN_MS: f32 = 420.0;
-const CLOSE_MS: f32 = 200.0;
+const OPEN_MS: f32 = 260.0;
+const CLOSE_MS: f32 = 160.0;
 const TRANS_MS: f32 = 160.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -210,12 +210,17 @@ impl App {
         self.visible = true;
         self.mouse = (-1.0, -1.0);
         unsafe {
+            // Saydam başla, tam boyda yerleş, gizliyken ilk kareyi çiz: önceki
+            // açılışın son karesi bir an görünmesin.
+            self.set_alpha(from);
             let _ = SetWindowPos(self.hwnd, HWND_TOPMOST, x, y + self.slide_px(from), w, h, SWP_NOACTIVATE);
-            self.place(from);
-            // Gizliyken ilk kareyi (tamamen saydam içerik) çiz: önceki açılışın
-            // son karesi bir an görünmesin.
             let _ = self.paint();
             let _ = ShowWindow(self.hwnd, SW_SHOW);
+            // Görünür olunca gelen çizim isteği gereksiz (kare zaten çizildi);
+            // ilk animasyon karesini 30 ms bekletiyordu. Eksik simge varsa kalsın.
+            if !self.icons.borrow().missed {
+                let _ = ValidateRect(self.hwnd, None);
+            }
         }
         // Klavye menüye gelsin: yazmaya başlayınca harf aramaya aktarılır.
         carlui_core::win::force_foreground(self.hwnd);
@@ -233,29 +238,28 @@ impl App {
         self.kick();
     }
 
-    /// Kayma mesafesi (fiziksel piksel): görünürlük 0'da 36 DIP aşağıda.
+    /// Kayma mesafesi (fiziksel piksel): görünürlük 0'da 28 DIP aşağıda.
     fn slide_px(&self, reveal: f32) -> i32 {
-        ((1.0 - reveal) * 36.0 * self.scale) as i32
+        ((1.0 - reveal) * 28.0 * self.scale).round() as i32
     }
 
-    /// Menünün tam boyu (fiziksel piksel).
-    fn full_px(&self) -> (i32, i32) {
-        ((view::W * self.scale) as i32, (view::H * self.scale) as i32)
-    }
-
-    /// Pencereyi gerçekten büyütür: alt kenar dock'un üstünde sabit, üst ve
-    /// yanlar açılır. Bölgeyle kırpmak yetmiyordu: DWM'nin çerçevesi (kenarlık,
-    /// gölge, köşeler) bölgeyi dinlemeyip tam boy beliriyordu. İçerik çizilirken
-    /// aynı miktar kaydırılır; yani perde gibi açığa çıkar.
-    fn place(&self, reveal: f32) {
-        let (fw, fh) = self.full_px();
-        let gh = 0.3 + 0.7 * reveal;
-        let gw = 0.86 + 0.14 * reveal;
-        let (cw, ch) = (((fw as f32) * gw) as i32, ((fh as f32) * gh) as i32);
-        let x = self.home_x + (fw - cw) / 2;
-        let y = self.home_y + self.slide_px(reveal) + (fh - ch);
+    /// Pencerenin saydamlığı (katmanlı pencere; DWM birleştirir, yeniden
+    /// çizim gerekmez). Saydamlık kaymadan biraz önde gider.
+    fn set_alpha(&self, reveal: f32) {
+        let a = (reveal.clamp(0.0, 1.0).powf(0.6) * 255.0).round() as u8;
         unsafe {
-            let _ = SetWindowPos(self.hwnd, None, x, y, cw, ch, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
+            let _ = SetLayeredWindowAttributes(self.hwnd, COLORREF(0), a, LWA_ALPHA);
+        }
+    }
+
+    /// Animasyonun bir karesi: pencere tam boyda kalır, yalnızca yeri ve
+    /// saydamlığı değişir. Eskiden her karede pencere büyütülüyordu; DWM
+    /// çerçeveyi ve gölgeyi her boyutta yeniden kuruyor, içerik de baştan
+    /// çiziliyordu, bu yüzden açılış takılıyordu.
+    fn place(&self, reveal: f32) {
+        self.set_alpha(reveal);
+        unsafe {
+            let _ = SetWindowPos(self.hwnd, None, self.home_x, self.home_y + self.slide_px(reveal), 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
     }
 
@@ -270,8 +274,8 @@ impl App {
                     // Kapanış hızlanarak gider.
                     a.from * (1.0 - t * t)
                 } else {
-                    // Uzun, yavaşlayarak oturan süzülme.
-                    a.from + (1.0 - a.from) * (1.0 - (1.0 - t).powi(4))
+                    // Hızlı başlayıp yumuşakça oturan süzülme.
+                    a.from + (1.0 - a.from) * (1.0 - (1.0 - t).powi(3))
                 }
             }
         }
@@ -321,12 +325,17 @@ impl App {
             }
             self.place(r);
         }
+        let paging = self.trans.is_some();
         if self.trans.is_some_and(|(t0, _)| t0.elapsed().as_secs_f32() * 1000.0 >= TRANS_MS) {
             self.trans = None;
         }
-        let _ = self.paint();
-        unsafe {
-            let _ = ValidateRect(self.hwnd, None);
+        // İçerik yalnızca değiştiyse çizilir (sayfa geçişi, yeni gelen simge,
+        // fare). Kare mesajları WM_PAINT'i bekletir; o yüzden burada bakılır.
+        if paging || unsafe { GetUpdateRect(self.hwnd, None, false) }.as_bool() {
+            let _ = self.paint();
+            unsafe {
+                let _ = ValidateRect(self.hwnd, None);
+            }
         }
         if self.animating() {
             unsafe {
@@ -666,13 +675,9 @@ impl App {
         let s = self.scale;
         let mut hits = std::mem::take(&mut self.hits);
         hits.clear();
-        // Açılırken pencere tam boydan küçük: içerik tam boydaki yerinde kalsın
-        // (alt kenara ve ortaya yaslı), pencere büyüdükçe açığa çıksın.
-        let (fw, fh) = self.full_px();
-        let (ox, oy) = (((fw - pw as i32) / 2).max(0) as f32, (fh - ph as i32).max(0) as f32);
         unsafe {
             rt.BeginDraw();
-            rt.SetTransform(&Matrix3x2 { M11: s, M12: 0.0, M21: 0.0, M22: s, M31: -ox, M32: -oy });
+            rt.SetTransform(&Matrix3x2 { M11: s, M12: 0.0, M21: 0.0, M22: s, M31: 0.0, M32: 0.0 });
             // Opak zemin (eski camın koyu tonu; açık temada süt beyazı).
             let bg = if carlui_ui::tone::light() { D2D1_COLOR_F { r: 0.98, g: 0.98, b: 0.99, a: 1.0 } } else { D2D1_COLOR_F { r: 0.17, g: 0.17, b: 0.18, a: 1.0 } };
             rt.Clear(Some(&bg));
@@ -915,7 +920,8 @@ fn main() -> Result<()> {
             ..Default::default()
         };
         RegisterClassExW(&wc);
-        let hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, START_CLASS, w!("CarlUI Menu"), WS_POPUP, 0, 0, 1, 1, None, None, inst, None)?;
+        // Katmanlı: açılış/kapanış saydamlığı DWM'de, yeniden çizmeden.
+        let hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_LAYERED, START_CLASS, w!("CarlUI Menu"), WS_POPUP, 0, 0, 1, 1, None, None, inst, None)?;
         let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let round = DWMWCP_ROUND;
