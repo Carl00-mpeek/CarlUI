@@ -32,6 +32,25 @@ pub fn hover_changed<A>(hits: &[(R, A)], from: (f32, f32), to: (f32, f32)) -> bo
     hits.iter().any(|(r, _)| flip(r)) || HOVERS.with(|h| h.borrow().iter().flatten().any(flip))
 }
 
+/// `hover_changed` gibi, ama değişen bütün vurgu alanlarını kapsayan
+/// dikdörtgeni verir (yalnızca o bölgeyi yeniden çizmek için).
+pub fn hover_dirty<A>(hits: &[(R, A)], from: (f32, f32), to: (f32, f32)) -> Option<R> {
+    let flip = |r: &&R| r.contains(from) != r.contains(to);
+    let mut out: Option<R> = None;
+    let mut add = |r: &R| {
+        out = Some(match out {
+            None => *r,
+            Some(o) => {
+                let (x, y) = (o.x.min(r.x), o.y.min(r.y));
+                R::new(x, y, o.right().max(r.right()) - x, o.bottom().max(r.bottom()) - y)
+            }
+        })
+    };
+    hits.iter().map(|(r, _)| r).filter(flip).for_each(&mut add);
+    HOVERS.with(|h| h.borrow().iter().flatten().filter(flip).for_each(&mut add));
+    out
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct R {
     pub x: f32,

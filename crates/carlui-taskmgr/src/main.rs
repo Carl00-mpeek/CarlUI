@@ -51,6 +51,9 @@ use windows::{
 
 const TIMER_TICK: usize = 1;
 const TIMER_ANIM: usize = 2;
+/// Fare vurgusunun ertelenmiş çizimi (hızlı harekette saniyede en çok ~30 kare).
+const TIMER_HOVER: usize = 3;
+const HOVER_FRAME_MS: u128 = 33;
 const WM_APP_SIGNED: u32 = WM_APP + 1;
 const SIDEBAR: f32 = 212.0;
 
@@ -119,6 +122,9 @@ pub struct App {
     fonts: Fonts,
     scale: f32,
     mouse: (f32, f32),
+    /// Ertelenen vurgu bölgesi (piksel) ve son çizim anı.
+    hover_pending: Option<RECT>,
+    last_paint: std::time::Instant,
     hits: Vec<(R, Act)>,
     pub accent: u32,
     pub tab: Tab,
@@ -375,13 +381,18 @@ impl App {
         self.hits.iter().rev().filter(|(r, a)| r.contains(pt) && *a != Act::Scroll).map(|(_, a)| a.clone()).next()
     }
 
-    fn paint(&mut self) -> Result<()> {
+    /// `dirty`: yeniden çizilecek bölge (piksel). İçerik korunduğu için yalnızca
+    /// fare vurgusu değişince küçük bir bölge çizilir; gerisi önceki karede kalır.
+    fn paint(&mut self, dirty: RECT) -> Result<()> {
+        self.last_paint = std::time::Instant::now();
         let mut rc = RECT::default();
         unsafe { GetClientRect(self.hwnd, &mut rc)? };
         let (pw, ph) = ((rc.right - rc.left).max(1) as u32, (rc.bottom - rc.top).max(1) as u32);
+        // Yeni ya da boyutu değişen hedefte eski içerik yok: hepsi çizilir.
+        let mut full = self.rt.is_none();
         if self.rt.is_none() {
             let props = D2D1_RENDER_TARGET_PROPERTIES { pixelFormat: D2D1_PIXEL_FORMAT { format: DXGI_FORMAT_B8G8R8A8_UNORM, alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED }, dpiX: 96.0, dpiY: 96.0, ..Default::default() };
-            let hp = D2D1_HWND_RENDER_TARGET_PROPERTIES { hwnd: self.hwnd, pixelSize: D2D_SIZE_U { width: pw, height: ph }, presentOptions: D2D1_PRESENT_OPTIONS_NONE };
+            let hp = D2D1_HWND_RENDER_TARGET_PROPERTIES { hwnd: self.hwnd, pixelSize: D2D_SIZE_U { width: pw, height: ph }, presentOptions: D2D1_PRESENT_OPTIONS_RETAIN_CONTENTS };
             let rt = unsafe { self.factory.CreateHwndRenderTarget(&props, &hp)? };
             unsafe { rt.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE) };
             self.rt = Some(rt);
@@ -391,6 +402,7 @@ impl App {
             let size = rt.GetPixelSize();
             if size.width != pw || size.height != ph {
                 rt.Resize(&D2D_SIZE_U { width: pw, height: ph })?;
+                full = true;
             }
         }
         let s = self.scale;
@@ -400,8 +412,17 @@ impl App {
         unsafe {
             rt.BeginDraw();
             rt.SetTransform(&Matrix3x2 { M11: s, M12: 0.0, M21: 0.0, M22: s, M31: 0.0, M32: 0.0 });
+        }
+        // Yalnızca kirli bölge: dışı GPU'da hiç çizilmez, önceki kare kalır.
+        let partial = !full && (dirty.left > 0 || dirty.top > 0 || dirty.right < rc.right || dirty.bottom < rc.bottom) && dirty.right > dirty.left && dirty.bottom > dirty.top;
+        unsafe {
+            if partial {
+                let c = D2D_RECT_F { left: dirty.left as f32 / s, top: dirty.top as f32 / s, right: dirty.right as f32 / s, bottom: dirty.bottom as f32 / s };
+                rt.PushAxisAlignedClip(&c, D2D1_ANTIALIAS_MODE_ALIASED);
+            }
             rt.Clear(Some(&carlui_ui::tone::backdrop()));
         }
+        carlui_ui::paint::hover_frame();
         {
             let base: ID2D1RenderTarget = rt.cast()?;
             let mut p = Painter { rt: &base, fonts: &self.fonts, mouse: self.mouse, hits: &mut hits, accent: carlui_ui::tone::accent(self.accent) };
@@ -432,6 +453,9 @@ impl App {
         }
         self.hits = hits;
         unsafe {
+            if partial {
+                rt.PopAxisAlignedClip();
+            }
             if rt.EndDraw(None, None).is_err() {
                 self.rt = None;
             }
@@ -488,8 +512,9 @@ impl App {
         let Some(first) = targets.first() else { return };
         let pid = first.pid;
         let suspended = targets.iter().all(|r| r.suspended);
-        self.paint().ok();
-        let g = |c: char| Icon::Glyph(c, None);
+        // Boş bölge = tam kare (kırpma yok).
+        self.paint(RECT::default()).ok();
+        let g =|c: char| Icon::Glyph(c, None);
         let item = |id: usize, t: &str, icon: Icon| Row::Item { id, text: t.into(), icon };
         let eco = power::eco(pid).unwrap_or(false);
         let rows = vec![
@@ -537,7 +562,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         WM_PAINT => {
             let mut ps = PAINTSTRUCT::default();
             BeginPaint(hwnd, &mut ps);
-            with_app(|a| a.paint().ok());
+            with_app(|a| a.paint(ps.rcPaint).ok());
             let _ = EndPaint(hwnd, &ps);
             LRESULT(0)
         }
@@ -553,6 +578,15 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                     if let Some(s) = a.startup_slot.lock().ok().and_then(|mut s| s.take()) {
                         a.startup = Some(s);
                     }
+                }
+            });
+            LRESULT(0)
+        }
+        WM_TIMER if wp.0 == TIMER_HOVER => {
+            let _ = KillTimer(hwnd, TIMER_HOVER);
+            with_app(|a| {
+                if let Some(r) = a.hover_pending.take() {
+                    let _ = InvalidateRect(hwnd, Some(&r), false);
                 }
             });
             LRESULT(0)
@@ -582,10 +616,25 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 // Her fare hareketinde bütün pencereyi (yüzlerce satır + akrilik)
                 // yeniden çizmek zayıf ekran kartlarında %15'e varan GPU yiyordu.
                 // Vurgu yalnızca imlecin altındaki öğe değişince değişir; o zaman çizilir.
-                let changed = a.hits.iter().any(|(r, _)| r.contains(pt) != r.contains(a.mouse));
+                // Üstelik yalnızca değişen vurgunun bölgesi çizilir (satırdan
+                // satıra geçerken iki satır), pencerenin tamamı değil.
+                let dirty = carlui_ui::paint::hover_dirty(&a.hits, a.mouse, pt);
                 a.mouse = pt;
-                if changed {
-                    a.invalidate();
+                if let Some(d) = dirty {
+                    let s = a.scale;
+                    let r = RECT { left: (d.x * s).floor() as i32 - 2, top: (d.y * s).floor() as i32 - 2, right: (d.right() * s).ceil() as i32 + 2, bottom: (d.bottom() * s).ceil() as i32 + 2 };
+                    let since = a.last_paint.elapsed().as_millis();
+                    if since >= HOVER_FRAME_MS && a.hover_pending.is_none() {
+                        let _ = InvalidateRect(hwnd, Some(&r), false);
+                    } else {
+                        // Hızlı harekette bölgeler birikir, kalan süre dolunca tek seferde çizilir.
+                        let first = a.hover_pending.is_none();
+                        let p = a.hover_pending.get_or_insert(r);
+                        *p = RECT { left: p.left.min(r.left), top: p.top.min(r.top), right: p.right.max(r.right), bottom: p.bottom.max(r.bottom) };
+                        if first {
+                            SetTimer(hwnd, TIMER_HOVER, (HOVER_FRAME_MS.saturating_sub(since) as u32).max(1), None);
+                        }
+                    }
                 }
             });
             LRESULT(0)
@@ -753,6 +802,8 @@ fn main() -> Result<()> {
             fonts: Fonts::new()?,
             scale: GetDpiForWindow(hwnd).max(96) as f32 / 96.0,
             mouse: (-1.0, -1.0),
+            hover_pending: None,
+            last_paint: std::time::Instant::now(),
             hits: Vec::new(),
             accent: glassmenu::system_accent(),
             tab: tab_arg.unwrap_or(Tab::Processes),
