@@ -38,7 +38,7 @@ impl Dock {
         let mut order = order.to_vec();
         let mut status_x = None;
         if taskbar && !self.taskbar_full() {
-            // Minimal/Compact: tray düğmesi ve durum alanı dizilimin sonuna eklenir,
+            // Compact: tray düğmesi ve durum alanı dizilimin sonuna eklenir,
             // bütün şerit ortada kalır.
             if separators && last.is_some() {
                 sep_xs.push(x + m.sep / 2.0);

@@ -26,32 +26,35 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         pos,
         80.0,
     );
-    f.toggle(
+    let style = match (c.taskbar, c.taskbar_size) {
+        (false, _) => 0,
+        (true, TaskbarSize::Compact) => 1,
+        (true, TaskbarSize::Full) => 2,
+    };
+    f.choice(
         p,
-        t!("Görev çubuğu görünümü", "Taskbar style"),
-        t!("Altta görev çubuğu gibi bir cam şerit: simgeler ortada ve sık, sağda ağ, ses, pil ve saat. Yalnızca alt konumda.", "A taskbar-like glass bar at the bottom: icons centered and close together, network, volume, battery and clock on the right. Bottom position only."),
-        c.taskbar,
-        |c| c.dock.taskbar ^= true,
+        t!("Görünüm", "Style"),
+        t!("Minimal: yüzen dock. Compact: ortada görev çubuğu, sağda ağ, ses, pil ve saat. Full: kenardan kenara görev çubuğu. Compact ve Full yalnızca altta.", "Minimal: floating dock. Compact: centered taskbar with network, volume, battery and clock. Full: edge-to-edge taskbar. Compact and Full are bottom only."),
+        &[
+            ("Minimal", edit(|c| c.dock.taskbar = false)),
+            (
+                "Compact",
+                edit(|c| {
+                    c.dock.taskbar = true;
+                    c.dock.taskbar_size = TaskbarSize::Compact;
+                }),
+            ),
+            (
+                "Full",
+                edit(|c| {
+                    c.dock.taskbar = true;
+                    c.dock.taskbar_size = TaskbarSize::Full;
+                }),
+            ),
+        ],
+        style,
+        90.0,
     );
-    if c.taskbar {
-        let sel = match c.taskbar_size {
-            TaskbarSize::Minimal => 0,
-            TaskbarSize::Compact => 1,
-            TaskbarSize::Full => 2,
-        };
-        f.choice(
-            p,
-            t!("Görev çubuğu boyutu", "Taskbar size"),
-            t!("Minimal ve Compact ortada durur, sağı solu kesiktir; Full kenardan kenaradır.", "Minimal and Compact sit in the middle with cut-off ends; Full runs edge to edge."),
-            &[
-                ("Minimal", edit(|c| c.dock.taskbar_size = TaskbarSize::Minimal)),
-                ("Compact", edit(|c| c.dock.taskbar_size = TaskbarSize::Compact)),
-                ("Full", edit(|c| c.dock.taskbar_size = TaskbarSize::Full)),
-            ],
-            sel,
-            90.0,
-        );
-    }
     f.slider(p, t!("Simge boyutu", "Icon size"), "", c.icon_size, 20.0, 64.0, 1.0, |v| format!("{v:.0} px"), |c, v| c.dock.icon_size = v);
     f.slider(p, t!("Kenardan uzaklık", "Distance from edge"), "", c.bottom_margin, 0.0, 60.0, 1.0, |v| format!("{v:.0} px"), |c, v| c.dock.bottom_margin = v);
     let sel = match c.behavior {

@@ -551,13 +551,11 @@ pub enum DockBehavior {
     AutoHide,
 }
 
-/// Görev çubuğu görünümünün boyutu.
+/// Görev çubuğu görünümünün boyutu (Minimal, görev çubuğu kapalı olan normal dock'tur).
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum TaskbarSize {
-    /// Ortada, küçük ölçülerle; sağı solu kesik.
-    Minimal,
-    /// Ortada, normal ölçülerle; sağı solu kesik.
+    /// Ortada; sağı solu kesik.
     Compact,
     /// Kenardan kenara.
     #[default]

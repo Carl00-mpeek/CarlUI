@@ -226,14 +226,11 @@ impl Dock {
         let tsize = cfg.dock.taskbar_size;
         if taskbar {
             // Görev çubuğu: simgeler arası daha dar. Full kenara yapışık ve köşesiz;
-            // Minimal ve Compact ortada yüzer. Minimal her şeyi biraz küçültür.
-            let f = if tsize == TaskbarSize::Minimal { 0.84 } else { 1.0 };
-            m.icon = (icon * f).round();
-            let k = k * f;
+            // Compact ortada yüzer, sağı solu kesik.
             m.slot = (42.0 * s * k).round();
-            m.h = (50.0 * s * k).round().max((40.0 * s).round());
-            m.pad = (8.0 * s * f).round();
-            m.sep = (10.0 * s * f).round();
+            m.h = (50.0 * s * k).round().max((44.0 * s).round());
+            m.pad = (8.0 * s).round();
+            m.sep = (10.0 * s).round();
             m.hl = (38.0 * s * k).round();
             if tsize == TaskbarSize::Full {
                 m.bottom = 0.0;
@@ -342,8 +339,7 @@ impl Dock {
             status: None,
         };
         if taskbar {
-            let f = if tsize == TaskbarSize::Minimal { 0.9 } else { 1.0 };
-            let mut st = status::Status::new(&dock.comp, f, tsize == TaskbarSize::Full)?;
+            let mut st = status::Status::new(&dock.comp, tsize == TaskbarSize::Full)?;
             st.refresh(gfx, m.h, s, true)?;
             dock.items.Children()?.InsertAtTop(&st.visual)?;
             dock.status = Some(st);
