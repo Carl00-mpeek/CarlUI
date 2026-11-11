@@ -24,6 +24,9 @@ gelir; üstüne gelince yalnızca değişen satır yeniden çizilir.
 **Düzeltme:** Çark dock açıkken bir uygulama kapanırsa seçim başka uygulamaya
 kaymıyor.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`dd80f79114dbc2f342408e0b9f2b6883032cccadb68a2a9fe0485b6321110d9d`
+
 ## v0.9.7 — Dock, Bluetooth ve oyunda gösterge düzeltmeleri (2026-11-08)
 
 **Düzeltme: Dock'tan "Programı kapat" masaüstünü siyah bırakıyordu.** Dosya Gezgini
