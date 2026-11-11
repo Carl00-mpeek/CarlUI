@@ -73,11 +73,23 @@ pub fn draw_close(dc: &ID2D1DeviceContext, px: f32, stroke: &ID2D1StrokeStyle) -
     Ok(())
 }
 
-/// Çizgi göstergesi: `len` x `thick` boyunda, uçları yuvarlak bir çizgi; pencere
-/// sayısı kadar (`n`) parçaya çapraz kesiklerle bölünür. Toplam boy hep aynıdır.
-/// `accent` verilirse degrade, yoksa yarı saydam beyaz (gri görünür).
-/// `vertical`: yüzey `thick` x `len` boyundadır, çizgi dikey çizilir.
-pub fn draw_split_line(dc: &ID2D1DeviceContext, len: f32, thick: f32, n: usize, accent: Option<((u8, u8, u8), (u8, u8, u8))>, vertical: bool) -> Result<()> {
+/// Çizgi göstergesinin parça biçimi (dock görünümüne göre).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum LineStyle {
+    /// Minimal (yüzen dock): her parça kendi başına yuvarlak uçlu hap.
+    Round,
+    /// Compact: uçları yuvarlak tek çizgi, parçalar çapraz "/" kesikle ayrılır.
+    Slant,
+    /// Full: köşeleri hafif yuvarlatılmış düz çubuklar, dik kesikle ayrılır.
+    Flat,
+}
+
+/// Çizgi göstergesi: `len` x `thick` boyunda bir çizgi; pencere sayısı kadar
+/// (`n`) parçaya bölünür, toplam boy hep aynıdır. Parçaların biçimi `style`'a
+/// göre değişir. `accent` verilirse degrade, yoksa `alpha` saydamlığında beyaz
+/// (kapalı uygulamada düşük: gri görünür). `vertical`: yüzey `thick` x `len`
+/// boyundadır, çizgi dikey çizilir.
+pub fn draw_split_line(dc: &ID2D1DeviceContext, len: f32, thick: f32, n: usize, accent: Option<((u8, u8, u8), (u8, u8, u8))>, alpha: f32, style: LineStyle, vertical: bool) -> Result<()> {
     unsafe {
         if vertical {
             // Yatay çiziz, 90° döndürürüz: (x, y) -> (thick - y, x).
@@ -97,12 +109,25 @@ pub fn draw_split_line(dc: &ID2D1DeviceContext, len: f32, thick: f32, n: usize, 
                 let props = D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES { startPoint: pt(0.0, 0.0), endPoint: pt(len, 0.0) };
                 dc.CreateLinearGradientBrush(&props, None, &coll)?.cast()?
             }
-            None => dc.CreateSolidColorBrush(&color(255, 255, 255, 0.55), None)?.cast()?,
+            None => dc.CreateSolidColorBrush(&color(255, 255, 255, alpha), None)?.cast()?,
         };
         let n = n.max(1);
-        let rr = D2D1_ROUNDED_RECT { rect: D2D_RECT_F { left: 0.0, top: 0.0, right: len, bottom: thick }, radiusX: thick / 2.0, radiusY: thick / 2.0 };
+        let radius = if style == LineStyle::Flat { (thick * 0.25).max(0.5) } else { thick / 2.0 };
+        let rr = D2D1_ROUNDED_RECT { rect: D2D_RECT_F { left: 0.0, top: 0.0, right: len, bottom: thick }, radiusX: radius, radiusY: radius };
         if n == 1 {
             dc.FillRoundedRectangle(&rr, &brush);
+            return Ok(());
+        }
+        if style != LineStyle::Slant {
+            // Yan yana ayrı parçalar; aradaki boşluk biçime göre.
+            let gap = if style == LineStyle::Round { thick.max(2.0) } else { (thick * 0.7).max(1.5) };
+            let w = (len - gap * (n - 1) as f32) / n as f32;
+            for i in 0..n {
+                let x = i as f32 * (w + gap);
+                let r = radius.min(w / 2.0);
+                let seg = D2D1_ROUNDED_RECT { rect: D2D_RECT_F { left: x, top: 0.0, right: x + w, bottom: thick }, radiusX: r, radiusY: r };
+                dc.FillRoundedRectangle(&seg, &brush);
+            }
             return Ok(());
         }
         // Parçalar paralelkenar; dış uçları yuvarlak hatlı maske keser.

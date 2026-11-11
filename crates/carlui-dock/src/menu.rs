@@ -42,9 +42,11 @@ pub enum Cmd {
     Settings,
     RestoreTaskbar,
     Quit,
+    /// Hızlı Erişim yığınına ekle.
+    AddQuick,
 }
 
-const IDS: [(usize, Cmd); 11] = [
+const IDS: [(usize, Cmd); 12] = [
     (1, Cmd::NewWindow),
     (2, Cmd::TogglePin),
     (3, Cmd::CloseWindow),
@@ -56,6 +58,7 @@ const IDS: [(usize, Cmd); 11] = [
     (10, Cmd::Settings),
     (11, Cmd::RestoreTaskbar),
     (12, Cmd::Quit),
+    (13, Cmd::AddQuick),
 ];
 
 // Segoe Fluent Icons glifleri.
@@ -64,6 +67,8 @@ const G_POWER: char = '\u{E7E8}';
 const G_NEW_WINDOW: char = '\u{E78B}';
 const G_PIN: char = '\u{E718}';
 const G_UNPIN: char = '\u{E77A}';
+/// Yıldız (Hızlı Erişim'e ekle).
+const G_QUICK: char = '\u{E734}';
 const G_CLOSE: char = '\u{E8BB}';
 const G_TASKMGR: char = '\u{E9D9}';
 const G_SETTINGS: char = '\u{E713}';
@@ -159,6 +164,9 @@ pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Opti
             rows.push(item(2, t!("Görev çubuğundan kaldır", "Unpin from dock"), glyph(G_UNPIN)));
         } else if !e.is_explorer() {
             rows.push(item(2, t!("Görev çubuğuna sabitle", "Pin to dock"), glyph(G_PIN)));
+        }
+        if !e.is_explorer() && cfg.stacks.iter().any(|s| s.eq_ignore_ascii_case(crate::dock::quick::KEY)) {
+            rows.push(item(13, t!("Hızlı Erişim'e ekle", "Add to Quick Access"), glyph(G_QUICK)));
         }
         match e.windows.len() {
             0 => {}

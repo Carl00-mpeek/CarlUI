@@ -394,7 +394,11 @@ impl App {
                 return;
             }
             Some((i, Kind::Folder)) => {
-                self.dock.stack_menu(i);
+                if self.dock.entries[i].key == dock::quick::KEY {
+                    self.dock.quick_menu(i);
+                } else {
+                    self.dock.stack_menu(i);
+                }
                 self.arm_autohide(900);
                 return;
             }
@@ -442,6 +446,23 @@ impl App {
             (menu::Cmd::CloseWindow | menu::Cmd::CloseAll, Some(i)) => {
                 for &w in &self.dock.entries[i].windows {
                     tracker::close(w);
+                }
+            }
+            (menu::Cmd::AddQuick, Some(i)) => {
+                let e = &self.dock.entries[i];
+                // Sabitlenmişte kendi yolu (.lnk/exe/AppsFolder), değilse AUMID ya da exe.
+                let exe = if e.exe.is_empty() { e.app.exe.clone() } else { e.exe.clone() };
+                let mut targets = Vec::new();
+                if let Some(p) = &e.pin {
+                    targets.push(p.path.clone());
+                }
+                if !e.app.aumid.is_empty() {
+                    targets.push(format!("shell:AppsFolder\\{}", e.app.aumid));
+                }
+                targets.push(exe);
+                let target = targets.join(" | ");
+                if !targets.iter().any(|t| dock::quick::add(t)) {
+                    carlui_core::warn!("hızlı erişime eklenemedi: {target}");
                 }
             }
             (menu::Cmd::Settings, _) => procs::settings(),

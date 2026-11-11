@@ -646,7 +646,7 @@ impl Default for DockConfig {
         Self {
             position: DockPosition::Bottom,
             separators: true,
-            line_indicator: false,
+            line_indicator: true,
             taskbar: false,
             taskbar_size: TaskbarSize::Full,
             other_screens: false,

@@ -40,6 +40,7 @@ pub fn stack_label(name: &str, dir: &std::path::Path) -> String {
         "pictures" => t!("Resimler", "Pictures").into(),
         "music" => t!("Müzik", "Music").into(),
         "videos" => t!("Videolar", "Videos").into(),
+        super::quick::KEY => t!("Hızlı Erişim", "Quick Access").into(),
         _ => dir.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| dir.display().to_string()),
     }
 }
@@ -205,10 +206,11 @@ impl Dock {
     pub fn stack_menu(&mut self, i: usize) {
         let Some(e) = self.entries.get(i) else { return };
         let downloads = e.key == "downloads";
+        let quick = e.key == super::quick::KEY;
         let dir = if e.exe.is_empty() { win::downloads_dir() } else { Some(PathBuf::from(&e.exe)) };
         let Some(dir) = dir else { return };
         let name = e.name.clone();
-        let files = recent_files(&dir, downloads);
+        let files = if quick { super::quick::items(&dir) } else { recent_files(&dir, downloads) };
         // Simgeler saklanır; USB/ağdaki İndirilenler pencereyi bekletmez.
         let icon = |p: &str| crate::iconcache::shell(p, 64).map(Icon::Image).unwrap_or(Icon::None);
         let cells: Vec<Cell> = files
@@ -225,10 +227,17 @@ impl Dock {
                 Cell { id: 10 + n, text, icon: icon(&p.display().to_string()) }
             })
             .collect();
-        let empty = if downloads { t!("Henüz indirilen dosya yok", "No downloads yet") } else { t!("Klasör boş", "Folder is empty") };
+        let empty = if downloads {
+            t!("Henüz indirilen dosya yok", "No downloads yet")
+        } else if quick {
+            t!("Boş: sağ tıkla klasör ya da uygulama ekle", "Empty: right-click to add folders or apps")
+        } else {
+            t!("Klasör boş", "Folder is empty")
+        };
+        let button = if quick { t!("Düzenle", "Edit") } else { t!("Klasörü aç", "Open folder") };
         let (at, side) = self.menu_at(i);
         self.menu_open = true;
-        let id = glassgrid::run_side(self.hwnd, &name, (1, t!("Klasörü aç", "Open folder").into()), empty, cells, self.cfg.dock.menu_accent_color(glassmenu::accent), at, side).unwrap_or(0);
+        let id = glassgrid::run_side(self.hwnd, &name, (1, button.into()), empty, cells, self.cfg.dock.menu_accent_color(glassmenu::accent), at, side).unwrap_or(0);
         self.menu_open = false;
         unsafe {
             let _ = PostMessageW(self.hwnd, WM_NULL, WPARAM(0), LPARAM(0));
@@ -241,6 +250,33 @@ impl Dock {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Hızlı Erişim sağ tık menüsü: klasör / uygulama ekle, düzenle.
+    pub fn quick_menu(&mut self, i: usize) {
+        let Some(e) = self.entries.get(i) else { return };
+        let dir = PathBuf::from(&e.exe);
+        let rows = vec![
+            Row::Item { id: 1, text: t!("Klasör ekle…", "Add folder…").into(), icon: Icon::Glyph('\u{E8F4}', None) },
+            Row::Item { id: 2, text: t!("Uygulama ya da dosya ekle…", "Add app or file…").into(), icon: Icon::Glyph('\u{E710}', None) },
+            Row::Sep,
+            Row::Item { id: 3, text: t!("Düzenle (klasörü aç)", "Edit (open folder)").into(), icon: Icon::Glyph('\u{E70F}', None) },
+        ];
+        let id = self.menu(i, rows);
+        let target = match id {
+            1 => super::quick::pick(self.hwnd, true),
+            2 => super::quick::pick(self.hwnd, false),
+            3 => {
+                open(&dir.display().to_string());
+                None
+            }
+            _ => None,
+        };
+        if let Some(t) = target {
+            if !super::quick::add(&t) {
+                carlui_core::warn!("hızlı erişime eklenemedi: {t}");
+            }
         }
     }
 

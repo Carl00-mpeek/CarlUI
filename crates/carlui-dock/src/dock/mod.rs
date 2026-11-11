@@ -21,6 +21,7 @@ mod actions;
 mod layout;
 mod mouse;
 mod places;
+pub mod quick;
 mod status;
 pub use places::{open as open_uri, TIMER_TRASH};
 pub use status::{Part, TIMER_STATUS};
@@ -60,6 +61,8 @@ use windows::{
 pub const TIMER_REGION: usize = 11;
 pub const TIMER_CLEANUP: usize = 12;
 pub const TIMER_AUTOHIDE: usize = 13;
+/// Çizgi göstergesi en çok bu kadar parçaya bölünür (daha çok pencerede de bu kadar).
+const MAX_SPLIT: usize = 6;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
@@ -291,18 +294,27 @@ impl Dock {
         let dot_brush = comp.CreateSurfaceBrushWithSurface(&dot)?;
         let active_brush = comp.CreateSurfaceBrushWithSurface(&accent)?;
         let hl_brush = comp.CreateColorBrushWithColor(carlui_ui::glass::exact(theme.hover))?;
-        // Çizgi göstergesi: 1-4 pencere x (arka plan, önde) için hazır yüzeyler.
+        // Çizgi göstergesi: 1-MAX_SPLIT pencere x (arka plan, önde) için hazır
+        // yüzeyler, sonda kapalı (sabitlenmiş ama açık olmayan) uygulamanın gri
+        // çizgisi. Parça biçimi görünüme göre: Minimal yuvarlak, Compact çapraz, Full düz.
         let mut line_brushes = Vec::new();
         if cfg.dock.line_indicator {
+            let style = match (taskbar, tsize) {
+                (false, _) => icons::LineStyle::Round,
+                (true, TaskbarSize::Compact) => icons::LineStyle::Slant,
+                (true, TaskbarSize::Full) => icons::LineStyle::Flat,
+            };
             let (len, thick) = ((26.0 * s).round(), (3.0 * s).round().max(2.0));
             let (lw, lh) = if vert { (thick, len) } else { (len, thick) };
-            for n in 1..=4usize {
+            for n in 1..=MAX_SPLIT {
                 for active in [false, true] {
                     let acc = active.then_some(((a0.0, a0.1, a0.2), (a1.0, a1.1, a1.2)));
-                    let sf = gfx.surface(lw, lh, |dc| icons::draw_split_line(dc, len, thick, n, acc, vert))?;
+                    let sf = gfx.surface(lw, lh, |dc| icons::draw_split_line(dc, len, thick, n, acc, 0.85, style, vert))?;
                     line_brushes.push(comp.CreateSurfaceBrushWithSurface(&sf)?);
                 }
             }
+            let sf = gfx.surface(lw, lh, |dc| icons::draw_split_line(dc, len, thick, 1, None, 0.28, style, vert))?;
+            line_brushes.push(comp.CreateSurfaceBrushWithSurface(&sf)?);
         }
 
         let mut dock = Self {
@@ -517,7 +529,8 @@ impl Dock {
             icon,
             hl,
             dots,
-            dots_sig: (0, false),
+            // İlk güncellemede kapalı uygulamanın çizgisi de çizilsin.
+            dots_sig: (usize::MAX, false),
             x: 0.0,
             leaving: None,
             fresh: true,
@@ -632,14 +645,18 @@ impl Dock {
             if name.is_empty() || name == "downloads" {
                 continue;
             }
-            let Some(dir) = win::stack_dir(name) else { continue };
+            let is_quick = name.eq_ignore_ascii_case(quick::KEY);
+            let dir = if is_quick { quick::dir() } else { win::stack_dir(name) };
+            let Some(dir) = dir else { continue };
             let p = dir.display().to_string();
-            let key = format!("stack:{}", p.to_lowercase());
+            let key = if is_quick { quick::KEY.to_string() } else { format!("stack:{}", p.to_lowercase()) };
             if want.iter().any(|w| w.key == key) {
                 continue;
             }
             let label = places::stack_label(name, &dir);
-            let mut w = place(&key, Kind::Folder, &label, p.clone());
+            // Hızlı Erişim: Gezgin'deki yıldızlı Hızlı Erişim simgesi.
+            let icon = if is_quick { quick::ICON.to_string() } else { p.clone() };
+            let mut w = place(&key, Kind::Folder, &label, icon);
             w.exe = p;
             want.push(w);
         }

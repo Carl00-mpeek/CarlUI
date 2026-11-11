@@ -94,6 +94,20 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     );
 
     f.section(p, t!("Klasör yığınları", "Folder stacks"));
+    let quick_on = c.stacks.iter().any(|s| s.eq_ignore_ascii_case("quick"));
+    f.toggle(
+        p,
+        t!("Hızlı Erişim", "Quick Access"),
+        t!("Seçtiğin klasör ve uygulamalar tek simgede; sağ tıkla ekle, uygulamanın menüsünden de eklenir.", "Your chosen folders and apps in one icon; right-click to add, or from an app's menu."),
+        quick_on,
+        |c| {
+            if c.dock.stacks.iter().any(|s| s.eq_ignore_ascii_case("quick")) {
+                c.dock.stacks.retain(|s| !s.eq_ignore_ascii_case("quick"));
+            } else {
+                c.dock.stacks.insert(0, "quick".into());
+            }
+        },
+    );
     let names = [t!("Masaüstü", "Desktop"), t!("Belgeler", "Documents"), t!("Resimler", "Pictures"), t!("Müzik", "Music"), t!("Videolar", "Videos")];
     for (key, name) in STACK_PRESETS.iter().zip(names) {
         let on = c.stacks.iter().any(|s| s.eq_ignore_ascii_case(key));
