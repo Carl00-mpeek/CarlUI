@@ -1,5 +1,29 @@
 # Sürüm notları
 
+## v0.9.8 — Dock tasarımları, Ada görünümleri ve görev yöneticisi düzeltmeleri (2026-11-11)
+
+**Yeni: Dock konumu ve görünümü.** Dock artık altta, solda ya da sağda durabilir.
+Altta "görev çubuğu" görünümü seçilebilir: Minimal (yüzen dock), Compact (ortada
+simgeler, yanında ağ/ses/pil ve saat) ya da Full (kenardan kenara, saat sağ uçta).
+Saat ayarlardaki 12/24 saat seçimine uyar ve ayar değişince hemen güncellenir.
+
+**Yeni: Dock'a ek özellikler.** Klasör yığınları (İndirilenler gibi klasörler dock'ta
+ızgara olarak açılır), açık uygulamalar için çizgi gösterge, ayırıcılar, medya
+düğmeleri ve diğer monitörlerde de dock. Ayarlardan açılan çark dock: kısayola
+(varsayılan Mouse5) basınca imlecin çevresinde uygulama halkası açılır.
+
+**Yeni: Ada görünümleri.** Hap, Çentik (üst kenara yapışık) ve Kart görünümleri;
+12/24 saat seçimi, daha çok tarih biçimi ve açılan kısım için ayrı tarih biçimi.
+
+**Yeni: Win menüsü** kayarak ve belirerek açılır.
+
+**Görev yöneticisi:** Başlangıç listesine RunOnce, ilke (policy) ve Mağaza
+uygulamalarının başlangıç girdileri eklendi; ikinci kez açılınca var olan pencere öne
+gelir; üstüne gelince yalnızca değişen satır yeniden çizilir.
+
+**Düzeltme:** Çark dock açıkken bir uygulama kapanırsa seçim başka uygulamaya
+kaymıyor.
+
 ## v0.9.7 — Dock, Bluetooth ve oyunda gösterge düzeltmeleri (2026-11-08)
 
 **Düzeltme: Dock'tan "Programı kapat" masaüstünü siyah bırakıyordu.** Dosya Gezgini
