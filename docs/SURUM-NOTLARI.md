@@ -1,5 +1,33 @@
 # Sürüm notları
 
+## v0.9.9 — Görev çubuğu panelleri, Hızlı Erişim yığını ve hata düzeltmeleri (2026-11-11)
+
+**Yeni: Görev çubuğunda ayrı paneller.** Compact ve Full görünümde ses simgesi yalnızca
+ses panelini (kaydırıcı, çıkış aygıtları, uygulama sesleri), ağ simgesi ağ panelini
+(Ethernet durumu, görünen kablosuz ağlar; kayıtlı ağa tek tıkla bağlanır) açar. Ok
+yalnızca parlaklık ve açık uygulamaları gösterir.
+
+**Yeni: Dock'ta Hızlı Erişim yığını.** Simgesi içindeki ilk dört öğeyi üst üste
+gösterir; ızgara dock tarafından kayarak açılır, solarak kapanır. Kapalı uygulamada
+çizgi yok, arkadaki uygulamada sönük gri çizgi var.
+
+**Güvenlik: Tarayıcı eklentisi eşleştirmesi.** Kasa artık yalnızca onayladığın
+eklentiye parola verir: eklenti ilk kez kasayı kullanmak isteyince CarlUI bir kez onay
+sorar. Eklenti 1.7.0'a güncellendi; Chrome/Edge'de eklentiler sayfasından **Yeniden
+yükle**'ye bas.
+
+**Düzeltmeler:**
+- Ayarlar, dosya o an okunamazsa varsayılana sıfırlanmıyor; bir modülün kaydı
+  ötekinin değişikliğini ezmiyor.
+- Adında "İ" geçen dosya indirirken, panodan resim alırken ve görev yöneticisinde
+  çökme olasılığı giderildi.
+- Donan bir modül artık bütün CarlUI iletişimini kilitleyemiyor.
+- İndirme yönlendirmelerinde çerezler başka siteye taşınmıyor; `site.com@baska.com`
+  gibi adreslerde gerçek sunucu gösteriliyor.
+- Explorer geç açılınca görev çubuğu gizleme ayarın yanlış kaydedilmiyor.
+- Dock'ta sürükleme başarısız olursa simgenin grubu korunuyor; kasa dosyası diske tam
+  yazılmadan yerine konmuyor.
+
 ## v0.9.8 — Dock tasarımları, Ada görünümleri ve görev yöneticisi düzeltmeleri (2026-11-11)
 
 **Yeni: Dock konumu ve görünümü.** Dock artık altta, solda ya da sağda durabilir.
