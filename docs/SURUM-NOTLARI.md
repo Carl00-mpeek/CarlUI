@@ -28,6 +28,9 @@ yükle**'ye bas.
 - Dock'ta sürükleme başarısız olursa simgenin grubu korunuyor; kasa dosyası diske tam
   yazılmadan yerine konmuyor.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`3d15504d079b34e58f8df1599a2ecb73fa7b147a876f54ad6ad14d1c90df60e2`
+
 ## v0.9.8 — Dock tasarımları, Ada görünümleri ve görev yöneticisi düzeltmeleri (2026-11-11)
 
 **Yeni: Dock konumu ve görünümü.** Dock artık altta, solda ya da sağda durabilir.
