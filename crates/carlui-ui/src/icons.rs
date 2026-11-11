@@ -2,6 +2,7 @@
 
 use windows::{
     core::*,
+    Foundation::Numerics::Matrix3x2,
     Win32::{
         Foundation::*,
         Graphics::{
@@ -196,6 +197,53 @@ pub fn draw_bitmap(dc: &ID2D1DeviceContext, src: &IWICFormatConverter, px: f32) 
         dc.DrawBitmap(&bmp, Some(&dest), 1.0, D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC, None, None);
     }
     Ok(())
+}
+
+/// Yığın simgesi (Hızlı Erişim): içindeki öğelerin küçük simgeleri hafif
+/// eğik, birbirinin üstüne taşarak dağınık durur; içinde bir sürü şey olduğu
+/// bir bakışta belli olsun. İlk öğe en üstte. En çok dört simge kullanılır.
+pub fn draw_pile(dc: &ID2D1DeviceContext, srcs: &[IWICFormatConverter], px: f32) -> Result<()> {
+    // (merkez x, merkez y, açı°) px oranında; arkadan öne doğru sırayla çizilir.
+    const LAYOUT: [&[(f32, f32, f32)]; 4] = [
+        &[(0.5, 0.5, 0.0)],
+        &[(0.37, 0.41, -10.0), (0.62, 0.59, 8.0)],
+        &[(0.33, 0.35, -12.0), (0.68, 0.38, 10.0), (0.5, 0.65, -4.0)],
+        &[(0.31, 0.32, -11.0), (0.69, 0.31, 9.0), (0.32, 0.69, 7.0), (0.67, 0.68, -6.0)],
+    ];
+    let n = srcs.len().min(4);
+    if n == 0 {
+        return Ok(());
+    }
+    let size = if n == 1 { px * 0.8 } else { px * 0.58 };
+    unsafe {
+        let mut base = Matrix3x2::default();
+        dc.GetTransform(&mut base);
+        for (k, &(fx, fy, deg)) in LAYOUT[n - 1].iter().enumerate().rev() {
+            let bmp = dc.CreateBitmapFromWicBitmap(&srcs[k], None)?;
+            let (cx, cy) = (fx * px, fy * px);
+            let (s, c) = deg.to_radians().sin_cos();
+            // Merkezin çevresinde döndür, sonra yüzeyin kendi kaymasını uygula.
+            let rot = Matrix3x2 { M11: c, M12: s, M21: -s, M22: c, M31: cx - cx * c + cy * s, M32: cy - cx * s - cy * c };
+            dc.SetTransform(&mul(&rot, &base));
+            let h = size / 2.0;
+            let dest = D2D_RECT_F { left: cx - h, top: cy - h, right: cx + h, bottom: cy + h };
+            dc.DrawBitmap(&bmp, Some(&dest), 1.0, D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC, None, None);
+        }
+        dc.SetTransform(&base);
+    }
+    Ok(())
+}
+
+/// İki 2B dönüşümün bileşkesi: önce `a`, sonra `b`.
+fn mul(a: &Matrix3x2, b: &Matrix3x2) -> Matrix3x2 {
+    Matrix3x2 {
+        M11: a.M11 * b.M11 + a.M12 * b.M21,
+        M12: a.M11 * b.M12 + a.M12 * b.M22,
+        M21: a.M21 * b.M11 + a.M22 * b.M21,
+        M22: a.M21 * b.M12 + a.M22 * b.M22,
+        M31: a.M31 * b.M11 + a.M32 * b.M21 + b.M31,
+        M32: a.M31 * b.M12 + a.M32 * b.M22 + b.M32,
+    }
 }
 
 /// Windows logosu: dört yumuşak köşeli kare, mavi degrade.

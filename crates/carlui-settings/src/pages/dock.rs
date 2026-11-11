@@ -88,7 +88,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.toggle(
         p,
         t!("Çizgi göstergesi", "Line indicator"),
-        t!("Açık uygulamanın altında nokta yerine çizgi: öndeyse vurgu renginde, arkadaysa gri; birden çok pencerede çapraz kesiklerle bölünür.", "A line instead of dots under running apps: accent when in front, gray in the background; split with diagonal cuts for multiple windows."),
+        t!("Açık uygulamanın altında nokta yerine çizgi: öndeyse vurgu renginde, arkadaysa sönük gri.", "A line instead of dots under running apps: accent when in front, dim gray in the background."),
         c.line_indicator,
         |c| c.dock.line_indicator ^= true,
     );

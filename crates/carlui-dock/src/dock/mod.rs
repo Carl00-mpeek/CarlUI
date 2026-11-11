@@ -64,6 +64,16 @@ pub const TIMER_AUTOHIDE: usize = 13;
 /// Çizgi göstergesi en çok bu kadar parçaya bölünür (daha çok pencerede de bu kadar).
 const MAX_SPLIT: usize = 6;
 
+/// Çizgi göstergesinin boyu ve kalınlığı (piksel): öndeki uygulamada tam,
+/// arka plandakinde bir tık küçük.
+fn line_size(s: f32, active: bool) -> (f32, f32) {
+    if active {
+        ((26.0 * s).round(), (3.0 * s).round().max(2.0))
+    } else {
+        ((21.0 * s).round(), (2.5 * s).round().max(2.0))
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
     Start,
@@ -77,9 +87,12 @@ pub enum Kind {
 }
 
 /// İkon kaynakları sırayla denenir; hiçbiri olmazsa pencerenin kendi ikonu.
+#[derive(Clone)]
 enum IconSrc {
     Glyph,
     Sources(Vec<String>, Option<HWND>),
+    /// Yığın: içindeki öğelerin simgeleri üst üste (boşsa ikinci alandaki simge).
+    Pile(Vec<String>, String),
 }
 
 pub struct Entry {
@@ -98,6 +111,8 @@ pub struct Entry {
     hl: ShapeVisual,
     dots: ContainerVisual,
     dots_sig: (usize, bool),
+    /// Yığın simgesindeki öğeler; değişince simge yeniden çizilir.
+    pile: Vec<String>,
     /// Dock'un ortasına göre merkez konumu.
     x: f32,
     leaving: Option<Instant>,
@@ -295,8 +310,9 @@ impl Dock {
         let active_brush = comp.CreateSurfaceBrushWithSurface(&accent)?;
         let hl_brush = comp.CreateColorBrushWithColor(carlui_ui::glass::exact(theme.hover))?;
         // Çizgi göstergesi: 1-MAX_SPLIT pencere x (arka plan, önde) için hazır
-        // yüzeyler, sonda kapalı (sabitlenmiş ama açık olmayan) uygulamanın gri
-        // çizgisi. Parça biçimi görünüme göre: Minimal yuvarlak, Compact çapraz, Full düz.
+        // yüzeyler. Öndeki uygulama vurgu renginde; arka plandaki sönük gri ve
+        // biraz daha küçük; kapalı uygulamada çizgi yok. Parça biçimi görünüme
+        // göre: Minimal yuvarlak, Compact çapraz, Full düz.
         let mut line_brushes = Vec::new();
         if cfg.dock.line_indicator {
             let style = match (taskbar, tsize) {
@@ -304,17 +320,15 @@ impl Dock {
                 (true, TaskbarSize::Compact) => icons::LineStyle::Slant,
                 (true, TaskbarSize::Full) => icons::LineStyle::Flat,
             };
-            let (len, thick) = ((26.0 * s).round(), (3.0 * s).round().max(2.0));
-            let (lw, lh) = if vert { (thick, len) } else { (len, thick) };
             for n in 1..=MAX_SPLIT {
                 for active in [false, true] {
+                    let (len, thick) = line_size(s, active);
+                    let (lw, lh) = if vert { (thick, len) } else { (len, thick) };
                     let acc = active.then_some(((a0.0, a0.1, a0.2), (a1.0, a1.1, a1.2)));
-                    let sf = gfx.surface(lw, lh, |dc| icons::draw_split_line(dc, len, thick, n, acc, 0.85, style, vert))?;
+                    let sf = gfx.surface(lw, lh, |dc| icons::draw_split_line(dc, len, thick, n, acc, 0.38, style, vert))?;
                     line_brushes.push(comp.CreateSurfaceBrushWithSurface(&sf)?);
                 }
             }
-            let sf = gfx.surface(lw, lh, |dc| icons::draw_split_line(dc, len, thick, 1, None, 0.28, style, vert))?;
-            line_brushes.push(comp.CreateSurfaceBrushWithSurface(&sf)?);
         }
 
         let mut dock = Self {
@@ -449,10 +463,17 @@ impl Dock {
         self.cfg.dock.pinned.clone()
     }
 
-    fn make_entry(&self, gfx: &Gfx, key: String, kind: Kind, group: u8, name: String, src: IconSrc) -> Result<Entry> {
-        let m = self.m;
-        let px = m.icon;
-        let surface = match (&kind, &src) {
+    fn icon_surface(&self, gfx: &Gfx, kind: &Kind, src: &IconSrc) -> Result<CompositionDrawingSurface> {
+        let px = self.m.icon;
+        if let IconSrc::Pile(paths, fallback) = src {
+            let imgs: Vec<_> = paths.iter().filter_map(|p| icons::shell_icon(&gfx.wic, p, (px * 0.6) as i32).ok()).collect();
+            if !imgs.is_empty() {
+                return gfx.surface(px, px, |dc| icons::draw_pile(dc, &imgs, px));
+            }
+            let fb = IconSrc::Sources(vec![fallback.clone()], None);
+            return self.icon_surface(gfx, kind, &fb);
+        }
+        Ok(match (kind, src) {
             (Kind::Start, _) => gfx.surface(px, px, |dc| icons::draw_start(dc, px))?,
             (Kind::Search, _) => gfx.surface(px, px, |dc| icons::draw_search(dc, px, &gfx.round_stroke))?,
             (Kind::Tray, _) => gfx.surface(px, px, |dc| icons::draw_chevron(dc, px, &gfx.round_stroke))?,
@@ -470,7 +491,17 @@ impl Dock {
                     }
                 }
             }
-            (_, IconSrc::Glyph) => gfx.surface(px, px, |_| Ok(()))?,
+            _ => gfx.surface(px, px, |_| Ok(()))?,
+        })
+    }
+
+    fn make_entry(&self, gfx: &Gfx, key: String, kind: Kind, group: u8, name: String, src: IconSrc) -> Result<Entry> {
+        let m = self.m;
+        let px = m.icon;
+        let surface = self.icon_surface(gfx, &kind, &src)?;
+        let pile = match &src {
+            IconSrc::Pile(p, _) => p.clone(),
+            _ => Vec::new(),
         };
 
         let comp = &self.comp;
@@ -531,6 +562,7 @@ impl Dock {
             dots,
             // İlk güncellemede kapalı uygulamanın çizgisi de çizilsin.
             dots_sig: (usize::MAX, false),
+            pile,
             x: 0.0,
             leaving: None,
             fresh: true,
@@ -654,9 +686,12 @@ impl Dock {
                 continue;
             }
             let label = places::stack_label(name, &dir);
-            // Hızlı Erişim: Gezgin'deki yıldızlı Hızlı Erişim simgesi.
-            let icon = if is_quick { quick::ICON.to_string() } else { p.clone() };
-            let mut w = place(&key, Kind::Folder, &label, icon);
+            let mut w = place(&key, Kind::Folder, &label, p.clone());
+            // Hızlı Erişim: içindeki öğelerin simgeleri üst üste (boşsa ev simgesi).
+            if is_quick {
+                let items = quick::items(&dir).into_iter().take(4).map(|p| p.display().to_string()).collect();
+                w.src = IconSrc::Pile(items, quick::ICON.to_string());
+            }
             w.exe = p;
             want.push(w);
         }
@@ -680,8 +715,17 @@ impl Dock {
                     }
                     e
                 }
-                None => self.make_entry(gfx, w.key.clone(), w.kind, w.group, w.name.clone(), w.src)?,
+                None => self.make_entry(gfx, w.key.clone(), w.kind, w.group, w.name.clone(), w.src.clone())?,
             };
+            // Yığının içeriği değiştiyse simgesi yeniden çizilir.
+            if let IconSrc::Pile(p, _) = &w.src {
+                if *p != e.pile {
+                    let brush = self.comp.CreateSurfaceBrushWithSurface(&self.icon_surface(gfx, &e.kind, &w.src)?)?;
+                    brush.SetStretch(CompositionStretch::Fill)?;
+                    e.icon.SetBrush(&brush)?;
+                    e.pile = p.clone();
+                }
+            }
             e.group = w.group;
             e.name = w.name;
             e.pin = w.pin;

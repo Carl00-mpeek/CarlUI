@@ -185,7 +185,7 @@ impl Dock {
         let dh = (4.0 * m.s).round();
         let lines = !self.line_brushes.is_empty();
         for e in &mut self.entries {
-            let n = e.windows.len().min(if lines { MAX_SPLIT } else { 4 });
+            let n = e.windows.len().min(if lines { self.line_brushes.len() / 2 } else { 4 });
             let active = n > 0 && e.windows.contains(&foreground);
             if e.dots_sig == (n, active) {
                 continue;
@@ -195,12 +195,15 @@ impl Dock {
             kids.RemoveAll()?;
             let y = if self.side == DockPosition::Left { (7.0 * m.s - dh).round() } else { (m.h - 7.0 * m.s).round() };
             if lines {
-                // Çizgi: boy sabit, pencere sayısınca bölünür; kapalı uygulamada gri.
-                if n > 0 || e.kind == Kind::App {
-                    let brush = if n == 0 { self.line_brushes.last().unwrap() } else { &self.line_brushes[(n - 1) * 2 + active as usize] };
-                    let (len, thick) = ((26.0 * m.s).round(), (3.0 * m.s).round().max(2.0));
+                // Çizgi: boy sabit, pencere sayısınca bölünür; kapalı uygulamada yok.
+                if n > 0 {
+                    let brush = &self.line_brushes[(n - 1) * 2 + active as usize];
+                    let (len, thick) = super::line_size(m.s, active);
+                    let full = super::line_size(m.s, true).1;
+                    // İnce çizgi tam kalınlıktakinin ortasına hizalanır.
+                    let mid = ((full - thick) / 2.0).round();
                     let x = ((m.slot - len) / 2.0).round();
-                    let y = if self.side == DockPosition::Left { (7.0 * m.s - thick).round() } else { (m.h - 6.0 * m.s).round() };
+                    let y = if self.side == DockPosition::Left { (7.0 * m.s - full).round() + mid } else { (m.h - 6.0 * m.s).round() + mid };
                     let d = self.comp.CreateSpriteVisual()?;
                     d.SetSize(if self.side.vertical() { v2(thick, len) } else { v2(len, thick) })?;
                     d.SetBrush(brush)?;

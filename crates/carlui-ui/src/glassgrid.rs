@@ -289,6 +289,46 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
     if handled { LRESULT(0) } else { DefWindowProcW(hwnd, msg, wp, lp) }
 }
 
+const OPEN_MS: f32 = 190.0;
+const CLOSE_MS: f32 = 120.0;
+
+/// Açılış/kapanış animasyonu: pencere tam boyda kalır, yalnızca yeri ve
+/// saydamlığı değişir (Win menüsündeki gibi; boyut değişince DWM takılıyor).
+struct Anim {
+    hwnd: HWND,
+    x: i32,
+    y: i32,
+    /// Kapalıyken (görünürlük 0) yerinden ne kadar kayık durduğu.
+    dir: (f32, f32),
+}
+
+impl Anim {
+    fn frame(&self, reveal: f32) {
+        let r = reveal.clamp(0.0, 1.0);
+        let a = (r.powf(0.6) * 255.0).round() as u8;
+        let k = 1.0 - r;
+        unsafe {
+            let _ = SetLayeredWindowAttributes(self.hwnd, COLORREF(0), a, LWA_ALPHA);
+            let _ = SetWindowPos(self.hwnd, None, self.x + (self.dir.0 * k).round() as i32, self.y + (self.dir.1 * k).round() as i32, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    }
+}
+
+/// Tek mesajı işler; ızgaranın dışına tıklamak kapatır. WM_QUIT'te false.
+unsafe fn pump(hwnd: HWND, msg: &MSG) -> bool {
+    if msg.message == WM_QUIT {
+        PostQuitMessage(msg.wParam.0 as i32);
+        STATE.with(|s| s.borrow_mut().as_mut().map(|s| s.done = true));
+        return false;
+    }
+    if matches!(msg.message, WM_LBUTTONDOWN | WM_RBUTTONDOWN | WM_MBUTTONDOWN | WM_NCLBUTTONDOWN | WM_NCRBUTTONDOWN) && msg.hwnd != hwnd {
+        STATE.with(|s| s.borrow_mut().as_mut().map(|s| s.done = true));
+    }
+    let _ = TranslateMessage(msg);
+    DispatchMessageW(msg);
+    true
+}
+
 fn register() -> PCWSTR {
     let name = w!("CarlUI.GlassGrid");
     unsafe {
@@ -374,7 +414,17 @@ pub fn run_side(owner: HWND, title: &str, action: (usize, String), empty: &str, 
     let class = register();
     unsafe {
         let inst: HINSTANCE = GetModuleHandleW(None).unwrap_or_default().into();
-        let hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, class, w!(""), WS_POPUP, x, y, pw, ph, owner, None, inst, None).ok()?;
+        // Katmanlı: açılış/kapanışta saydamlığı DWM birleştirir, yeniden çizim gerekmez.
+        let hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED, class, w!(""), WS_POPUP, x, y, pw, ph, owner, None, inst, None).ok()?;
+        let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), 0, LWA_ALPHA);
+        // Dock'tan dışarı doğru süzülür: alttaysa aşağıdan, yandaysa dock tarafından.
+        let dist = 16.0 * scale;
+        let dir = match side {
+            0 => (0.0, dist),
+            s if s > 0 => (-dist, 0.0),
+            _ => (dist, 0.0),
+        };
+        let anim = Anim { hwnd, x, y, dir };
         let on = i32::from(!crate::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let round = DWMWCP_ROUND;
@@ -384,20 +434,47 @@ pub fn run_side(owner: HWND, title: &str, action: (usize, String), empty: &str, 
         let border: u32 = if crate::tone::light() { 0x00E4DCD8 } else { 0x00505050 };
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &border as *const _ as _, 4);
         let _ = DwmExtendFrameIntoClientArea(hwnd, &windows::Win32::UI::Controls::MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
+        anim.frame(0.0);
         let _ = ShowWindow(hwnd, SW_SHOW);
         let _ = SetForegroundWindow(hwnd);
         let _ = SetFocus(hwnd);
+        let done = || STATE.with(|s| s.borrow().as_ref().map(|s| s.done).unwrap_or(true));
         let mut msg = MSG::default();
-        while !STATE.with(|s| s.borrow().as_ref().map(|s| s.done).unwrap_or(true)) {
+        // İlk çizim (çizim hedefi, simgeler) zaman alıyor: süzülme ondan sonra
+        // başlasın, yoksa ilk kısmı kaçırılıp ızgara "pat" diye belirir.
+        let _ = UpdateWindow(hwnd);
+        let t0 = std::time::Instant::now();
+        let mut opened = 0.0;
+        while !done() && opened < 1.0 {
+            while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
+                if !pump(hwnd, &msg) {
+                    break;
+                }
+            }
+            let t = (t0.elapsed().as_secs_f32() * 1000.0 / OPEN_MS).min(1.0);
+            opened = 1.0 - (1.0 - t).powi(3);
+            anim.frame(opened);
+            let _ = DwmFlush();
+        }
+        if !done() {
+            anim.frame(1.0);
+        }
+        while !done() {
             if !GetMessageW(&mut msg, None, 0, 0).as_bool() {
                 PostQuitMessage(msg.wParam.0 as i32);
                 break;
             }
-            if matches!(msg.message, WM_LBUTTONDOWN | WM_RBUTTONDOWN | WM_MBUTTONDOWN | WM_NCLBUTTONDOWN | WM_NCRBUTTONDOWN) && msg.hwnd != hwnd {
-                STATE.with(|s| s.borrow_mut().as_mut().map(|s| s.done = true));
+            pump(hwnd, &msg);
+        }
+        // Kapanış: hızlanarak dock'a doğru süzülüp kaybolur.
+        let t0 = std::time::Instant::now();
+        loop {
+            let t = (t0.elapsed().as_secs_f32() * 1000.0 / CLOSE_MS).min(1.0);
+            anim.frame(opened * (1.0 - t * t));
+            if t >= 1.0 {
+                break;
             }
-            let _ = TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+            let _ = DwmFlush();
         }
         let _ = DestroyWindow(hwnd);
     }

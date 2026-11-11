@@ -396,6 +396,8 @@ impl App {
             Some((i, Kind::Folder)) => {
                 if self.dock.entries[i].key == dock::quick::KEY {
                     self.dock.quick_menu(i);
+                    // Eklenen öğe yığının simgesinde hemen görünsün.
+                    let _ = self.dock.sync(&self.gfx, &self.tracker, true);
                 } else {
                     self.dock.stack_menu(i);
                 }
@@ -461,7 +463,9 @@ impl App {
                 }
                 targets.push(exe);
                 let target = targets.join(" | ");
-                if !targets.iter().any(|t| dock::quick::add(t)) {
+                if targets.iter().any(|t| dock::quick::add(t)) {
+                    let _ = self.dock.sync(&self.gfx, &self.tracker, true);
+                } else {
                     carlui_core::warn!("hızlı erişime eklenemedi: {target}");
                 }
             }
