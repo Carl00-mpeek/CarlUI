@@ -514,7 +514,7 @@ impl App {
         let suspended = targets.iter().all(|r| r.suspended);
         // Boş bölge = tam kare (kırpma yok).
         self.paint(RECT::default()).ok();
-        let g =|c: char| Icon::Glyph(c, None);
+        let g = |c: char| Icon::Glyph(c, None);
         let item = |id: usize, t: &str, icon: Icon| Row::Item { id, text: t.into(), icon };
         let eco = power::eco(pid).unwrap_or(false);
         let rows = vec![

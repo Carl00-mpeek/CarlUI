@@ -47,6 +47,8 @@ pub struct Status {
     pub full: bool,
     /// Ortadaki dizilimde sol kenarı (dock ortasına göre); dizilim yazar.
     pub at: f32,
+    /// Saat biçimi (ayarlardaki 12/24 saat); her yoklamada ayardan alınır.
+    pub hour: carlui_core::config::HourFormat,
 }
 
 fn battery() -> Option<(u8, bool)> {
@@ -59,9 +61,9 @@ fn battery() -> Option<(u8, bool)> {
     Some((s.BatteryLifePercent, s.ACLineStatus == 1))
 }
 
-fn now() -> (String, String) {
+fn now(hour: carlui_core::config::HourFormat) -> (String, String) {
     let t = unsafe { GetLocalTime() };
-    (format!("{:02}:{:02}", t.wHour, t.wMinute), format!("{:02}.{:02}.{}", t.wDay, t.wMonth, t.wYear))
+    (hour.time(t.wHour, t.wMinute), format!("{:02}.{:02}.{}", t.wDay, t.wMonth, t.wYear))
 }
 
 impl Status {
@@ -76,6 +78,7 @@ impl Status {
             quick_w: 0.0,
             full,
             at: 0.0,
+            hour: Default::default(),
         })
     }
 
@@ -91,7 +94,7 @@ impl Status {
             let (l, m) = v.get();
             ((l * 100.0).round() as u8, m)
         });
-        let (time, date) = now();
+        let (time, date) = now(self.hour);
         Sig { wired, vol, battery: battery(), time, date }
     }
 
@@ -213,6 +216,8 @@ impl Dock {
     pub fn status_tick(&mut self, gfx: &Gfx) {
         let (h, s) = (self.m.h, self.m.s);
         let Some(st) = self.status.as_mut() else { return };
+        // Saat ayarı değişince dock baştan kurulmaz; bir sonraki yoklamada yeni biçimle çizilir.
+        st.hour = self.cfg.clock.hour;
         match st.refresh(gfx, h, s, false) {
             Ok(true) => {
                 let _ = self.relayout(true);

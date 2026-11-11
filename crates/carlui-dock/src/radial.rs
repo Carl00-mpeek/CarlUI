@@ -34,7 +34,9 @@ pub const TIMER: usize = 34;
 const MAX_ITEMS: usize = 12;
 
 struct Slot {
-    entry: usize,
+    /// Öğenin anahtarı. Sıra numarası tutulmaz: halka açıkken bir uygulama
+    /// kapanırsa dock listesi kayar ve numara başka öğeyi (ya da hiçbirini) gösterir.
+    entry: String,
     visual: SpriteVisual,
     /// Pencereye göre simge merkezi.
     cx: f32,
@@ -160,7 +162,7 @@ impl Radial {
             v.SetOffset(v3(sx - icon / 2.0, sy - icon / 2.0))?;
             v.SetCenterPoint(Vector3 { X: icon / 2.0, Y: icon / 2.0, Z: 0.0 })?;
             kids.InsertAtTop(&v)?;
-            self.slots.push(Slot { entry: i, visual: v, cx: sx, cy: sy, angle });
+            self.slots.push(Slot { entry: dock.entries[i].key.clone(), visual: v, cx: sx, cy: sy, angle });
         }
 
         // Açılış: merkezden büyüyerek ve belirerek.
@@ -230,8 +232,8 @@ impl Radial {
         (self.pos.0 + s.cx as i32, self.pos.1 + (s.cy - 30.0 * self.s) as i32)
     }
 
-    pub fn hovered(&self) -> Option<(usize, usize)> {
-        self.hovered.map(|k| (k, self.slots[k].entry))
+    pub fn hovered(&self) -> Option<(usize, &str)> {
+        self.hovered.and_then(|k| Some((k, self.slots.get(k)?.entry.as_str())))
     }
 
     /// Zamanlayıcı adımı. Ne yapılacağını döndürür.
@@ -252,7 +254,7 @@ impl Radial {
             self.hovered = h;
             changed = true;
         }
-        let entry = h.map(|k| self.slots[k].entry);
+        let entry = h.and_then(|k| self.slots.get(k)).map(|s| s.entry.clone());
 
         if pressed(VK_ESCAPE) {
             return Tick::Close;
@@ -297,6 +299,7 @@ impl Radial {
 pub enum Tick {
     Idle,
     Hover,
-    Activate(usize),
+    /// Seçilen öğenin anahtarı.
+    Activate(String),
     Close,
 }

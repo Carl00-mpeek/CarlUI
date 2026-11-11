@@ -183,9 +183,12 @@ impl App {
         match r.tick() {
             radial::Tick::Idle => {}
             radial::Tick::Hover => match r.hovered() {
-                Some((k, i)) => {
+                Some((k, key)) => {
                     let anchor = r.label_anchor(k);
-                    let e = &self.dock.entries[i];
+                    let Some(e) = self.dock.entries.iter().find(|e| e.key == key) else {
+                        self.popup.hide();
+                        return;
+                    };
                     let (key, name) = (e.key.clone(), e.name.clone());
                     let side = self.popup.side;
                     self.popup.side = config::DockPosition::Bottom;
@@ -194,10 +197,11 @@ impl App {
                 }
                 None => self.popup.hide(),
             },
-            radial::Tick::Activate(i) => {
+            radial::Tick::Activate(key) => {
                 r.hide(hwnd);
                 self.popup.hide();
-                if i < self.dock.entries.len() {
+                // Halka açıkken liste kaymış olabilir: öğe anahtarıyla bulunur.
+                if let Some(i) = self.dock.index_of(&key) {
                     let fg = unsafe { GetForegroundWindow() };
                     self.dock.activate(i, fg);
                 }

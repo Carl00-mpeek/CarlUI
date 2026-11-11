@@ -340,6 +340,7 @@ impl Dock {
         };
         if taskbar {
             let mut st = status::Status::new(&dock.comp, tsize == TaskbarSize::Full)?;
+            st.hour = cfg.clock.hour;
             st.refresh(gfx, m.h, s, true)?;
             dock.items.Children()?.InsertAtTop(&st.visual)?;
             dock.status = Some(st);
@@ -362,6 +363,11 @@ impl Dock {
     /// Çark dock'ta gösterilecek uygulamalar (dock sırasıyla, en çok `max`).
     pub fn radial_items(&self, max: usize) -> Vec<usize> {
         (0..self.entries.len()).filter(|&i| self.entries[i].kind == Kind::App && self.entries[i].leaving.is_none()).take(max).collect()
+    }
+
+    /// Anahtarı verilen (kapanmakta olmayan) öğenin şimdiki sırası.
+    pub fn index_of(&self, key: &str) -> Option<usize> {
+        self.entries.iter().position(|e| e.key == key && e.leaving.is_none())
     }
 
     /// Öğenin simge fırçası (çark dock aynı simgeyi yeniden çizmeden paylaşır).
