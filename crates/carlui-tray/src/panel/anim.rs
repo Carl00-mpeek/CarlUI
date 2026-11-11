@@ -9,6 +9,10 @@ impl Panel {
         // Ses bölümü her açılışta kapalı başlar (panel kısa kalsın).
         self.audio_open = false;
         self.grow_from = None;
+        if self.mode == Mode::Net {
+            // Önce bilinen liste görünür; tarama bitince liste yenilenir.
+            self.scan_later(3500, true);
+        }
         self.open_with(gfx, host, button, dock_top, true)
     }
 
@@ -115,12 +119,27 @@ impl Panel {
         content.StartAnimation(h!("Offset"), &follow)?;
         gk.InsertAtTop(&content)?;
 
-        let cpx = (bubble * 0.62).round();
-        let chev_s = gfx.surface(cpx, cpx, |dc| icons::draw_chevron(dc, cpx, &gfx.round_stroke))?;
-        let chevron = self.sprite(&chev_s, cpx, cpx, 0.0, 0.0)?;
-        let center = self.comp.CreateExpressionAnimationWithExpression(h!("Vector3(r.Size.X / 2 - C / 2, r.Size.Y / 2 - C / 2, 0)"))?;
+        // Balonun ortasında tıklanan simge: ok, ya da ses/ağ simgesi.
+        let glyph = match self.mode {
+            Mode::Sound => Some('\u{E767}'),
+            Mode::Net => Some(if carlui_core::wired::wired_up() { '\u{E839}' } else { '\u{E701}' }),
+            _ => None,
+        };
+        let (chevron, cw, ch) = match glyph {
+            Some(c) => {
+                let g = carlui_ui::tone::literal_if(true, || self.text.glyph(gfx, c, (bubble * 0.4).round(), 0.95))?;
+                (self.sprite(&g.surface, g.width, g.height, 0.0, 0.0)?, g.width, g.height)
+            }
+            None => {
+                let cpx = (bubble * 0.62).round();
+                let chev_s = gfx.surface(cpx, cpx, |dc| icons::draw_chevron(dc, cpx, &gfx.round_stroke))?;
+                (self.sprite(&chev_s, cpx, cpx, 0.0, 0.0)?, cpx, cpx)
+            }
+        };
+        let center = self.comp.CreateExpressionAnimationWithExpression(h!("Vector3(r.Size.X / 2 - CW / 2, r.Size.Y / 2 - CH / 2, 0)"))?;
         center.SetReferenceParameter(h!("r"), &glass.root)?;
-        center.SetScalarParameter(h!("C"), cpx)?;
+        center.SetScalarParameter(h!("CW"), cw)?;
+        center.SetScalarParameter(h!("CH"), ch)?;
         chevron.StartAnimation(h!("Offset"), &center)?;
         gk.InsertAtTop(&chevron)?;
         self.root.Children()?.InsertAtTop(&glass.root)?;

@@ -15,6 +15,7 @@ mod host;
 mod panel;
 mod quick;
 mod radio_watch;
+mod wifi;
 
 use carlui_core::{
     bus::{BusClient, Event},
@@ -86,13 +87,23 @@ fn cursor() -> (i32, i32) {
 impl App {
     fn publish_state(&self) {
         let open = self.panel.state == State::Open;
-        self.bus.send(&Event::Custom { name: "tray-state".into(), data: serde_json::json!({ "open": open }) });
+        // Ses/ağ panelleri açıkken dock'taki ok dönmesin.
+        let chevron = open && matches!(self.panel.mode, panel::Mode::Full | panel::Mode::Tray);
+        self.bus.send(&Event::Custom { name: "tray-state".into(), data: serde_json::json!({ "open": open, "chevron": chevron }) });
     }
 
     fn toggle(&mut self, data: &serde_json::Value) {
-        if self.panel.state == State::Open {
+        // Görev çubuğu görünümünde her durum simgesi kendi panelini açar ("mode").
+        let mode = panel::Mode::parse(data.get("mode").and_then(|v| v.as_str()));
+        let open = self.panel.state == State::Open;
+        if open && self.panel.mode == mode {
             self.panel.close(true);
         } else {
+            // Başka simgeye tıklandı: açık panel yerini yenisine bırakır.
+            if open {
+                self.panel.close(false);
+            }
+            self.panel.mode = mode;
             let g = |k: &str| data.get(k).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             let button = RECT { left: g("l"), top: g("t"), right: g("r"), bottom: g("b") };
             self.panel.side = g("side").clamp(0, 2) as u8;
@@ -310,6 +321,15 @@ extern "system" fn panel_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
             }
             panel::WM_APP_OUTSIDE => {
                 with_app(|a| a.close(true));
+                LRESULT(0)
+            }
+            panel::WM_APP_NETS => {
+                with_app(|a| {
+                    if a.panel.mode == panel::Mode::Net {
+                        let App { gfx, host, panel, .. } = a;
+                        panel.refresh(gfx, host);
+                    }
+                });
                 LRESULT(0)
             }
             panel::WM_APP_RADIOS => {

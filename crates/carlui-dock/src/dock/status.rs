@@ -19,8 +19,12 @@ pub const TIMER_STATUS: usize = 14;
 /// Tıklanan bölüm.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Part {
-    /// Ağ/ses/pil simgeleri.
-    Quick,
+    /// Ağ simgesi.
+    Net,
+    /// Ses simgesi.
+    Volume,
+    /// Pil simgesi (yalnızca dizüstünde).
+    Battery,
     /// Saat ve tarih.
     Clock,
 }
@@ -43,6 +47,8 @@ pub struct Status {
     /// Yüzey genişliği ve simgelerin bittiği yer (saatin sol kenarı), piksel.
     pub width: f32,
     pub quick_w: f32,
+    /// Bir simge hücresinin genişliği (sırayla ağ, ses, pil).
+    pub cell: f32,
     /// Full: sağ kenara yaslı; değilse dizilimin sonunda (`at`).
     pub full: bool,
     /// Ortadaki dizilimde sol kenarı (dock ortasına göre); dizilim yazar.
@@ -76,6 +82,7 @@ impl Status {
             visual: comp.CreateSpriteVisual()?,
             width: 0.0,
             quick_w: 0.0,
+            cell: 0.0,
             full,
             at: 0.0,
             hour: Default::default(),
@@ -182,6 +189,7 @@ impl Status {
         self.visual.SetSize(v2(width, h))?;
         self.width = width;
         self.quick_w = quick_w;
+        self.cell = cell;
         Ok(())
     }
 }
@@ -248,14 +256,28 @@ impl Dock {
         if la < 0.0 || la > st.width {
             return None;
         }
-        Some(if la < st.quick_w { Part::Quick } else { Part::Clock })
+        if la >= st.quick_w {
+            return Some(Part::Clock);
+        }
+        // Simgeler arasındaki boşluk son simgeye sayılır.
+        let k = (la / st.cell.max(1.0)) as usize;
+        Some(match k {
+            0 => Part::Net,
+            1 => Part::Volume,
+            _ if st.sig.battery.is_some() => Part::Battery,
+            _ => Part::Volume,
+        })
     }
 
-    /// Durum alanının ekran dikdörtgeni ve dock'un üst kenarı (tray paneli için).
-    pub fn status_rect(&self) -> (RECT, i32) {
-        let w = self.status.as_ref().map(|s| s.quick_w).unwrap_or(0.0);
-        let l = (self.len / 2.0 + self.status_left()) as i32 + self.wpos.0;
+    /// Simge hücresinin ekran dikdörtgeni ve dock'un üst kenarı (tray paneli
+    /// balonu bu simgeden çıkar).
+    pub fn status_rect(&self, part: Part) -> (RECT, i32) {
+        let (cell, k) = match &self.status {
+            Some(st) => (st.cell, if part == Part::Volume { 1.0 } else { 0.0 }),
+            None => (0.0, 0.0),
+        };
+        let l = (self.len / 2.0 + self.status_left() + cell * k) as i32 + self.wpos.0;
         let t = self.c0() as i32 + self.wpos.1;
-        (RECT { left: l, top: t, right: l + w as i32, bottom: t + self.m.h as i32 }, t)
+        (RECT { left: l, top: t, right: l + cell as i32, bottom: t + self.m.h as i32 }, t)
     }
 }

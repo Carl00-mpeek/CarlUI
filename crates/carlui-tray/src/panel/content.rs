@@ -4,20 +4,61 @@
 use super::*;
 
 impl Panel {
-    /// Panelin içeriğini (hızlı ayarlar + ikon ızgarası) kurar; yüksekliği döndürür.
+    /// Panelin içeriğini kipine göre kurar; yüksekliği döndürür.
     pub(super) fn build_content(&mut self, gfx: &Gfx, host: &mut Host, content: &ContainerVisual) -> Result<f32> {
+        let s = self.s;
+        let pad = (16.0 * s).round();
+        self.stagger.clear();
+        self.cells.clear();
+        self.wifi = None;
+        self.bt = None;
+        self.vol = None;
+        self.bright = None;
+        self.audio_btn = None;
+        self.devices.clear();
+        self.device_rows.clear();
+        self.apps.clear();
+        self.app_sliders.clear();
+        self.app_icons.clear();
+        self.net_rows.clear();
+        let mut y = pad;
+        match self.mode {
+            Mode::Net => return Ok(self.build_net(gfx, content)?.round()),
+            Mode::Sound => {
+                // Yalnızca ses: ana kaydırıcı, çıkış aygıtları ve uygulama sesleri.
+                y = self.volume_row(gfx, content, y, false)?;
+                y = self.build_mixer(gfx, content, y)?;
+                return Ok((y + pad - (4.0 * s).round()).round());
+            }
+            Mode::Tray => {
+                // Yalnızca parlaklık ve açık uygulamalar.
+                if self.brightness.is_some() {
+                    y = self.bright_row(gfx, content, y)?;
+                    y = self.separator(content, y + (6.0 * s).round())?;
+                }
+            }
+            Mode::Full => {
+                y = self.tiles(gfx, content, y)?;
+                y = self.volume_row(gfx, content, y, true)?;
+                y = self.bright_row(gfx, content, y)?;
+                if self.audio_open {
+                    y = self.build_mixer(gfx, content, y)?;
+                }
+                y = self.separator(content, y + (6.0 * s).round())?;
+            }
+        }
+        self.grid(gfx, host, content, y)
+    }
+
+    /// Hızlı ayar kutucukları: Wi-Fi, Bluetooth.
+    fn tiles(&mut self, gfx: &Gfx, content: &ContainerVisual, y: f32) -> Result<f32> {
         let s = self.s;
         let w = self.width;
         let pad = (16.0 * s).round();
         let gap = (8.0 * s).round();
         let rs = self.theme.radius_scale;
         let kids = content.Children()?;
-        self.stagger.clear();
-        self.cells.clear();
         let off_brush: CompositionBrush = self.comp.CreateColorBrushWithColor(color(carlui_core::theme::Rgba(255, 255, 255, 0x14)))?.cast()?;
-        let mut y = pad;
-
-        // Hızlı ayar kutucukları: Wi-Fi, Bluetooth.
         let tile_w = ((w - pad * 2.0 - gap) / 2.0).floor();
         let tile_h = (48.0 * s).round();
         let mut tiles = Vec::new();
@@ -58,38 +99,45 @@ impl Panel {
         self.wifi = tiles.pop();
         // İçerik yeniden kurulunca (ör. ses karıştırıcısı açıldı) son durum korunur.
         self.set_radios(self.radios);
-        y += tile_h + (12.0 * s).round();
+        Ok(y + tile_h + (12.0 * s).round())
+    }
 
-        // Kaydırıcılar: ses ve (destekleniyorsa) parlaklık.
+    /// Ses kaydırıcısı (`button`: yanında ses bölümü düğmesi).
+    fn volume_row(&mut self, gfx: &Gfx, content: &ContainerVisual, y: f32, button: bool) -> Result<f32> {
         let (vol_value, muted) = self.volume.as_ref().map(|v| v.get()).unwrap_or((0.0, false));
         let vol_glyph = if muted || vol_value == 0.0 { '\u{E74F}' } else { '\u{E767}' };
-        self.vol = Some(self.slider(gfx, content, vol_glyph, y, if muted { 0.0 } else { vol_value }, true)?);
-        self.audio_button(gfx, content, y)?;
-        y += (36.0 * s).round();
-        self.bright = None;
-        if let Some(b) = self.brightness {
-            self.bright = Some(self.slider(gfx, content, '\u{E706}', y, b, false)?);
-            y += (36.0 * s).round();
+        self.vol = Some(self.slider(gfx, content, vol_glyph, y, if muted { 0.0 } else { vol_value }, button)?);
+        if button {
+            self.audio_button(gfx, content, y)?;
         }
-        self.devices.clear();
-        self.device_rows.clear();
-        self.apps.clear();
-        self.app_sliders.clear();
-        self.app_icons.clear();
-        if self.audio_open {
-            y = self.build_mixer(gfx, content, y)?;
-        }
-        y += (6.0 * s).round();
+        Ok(y + (36.0 * self.s).round())
+    }
 
+    /// Parlaklık kaydırıcısı (destekleniyorsa).
+    fn bright_row(&mut self, gfx: &Gfx, content: &ContainerVisual, y: f32) -> Result<f32> {
+        let Some(b) = self.brightness else { return Ok(y) };
+        self.bright = Some(self.slider(gfx, content, '\u{E706}', y, b, false)?);
+        Ok(y + (36.0 * self.s).round())
+    }
+
+    fn separator(&mut self, content: &ContainerVisual, y: f32) -> Result<f32> {
+        let pad = (16.0 * self.s).round();
         let sep = self.comp.CreateSpriteVisual()?;
         sep.SetBrush(&self.comp.CreateColorBrushWithColor(carlui_ui::glass::exact(self.theme.separator))?)?;
-        sep.SetSize(v2(w - pad * 2.0, 1.0))?;
+        sep.SetSize(v2(self.width - pad * 2.0, 1.0))?;
         sep.SetOffset(v3(pad, y.round()))?;
-        kids.InsertAtTop(&sep)?;
+        content.Children()?.InsertAtTop(&sep)?;
         self.stagger.push(sep.cast()?);
-        y += (14.0 * s).round();
+        Ok(y + (14.0 * self.s).round())
+    }
 
-        // İkon ızgarası (4 sütun): ikon + kısa ad.
+    /// İkon ızgarası (4 sütun): ikon + kısa ad.
+    fn grid(&mut self, gfx: &Gfx, host: &mut Host, content: &ContainerVisual, mut y: f32) -> Result<f32> {
+        let s = self.s;
+        let w = self.width;
+        let pad = (16.0 * s).round();
+        let rs = self.theme.radius_scale;
+        let kids = content.Children()?;
         let visible: Vec<usize> = (0..host.icons.len()).filter(|&i| !host.icons[i].hidden).collect();
         let cols = 4usize;
         let cell_w = ((w - pad * 2.0) / cols as f32).floor();

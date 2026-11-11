@@ -562,7 +562,9 @@ impl App {
             Event::Custom { name, data } if name == "tray-state" => {
                 let open = data.get("open").and_then(|v| v.as_bool()).unwrap_or(false);
                 self.tray_open = open;
-                self.dock.set_tray_open(open);
+                // Eski tray "chevron" göndermez: açık olması yeter.
+                let chevron = data.get("chevron").and_then(|v| v.as_bool()).unwrap_or(open);
+                self.dock.set_tray_open(chevron);
                 if !open {
                     self.arm_autohide(900);
                 }
@@ -685,16 +687,19 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
                     a.update_span();
                     if clicked.is_none() {
                         // Görev çubuğu görünümünde sağ uçtaki durum alanı.
+                        // Her simge kendi panelini açar: ağ → ağ listesi, ses → ses ve uygulama sesleri.
                         match a.dock.status_hit(x, y) {
-                            Some(dock::Part::Quick) if screens::child().is_none() => {
+                            Some(p @ (dock::Part::Net | dock::Part::Volume)) if screens::child().is_none() => {
                                 a.popup.hide();
-                                let (r, top) = a.dock.status_rect();
+                                let (r, top) = a.dock.status_rect(p);
+                                let mode = if p == dock::Part::Net { "net" } else { "sound" };
                                 a.bus.send(&Event::Custom {
                                     name: "tray-toggle".into(),
-                                    data: serde_json::json!({ "l": r.left, "t": r.top, "r": r.right, "b": r.bottom, "dock_top": top, "side": a.dock.side() as u8 }),
+                                    data: serde_json::json!({ "l": r.left, "t": r.top, "r": r.right, "b": r.bottom, "dock_top": top, "side": a.dock.side() as u8, "mode": mode }),
                                 });
                             }
-                            Some(dock::Part::Quick) => dock::open_uri("ms-actioncenter:controlcenter/&showFooter=true"),
+                            Some(dock::Part::Battery) => dock::open_uri("ms-settings:batterysaver"),
+                            Some(dock::Part::Net | dock::Part::Volume) => dock::open_uri("ms-actioncenter:controlcenter/&showFooter=true"),
                             Some(dock::Part::Clock) => dock::open_uri("ms-actioncenter:"),
                             None => {}
                         }
@@ -703,9 +708,11 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
                         a.popup.hide();
                         if a.dock.entries[i].kind == Kind::Tray {
                             let (r, top) = a.dock.tray_button(i);
+                            // Görev çubuğunda ses/ağ kendi simgelerinde: ok yalnızca uygulamalar ve parlaklık.
+                            let mode = if a.dock.taskbar() { "tray" } else { "full" };
                             a.bus.send(&Event::Custom {
                                 name: "tray-toggle".into(),
-                                data: serde_json::json!({ "l": r.left, "t": r.top, "r": r.right, "b": r.bottom, "dock_top": top, "side": a.dock.side() as u8 }),
+                                data: serde_json::json!({ "l": r.left, "t": r.top, "r": r.right, "b": r.bottom, "dock_top": top, "side": a.dock.side() as u8, "mode": mode }),
                             });
                         } else if a.dock.entries[i].kind == Kind::Folder {
                             a.dock.stack_menu(i);
@@ -745,6 +752,12 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
                 let (x, y) = xy(lp);
                 with_app(|a| {
                     let idx = a.dock.hit(x, y);
+                    // Ağ simgesine sağ tık: kablo bağlıysa Ethernet, değilse Wi-Fi ayarları.
+                    if idx.is_none() && a.dock.status_hit(x, y) == Some(dock::Part::Net) {
+                        a.popup.hide();
+                        dock::open_uri(if carlui_core::wired::wired_up() { "ms-settings:network-ethernet" } else { "ms-settings:network-wifi" });
+                        return;
+                    }
                     a.context_menu(idx);
                 });
                 LRESULT(0)

@@ -19,6 +19,7 @@ mod anim;
 mod content;
 mod mixer;
 mod mouse;
+mod net;
 
 use crate::{
     audio,
@@ -55,6 +56,8 @@ use windows::{
 pub const WM_APP_RADIOS: u32 = WM_APP + 30;
 pub const WM_APP_BRIGHT: u32 = WM_APP + 31;
 pub const WM_APP_OUTSIDE: u32 = WM_APP + 32;
+/// Ağ taraması bitti (ağ panelinin listesi yenilenir).
+pub const WM_APP_NETS: u32 = WM_APP + 33;
 pub const TIMER_HIDE: usize = 41;
 pub const TIMER_BRIGHT: usize = 42;
 pub const TIMER_REGION: usize = 43;
@@ -66,8 +69,36 @@ pub enum State {
     Closing,
 }
 
+/// Panelin ne gösterdiği. Dock'un görev çubuğu görünümünde (Compact/Full)
+/// durum alanındaki her simge kendi panelini açar; Minimal dock'ta tek panel.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Mode {
+    /// Hızlı ayarlar + kaydırıcılar + ikon ızgarası (Minimal dock).
+    #[default]
+    Full,
+    /// Yalnızca parlaklık ve açık uygulamalar (görev çubuğundaki ok).
+    Tray,
+    /// Yalnızca ses ve uygulama sesleri (ses simgesi).
+    Sound,
+    /// Bağlanılabilir ağlar (ağ simgesi).
+    Net,
+}
+
+impl Mode {
+    pub fn parse(s: Option<&str>) -> Self {
+        match s {
+            Some("tray") => Self::Tray,
+            Some("sound") => Self::Sound,
+            Some("net") => Self::Net,
+            _ => Self::Full,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Hit {
+    /// Ağ panelindeki satır.
+    Net(usize),
     None,
     Cell(usize),
     Wifi,
@@ -199,6 +230,9 @@ pub struct Panel {
     grow_from: Option<f32>,
     /// Dock hangi kenarda: 0 alt, 1 sol, 2 sağ (panel dock'un iç yanında açılır).
     pub side: u8,
+    pub mode: Mode,
+    nets: Vec<crate::wifi::Network>,
+    net_rows: Vec<(RECT, net::NetRow)>,
 }
 
 impl Panel {
@@ -255,6 +289,9 @@ impl Panel {
             height: 0.0,
             grow_from: None,
             side: 0,
+            mode: Mode::Full,
+            nets: Vec::new(),
+            net_rows: Vec::new(),
         })
     }
 

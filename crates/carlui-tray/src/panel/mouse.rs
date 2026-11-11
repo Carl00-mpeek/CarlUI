@@ -11,6 +11,9 @@ impl Panel {
         let lx = x - self.panel.left;
         let ly = y - self.panel.top;
         let speaker = |sl: &Slider| lx < sl.hit.left && ly >= sl.hit.top && ly < sl.hit.bottom;
+        if let Some(i) = self.net_rows.iter().position(|(r, _)| contains(r, lx, ly)) {
+            return Hit::Net(i);
+        }
         if let Some(t) = &self.wifi {
             if contains(&t.rect, lx, ly) {
                 return Hit::Wifi;
@@ -142,6 +145,14 @@ impl Panel {
             Hit::VolumeIcon => {
                 if let Some(v) = &self.volume {
                     v.toggle_mute();
+                }
+            }
+            Hit::Net(i) => {
+                // Açılan Windows ayarı panelin altında kalmasın: panel kapanır.
+                if self.net_click(i) {
+                    unsafe {
+                        let _ = PostMessageW(self.hwnd, WM_APP_OUTSIDE, WPARAM(0), LPARAM(0));
+                    }
                 }
             }
             Hit::AudioBtn => self.toggle_mixer(),
