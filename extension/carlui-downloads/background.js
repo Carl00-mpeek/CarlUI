@@ -14,13 +14,13 @@ const API = globalThis.browser ?? globalThis.chrome;
 const BASE = "http://127.0.0.1:47321";
 const HDR = { "Content-Type": "application/json", "X-CarlUI": "1" };
 
-async function call(path, body, timeoutMs) {
+async function raw(path, body, timeoutMs, token) {
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), timeoutMs);
+  const t = timeoutMs ? setTimeout(() => ctl.abort(), timeoutMs) : 0;
   try {
     const res = await fetch(BASE + path, {
       method: body === undefined ? "GET" : "POST",
-      headers: HDR,
+      headers: token ? { ...HDR, "X-CarlUI": token } : HDR,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: ctl.signal,
     });
@@ -30,6 +30,39 @@ async function call(path, body, timeoutMs) {
   } finally {
     clearTimeout(t);
   }
+}
+
+// Eşleştirme: CarlUI kasa isteklerini yalnızca kullanıcının onayladığı
+// eklentiden kabul eder. İlk kasa isteğinde CarlUI onay sorar, verdiği
+// belirteç burada saklanır ve sonraki isteklerde gönderilir.
+async function savedToken() {
+  try {
+    return (await API.storage.local.get("carluiToken")).carluiToken || "";
+  } catch {
+    return "";
+  }
+}
+
+let pairing = null;
+function pair() {
+  pairing ??= raw("/vault/pair", {}, 0, "")
+    .then(async (r) => {
+      if (!r || !r.token) return "";
+      await API.storage.local.set({ carluiToken: r.token });
+      return r.token;
+    })
+    .finally(() => (pairing = null));
+  return pairing;
+}
+
+async function call(path, body, timeoutMs) {
+  if (!path.startsWith("/vault/")) return raw(path, body, timeoutMs, "");
+  let r = await raw(path, body, timeoutMs, await savedToken());
+  if (r && r.pair) {
+    const token = await pair();
+    if (token) r = await raw(path, body, timeoutMs, token);
+  }
+  return r;
 }
 
 // "Tarayıcıya bırak" ile yeniden başlatılan adresler: bir kez daha sorulmaz.
@@ -196,7 +229,7 @@ function capture(tab, url, msg) {
 // Kasa kilitliyken önerilecek ad ("accounts.google.com" → "Google").
 function siteName(host) {
   const l = host.split(".");
-  if (l.length < 2 || /^[d.]+$/.test(host)) return host;
+  if (l.length < 2 || /^[\d.]+$/.test(host)) return host;
   const two = l.length >= 3 && l.at(-1).length === 2 && ["com", "co", "org", "net", "gov", "edu", "ac", "gen", "web", "bel"].includes(l.at(-2));
   const n = two ? l.at(-3) : l.at(-2);
   return n.charAt(0).toUpperCase() + n.slice(1);

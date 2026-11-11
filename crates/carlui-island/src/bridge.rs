@@ -29,7 +29,9 @@
 //! Başlık ve köken bu bilgisayardaki başka bir programca taklit edilebilir;
 //! bu yüzden `/vault/` istekleri ayrıca bağlantıyı açan sürece bakılarak
 //! kabul edilir: bilinen bir tarayıcı olmalı ve öndeki pencereyle aynı exe
-//! olmalı (bkz. `browser_peer`).
+//! olmalı (bkz. `browser_peer`). Tarayıcıdaki başka bir eklenti de aynı
+//! süreçten konuşacağı için kasa istekleri ayrıca kullanıcının onayladığı
+//! eşleştirme belirtecini ister (bkz. `pairing`).
 
 use crate::*;
 use std::{
@@ -180,6 +182,14 @@ fn clean_header(s: &str) -> String {
     s.chars().filter(|c| *c != '\r' && *c != '\n').collect()
 }
 
+/// Kartta gösterilen sunucu adı. `kullanıcı@` kısmı atılır: "guvenilir.com@kotu.com"
+/// adresi gerçekte kotu.com'a gider ve öyle görünmeli.
+fn card_host(url: &str) -> String {
+    let rest = url.split_once("://").map(|p| p.1).unwrap_or("");
+    let auth = rest.split(['/', '?', '#', '\\']).next().unwrap_or("");
+    auth.rsplit('@').next().unwrap_or("").to_string()
+}
+
 fn respond(s: &mut TcpStream, code: &str, body: &str) {
     let _ = write!(s, "HTTP/1.1 {code}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
 }
@@ -214,7 +224,7 @@ fn handle(mut s: TcpStream, hwnd: isize) {
     }
     let mut parts = line.split_whitespace();
     let (method, path) = (parts.next().unwrap_or("").to_string(), parts.next().unwrap_or("").to_string());
-    let (mut len, mut origin, mut marked) = (0usize, String::new(), false);
+    let (mut len, mut origin, mut marked, mut token) = (0usize, String::new(), false, String::new());
     loop {
         let mut h = String::new();
         if r.read_line(&mut h).unwrap_or(0) == 0 || h.trim().is_empty() {
@@ -224,7 +234,11 @@ fn handle(mut s: TcpStream, hwnd: isize) {
         match k.trim().to_ascii_lowercase().as_str() {
             "content-length" => len = v.trim().parse().unwrap_or(0).min(1 << 20),
             "origin" => origin = v.trim().to_string(),
-            "x-carlui" => marked = true,
+            // Değer: eşleştirme belirteci (eski eklenti "1" gönderir; bkz. `pairing`).
+            "x-carlui" => {
+                marked = true;
+                token = v.trim().to_string();
+            }
             _ => {}
         }
     }
@@ -277,6 +291,13 @@ fn handle(mut s: TcpStream, hwnd: isize) {
         // adres uyuyor ve tarayıcı önde olmalı; bkz. carlui_core::vaultlink).
         ("POST", p) if p.starts_with("/vault/") && !VAULT_FILL.load(Ordering::Relaxed) => {
             respond(&mut s, "200 OK", &serde_json::json!({ "ok": false, "off": true, "message": t!("Tarayıcıda doldurma Ayarlar'da kapalı.", "Browser filling is turned off in Settings.") }).to_string());
+        }
+        // Her eklentinin kökeni "…-extension://" ile başlar; kasa yalnızca
+        // kullanıcının onayladığı eklentiye yanıt verir (bkz. `pairing`).
+        ("POST", "/vault/pair") => respond(&mut s, "200 OK", &crate::pairing::pair(&origin).to_string()),
+        ("POST", p) if p.starts_with("/vault/") && !crate::pairing::paired(&token) => {
+            let msg = t!("Eklentinin Carl Vault'a bağlanması gerekiyor. Eklentiyi güncelleyip yeniden dene.", "The extension needs to connect to Carl Vault. Update the extension and try again.");
+            respond(&mut s, "200 OK", &serde_json::json!({ "ok": false, "pair": true, "message": msg }).to_string());
         }
         ("POST", "/vault/find") | ("POST", "/vault/fill") | ("POST", "/vault/save") => {
             use carlui_core::vaultlink::{ask, Request};
@@ -386,7 +407,7 @@ fn handle(mut s: TcpStream, hwnd: isize) {
             let given = g("filename").rsplit(['\\', '/']).next().unwrap_or("").to_string();
             let name = probed.or((!given.is_empty()).then_some(given)).unwrap_or_else(|| crate::dlman::name_from_url(&url));
             let size = if psize > 0 { psize } else { v.get("size").and_then(|x| x.as_f64()).unwrap_or(0.0).max(0.0) as u64 };
-            let host = url.split("://").nth(1).and_then(|r| r.split('/').next()).unwrap_or("").to_string();
+            let host = card_host(&url);
             info!("tarayıcıdan indirme teklifi: {name} ({host})");
             if let Ok(mut q) = OFFERS.lock() {
                 q.push_back(Offer { url, name, size, host, headers, at: Instant::now(), polled, reply: Some(tx) });
@@ -475,6 +496,13 @@ mod tests {
         let old = std::thread::spawn(move || post(addr, "/offer", r#"{"url":"http://127.0.0.1:1/a.bin"}"#));
         drop(next_offer());
         assert_eq!(old.join().unwrap()["action"], "carlui");
+    }
+
+    #[test]
+    fn card_hosts() {
+        assert_eq!(card_host("https://guvenilir.com@kotu.com/a.exe"), "kotu.com");
+        assert_eq!(card_host("https://a:b@site.org:8080?x=1"), "site.org:8080");
+        assert_eq!(card_host("http://example.com/x@y"), "example.com");
     }
 
     #[test]

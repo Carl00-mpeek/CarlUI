@@ -87,7 +87,13 @@ fn io(e: std::io::Error) -> Error {
 /// Önce geçici dosyaya yaz, sonra yerine koy: yarıda kalan yazma kasayı bozmasın.
 fn write_atomic(path: &Path, data: &[u8], backup: bool) -> Result<()> {
     let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, data).map_err(io)?;
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&tmp).map_err(io)?;
+        f.write_all(data).map_err(io)?;
+        // Yeniden adlandırmadan önce diske: elektrik kesilirse yarım kasa kalmasın.
+        f.sync_all().map_err(io)?;
+    }
     if backup && path.exists() {
         let _ = std::fs::copy(path, path.with_extension("json.bak"));
     }

@@ -11,16 +11,45 @@ use std::{
     fs::{File, OpenOptions},
     io::{BufRead, BufReader, Write},
     os::windows::io::FromRawHandle,
-    sync::{Arc, Mutex},
+    sync::{
+        mpsc::{self, SyncSender, TrySendError},
+        Arc, Mutex, OnceLock,
+    },
     time::Duration,
 };
 use windows::{
     core::*,
-    Win32::{Foundation::*, Storage::FileSystem::*, System::Pipes::*},
+    Win32::{
+        Foundation::*,
+        Storage::FileSystem::*,
+        System::{Pipes::*, RemoteDesktop::ProcessIdToSessionId, Threading::GetCurrentProcessId},
+    },
 };
 
-const UP: &str = r"\\.\pipe\carlui-bus-up";
-const DOWN: &str = r"\\.\pipe\carlui-bus-down";
+/// Boru adları oturuma özel: aynı bilgisayarda başka bir kullanıcı oturumundaki
+/// CarlUI ile karışmasın.
+fn names() -> &'static (String, String) {
+    static N: OnceLock<(String, String)> = OnceLock::new();
+    N.get_or_init(|| {
+        let mut session = 0;
+        unsafe {
+            let _ = ProcessIdToSessionId(GetCurrentProcessId(), &mut session);
+        }
+        (format!(r"\\.\pipe\carlui-bus-up-{session}"), format!(r"\\.\pipe\carlui-bus-down-{session}"))
+    })
+}
+
+fn up_name() -> &'static str {
+    &names().0
+}
+
+fn down_name() -> &'static str {
+    &names().1
+}
+
+/// Bir modüle gönderilmeyi bekleyen en çok olay sayısı. Dolarsa modül donmuş
+/// sayılır ve bağlantısı düşürülür (yeniden bağlanır); öbür modüller beklemez.
+const QUEUE: usize = 256;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -79,16 +108,37 @@ fn wait_client(h: HANDLE) -> bool {
     }
 }
 
-fn write_line(f: &mut File, ev: &Event) -> std::io::Result<()> {
+fn encode(ev: &Event) -> Vec<u8> {
     let mut line = serde_json::to_vec(ev).unwrap_or_default();
     line.push(b'\n');
-    f.write_all(&line)
+    line
+}
+
+fn write_line(f: &mut File, ev: &Event) -> std::io::Result<()> {
+    f.write_all(&encode(ev))
+}
+
+/// Aşağı borusuna kendi iş parçacığından yazan modül bağlantısı: borusunu
+/// okumayan (donmuş) bir modül yayını engelleyemez.
+fn spawn_writer(mut f: File) -> Option<SyncSender<Arc<Vec<u8>>>> {
+    let (tx, rx) = mpsc::sync_channel::<Arc<Vec<u8>>>(QUEUE);
+    std::thread::Builder::new()
+        .name("bus-writer".into())
+        .spawn(move || {
+            for line in rx {
+                if f.write_all(&line).is_err() {
+                    break;
+                }
+            }
+        })
+        .ok()?;
+    Some(tx)
 }
 
 /// Ana süreçteki olay yolu sunucusu.
 #[derive(Clone)]
 pub struct BusServer {
-    clients: Arc<Mutex<Vec<File>>>,
+    clients: Arc<Mutex<Vec<SyncSender<Arc<Vec<u8>>>>>>,
 }
 
 impl BusServer {
@@ -102,10 +152,12 @@ impl BusServer {
         std::thread::Builder::new()
             .name("bus-down".into())
             .spawn(move || loop {
-                match create_instance(DOWN, false) {
+                match create_instance(down_name(), false) {
                     Ok(h) if wait_client(h) => {
                         let f = unsafe { File::from_raw_handle(h.0 as _) };
-                        down.clients.lock().unwrap_or_else(|e| e.into_inner()).push(f);
+                        if let Some(tx) = spawn_writer(f) {
+                            down.clients.lock().unwrap_or_else(|e| e.into_inner()).push(tx);
+                        }
                     }
                     Ok(h) => unsafe {
                         let _ = CloseHandle(h);
@@ -122,7 +174,7 @@ impl BusServer {
         std::thread::Builder::new()
             .name("bus-up".into())
             .spawn(move || loop {
-                match create_instance(UP, true) {
+                match create_instance(up_name(), true) {
                     Ok(h) if wait_client(h) => {
                         let f = unsafe { File::from_raw_handle(h.0 as _) };
                         let srv = up.clone();
@@ -154,10 +206,20 @@ impl BusServer {
         server
     }
 
-    /// Tüm bağlı modüllere gönderir; kopmuş bağlantıları temizler.
+    /// Tüm bağlı modüllere gönderir; beklemez. Kopmuş ya da kuyruğu dolmuş
+    /// (donmuş) bağlantıları düşürür: yazıcı biter, boru kapanır, modül
+    /// kopmayı görüp yeniden bağlanır.
     pub fn publish(&self, ev: &Event) {
+        let line = Arc::new(encode(ev));
         let mut clients = self.clients.lock().unwrap_or_else(|e| e.into_inner());
-        clients.retain_mut(|f| write_line(f, ev).is_ok());
+        clients.retain(|tx| match tx.try_send(line.clone()) {
+            Ok(()) => true,
+            Err(TrySendError::Full(_)) => {
+                crate::warn!("bus: bir modül olayları okumuyor, bağlantısı düşürüldü");
+                false
+            }
+            Err(TrySendError::Disconnected(_)) => false,
+        });
     }
 }
 
@@ -180,7 +242,7 @@ impl BusClient {
         std::thread::Builder::new()
             .name("bus-client".into())
             .spawn(move || loop {
-                let (Some(down), Some(up)) = (open_pipe(DOWN, false), open_pipe(UP, true)) else {
+                let (Some(down), Some(up)) = (open_pipe(down_name(), false), open_pipe(up_name(), true)) else {
                     std::thread::sleep(Duration::from_secs(2));
                     continue;
                 };
@@ -206,7 +268,7 @@ impl BusClient {
     pub fn send_once(ev: &Event) -> bool {
         // Sunucu bir sonraki boru örneğini açana kadar kısa süre "meşgul" olabilir.
         for _ in 0..10 {
-            if let Some(mut f) = open_pipe(UP, true) {
+            if let Some(mut f) = open_pipe(up_name(), true) {
                 return write_line(&mut f, ev).is_ok();
             }
             std::thread::sleep(Duration::from_millis(30));

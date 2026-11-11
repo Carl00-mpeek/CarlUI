@@ -15,6 +15,7 @@ carlui-core.workspace = true
 carlui-launcher = { path = "../carlui-launcher" }
 carlui-sys = { path = "../carlui-sys" }
 carlui-ui.workspace = true
+getrandom = "0.2"
 rqrr = { version = "0.11.0", default-features = false }
 rxing = { version = "0.9.3", default-features = false, features = ["qrcode", "decoders", "encoding_rs"] }
 serde_json.workspace = true

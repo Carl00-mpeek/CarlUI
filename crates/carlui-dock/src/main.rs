@@ -471,9 +471,7 @@ impl App {
             }
             (menu::Cmd::Settings, _) => procs::settings(),
             (menu::Cmd::RestoreTaskbar, _) => {
-                let mut cfg = self.dock.cfg.clone();
-                cfg.general.hide_taskbar = false;
-                config::save(&cfg);
+                config::update(|c| c.general.hide_taskbar = false);
                 self.quit();
             }
             (menu::Cmd::Quit, _) => self.quit(),
@@ -1024,7 +1022,11 @@ fn first_run_import(cfg: &mut Config) {
         cfg.dock.pinned = pins.into_iter().filter(|p| !p.path.to_lowercase().ends_with("explorer.exe")).collect();
     }
     cfg.dock.imported_taskbar_pins = true;
-    config::save(cfg);
+    let pinned = cfg.dock.pinned.clone();
+    config::update(|c| {
+        c.dock.pinned = pinned;
+        c.dock.imported_taskbar_pins = true;
+    });
 }
 
 fn main() -> Result<()> {

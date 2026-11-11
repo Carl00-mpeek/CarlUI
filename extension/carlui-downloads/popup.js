@@ -13,13 +13,39 @@ const $ = (id) => document.getElementById(id);
 let lang = /^tr\b/i.test(navigator.language || "") ? "tr" : "en";
 const L = (tr, en) => (lang === "tr" ? tr : en);
 
-async function call(path, body, get) {
+async function raw(path, body, get, token) {
+  const headers = token ? { ...HDR, "X-CarlUI": token } : HDR;
   try {
-    const res = await fetch(BASE + path, get ? { headers: HDR } : { method: "POST", headers: HDR, body: JSON.stringify(body ?? {}) });
+    const res = await fetch(BASE + path, get ? { headers } : { method: "POST", headers, body: JSON.stringify(body ?? {}) });
     return res.ok ? await res.json() : null;
   } catch {
     return null;
   }
+}
+
+// Eşleştirme belirteci (bkz. background.js): kasa istekleri onaylı eklentiden gelmeli.
+async function savedToken() {
+  try {
+    return (await API.storage.local.get("carluiToken")).carluiToken || "";
+  } catch {
+    return "";
+  }
+}
+
+async function call(path, body, get) {
+  if (!path.startsWith("/vault/")) return raw(path, body, get, "");
+  let r = await raw(path, body, get, await savedToken());
+  if (r && r.pair) {
+    note(L("CarlUI'da bağlantıyı onayla…", "Approve the connection in CarlUI…"));
+    const p = await raw("/vault/pair", {}, false, "");
+    if (p && p.token) {
+      await API.storage.local.set({ carluiToken: p.token });
+      r = await raw(path, body, get, p.token);
+    } else if (p && p.message) {
+      r = { ok: false, message: p.message };
+    }
+  }
+  return r;
 }
 
 function note(text, warn) {

@@ -879,24 +879,59 @@ pub fn expand_env(s: &str) -> String {
 /// Ayarları okur. Dosya yoksa varsayılanları yazar; bozuksa varsayılanlarla
 /// devam eder ama dosyanın üzerine yazmaz (kullanıcının düzenlemesi kaybolmasın).
 pub fn load() -> Config {
-    let cfg = read();
-    crate::lang::apply(&cfg.general.language);
-    cfg
+    load_checked().unwrap_or_default()
 }
 
-fn read() -> Config {
+/// `load` gibi; ama dosya var olup okunamıyorsa ya da bozuksa `None` döner.
+/// Çağıran son bilinen ayarla devam etmeli.
+pub fn load_checked() -> Option<Config> {
+    let cfg = read()?;
+    crate::lang::apply(&cfg.general.language);
+    Some(cfg)
+}
+
+/// Dosyayı okur. Yalnızca dosya gerçekten yoksa varsayılanları yazar; geçici
+/// hatalarda (paylaşım ihlali, erişim reddi) birkaç kez dener, olmazsa hiçbir
+/// şey yazmadan `None` döner — kullanıcının ayarları sıfırlanmasın.
+fn read() -> Option<Config> {
     let path = crate::paths::config_file();
-    match std::fs::read_to_string(&path) {
-        Ok(text) => toml::from_str(&text).unwrap_or_else(|e| {
-            crate::warn!("config.toml okunamadı, varsayılanlar kullanılıyor: {e}");
-            Config::default()
-        }),
-        Err(_) => {
-            let cfg = Config::default();
-            save(&cfg);
-            cfg
+    let mut tries = 0;
+    loop {
+        match std::fs::read_to_string(&path) {
+            Ok(text) => {
+                return match toml::from_str(text.trim_start_matches('\u{feff}')) {
+                    Ok(cfg) => Some(cfg),
+                    Err(e) => {
+                        crate::warn!("config.toml bozuk, dosyaya dokunulmadı: {e}");
+                        None
+                    }
+                };
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let cfg = Config::default();
+                save(&cfg);
+                return Some(cfg);
+            }
+            Err(e) => {
+                tries += 1;
+                if tries >= 5 {
+                    crate::warn!("config.toml okunamadı ({e}), dosyaya dokunulmadı");
+                    return None;
+                }
+                std::thread::sleep(Duration::from_millis(40 * tries));
+            }
         }
     }
+}
+
+/// Dosyadaki güncel ayarı okuyup `f` ile değiştirir ve kaydeder. Başka bir
+/// sürecin (ör. ayarlar penceresi) bu arada yazdığı bölümler korunur.
+/// Dosya okunamıyorsa yazmaz ve `None` döner.
+pub fn update(f: impl FnOnce(&mut Config)) -> Option<Config> {
+    let mut cfg = read()?;
+    f(&mut cfg);
+    save(&cfg);
+    Some(cfg)
 }
 
 /// Ayarları TOML metnine çevirir (dışa aktarma için).
@@ -917,9 +952,24 @@ pub fn save(cfg: &Config) {
     match toml::to_string_pretty(cfg) {
         // Önce geçici dosyaya yaz, sonra taşı: izleyiciler yarım dosya görmesin.
         Ok(text) => {
-            let tmp = path.with_extension("toml.tmp");
-            if std::fs::write(&tmp, text).is_ok() {
-                let _ = std::fs::rename(&tmp, &path);
+            // Geçici ad sürece özel: aynı anda yazan iki süreç birbirinin dosyasını ezmesin.
+            let tmp = path.with_extension(format!("toml.{}.tmp", std::process::id()));
+            let written = std::fs::File::create(&tmp).and_then(|mut f| {
+                use std::io::Write;
+                f.write_all(text.as_bytes())?;
+                f.sync_all()
+            });
+            match written {
+                Ok(()) => {
+                    if let Err(e) = std::fs::rename(&tmp, &path) {
+                        crate::error!("config.toml yerine konamadı: {e}");
+                        let _ = std::fs::remove_file(&tmp);
+                    }
+                }
+                Err(e) => {
+                    crate::error!("config.toml yazılamadı: {e}");
+                    let _ = std::fs::remove_file(&tmp);
+                }
             }
         }
         Err(e) => crate::error!("config.toml yazılamadı: {e}"),
@@ -949,7 +999,13 @@ pub fn watch(mut on_change: impl FnMut(Config) + Send + 'static) {
                 while WaitForSingleObject(h, INFINITE) == WAIT_OBJECT_0 {
                     // Editörler dosyayı birkaç adımda yazar; kısa bir bekleme ile birleştir.
                     std::thread::sleep(Duration::from_millis(150));
-                    let cfg = load();
+                    // Okunamıyor ya da bozuksa son geçerli ayarla devam et.
+                    let Some(cfg) = load_checked() else {
+                        if FindNextChangeNotification(h).is_err() {
+                            break;
+                        }
+                        continue;
+                    };
                     if cfg != last {
                         crate::info!("ayarlar yeniden yüklendi");
                         last = cfg.clone();

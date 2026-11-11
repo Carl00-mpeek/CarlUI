@@ -242,7 +242,9 @@ pub fn name_from_url(url: &str) -> String {
 
 /// `Content-Disposition: attachment; filename="x.zip"` (filename* önce).
 fn name_from_disposition(h: &str) -> Option<String> {
-    let lower = h.to_lowercase();
+    // ASCII küçültme: bayt uzunluğu değişmez, bulunan konum özgün metinde de geçerli
+    // ("İ" gibi harfler `to_lowercase` ile uzar, konum kayar ve kesme panikler).
+    let lower = h.to_ascii_lowercase();
     if let Some(i) = lower.find("filename*=") {
         let v = h[i + 10..].split(';').next()?.trim().trim_matches('"');
         let v = v.split_once("''").map(|p| p.1).unwrap_or(v);
@@ -298,7 +300,18 @@ struct Conn {
 }
 
 /// Başlıkları gönderip yanıtı bekler; 2xx değilse hata.
-fn request(url: &str, headers: &str) -> std::result::Result<Conn, String> {
+/// Adresin parçaları (WinHTTP'ye verilecek biçimde).
+#[derive(Debug, PartialEq)]
+struct Target {
+    secure: bool,
+    host: String,
+    port: u16,
+    path: String,
+}
+
+/// `http(s)://[kullanıcı@]sunucu[:port][/yol][?sorgu]`; `kullanıcı@` atılır,
+/// IPv6 köşeli parantezleri çözülür.
+fn target(url: &str) -> std::result::Result<Target, String> {
     let (secure, rest) = if let Some(r) = url.strip_prefix("https://") {
         (true, r)
     } else if let Some(r) = url.strip_prefix("http://") {
@@ -306,15 +319,83 @@ fn request(url: &str, headers: &str) -> std::result::Result<Conn, String> {
     } else {
         return Err(t!("yalnızca http/https adresleri", "only http/https addresses").into());
     };
-    let (hostport, path) = match rest.find('/') {
-        Some(i) => (&rest[..i], &rest[i..]),
-        None => (rest, "/"),
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let (auth, tail) = rest.split_at(end);
+    let hostport = auth.rsplit('@').next().unwrap_or(auth);
+    let (host, port) = match hostport.strip_prefix('[') {
+        Some(r) => {
+            let (h, after) = r.split_once(']').ok_or(t!("geçersiz adres", "invalid address"))?;
+            (h, after.strip_prefix(':'))
+        }
+        None => match hostport.rsplit_once(':') {
+            Some((h, p)) => (h, Some(p)),
+            None => (hostport, None),
+        },
     };
-    let (host, port) = match hostport.rsplit_once(':') {
-        Some((h, p)) if p.chars().all(|c| c.is_ascii_digit()) && !p.is_empty() => (h, p.parse().unwrap_or(443)),
-        _ => (hostport, if secure { 443 } else { 80 }),
+    let port = match port.filter(|p| !p.is_empty()) {
+        Some(p) => p.parse().map_err(|_| t!("geçersiz port", "invalid port").to_string())?,
+        None if secure => 443,
+        None => 80,
     };
-    let path = path.split('#').next().unwrap_or(path);
+    if host.is_empty() {
+        return Err(t!("geçersiz adres", "invalid address").into());
+    }
+    let tail = tail.split('#').next().unwrap_or("");
+    let path = if tail.starts_with('/') { tail.to_string() } else { format!("/{tail}") };
+    Ok(Target { secure, host: host.to_string(), port, path })
+}
+
+/// Yönlendirme adresini (`Location`) tam adrese çevirir.
+fn resolve(base: &str, loc: &str) -> String {
+    let loc = loc.trim();
+    if loc.starts_with("http://") || loc.starts_with("https://") {
+        return loc.to_string();
+    }
+    let scheme = if base.starts_with("https://") { "https:" } else { "http:" };
+    if loc.starts_with("//") {
+        return format!("{scheme}{loc}");
+    }
+    let rest = base.split_once("://").map(|p| p.1).unwrap_or("");
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let origin = &base[..base.len() - rest.len() + end];
+    if loc.starts_with('/') {
+        return format!("{origin}{loc}");
+    }
+    let path = rest[end..].split(['?', '#']).next().unwrap_or("");
+    let dir = path.rfind('/').map(|i| &path[..=i]).unwrap_or("/");
+    format!("{origin}{dir}{loc}")
+}
+
+/// `Cookie` başlığı olmadan.
+fn without_cookie(headers: &str) -> String {
+    headers.split("\r\n").filter(|h| !h.to_ascii_lowercase().starts_with("cookie:")).collect::<Vec<_>>().join("\r\n")
+}
+
+/// Yönlendirmeler elle izlenir: tarayıcıdan gelen çerezler yalnızca o sunucuya
+/// aittir; başka bir sunucuya (ya da https'ten http'ye) geçilirken gönderilmez.
+fn request(url: &str, headers: &str) -> std::result::Result<Conn, String> {
+    let mut url = url.to_string();
+    let mut headers = headers.to_string();
+    for _ in 0..10 {
+        match request_once(&url, &headers)? {
+            Ok(c) => return Ok(c),
+            Err(loc) => {
+                let next = resolve(&url, &loc);
+                let (a, b) = (target(&url)?, target(&next)?);
+                if a.host.to_ascii_lowercase() != b.host.to_ascii_lowercase() || a.port != b.port || (a.secure && !b.secure) {
+                    headers = without_cookie(&headers);
+                }
+                url = next;
+            }
+        }
+    }
+    Err(t!("çok fazla yönlendirme", "too many redirects").into())
+}
+
+/// Tek istek: bağlantı ya da yönlendirme adresi.
+fn request_once(url: &str, headers: &str) -> std::result::Result<std::result::Result<Conn, String>, String> {
+    let Target { secure, host, port, path } = target(url)?;
+    let (host, path) = (host.as_str(), path.as_str());
     unsafe {
         let ses = H(WinHttpOpen(w!("CarlUI"), WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, PCWSTR::null(), PCWSTR::null(), 0));
         if ses.0.is_null() {
@@ -330,14 +411,21 @@ fn request(url: &str, headers: &str) -> std::result::Result<Conn, String> {
         if req.0.is_null() {
             return Err(t!("istek kurulamadı", "could not create the request").into());
         }
+        // Yönlendirmeyi WinHTTP izlemesin: eklenen başlıkları (çerezler) yeni sunucuya taşır.
+        let _ = WinHttpSetOption(Some(req.0), WINHTTP_OPTION_DISABLE_FEATURE, Some(&WINHTTP_DISABLE_REDIRECTS.to_ne_bytes()));
         let hdr: Vec<u16> = headers.encode_utf16().collect();
         WinHttpSendRequest(req.0, (!hdr.is_empty()).then_some(hdr.as_slice()), None, 0, 0, 0).map_err(|e| format!("{}: {}", t!("gönderilemedi", "send failed"), e.message()))?;
         WinHttpReceiveResponse(req.0, std::ptr::null_mut()).map_err(|e| format!("{}: {}", t!("yanıt yok", "no response"), e.message()))?;
         let status: u32 = header(&req, WINHTTP_QUERY_STATUS_CODE).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
+        if matches!(status, 301 | 302 | 303 | 307 | 308) {
+            if let Some(loc) = header(&req, WINHTTP_QUERY_LOCATION).filter(|l| !l.trim().is_empty()) {
+                return Ok(Err(loc));
+            }
+        }
         if !(200..300).contains(&status) {
             return Err(t!(format!("sunucu {status} döndü"), format!("server returned {status}")));
         }
-        Ok(Conn { req, _con: con, _ses: ses })
+        Ok(Ok(Conn { req, _con: con, _ses: ses }))
     }
 }
 
@@ -620,6 +708,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn disposition_turkish_i() {
+        // "İ" küçülünce uzar; konum kaymamalı, panik olmamalı.
+        assert_eq!(name_from_disposition(r#"attachment; title="İİİİİİ"; filename="a.zip""#).as_deref(), Some("a.zip"));
+        assert_eq!(name_from_disposition(r#"attachment; title="İİ"; FILENAME*=UTF-8''b%20c.zip"#).as_deref(), Some("b c.zip"));
+    }
+
+    #[test]
     fn short_names() {
         assert_eq!(short_name("rapor.pdf", 26), "rapor.pdf");
         assert_eq!(short_name("ubuntu-24.04.3-desktop-amd64.iso", 20), "ubuntu-24.04.3-d…iso");
@@ -642,5 +737,32 @@ mod tests {
         assert_eq!(name_from_disposition("attachment; filename=\"rapor.zip\""), Some("rapor.zip".into()));
         assert_eq!(name_from_disposition("attachment; filename*=UTF-8''%C3%B6dev.pdf"), Some("ödev.pdf".into()));
         assert_eq!(decode("a%2"), "a%2");
+    }
+}
+
+#[cfg(test)]
+mod redirect_tests {
+    use super::*;
+
+    #[test]
+    fn targets() {
+        let t = target("https://user:pw@evil.com@good.com:8443/a/b?x=1#f").unwrap();
+        assert_eq!((t.secure, t.host.as_str(), t.port, t.path.as_str()), (true, "good.com", 8443, "/a/b?x=1"));
+        let t = target("http://[::1]:8080?q").unwrap();
+        assert_eq!((t.host.as_str(), t.port, t.path.as_str()), ("::1", 8080, "/?q"));
+        let t = target("https://[2001:db8::1]/x").unwrap();
+        assert_eq!((t.host.as_str(), t.port), ("2001:db8::1", 443));
+        assert!(target("ftp://x").is_err());
+        assert!(target("https://x.com:abc/").is_err());
+    }
+
+    #[test]
+    fn resolves() {
+        assert_eq!(resolve("https://a.com/d/f.zip?x", "g.zip"), "https://a.com/d/g.zip");
+        assert_eq!(resolve("https://a.com/d/f", "/r"), "https://a.com/r");
+        assert_eq!(resolve("https://a.com/d", "//cdn.b.com/x"), "https://cdn.b.com/x");
+        assert_eq!(resolve("https://a.com?q", "x"), "https://a.com/x");
+        assert_eq!(resolve("http://a.com/", "https://b.com/y"), "https://b.com/y");
+        assert_eq!(without_cookie("A: 1\r\nCookie: s=1\r\nB: 2"), "A: 1\r\nB: 2");
     }
 }

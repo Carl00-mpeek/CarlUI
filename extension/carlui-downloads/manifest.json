@@ -2,10 +2,10 @@
   "manifest_version": 3,
   "name": "CarlUI",
   "short_name": "CarlUI",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "default_locale": "en",
   "description": "__MSG_desc__",
-  "permissions": ["downloads", "cookies", "activeTab", "scripting"],
+  "permissions": ["downloads", "cookies", "activeTab", "scripting", "storage"],
   "host_permissions": ["<all_urls>", "http://127.0.0.1:47321/*"],
   "content_scripts": [
     { "matches": ["https://*/*", "http://localhost/*"], "js": ["passkey-page.js"], "run_at": "document_start", "world": "MAIN" },

@@ -28,7 +28,8 @@ pub fn exe_of(command: &str) -> String {
     let c = expand_env(command.trim());
     let first = if let Some(rest) = c.strip_prefix('"') {
         rest.split('"').next().unwrap_or_default().to_string()
-    } else if let Some(i) = c.to_lowercase().find(".exe") {
+    } else if let Some(i) = c.to_ascii_lowercase().find(".exe") {
+        // ASCII küçültme: konum özgün metinde de geçerli ("İ" uzamaz).
         c[..i + 4].to_string()
     } else {
         c.split_whitespace().next().unwrap_or_default().to_string()
@@ -56,4 +57,13 @@ pub fn reveal(path: &str) {
 
 pub fn file_name(path: &str) -> String {
     std::path::Path::new(path).file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| path.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn exe_of_turkish_i() {
+        // "İ" küçülünce uzar; konum kaymamalı, panik olmamalı.
+        assert_eq!(super::exe_of(r"C:\İİİİ\Uygulama.EXE --başla"), r"C:\İİİİ\Uygulama.EXE");
+    }
 }

@@ -156,10 +156,7 @@ fn clipboard(hwnd: HWND) -> Option<String> {
             if p.is_null() {
                 return None;
             }
-            let mut n = 0;
-            while *p.add(n) != 0 && n < 4096 {
-                n += 1;
-            }
+            let n = carlui_core::win::global_wide_len(g, p, 4096);
             let s = String::from_utf16_lossy(std::slice::from_raw_parts(p, n));
             let _ = GlobalUnlock(g);
             Some(s)

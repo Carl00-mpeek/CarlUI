@@ -72,6 +72,13 @@ fn set_visible(visible: bool) {
 }
 
 pub fn hide() {
+    // Explorer henüz çubuğu açmamışsa `ABM_GETSTATE` 0 döner ve kullanıcının
+    // "otomatik gizle" ayarı yanlış kaydedilirdi. Ertele: explorer çubuğu
+    // oluşturunca (TaskbarCreated) `hide` yeniden çağrılır.
+    if win::explorer_tray().is_none() {
+        info!("explorer görev çubuğu henüz yok, gizleme erteleniyor");
+        return;
+    }
     if !hidden_by_us() {
         let saved = Saved { original_state: get_state() };
         let path = paths::state_file();

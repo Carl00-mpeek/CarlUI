@@ -27,6 +27,7 @@ mod clipping;
 mod dlman;
 mod listening;
 mod offering;
+mod pairing;
 mod downloads;
 mod editor;
 mod epic;

@@ -109,10 +109,7 @@ pub fn paste(hwnd: HWND) -> Option<Zeroizing<String>> {
             if p.is_null() {
                 return None;
             }
-            let mut n = 0;
-            while *p.add(n) != 0 && n < 16 * 1024 {
-                n += 1;
-            }
+            let n = carlui_core::win::global_wide_len(g, p, 16 * 1024);
             let s = Zeroizing::new(String::from_utf16_lossy(std::slice::from_raw_parts(p, n)));
             let _ = GlobalUnlock(g);
             Some(s)

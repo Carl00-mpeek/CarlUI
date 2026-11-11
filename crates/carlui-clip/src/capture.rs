@@ -122,10 +122,11 @@ fn is_image_path(p: &str) -> bool {
 
 /// HTML içindeki ilk resmi bulur: data:image/…;base64 ya da file:/// yolu.
 fn html_image(html: &str) -> Option<Vec<u8>> {
-    let lower = html.to_lowercase();
+    // ASCII küçültme: konumlar özgün metinde de geçerli kalır ("İ" uzamaz).
+    let lower = html.to_ascii_lowercase();
     let at = lower.find("<img")?;
     let rest = &html[at..];
-    let src_at = rest.to_lowercase().find("src=")? + 4;
+    let src_at = rest.to_ascii_lowercase().find("src=")? + 4;
     let quote = rest[src_at..].chars().next()?;
     let body = &rest[src_at + 1..];
     let src = if quote == '"' || quote == '\'' { body.split(quote).next()? } else { body.split([' ', '>']).next()? };
@@ -268,5 +269,12 @@ mod tests {
         let h = r#"Version:0.9<html><body><img alt="x" src="data:image/png;base64,aGVsbG8="></body>"#;
         assert_eq!(super::html_image(h).unwrap(), b"hello");
         assert!(super::is_image_path(r"C:\a\B.JPG"));
+    }
+
+    #[test]
+    fn html_turkish_i() {
+        // "İ" küçülünce uzar; konum kaymamalı, panik olmamalı.
+        let h = r#"<p>İİİİİİİ</p><IMG title="İİ" SRC="data:image/png;base64,aGVsbG8=">"#;
+        assert_eq!(super::html_image(h).unwrap(), b"hello");
     }
 }

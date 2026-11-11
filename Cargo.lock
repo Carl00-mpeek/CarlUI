@@ -266,6 +266,7 @@ dependencies = [
  "carlui-launcher",
  "carlui-sys",
  "carlui-ui",
+ "getrandom 0.2.17",
  "qrcode",
  "rqrr",
  "rxing",

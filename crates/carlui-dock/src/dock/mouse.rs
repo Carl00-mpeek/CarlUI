@@ -258,9 +258,9 @@ impl Dock {
         if insert.is_some() {
             self.entries[di].group = 1;
         }
-        self.relayout_order(&order, true)?;
+        let res = self.relayout_order(&order, true);
         self.entries[di].group = saved_group;
-        Ok(())
+        res
     }
 
     pub(super) fn finish_drag(&mut self, gfx: &Gfx, tracker: &Tracker, drag: Drag) {
@@ -276,8 +276,7 @@ impl Dock {
                 None => self.pin_from_entry(di),
             };
             pins.insert(k.min(pins.len()), pin);
-            self.cfg.dock.pinned = pins;
-            carlui_core::config::save(&self.cfg);
+            self.save_pins(pins);
             carlui_core::info!("dock sırası güncellendi");
         }
         let _ = self.sync(gfx, tracker, true);
@@ -308,8 +307,16 @@ impl Dock {
             }
             None => pins.push(self.pin_from_entry(i)),
         }
-        self.cfg.dock.pinned = pins;
-        carlui_core::config::save(&self.cfg);
+        self.save_pins(pins);
         let _ = self.sync(gfx, tracker, true);
+    }
+
+    /// Sabitlenmişleri kaydeder; dosyadaki öbür ayarlara (başka süreçlerin
+    /// yazdıklarına) dokunmaz.
+    fn save_pins(&mut self, pins: Vec<Pinned>) {
+        self.cfg.dock.pinned = pins.clone();
+        if carlui_core::config::update(|c| c.dock.pinned = pins).is_none() {
+            carlui_core::warn!("sabitlenmişler kaydedilemedi: config.toml okunamadı");
+        }
     }
 }

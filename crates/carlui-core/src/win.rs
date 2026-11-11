@@ -391,3 +391,18 @@ pub fn game_in_front() -> bool {
         r.left <= m.left && r.top <= m.top && r.right >= m.right && r.bottom >= m.bottom
     }
 }
+
+/// Kilitli bir pano belleğindeki (`GlobalLock`) UTF-16 metnin uzunluğu: ilk
+/// NUL'a kadar, ama bellek bloğunun (`GlobalSize`) ve `cap`'in dışına çıkmadan.
+/// Sonunda NUL olmayan (bozuk) pano verisi böylece bloğun dışını okutmaz.
+///
+/// # Safety
+/// `p`, `g` bloğunun `GlobalLock` ile alınmış ve hâlâ kilitli başlangıcı olmalı.
+pub unsafe fn global_wide_len(g: windows::Win32::Foundation::HGLOBAL, p: *const u16, cap: usize) -> usize {
+    let max = (windows::Win32::System::Memory::GlobalSize(g) / 2).min(cap);
+    let mut n = 0;
+    while n < max && *p.add(n) != 0 {
+        n += 1;
+    }
+    n
+}
