@@ -95,6 +95,8 @@ pub enum Act {
     Weather(pages::dock_live_weather::WeatherAct),
     /// İlk kurulum karşılamasını (`--welcome`) yeniden aç.
     Welcome,
+    /// Güncelleme sayfası (denetle, kur, sürüm sayfası).
+    Update(pages::update::UpdateAct),
 }
 
 pub struct App {
@@ -185,6 +187,7 @@ impl App {
             Act::Look(l) => pages::looks::act(self, l),
             Act::PetPhoto(x) => pages::dock_live_photo::act(self, x),
             Act::Weather(x) => pages::dock_live_weather::act(self, x),
+            Act::Update(x) => pages::update::act(self, x),
             Act::Info(Some(id)) => info::toggle(id),
             Act::Info(None) => info::keep(),
             Act::Page(pg) => {

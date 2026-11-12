@@ -1,43 +1,27 @@
 ## Türkçe
 
-**CarlUI 1.0.0: ilk kararlı sürüm.**
+**CarlUI 1.1.0: Güncelleme sayfası ve yenilenen ilk kurulum turu.**
 
-**Yeni: Hayvan tepkileri**
-- Dock'taki hayvan müzik çalarken müzik notalarıyla dans eder, bildirim gelince kulak kabartır, 3 dakika boş kalınca uyur, döndüğünde gerinir, üzerine tıklayınca (sevince) kalpler çıkarır.
-- Ayarlar → Dock → "Hayvan tepkileri". Varsayılan olarak açıktır.
+**Yeni: Güncelleme sayfası**
+- Ayarlar'a yeni bir "Güncelleme" sayfası eklendi: CarlUI yazısı, sürüm numarası ve durum bir arada görünür. Altındaki "Güncellemeleri denetle" düğmesiyle yeni sürüm olup olmadığına bakabilirsin.
+- Güncelse "Yazılımınız güncel" yazar. Yeni sürüm varsa "Güncelle" düğmesi ve kısa bir "Yenilikler" kartı çıkar.
+- "Yeni sürümleri bildir" seçeneği Genel'den bu sayfaya taşındı.
 
-**Güvenlik**
-- CarlUI modülleri arasındaki iç haberleşme kısıtlandı: borular yalnızca sahibine açık; iki taraf da karşısındakinin aynı kurulum klasöründen, aynı kullanıcı ve oturumdaki bir CarlUI programı olduğunu doğrular. Aşırı uzun mesajlar atılır.
-
-**Genişletilmiş yedek**
-- Ayarlar → Genel → Yedek artık `CarlUI-yedek-YYYY-MM-DD` klasörü dışa aktarır: ayarlar, kayıtlı görünümler, pencere düzenleri ve özel hayvanlar. İçe aktarma bunları geri yükler, başarısız olan bölüm varsa bildirir.
-- Kasa ve pano geçmişi bilerek yedeğe dahil değildir. Eski tek `.toml` yedekleri hâlâ içe aktarılır.
-
-**Düzeltmeler**
-- Pencere düzenleri, monitör değişince bir pencereyi ekran dışına geri koymuyor.
-- Bozuk düzen dosyası kaybolmak yerine `layouts.json.bad` olarak saklanır.
-- Tam Kaldırıcı, Mağaza uygulaması kaldırması gerçekten başarısız olduğunda bunu bildirir.
-- Kaldırıcı listesindeki uzun adlar güvenle kısaltılır.
+**Yeni: Genişletilmiş ilk kurulum turu**
+- İlk açılışta tur artık daha kapsamlı: karşılama, görünüm ve vurgu rengi, dock hayvanı ve sahnesi, dock, ada, modüller ve "Neler yapabilirsin" özeti.
+- Her adım atlanabilir. Turu istediğin zaman Ayarlar → Genel'den yeniden açabilirsin.
 
 ---
 
 ## English
 
-**CarlUI 1.0.0: the first stable release.**
+**CarlUI 1.1.0: an Update page and a revamped first-run tour.**
 
-**New: Pet reactions**
-- The dock pet dances with music notes while music plays, perks up when a notification arrives, falls asleep after 3 minutes idle and stretches when you return, and shows hearts when you click (pet) it.
-- Settings → Dock → "Pet reactions" (Hayvan tepkileri). On by default.
+**New: Update page**
+- Settings has a new "Update" page: the CarlUI wordmark, the version number and the status together. The "Check for updates" (Güncellemeleri denetle) button at the bottom looks for a new version.
+- When you are current it says "Your software is up to date". When a new version exists, an "Update" button and a short "What's new" card appear.
+- The "Notify me about new versions" option moved from General to this page.
 
-**Security**
-- The internal messaging between CarlUI modules is now restricted: pipes are owner-only, and both sides verify that the peer is a CarlUI program from the same install folder, same user and session. Over-long messages are dropped.
-
-**Extended backup**
-- Settings → General → Backup now exports a `CarlUI-yedek-YYYY-MM-DD` folder with settings, saved looks, window layouts and custom pets. Import restores them and reports any part that failed.
-- The vault and clipboard history are deliberately not included. Old single `.toml` backups still import.
-
-**Fixes**
-- Window layouts no longer restore a window off-screen after a monitor change.
-- A corrupt layouts file is kept as `layouts.json.bad` instead of being lost.
-- The Full Uninstaller now reports when a Store app removal actually failed.
-- Long names in the uninstaller list are shortened safely.
+**New: Extended first-run tour**
+- The first-run tour is now more complete: welcome, look and accent colour, dock pet and scene, dock, island, modules and a "What you can do" summary.
+- Every step can be skipped. You can reopen the tour any time from Settings → General.

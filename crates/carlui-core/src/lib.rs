@@ -25,6 +25,7 @@ pub mod quick;
 pub mod record;
 pub mod theme;
 pub mod tools;
+pub mod update;
 pub mod vaultlink;
 pub mod vcard;
 pub mod weather;

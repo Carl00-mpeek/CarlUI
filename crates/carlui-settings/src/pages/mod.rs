@@ -28,6 +28,8 @@ mod search;
 pub mod sensors;
 pub mod shortcuts;
 mod tools;
+pub mod update;
+mod update_state;
 mod vault;
 
 use crate::{ui::Flow, ui::P, App};
@@ -45,10 +47,11 @@ pub enum Page {
     Vault,
     Tools,
     Ai,
+    Update,
 }
 
 impl Page {
-    pub const ALL: [Page; 11] = [Page::General, Page::Look, Page::Dock, Page::Island, Page::Search, Page::Clipboard, Page::Tools, Page::Ai, Page::Game, Page::Vault, Page::Shortcuts];
+    pub const ALL: [Page; 12] = [Page::General, Page::Look, Page::Dock, Page::Island, Page::Search, Page::Clipboard, Page::Tools, Page::Ai, Page::Game, Page::Vault, Page::Shortcuts, Page::Update];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -63,6 +66,7 @@ impl Page {
             Page::Vault => "Carl Vault",
             Page::Tools => carlui_core::t!("Araçlar", "Tools"),
             Page::Ai => carlui_core::t!("Yapay zekâ", "AI"),
+            Page::Update => carlui_core::t!("Güncelleme", "Update"),
         }
     }
 
@@ -79,6 +83,7 @@ impl Page {
             Page::Vault => '\u{E72E}',
             Page::Tools => '\u{E90F}',
             Page::Ai => '\u{E945}',
+            Page::Update => '\u{E895}',
         }
     }
 
@@ -97,6 +102,7 @@ impl Page {
             "tools" | "araclar" | "araçlar" => Page::Tools,
             "replay" | "kayit" | "kayıt" | "tekrar" => Page::Tools,
             "ai" | "yapay-zeka" | "yz" => Page::Ai,
+            "update" | "updates" | "guncelleme" | "güncelleme" => Page::Update,
             _ => return None,
         })
     }
@@ -115,6 +121,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         Page::Vault => vault::paint(app, p, f),
         Page::Tools => tools::paint(app, p, f),
         Page::Ai => ai::paint(app, p, f),
+        Page::Update => update::paint(app, p, f),
     }
     f.flush(p);
 }

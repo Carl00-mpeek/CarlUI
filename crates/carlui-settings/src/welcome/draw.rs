@@ -51,29 +51,30 @@ pub(super) fn frame(app: &Welcome, p: &mut W, w: f32, h: f32) {
     footer(app, p, w, h);
 }
 
-/// Üstte dört adım çizgisi (tıklanınca o adıma gider) ve "Adım n/4".
+/// Üstte seçim adımlarının çizgileri (tıklanınca o adıma gider) ve "Adım n/5".
+/// Tanıtımda hiçbiri, özette hepsi dolu.
 fn progress(app: &Welcome, p: &mut W, w: f32) {
     let cur = app.step.index();
     let n = Step::COUNT;
     let (gap, sw) = (6.0, 44.0);
-    for (i, s) in Step::ALL.iter().take(n).enumerate() {
+    for (i, s) in Step::PROGRESS.iter().enumerate() {
         let r = R::new(PAD + i as f32 * (sw + gap), 22.0, sw, 4.0);
-        let t = tween::to(tween::at("w-dot", r.x, 0.0), if i <= cur { 1.0 } else { 0.0 }, 14.0);
+        let t = tween::to(tween::at("w-dot", r.x, 0.0), if s.index() <= cur { 1.0 } else { 0.0 }, 14.0);
         p.round(r, 2.0, 0xFFFFFF, 0.14);
         if t > 0.0 {
-            let a = if i == cur { 1.0 } else { 0.55 };
+            let a = if *s == app.step { 1.0 } else { 0.55 };
             p.round(R::new(r.x, r.y, r.w * t, r.h), 2.0, p.accent, a);
         }
         let hit = R::new(r.x, r.y - 8.0, r.w, r.h + 16.0);
-        if p.hover(hit) && i != cur {
+        if p.hover(hit) && *s != app.step {
             p.round(r, 2.0, 0xFFFFFF, 0.18);
         }
         p.hit(hit, Go::Nav(Nav::Go(*s)));
     }
-    let label = if app.step == Step::Finish {
-        t!("Tamam", "Done").to_string()
-    } else {
-        t!(format!("Adım {}/{}", cur + 1, n), format!("Step {} of {}", cur + 1, n))
+    let label = match (app.step, app.step.progress()) {
+        (Step::Finish, _) => t!("Tamam", "Done").to_string(),
+        (_, Some(i)) => t!(format!("Adım {}/{}", i + 1, n), format!("Step {} of {}", i + 1, n)),
+        (_, None) => t!("Yaklaşık bir dakika", "About a minute").to_string(),
     };
     p.text(&label, R::new(w - PAD - 160.0, 12.0, 160.0, 24.0), 12.0, false, TEXT, 0.55, Align::Right);
 }
@@ -94,8 +95,8 @@ fn footer(app: &Welcome, p: &mut W, w: f32, h: f32) {
         return;
     }
 
-    // Solda "Atla": akışın tamamını atlar, ayara dokunmaz.
-    let skip = t!("Atla", "Skip");
+    // Solda "Atla": turun tamamını atlar, ayarın geri kalanına dokunmaz.
+    let skip = if app.step == Step::Hello { t!("Turu atla", "Skip the tour") } else { t!("Atla", "Skip") };
     let sr = R::new(PAD - 10.0, y, p.fonts.width(skip, 13.0, false) + 20.0, BTN_H);
     let hv = tween::to(tween::at("w-skip", sr.x, sr.y), if p.hover(sr) { 1.0 } else { 0.0 }, 18.0);
     if hv > 0.0 {
@@ -104,12 +105,19 @@ fn footer(app: &Welcome, p: &mut W, w: f32, h: f32) {
     p.text(skip, sr, 13.0, false, TEXT, 0.6 + 0.3 * hv, Align::Center);
     p.hit(sr, Go::Nav(Nav::Skip));
 
-    // Sağda birincil düğme: bir şey seçildiyse "İleri", seçilmediyse "Geç".
-    let next = if app.touched[app.step.index()] { t!("İleri", "Next") } else { t!("Geç", "Skip step") };
+    // Sağda birincil düğme: tanıtımda "Başlayalım"; sonra bir şey seçildiyse
+    // "İleri", seçilmediyse "Geç".
+    let next = if app.step == Step::Hello {
+        t!("Başlayalım", "Let's go")
+    } else if app.touched[app.step.index()] {
+        t!("İleri", "Next")
+    } else {
+        t!("Geç", "Skip step")
+    };
     let nw = width(p, next);
     let r = R::new(w - PAD - nw, y, nw, BTN_H);
     primary(app, p, r, next, Go::Nav(Nav::Next));
-    if app.step != Step::Look {
+    if app.step != Step::Hello {
         let back = t!("Geri", "Back");
         let bw = width(p, back);
         p.button(R::new(r.x - 10.0 - bw, y, bw, BTN_H), None, back, Go::Nav(Nav::Back), true, false);

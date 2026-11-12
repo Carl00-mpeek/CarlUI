@@ -129,12 +129,17 @@ fn thumb(id: &str) -> Option<Rc<Thumb>> {
 /// Ekranda kaplanan boyut: kutuya sığan en büyük tam sayı kat (keskin kalır);
 /// 1× bile sığmıyorsa tam sayıya bölünerek küçülür.
 fn fit(t: &Thumb) -> (f32, f32) {
+    fit_in(t, MAX_W, MAX_H)
+}
+
+/// `fit`, verilen kutu için (karşılama turundaki büyük kartlar da kullanır).
+fn fit_in(t: &Thumb, max_w: f32, max_h: f32) -> (f32, f32) {
     let (w, h) = (t.w as f32, t.h as f32);
-    if h > MAX_H || w > MAX_W {
-        let k = (h / MAX_H).max(w / MAX_W).ceil();
+    if h > max_h || w > max_w {
+        let k = (h / max_h).max(w / max_w).ceil();
         (w / k, h / k)
     } else {
-        let s = (MAX_H / h).min(MAX_W / w).floor().max(1.0);
+        let s = (max_h / h).min(max_w / w).floor().max(1.0);
         (w * s, h * s)
     }
 }
@@ -145,6 +150,12 @@ fn lead(id: &str) -> f32 {
 }
 
 fn draw(p: &P, id: &str, r: R) {
+    draw_in(p, id, r, MAX_W, MAX_H);
+}
+
+/// Hayvanın ilk karesini `r` içinde ortalar; en çok `max_w`×`max_h`, keskin
+/// tam sayı katıyla. Önizlemesi olmayan kimlikte (Yok, kullanıcı paketi) hiçbir şey çizmez.
+pub fn draw_in<A: Clone>(p: &carlui_ui::paint::Painter<A>, id: &str, r: R, max_w: f32, max_h: f32) {
     let Some(t) = thumb(id) else { return };
     let bmp = BITMAPS.with(|c| {
         let mut c = c.borrow_mut();
@@ -157,7 +168,7 @@ fn draw(p: &P, id: &str, r: R) {
         Some(b)
     });
     if let Some(b) = bmp {
-        let (dw, dh) = fit(&t);
+        let (dw, dh) = fit_in(&t, max_w, max_h);
         let dest = R::new((r.x + (r.w - dw) / 2.0).round(), (r.y + (r.h - dh) / 2.0).round(), dw, dh);
         unsafe { p.rt.DrawBitmap(&b, Some(&dest.d2d()), 1.0, D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR, None) };
     }

@@ -1,34 +1,39 @@
 //! Karşılama adımlarının içeriği. Her adım kendisine verilen alana çizer;
 //! seçili olan, ayara bakılarak hesaplanır (pencerede ayrı durum tutulmaz).
+//! Tanıtım ve özet `steps_intro`, hayvan adımı `steps_pet` içinde.
 
 use super::{
+    choices,
     model::{self, DockChoice, Module, Step},
-    Go, Welcome, W,
+    steps_intro, steps_pet, Go, Welcome, W,
 };
 use crate::pages::looks_preview;
 use carlui_core::{
     config::{DockPosition, IslandStyle, TaskbarSize},
     looks::{self, builtin, Which},
+    theme::Palette,
 };
 use carlui_ui::{
-    paint::{mix, wrap, Align, R, TEXT},
+    paint::{wrap, Align, R, TEXT},
     tween,
 };
 
-const GAP: f32 = 12.0;
+pub(super) const GAP: f32 = 12.0;
 
 pub(super) fn paint(app: &Welcome, p: &mut W, r: R) {
     match app.step {
+        Step::Hello => steps_intro::hello(app, p, r),
         Step::Look => look(app, p, r),
+        Step::Pet => steps_pet::pet(app, p, r),
         Step::Dock => dock(app, p, r),
         Step::Island => island(app, p, r),
         Step::Modules => modules(app, p, r),
-        Step::Finish => finish(app, p, r),
+        Step::Finish => steps_intro::finish(app, p, r),
     }
 }
 
 /// Seçilebilir kart zemini: üstüne gelince aydınlanır, seçiliyken vurgu kenarı.
-fn card(app: &Welcome, p: &mut W, r: R, selected: bool, go: Go) {
+pub(super) fn card(app: &Welcome, p: &mut W, r: R, selected: bool, go: Go) {
     let rad = app.round(10.0);
     let hv = tween::to(tween::at("w-card", r.x, r.y), if p.hover(r) { 1.0 } else { 0.0 }, 18.0);
     let sel = tween::to(tween::at("w-sel", r.x, r.y), if selected { 1.0 } else { 0.0 }, 14.0);
@@ -42,7 +47,7 @@ fn card(app: &Welcome, p: &mut W, r: R, selected: bool, go: Go) {
 }
 
 /// Kartın alt satırı: seçiliyse onay işareti ve ad.
-fn name_row(p: &W, r: R, name: &str, selected: bool) {
+pub(super) fn name_row(p: &W, r: R, name: &str, selected: bool) {
     let mut x = r.x;
     if selected {
         p.glyph('\u{E73E}', R::new(x, r.y, 16.0, r.h), 12.0, p.accent, 1.0);
@@ -55,9 +60,11 @@ fn look(app: &Welcome, p: &mut W, r: R) {
     let all = builtin::all();
     let which = looks::current(&app.cfg, &all, &[]);
     let cols = 3usize;
-    let rows = all.len().div_ceil(cols).max(1);
+    let rows = all.len().div_ceil(cols);
     let cw = (r.w - GAP * (cols as f32 - 1.0)) / cols as f32;
-    let ch = ((r.h - GAP * (rows as f32 - 1.0)) / rows as f32).min(180.0);
+    // Altta vurgu rengi şeridi için yer bırakılır.
+    let grid_h = r.h - ACCENT_H - GAP;
+    let ch = ((grid_h - GAP * (rows as f32 - 1.0)) / rows as f32).min(180.0);
     let wall = app.cfg.theme.wallpaper_accent.as_str();
     for (i, l) in all.iter().enumerate() {
         let c = R::new(r.x + (i % cols) as f32 * (cw + GAP), r.y + (i / cols) as f32 * (ch + GAP), cw, ch);
@@ -66,6 +73,48 @@ fn look(app: &Welcome, p: &mut W, r: R) {
         looks_preview::draw(p, R::new(c.x + 8.0, c.y + 8.0, c.w - 16.0, c.h - 44.0), l, wall);
         name_row(p, R::new(c.x + 12.0, c.bottom() - 34.0, c.w - 20.0, 30.0), &l.name, selected);
     }
+    // Kartların altında tek satırlık şerit: yalnızca vurgu rengi (Ayarlar'daki hazır paletler).
+    let top = r.y + rows as f32 * (ch + GAP);
+    accent_strip(app, p, R::new(r.x, top, r.w, ACCENT_H));
+}
+
+/// Vurgu rengi şeridinin yüksekliği.
+const ACCENT_H: f32 = 44.0;
+
+/// Vurgu rengi şeridi: solda başlık, ortada 7 palet, sağda seçili paletin adı.
+fn accent_strip(app: &Welcome, p: &mut W, c: R) {
+    const SW: f32 = 24.0;
+    const SG: f32 = 12.0;
+    const LABEL_W: f32 = 170.0;
+    let rad = app.round(10.0);
+    p.round(c, rad, 0xFFFFFF, 0.03);
+    p.outline(c, rad, 0xFFFFFF, 0.07);
+    p.text(t!("Yalnızca vurgu rengi", "Just the accent color"), R::new(c.x + 14.0, c.y, LABEL_W, c.h), 13.0, true, TEXT, 0.9, Align::Left);
+    let sel = choices::accent_selected(&app.cfg);
+    let x0 = c.x + 14.0 + LABEL_W;
+    let y0 = c.y + (c.h - SW) / 2.0;
+    for (i, pal) in Palette::ALL.iter().enumerate() {
+        let s = R::new(x0 + i as f32 * (SW + SG), y0, SW, SW);
+        let on = sel == Some(*pal);
+        if on {
+            p.round(s.inset(-4.0), SW / 2.0 + 4.0, 0xFFFFFF, 0.9);
+            p.round(s.inset(-2.0), SW / 2.0 + 2.0, 0x000000, 0.9);
+        } else if p.hover(s) {
+            p.round(s.inset(-3.0), SW / 2.0 + 3.0, 0xFFFFFF, 0.25);
+        }
+        let (a, b) = pal.accent();
+        carlui_ui::tone::literal(|| {
+            p.round(s, SW / 2.0, carlui_core::accent::from_rgba(a), 1.0);
+            p.round(s.inset(SW * 0.28), SW * 0.22, carlui_core::accent::from_rgba(b), 1.0);
+        });
+        p.hit(s.inset(-3.0), Go::Accent(*pal));
+    }
+    let name = match sel {
+        Some(pal) => pal.name().to_string(),
+        None => t!("Duvar kâğıdından ya da özel", "From wallpaper or custom").to_string(),
+    };
+    let nx = x0 + Palette::ALL.len() as f32 * (SW + SG) + 6.0;
+    p.text(&name, R::new(nx, c.y, c.right() - nx - 14.0, c.h), 12.0, false, TEXT, 0.6, Align::Right);
 }
 
 fn dock(app: &Welcome, p: &mut W, r: R) {
@@ -164,53 +213,4 @@ fn modules(app: &Welcome, p: &mut W, r: R) {
     };
     p.glyph('\u{E72E}', R::new(r.x, r.bottom() - foot, 18.0, foot), 12.0, TEXT, 0.55);
     p.text(&note, R::new(r.x + 24.0, r.bottom() - foot, r.w - 24.0, foot), 12.0, false, TEXT, 0.55, Align::Left);
-}
-
-fn finish(app: &Welcome, p: &mut W, r: R) {
-    let tips = model::tips(&app.cfg);
-    let mut y = r.y;
-    for (label, key) in &tips {
-        let c = R::new(r.x, y, r.w, 46.0);
-        p.round(c, app.round(10.0), 0xFFFFFF, 0.045);
-        p.outline(c, app.round(10.0), 0xFFFFFF, 0.07);
-        p.text(label, R::new(c.x + 16.0, c.y, c.w * 0.55, c.h), 14.0, false, TEXT, 0.9, Align::Left);
-        key_chip(app, p, R::new(c.x, c.y, c.w - 12.0, c.h), key);
-        y += 46.0 + 8.0;
-    }
-    if tips.is_empty() {
-        p.text(t!("Kısayolları Ayarlar > Kısayollar'dan atayabilirsin.", "Assign shortcuts in Settings > Shortcuts."), R::new(r.x, y, r.w, 24.0), 13.0, false, TEXT, 0.6, Align::Left);
-        y += 32.0;
-    }
-
-    // Kısa özet: seçilen görünüm, dock ve kaç modülün açık olduğu.
-    y += 14.0;
-    let all = builtin::all();
-    let look = match looks::current(&app.cfg, &all, &[]) {
-        Which::Builtin(i) => all.get(i).map(|l| l.name.clone()).unwrap_or_default(),
-        _ => t!("Özel", "Custom").to_string(),
-    };
-    let dock = match (app.cfg.dock.taskbar, app.cfg.dock.position) {
-        (true, _) => t!("görev çubuğu", "taskbar"),
-        (false, DockPosition::Bottom) => t!("altta dock", "dock at the bottom"),
-        (false, DockPosition::Left) => t!("solda dock", "dock on the left"),
-        (false, DockPosition::Right) => t!("sağda dock", "dock on the right"),
-    };
-    let on = Module::ALL.iter().filter(|m| m.get(&app.cfg)).count();
-    let n = Module::ALL.len();
-    let summary = t!(format!("Görünüm: {look} · {dock} · {on}/{n} modül açık"), format!("Look: {look} · {dock} · {on}/{n} modules on"));
-    p.text(&summary, R::new(r.x, y, r.w, 22.0), 13.0, false, TEXT, 0.62, Align::Left);
-    let later = t!("Her şeyi sonra Ayarlar'dan değiştirebilirsin; bu pencere bir daha kendiliğinden açılmaz.", "You can change everything later in Settings; this window won't open on its own again.");
-    let lines = wrap(later, r.w, |s| p.fonts.width(s, 12.0, false));
-    for (k, l) in lines.iter().take(2).enumerate() {
-        p.text(l, R::new(r.x, y + 24.0 + k as f32 * 18.0, r.w, 18.0), 12.0, false, TEXT, 0.45, Align::Left);
-    }
-}
-
-/// Sağa yaslı kısayol etiketi ("Ctrl+Alt+V").
-fn key_chip(app: &Welcome, p: &W, row: R, key: &str) {
-    let kw = p.fonts.width(key, 13.0, true) + 22.0;
-    let k = R::new(row.right() - kw, row.y + (row.h - 28.0) / 2.0, kw, 28.0);
-    p.round(k, app.round(6.0), mix(0xFFFFFF, p.accent, 0.3), 0.10);
-    p.outline(k, app.round(6.0), p.accent, 0.45);
-    p.text(key, k, 13.0, true, TEXT, 0.92, Align::Center);
 }

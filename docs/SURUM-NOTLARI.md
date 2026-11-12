@@ -1,5 +1,19 @@
 # Sürüm notları
 
+## v1.1.0 — Güncelleme sayfası, genişletilmiş ilk kurulum turu (2026-11-12)
+
+**CarlUI 1.1.0: Güncelleme sayfası ve yenilenen ilk kurulum turu.**
+
+**Yeni: Güncelleme sayfası.** Ayarlar'a yeni bir "Güncelleme" sayfası eklendi:
+CarlUI yazısı, sürüm numarası ve durum bir arada görünür; alttaki "Güncellemeleri
+denetle" düğmesiyle yeni sürüm olup olmadığına bakılır. Güncelse "Yazılımınız güncel"
+yazar; yeni sürüm varsa "Güncelle" düğmesi ve kısa bir "Yenilikler" kartı çıkar.
+"Yeni sürümleri bildir" seçeneği Genel'den bu sayfaya taşındı.
+
+**Yeni: Genişletilmiş ilk kurulum turu.** İlk açılışta tur artık karşılama, görünüm
+ve vurgu rengi, dock hayvanı ve sahnesi, dock, ada, modüller ve "Neler yapabilirsin"
+özetini kapsar. Her adım atlanabilir; tur Ayarlar → Genel'den yeniden açılabilir.
+
 ## v1.0.0 — Hayvan tepkileri, güvenli iç haberleşme, genişletilmiş yedek (2026-11-12)
 
 **CarlUI 1.0.0: ilk kararlı sürüm.**

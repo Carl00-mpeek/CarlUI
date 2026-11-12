@@ -4,10 +4,12 @@
 
 use carlui_core::config::{Config, DockPosition, IslandStyle, TaskbarSize};
 
-/// Akışın adımları; son adım özet ekranıdır.
+/// Akışın adımları: kısa tanıtım, seçim adımları ve "neler yapabilirsin" özeti.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
+    Hello,
     Look,
+    Pet,
     Dock,
     Island,
     Modules,
@@ -15,17 +17,25 @@ pub enum Step {
 }
 
 impl Step {
-    pub const ALL: [Step; 5] = [Step::Look, Step::Dock, Step::Island, Step::Modules, Step::Finish];
-    /// İlerleme göstergesinde sayılan adım sayısı (özet hariç).
-    pub const COUNT: usize = 4;
+    pub const ALL: [Step; 7] = [Step::Hello, Step::Look, Step::Pet, Step::Dock, Step::Island, Step::Modules, Step::Finish];
+    /// İlerleme göstergesinde sayılan seçim adımları (tanıtım ve özet hariç).
+    pub const PROGRESS: [Step; 5] = [Step::Look, Step::Pet, Step::Dock, Step::Island, Step::Modules];
+    pub const COUNT: usize = Self::PROGRESS.len();
 
     pub fn index(self) -> usize {
         Self::ALL.iter().position(|s| *s == self).unwrap_or(0)
     }
 
+    /// İlerleme göstergesindeki sırası; tanıtım ve özette `None`.
+    pub fn progress(self) -> Option<usize> {
+        Self::PROGRESS.iter().position(|s| *s == self)
+    }
+
     pub fn title(self) -> &'static str {
         match self {
+            Step::Hello => t!("CarlUI'ye hoş geldin", "Welcome to CarlUI"),
             Step::Look => t!("Bir görünüm seç", "Pick a look"),
+            Step::Pet => t!("Dock'ta bir arkadaş", "A friend on your dock"),
             Step::Dock => t!("Dock nerede dursun?", "Where should the dock go?"),
             Step::Island => t!("Adanın biçimi", "Island style"),
             Step::Modules => t!("Neler açık olsun?", "What should be on?"),
@@ -35,11 +45,13 @@ impl Step {
 
     pub fn subtitle(self) -> &'static str {
         match self {
-            Step::Look => t!("Tema, renk, cam ve köşeler birlikte değişir. Sonra Ayarlar'dan tek tek de değiştirebilirsin.", "Theme, color, glass and corners change together. You can tweak each one later in Settings."),
+            Step::Hello => t!("CarlUI, Windows'a yüzen bir dock, ekranın üstünde bir ada ve hızlı arama ekleyen bir kabuk. Bu kısa turda onu kendine göre ayarlayalım.", "CarlUI is a shell that adds a floating dock, an island at the top of the screen and quick search to Windows. Let's make it yours in this short tour."),
+            Step::Look => t!("Tema, renk, cam ve köşeler birlikte değişir. En alttan yalnızca vurgu rengini de seçebilirsin.", "Theme, color, glass and corners change together. Or pick just the accent color at the bottom."),
+            Step::Pet => t!("Dock'un üstünde yaşayan küçük bir hayvan ve dock camında bir sahne. İkisi de isteğe bağlı.", "A small pet living on top of the dock and a scene in the dock's glass. Both are optional."),
             Step::Dock => t!("Uygulamaların durduğu çubuk. Yüzen dock ya da görev çubuğu olabilir.", "The bar your apps live in. A floating dock or a taskbar."),
             Step::Island => t!("Ekranın üstündeki ada saati, çalan müziği ve bildirimleri gösterir.", "The island at the top shows the clock, what's playing and notifications."),
             Step::Modules => t!("İstemediğini kapat; hepsi sonra Ayarlar'dan açılabilir.", "Turn off what you don't want; everything can be turned on later in Settings."),
-            Step::Finish => t!("Seçtiklerin uygulandı. İşine yarayacak birkaç kısayol:", "Your choices are applied. A few shortcuts worth knowing:"),
+            Step::Finish => t!("Seçtiklerin uygulandı. CarlUI ile neler yapabileceğine kısaca bak:", "Your choices are applied. Here's a quick look at what you can do:"),
         }
     }
 }
@@ -129,11 +141,18 @@ pub fn set_island(c: &mut Config, s: IslandStyle) {
 }
 
 /// Özet ekranındaki kısayollar: ayardaki gerçek tuşlar; kapalı modülün ya
-/// da boş (atanmamış) kısayolun satırı çıkmaz. En çok üç tane.
+/// da boş (atanmamış) kısayolun satırı çıkmaz. En çok üç tane. Özet artık
+/// kartlarla (`choices::highlights`) çizilir; sıralama testi için kalır.
+#[cfg(test)]
 pub fn tips(c: &Config) -> Vec<(&'static str, String)> {
+    shortcut_list(c, true).into_iter().take(3).collect()
+}
+
+/// Tüm özet kısayolları (sırayla); `search` false ise arama satırı çıkmaz.
+pub fn shortcut_list(c: &Config, search: bool) -> Vec<(&'static str, String)> {
     let s = &c.shortcuts;
     [
-        (c.launcher.enabled, t!("Ara", "Search"), &s.search),
+        (search && c.launcher.enabled, t!("Ara", "Search"), &s.search),
         (c.clipboard.enabled, t!("Pano geçmişi", "Clipboard history"), &s.clipboard),
         (true, t!("Ekran görüntüsü", "Screenshot"), &s.screenshot),
         (true, "Carl Vault", &s.vault),
@@ -142,7 +161,6 @@ pub fn tips(c: &Config) -> Vec<(&'static str, String)> {
     .into_iter()
     .filter(|(on, _, key)| *on && !key.trim().is_empty())
     .map(|(_, label, key)| (label, key.trim().to_string()))
-    .take(3)
     .collect()
 }
 

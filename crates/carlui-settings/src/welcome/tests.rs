@@ -6,13 +6,29 @@ use carlui_core::config::{Config, DockPosition, IslandStyle, TaskbarSize};
 
 #[test]
 fn ileri_geri_sinirda_durur() {
-    assert_eq!(navigate(Step::Look, Nav::Back), Outcome::Stay(Step::Look));
-    assert_eq!(navigate(Step::Look, Nav::Next), Outcome::Stay(Step::Dock));
+    assert_eq!(navigate(Step::Hello, Nav::Back), Outcome::Stay(Step::Hello));
+    assert_eq!(navigate(Step::Hello, Nav::Next), Outcome::Stay(Step::Look));
+    assert_eq!(navigate(Step::Look, Nav::Back), Outcome::Stay(Step::Hello));
+    assert_eq!(navigate(Step::Look, Nav::Next), Outcome::Stay(Step::Pet));
+    assert_eq!(navigate(Step::Pet, Nav::Next), Outcome::Stay(Step::Dock));
     assert_eq!(navigate(Step::Dock, Nav::Next), Outcome::Stay(Step::Island));
     assert_eq!(navigate(Step::Island, Nav::Next), Outcome::Stay(Step::Modules));
     assert_eq!(navigate(Step::Modules, Nav::Next), Outcome::Stay(Step::Finish));
     assert_eq!(navigate(Step::Finish, Nav::Back), Outcome::Stay(Step::Modules));
-    assert_eq!(navigate(Step::Dock, Nav::Back), Outcome::Stay(Step::Look));
+    assert_eq!(navigate(Step::Dock, Nav::Back), Outcome::Stay(Step::Pet));
+    assert_eq!(navigate(Step::Pet, Nav::Back), Outcome::Stay(Step::Look));
+}
+
+/// İlerleme göstergesi yalnızca seçim adımlarını sayar: tanıtım ve özet dışarıda.
+#[test]
+fn ilerleme_secim_adimlarini_sayar() {
+    assert_eq!(Step::Hello.progress(), None);
+    assert_eq!(Step::Finish.progress(), None);
+    assert_eq!(Step::Look.progress(), Some(0));
+    assert_eq!(Step::Modules.progress(), Some(Step::COUNT - 1));
+    assert_eq!(Step::ALL.first(), Some(&Step::Hello));
+    assert_eq!(Step::ALL.last(), Some(&Step::Finish));
+    assert_eq!(Step::ALL.len(), Step::COUNT + 2);
 }
 
 #[test]
@@ -28,14 +44,13 @@ fn atla_ve_bitir_kapatir() {
 /// Baştan sona "İleri" ile gidilince her adım bir kez görülür.
 #[test]
 fn bastan_sona_yuruyus() {
-    let mut s = Step::Look;
+    let mut s = Step::Hello;
     let mut seen = vec![s];
     while let Outcome::Stay(n) = navigate(s, Nav::Next) {
         s = n;
         seen.push(s);
     }
     assert_eq!(seen, Step::ALL.to_vec());
-    assert_eq!(Step::ALL.len(), Step::COUNT + 1);
 }
 
 /// Atla yalnızca karşılama işaretini değiştirir.

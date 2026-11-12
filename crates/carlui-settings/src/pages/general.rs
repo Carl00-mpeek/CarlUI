@@ -1,4 +1,5 @@
-//! Genel: dil, Windows ile başlama, güncellemeler, görev çubuğu, adanın monitörü.
+//! Genel: dil, Windows ile başlama, görev çubuğu, adanın monitörü.
+//! (Yeni sürüm bildirimi anahtarı Güncelleme sayfasına taşındı.)
 
 use crate::{
     ui::{edit, Flow, P},
@@ -24,7 +25,6 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
 
     f.section(p, t!("Sistem", "System"));
     f.toggle(p, t!("Windows ile başlat", "Start with Windows"), t!("Oturum açılınca CarlUI hemen başlar.", "CarlUI starts as soon as you sign in."), c.start_with_windows, |c| c.general.start_with_windows ^= true);
-    f.toggle(p, t!("Yeni sürümleri bildir", "Notify about new versions"), t!("Günde bir kez GitHub'a bakılır; yeni sürüm kendiliğinden kurulmaz.", "Checks GitHub once a day; nothing is installed automatically."), c.check_updates, |c| c.general.check_updates ^= true);
     f.toggle(p, t!("Windows görev çubuğunu gizle", "Hide the Windows taskbar"), t!("Dock çalışırken Windows'un kendi görev çubuğu görünmez.", "The Windows taskbar stays hidden while the dock runs."), c.hide_taskbar, |c| c.general.hide_taskbar ^= true);
     f.section(p, t!("Yedekleme", "Backup"));
     let r = f.row(p, t!("Ayarları dışa / içe aktar", "Export / import settings"), t!("Ayarlar, görünümler, pencere düzenleri ve hayvan paketleri seçtiğin yerde CarlUI-yedek-tarih klasörüne yazılır; Vault ve pano geçmişi yedeğe girmez. İçe aktarırken o klasördeki config.toml'u seç (tek bir .toml da olur).", "Settings, looks, window layouts and pet packs go into a CarlUI-yedek-date folder where you choose; Vault and clipboard history are not included. To import, pick the config.toml inside that folder (a lone .toml works too)."), 230.0);

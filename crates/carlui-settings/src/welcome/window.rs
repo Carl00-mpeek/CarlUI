@@ -66,6 +66,8 @@ impl Welcome {
             let hp = D2D1_HWND_RENDER_TARGET_PROPERTIES { hwnd: self.hwnd, pixelSize: D2D_SIZE_U { width: pw, height: ph }, presentOptions: D2D1_PRESENT_OPTIONS_NONE };
             let rt = unsafe { self.factory.CreateHwndRenderTarget(&props, &hp)? };
             unsafe { rt.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE) };
+            // Hayvan kareleri eski hedefe bağlıydı; yeni hedefte yeniden yaratılır.
+            crate::pages::dock_live_thumbs::render_target_changed();
             self.rt = Some(rt);
         }
         let rt = self.rt.clone().unwrap();
@@ -274,8 +276,8 @@ pub fn run() -> Result<()> {
             mouse: (-1.0, -1.0),
             hits: Vec::new(),
             cfg,
-            step: super::model::Step::Look,
-            touched: [false; 5],
+            step: super::model::Step::Hello,
+            touched: [false; super::model::Step::ALL.len()],
             reload,
         };
         tween::enable();

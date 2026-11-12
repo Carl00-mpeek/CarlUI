@@ -1,28 +1,45 @@
-//! Bu modül ilk kurulumdaki karşılama akışı (`carlui-settings --welcome`).
+//! Bu modül ilk kurulumdaki karşılama turu (`carlui-settings --welcome`).
 //! Sorun: yeni kullanıcı CarlUI'yi varsayılan görünüşle görüyor, dock'un
 //! yerini, adanın biçimini ve hangi modüllerin açık olduğunu bilmeden
-//! ayarlar penceresinin on bir sayfasında arıyordu. Çözüm: dört kısa adım
-//! (görünüm, dock, ada, modüller) ve bir özet; her seçim `config::update` ile
-//! hemen uygulanır, her adım ve tüm akış atlanabilir.
+//! ayarlar penceresinin on bir sayfasında arıyordu. Çözüm: kısa bir tanıtım,
+//! beş seçim adımı (görünüm ve vurgu rengi, dock hayvanı ve sahne, dock,
+//! ada, modüller) ve "neler yapabilirsin" özeti; her seçim `config::update`
+//! ile hemen uygulanır, her adım ve tüm tur atlanabilir.
+//!
+//! Kurucuyla ilişkisi: kurucu dosyaları kopyalayıp CarlUI'yi başlatır; ayar
+//! dosyası ilk kez yazıldıysa (`Config::fresh`) ana süreç turu birkaç saniye
+//! sonra açar. Tur kurucunun içinde değil, kurulumdan sonra çalışır: görünüm
+//! önizlemesi ve hayvan kareleri burada, seçimler de canlı CarlUI'de anında
+//! görünür.
 //!
 //! Karşılama işareti (`general.welcomed`) pencere açılır açılmaz yazılır:
 //! atlamak, kapatmak ya da çökme akışı bir daha göstermez. Ana süreç
 //! (`carlui`) akışı yalnızca ilk kurulumda ve tam ekran uygulama yokken açar.
 //!
-//! Parçalar: `model` adım makinesi ve ayar değişiklikleri, `draw` çerçeve
-//! (başlık, ilerleme, düğmeler), `steps` adımların içeriği, `window` Win32
-//! penceresi.
+//! Parçalar: `model` adım makinesi ve ayar değişiklikleri, `choices` vurgu,
+//! hayvan, sahne ve özet kartları, `draw` çerçeve (başlık, ilerleme,
+//! düğmeler), `steps`/`steps_pet`/`steps_intro` adımların içeriği, `window`
+//! Win32 penceresi.
 
+mod choices;
 mod draw;
 mod model;
 mod steps;
+mod steps_intro;
+mod steps_pet;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_tour;
 mod window;
 
 pub use window::run;
 
-use carlui_core::config::{self, Config, IslandStyle};
+use carlui_core::{
+    config::{self, Config, IslandStyle},
+    live::LiveScene,
+    theme::Palette,
+};
 use carlui_ui::paint::{Fonts, Painter, R};
 use model::{DockChoice, Module, Nav, Outcome, Step};
 use std::sync::{Arc, Mutex};
@@ -37,6 +54,13 @@ pub enum Go {
     Nav(Nav),
     /// Hazır görünümü uygula (`looks::builtin::all` sırası).
     Look(usize),
+    /// Yalnızca vurgu rengi (hazır palet).
+    Accent(Palette),
+    /// Hayvan ana kartı ("" = yok).
+    Pet(&'static str),
+    /// Kedi/köpek renk varyantı.
+    PetColor(&'static str),
+    Scene(LiveScene),
     Dock(DockChoice),
     Island(IslandStyle),
     Module(Module),
@@ -57,7 +81,7 @@ pub struct Welcome {
     pub cfg: Config,
     pub step: Step,
     /// Kullanıcı bu adımda bir şey seçti mi ("Geç" yerine "İleri" yazılır).
-    pub touched: [bool; 5],
+    pub touched: [bool; Step::ALL.len()],
     reload: Arc<Mutex<Option<Config>>>,
 }
 
@@ -119,6 +143,10 @@ impl Welcome {
                 }
                 self.touched[self.step.index()] = true;
             }
+            Go::Accent(pal) => self.edit(move |c| choices::set_accent(c, pal)),
+            Go::Pet(id) => self.edit(move |c| choices::choose_pet(c, id)),
+            Go::PetColor(id) => self.edit(move |c| choices::choose_variant(c, id)),
+            Go::Scene(s) => self.edit(move |c| choices::set_scene(c, s)),
             Go::Dock(d) => self.edit(move |c| model::set_dock(c, d)),
             Go::Island(s) => self.edit(move |c| model::set_island(c, s)),
             Go::Module(m) => self.edit(move |c| m.toggle(c)),
