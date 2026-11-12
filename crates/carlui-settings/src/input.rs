@@ -30,6 +30,15 @@ pub enum Form {
     ExpandApp,
     /// Ekran görüntüsü dosya adı şablonu (tek alan; boş = varsayılan).
     ShotName,
+    /// Özel vurgu rengi ("#RRGGBB"; tek alan).
+    AccentHex,
+    /// Görünüm adı: şu anki görünüşü kaydet / kullanıcı görünümünü yeniden
+    /// adlandır (tek alan; `pages::looks::submit` işler).
+    LookName,
+    LookRename,
+    /// Fotoğraftan yapılan hayvanın adı (tek alan; `pages::dock_live_photo`
+    /// işler, alan kendi satırında çizilir).
+    PetName,
 }
 
 pub struct Input {
@@ -85,6 +94,10 @@ impl Input {
 
     /// Ayara ekler; olmazsa hatayı yazar ve false döner.
     pub fn apply(&mut self, cfg: &mut Config) -> bool {
+        // Görünüm formları ayara değil görünüm listesine yazar (bkz. `pages::looks`).
+        if matches!(self.kind, Form::LookName | Form::LookRename | Form::PetName) {
+            return false;
+        }
         if self.kind.single() {
             return self.apply_app(cfg);
         }
@@ -204,7 +217,35 @@ mod tests {
 impl Form {
     /// Tek alanlı form mu (yalnızca ad).
     pub fn single(self) -> bool {
-        matches!(self, Form::NotifyApp | Form::ClipApp | Form::ExpandApp | Form::ShotName)
+        matches!(self, Form::NotifyApp | Form::ClipApp | Form::ExpandApp | Form::ShotName | Form::AccentHex | Form::LookName | Form::LookRename | Form::PetName)
+    }
+
+    /// Onay düğmesinin yazısı.
+    pub fn ok_label(self) -> &'static str {
+        match self {
+            Form::LookName | Form::LookRename => carlui_core::t!("Kaydet", "Save"),
+            Form::PetName => carlui_core::t!("Oluştur", "Create"),
+            _ => carlui_core::t!("Ekle", "Add"),
+        }
+    }
+
+    /// Klavye ipucundaki Enter açıklaması; düğme yazısıyla aynı fiil.
+    pub fn ok_hint(self) -> &'static str {
+        match self {
+            Form::LookName | Form::LookRename => carlui_core::t!("kaydet", "save"),
+            Form::PetName => carlui_core::t!("oluştur", "create"),
+            _ => carlui_core::t!("ekle", "add"),
+        }
+    }
+
+    /// Formun altındaki klavye ipucu (Enter, onay düğmesini izler).
+    pub fn keys_hint(self, multi: bool) -> String {
+        let ok = self.ok_hint();
+        if multi {
+            format!("{} · {} · Enter: {ok} · {}", carlui_core::t!("Tab: alan değiştir", "Tab: next field"), carlui_core::t!("Ctrl+V: yapıştır", "Ctrl+V: paste"), carlui_core::t!("Esc: vazgeç", "Esc: cancel"))
+        } else {
+            format!("{} · Enter: {ok} · {}", carlui_core::t!("Ctrl+V: yapıştır", "Ctrl+V: paste"), carlui_core::t!("Esc: vazgeç", "Esc: cancel"))
+        }
     }
 }
 
@@ -214,6 +255,9 @@ impl Input {
         if self.kind == Form::ShotName {
             cfg.shots.name = self.name.trim().to_string();
             return true;
+        }
+        if self.kind == Form::AccentHex {
+            return self.apply_accent(cfg);
         }
         let name = self.name.trim().trim_matches('"').to_string();
         if name.is_empty() {
@@ -229,5 +273,66 @@ impl Input {
             list.push(name);
         }
         true
+    }
+
+    /// Yazılan renk kodunu özel vurgu yapar; geçersizse hata.
+    fn apply_accent(&mut self, cfg: &mut Config) -> bool {
+        match carlui_core::accent::parse_hex(&self.name) {
+            Some(c) => {
+                cfg.theme.custom_accent = carlui_core::accent::to_hex(c);
+                cfg.theme.accent_source = carlui_core::config::AccentSource::Custom;
+                true
+            }
+            None => {
+                self.error = Some(carlui_core::t!("Renk kodu #RRGGBB biçiminde olmalı (ör. #4F8BFF).", "The color code must look like #RRGGBB (e.g. #4F8BFF).").into());
+                false
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod accent_tests {
+    use super::*;
+    use carlui_core::config::AccentSource;
+
+    #[test]
+    fn accent_hex_form() {
+        let mut c = Config::default();
+        let mut i = Input::new(Form::AccentHex);
+        i.name = "mavi".into();
+        assert!(!i.apply(&mut c));
+        assert!(i.error.is_some());
+        assert_eq!(c.theme.accent_source, AccentSource::Palette);
+        i.name = " #ff8800 ".into();
+        assert!(i.apply(&mut c));
+        assert_eq!(c.theme.custom_accent, "#FF8800");
+        assert_eq!(c.theme.accent_source, AccentSource::Custom);
+    }
+
+    /// Görünüm adı formları ayara hiçbir şey yazmaz (uygulama listelerine düşmez).
+    #[test]
+    fn look_forms_leave_config() {
+        for kind in [Form::LookName, Form::LookRename] {
+            let mut c = Config::default();
+            let before = (c.notify.blocked_apps.len(), c.clipboard.excluded_apps.len(), c.tools.expand_excluded.len());
+            let mut i = Input::new(kind);
+            i.name = "Gece".into();
+            assert!(!i.apply(&mut c));
+            assert_eq!(before, (c.notify.blocked_apps.len(), c.clipboard.excluded_apps.len(), c.tools.expand_excluded.len()));
+            assert!(kind.single());
+            assert_eq!(kind.ok_label(), carlui_core::t!("Kaydet", "Save"));
+        }
+    }
+
+    /// İpucundaki Enter fiili onay düğmesiyle aynı olmalı.
+    #[test]
+    fn hint_follows_ok_label() {
+        for kind in [Form::Engine, Form::Snippet, Form::NotifyApp, Form::AccentHex, Form::LookName, Form::LookRename, Form::PetName] {
+            let hint = kind.keys_hint(!kind.single());
+            assert!(hint.contains(&format!("Enter: {}", kind.ok_label().to_lowercase())), "{kind:?}: {hint}");
+        }
+        assert!(Form::LookName.keys_hint(false).contains(carlui_core::t!("Enter: kaydet", "Enter: save")));
+        assert!(!Form::LookRename.keys_hint(false).contains(carlui_core::t!("ekle", "add")));
     }
 }

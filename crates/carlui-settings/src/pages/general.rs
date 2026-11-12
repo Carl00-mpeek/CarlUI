@@ -34,6 +34,10 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     if let Some(n) = &app.notice {
         f.note(p, n);
     }
+    f.section(p, t!("Tanıtım", "Tour"));
+    let r = f.row(p, t!("Karşılamayı yeniden göster", "Show the welcome again"), t!("İlk kurulumdaki kısa tanıtım: görünüm, dock, ada ve modüller.", "The short first-run tour: look, dock, island and modules."), 150.0);
+    let label = t!("Göster", "Show");
+    p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E768}'), label, Act::Welcome, true, false);
 
     let n = unsafe { GetSystemMetrics(SM_CMONITORS) }.clamp(1, 4) as u32;
     if n > 1 {

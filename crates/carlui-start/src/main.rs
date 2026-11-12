@@ -54,9 +54,12 @@ const WM_APP_APPS: u32 = WM_APP + 1;
 /// Gizliyken simgeleri parça parça önceden oku.
 const WM_APP_WARM: u32 = WM_APP + 7;
 const WM_APP_FRAME: u32 = WM_APP + 2;
+/// Açılış/kapanış ve sayfa geçişi süreleri (ms, varsayılan hızda). Kullanılırken
+/// `motion_ms` ile hız ayarına ve "hareketi azalt"a göre ölçeklenir.
 const OPEN_MS: f32 = 260.0;
 const CLOSE_MS: f32 = 160.0;
 const TRANS_MS: f32 = 160.0;
+use carlui_core::theme::motion_ms;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum View {
@@ -274,7 +277,7 @@ impl App {
         match self.anim {
             None => 1.0,
             Some(a) => {
-                let ms = if a.closing { CLOSE_MS } else { OPEN_MS };
+                let ms = motion_ms(if a.closing { CLOSE_MS } else { OPEN_MS });
                 let t = (a.t0.elapsed().as_secs_f32() * 1000.0 / ms).min(1.0);
                 if a.closing {
                     // Kapanış hızlanarak gider.
@@ -292,7 +295,7 @@ impl App {
         match self.trans {
             None => (1.0, 0.0),
             Some((t0, dir)) => {
-                let t = (t0.elapsed().as_secs_f32() * 1000.0 / TRANS_MS).min(1.0);
+                let t = (t0.elapsed().as_secs_f32() * 1000.0 / motion_ms(TRANS_MS)).min(1.0);
                 let e = 1.0 - (1.0 - t).powi(3);
                 (e, (1.0 - e) * 18.0 * dir)
             }
@@ -317,7 +320,7 @@ impl App {
     fn frame(&mut self) {
         self.frame_queued = false;
         if let Some(a) = self.anim {
-            let ms = if a.closing { CLOSE_MS } else { OPEN_MS };
+            let ms = motion_ms(if a.closing { CLOSE_MS } else { OPEN_MS });
             let done = a.t0.elapsed().as_secs_f32() * 1000.0 >= ms;
             let r = if done && !a.closing { 1.0 } else { self.reveal() };
             if done {
@@ -332,7 +335,7 @@ impl App {
             self.place(r);
         }
         let paging = self.trans.is_some();
-        if self.trans.is_some_and(|(t0, _)| t0.elapsed().as_secs_f32() * 1000.0 >= TRANS_MS) {
+        if self.trans.is_some_and(|(t0, _)| t0.elapsed().as_secs_f32() * 1000.0 >= motion_ms(TRANS_MS)) {
             self.trans = None;
         }
         // İçerik yalnızca değiştiyse çizilir (sayfa geçişi, yeni gelen simge,

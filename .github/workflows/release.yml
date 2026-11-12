@@ -71,7 +71,9 @@ jobs:
             $body | Set-Content notes.md -Encoding utf8
             gh release edit $tag --notes-file notes.md
           } else {
-            "Kurulum / Setup: **CarlUI-Setup.exe**`n`n$line" | Set-Content notes.md -Encoding utf8
+            $head = ''
+            if (Test-Path docs/release-notes.md) { $head = (Get-Content docs/release-notes.md -Raw -Encoding utf8).TrimEnd() + "`n`n" }
+            "${head}Kurulum / Setup: **CarlUI-Setup.exe**`n`n$line" | Set-Content notes.md -Encoding utf8
             gh release create $tag dist\CarlUI-Setup.exe --title "CarlUI $tag" --notes-file notes.md --generate-notes
           }
           if ($LASTEXITCODE -ne 0) { throw 'sürüm güncellenemedi' }

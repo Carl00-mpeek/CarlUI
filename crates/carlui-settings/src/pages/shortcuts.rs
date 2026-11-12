@@ -199,9 +199,9 @@ fn icon_button(p: &mut P, r: R, glyph: char, act: Act) {
 
 fn key_row(app: &App, p: &mut P, f: &mut Flow, key: Key) {
     let value = key.get(&app.cfg);
-    // Hata satırın açıklamasının yerine yazılır: alttaki satırlar kaymaz.
+    // Açıklama "i" düğmesinde; hata ise başlığın altında turuncu görünür.
     let error = app.error.as_ref().filter(|(k, _)| *k == key).map(|(_, e)| e.as_str());
-    let r = f.row_c(p, key.label(), error.unwrap_or(key.desc()), 300.0, error.map(|_| ORANGE));
+    let r = f.row_sub(p, key.label(), key.desc(), error.unwrap_or(""), Some(ORANGE), 300.0);
     let reset = R::new(r.right() - 12.0 - 32.0, r.y + (r.h - 32.0) / 2.0, 32.0, 32.0);
     let off = R::new(reset.x - 4.0 - 32.0, reset.y, 32.0, 32.0);
     let caps = R::new(off.x - 8.0 - 210.0, r.y + (r.h - 36.0) / 2.0, 210.0, 36.0);
@@ -213,8 +213,12 @@ fn key_row(app: &App, p: &mut P, f: &mut Flow, key: Key) {
 }
 
 pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
-    f.note(p, t!("Değiştirmek için tuşlara tıkla ve yeni kısayola bas. ✕ kapatır, ↺ varsayılana döndürür.", "Click the keys and press a new shortcut to change it. ✕ turns it off, ↺ restores the default."));
-    f.section(p, t!("Genel", "General"));
+    // Sayfanın kullanım açıklaması ve fare tuşu kuralları ilk bölüm başlığının "i" düğmesinde.
+    let help = t!(
+        "Değiştirmek için tuşlara tıkla ve yeni kısayola bas. ✕ kapatır, ↺ varsayılana döndürür.\nSağ, orta ve yan fare tuşları tek başına ya da Ctrl gibi bir tuşla atanabilir; atanan tuş başka işe yaramaz, bu yüzden sağ ve orta tık için Ctrl+Mouse2 gibi bir birleşim daha iyidir. Sol tık, değiştiricisiz tek tuş ve Windows'un temel kısayolları (Ctrl+C, Alt+Tab, Win+L …) kabul edilmez.",
+        "Click the keys and press a new shortcut to change it. ✕ turns it off, ↺ restores the default.\nRight, middle and side mouse buttons can be assigned alone or with a key like Ctrl. An assigned button does nothing else, so a combination like Ctrl+Mouse2 is better for right and middle click. Left click, a single key without modifiers and core Windows shortcuts (Ctrl+C, Alt+Tab, Win+L …) are not accepted."
+    );
+    f.section_info(p, t!("Genel", "General"), help);
     key_row(app, p, f, Key::Search);
     let sel = match app.cfg.shortcuts.win_key {
         WinKey::Menu => 0,
@@ -250,7 +254,4 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.section(p, "Dock");
     key_row(app, p, f, Key::AppNumbers);
     key_row(app, p, f, Key::Radial);
-    f.flush(p);
-    f.y += 6.0;
-    f.note(p, t!("Sağ, orta ve yan fare tuşları tek başına ya da Ctrl gibi bir tuşla atanabilir; atanan tuş başka işe yaramaz, bu yüzden sağ ve orta tık için Ctrl+Mouse2 gibi bir birleşim daha iyidir. Sol tık, değiştiricisiz tek tuş ve Windows'un temel kısayolları (Ctrl+C, Alt+Tab, Win+L …) kabul edilmez.", "Right, middle and side mouse buttons can be assigned alone or with a key like Ctrl. An assigned button does nothing else, so a combination like Ctrl+Mouse2 is better for right and middle click. Left click, a single key without modifiers and core Windows shortcuts (Ctrl+C, Alt+Tab, Win+L …) are not accepted."));
 }

@@ -19,7 +19,8 @@ mod wifi;
 
 use carlui_core::{
     bus::{BusClient, Event},
-    config, info, log, paths,
+    config::{self, ThemeConfig},
+    info, log, paths,
     theme::Theme,
 };
 use carlui_ui::gfx::Gfx;
@@ -52,6 +53,9 @@ const TIMER_REQUEST: usize = 2;
 /// Meşgulken gelen ikon mesajları kuyruğu işlensin.
 const WM_APP_SAVED: u32 = WM_APP + 3;
 const TIMER_SAVED: usize = 3;
+/// Ayar dosyası değişti (panel penceresine): vurgu rengi, cam, köşe ve
+/// animasyon hızı yeniden okunur. Açık/koyu değişimi süreci zaten yeniden başlatır.
+const WM_APP_THEME: u32 = WM_APP + 4;
 
 struct App {
     gfx: Gfx,
@@ -60,6 +64,9 @@ struct App {
     bus: BusClient,
     inbox: Arc<Mutex<VecDeque<Event>>>,
     icons_pending: bool,
+    /// Panelin şu an kullandığı tema ayarı ve izleyicinin bıraktığı yenisi.
+    theme_cfg: ThemeConfig,
+    theme_slot: Arc<Mutex<Option<ThemeConfig>>>,
 }
 
 thread_local! {
@@ -357,6 +364,20 @@ extern "system" fn panel_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
                 });
                 LRESULT(0)
             }
+            WM_APP_THEME => {
+                with_app(|a| {
+                    let Some(t) = a.theme_slot.lock().ok().and_then(|mut s| s.take()) else { return };
+                    // Başka bir ayar değiştiyse panel boşuna yeniden kurulmasın.
+                    if t == a.theme_cfg {
+                        return;
+                    }
+                    a.panel.set_theme(&Theme::from_config(&t));
+                    a.theme_cfg = t;
+                    let App { gfx, host, panel, .. } = a;
+                    panel.refresh(gfx, host);
+                });
+                LRESULT(0)
+            }
             _ => DefWindowProcW(hwnd, msg, wp, lp),
         }
     }
@@ -422,10 +443,20 @@ fn main() -> Result<()> {
         // Ayar değişince yeniden okunur; bu, seçilen arayüz dilini de uygular
         // (panel her açılışta metinlerini yeni dille kurar).
         carlui_ui::tone::follow(&cfg.theme);
-        config::watch(|c| carlui_ui::tone::restart_on_change(&c.theme));
         let theme = Theme::from_config(&cfg.theme);
         let gfx = Gfx::new()?;
         let panel_hwnd = create_panel_window()?;
+        // Dock ve ada gibi: vurgu rengi ve cam ayarları canlı izlenir.
+        let theme_slot: Arc<Mutex<Option<ThemeConfig>>> = Arc::default();
+        let slot = theme_slot.clone();
+        let panel_raw = panel_hwnd.0 as isize;
+        config::watch(move |c| {
+            carlui_ui::tone::restart_on_change(&c.theme);
+            if let Ok(mut g) = slot.lock() {
+                *g = Some(c.theme.clone());
+            }
+            let _ = PostMessageW(HWND(panel_raw as _), WM_APP_THEME, WPARAM(0), LPARAM(0));
+        });
         let s = GetDpiForWindow(panel_hwnd) as f32 / 96.0;
         let panel = Panel::new(&gfx, panel_hwnd, &theme, s)?;
 
@@ -437,7 +468,7 @@ fn main() -> Result<()> {
             }
             let _ = PostMessageW(HWND(hwnd_raw as _), WM_APP_BUS, WPARAM(0), LPARAM(0));
         });
-        APP.with(|a| *a.borrow_mut() = Some(App { gfx, host, panel, bus, inbox, icons_pending: false }));
+        APP.with(|a| *a.borrow_mut() = Some(App { gfx, host, panel, bus, inbox, icons_pending: false, theme_cfg: cfg.theme.clone(), theme_slot }));
         radio_watch::start(panel_hwnd.0 as isize, panel::WM_APP_RADIOS);
         with_app(|a| a.host.request_icons());
         // Bazı ikonlar (ör. explorer'ın ses ikonu) ilk yayını kaçırıyor; kısa süre sonra bir kez daha iste.

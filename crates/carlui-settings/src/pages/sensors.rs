@@ -55,7 +55,8 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         State::NoDriver => Some(('\u{E8A7}', t!("PawnIO", "PawnIO"), Act::SensorsDriver)),
         _ => None,
     };
-    let r = f.row(p, label, desc, if button.is_some() { 120.0 } else { 0.0 });
+    // Okuyucunun durumu ve kurulum hatası kartta görünür kalır.
+    let r = f.row_sub(p, label, "", desc, None, if button.is_some() { 120.0 } else { 0.0 });
     if let Some((icon, name, act)) = button {
         p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some(icon), name, act, true, false);
     }

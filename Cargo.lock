@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "carlui"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "serde",
@@ -196,7 +196,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-ai"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "ort",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-clip"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "serde",
@@ -216,7 +216,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-convert"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-ai",
  "carlui-clip",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-core"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -239,18 +239,19 @@ dependencies = [
 
 [[package]]
 name = "carlui-dock"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "carlui-sys",
  "carlui-ui",
+ "serde",
  "serde_json",
  "windows",
 ]
 
 [[package]]
 name = "carlui-expand"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-clip",
  "carlui-core",
@@ -259,7 +260,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-island"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-clip",
  "carlui-core",
@@ -277,7 +278,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-launcher"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "serde",
@@ -287,7 +288,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-office"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "calamine",
  "carlui-core",
@@ -302,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-remover"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-clip",
  "carlui-core",
@@ -314,7 +315,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-replay"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "carlui-ui",
@@ -324,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-sensors"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "carlui-sys",
@@ -333,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-settings"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-ai",
  "carlui-core",
@@ -344,7 +345,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-setup"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "carlui-ui",
@@ -355,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-start"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "carlui-launcher",
@@ -367,7 +368,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-sys"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "windows",
@@ -375,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-taskmgr"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "carlui-sys",
@@ -385,7 +386,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-tools"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-clip",
  "carlui-core",
@@ -396,7 +397,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-tray"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "carlui-ui",
@@ -406,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-ui"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "carlui-core",
  "windows",
@@ -414,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "carlui-vault"
-version = "0.9.9"
+version = "0.10.0"
 dependencies = [
  "argon2",
  "carlui-core",

@@ -415,17 +415,19 @@ mod tests {
         let mut s = Store { items: Vec::new(), dir: dir.clone(), max_items: 10, loaded: true };
         s.add(Content::Text("merhaba".into()));
         let offer = |t: &str, exp| Content::Vault(Offer { token: t.into(), label: "GitHub · Parola".into(), expires: exp });
-        assert!(!s.add(offer("aa", now_ms() - 1)), "süresi dolmuş belirteç alınmaz");
-        assert!(s.add(offer("bb", now_ms() + 60_000)));
-        assert!(s.add(offer("cc", now_ms() + 60_000)));
+        // Belirteçler uzun ve benzersiz: zamandan türeyen kimliklerle çakışamaz.
+        const GIZLI: &str = "KASA-BELIRTECI-zq9x7w3v-son";
+        assert!(!s.add(offer("KASA-BELIRTECI-eski-sureli", now_ms() - 1)), "süresi dolmuş belirteç alınmaz");
+        assert!(s.add(offer("KASA-BELIRTECI-ilk-zq9x", now_ms() + 60_000)));
+        assert!(s.add(offer(GIZLI, now_ms() + 60_000)));
         let vaults: Vec<&Clip> = s.items.iter().filter(|c| c.kind == Kind::Vault).collect();
         assert_eq!(vaults.len(), 1, "aynı alanın eski belirteci silinir");
-        assert_eq!(vaults[0].token, "cc");
+        assert_eq!(vaults[0].token, GIZLI);
         let id = vaults[0].id.clone();
         s.toggle_pin(&id);
         assert!(!s.get(&id).unwrap().pinned);
         let disk = std::fs::read_to_string(dir.join("history.json")).unwrap();
-        assert!(disk.contains("merhaba") && !disk.contains("cc") && !disk.contains("GitHub") && !disk.contains("vault"));
+        assert!(disk.contains("merhaba") && !disk.contains("KASA-BELIRTECI") &&!disk.contains("GitHub") && !disk.contains("vault"));
         s.items.iter_mut().for_each(|c| c.expires = if c.kind == Kind::Vault { 1 } else { c.expires });
         assert!(s.expire_vault());
         assert!(s.items.iter().all(|c| c.kind != Kind::Vault));

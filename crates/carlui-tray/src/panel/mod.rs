@@ -236,6 +236,13 @@ pub struct Panel {
 }
 
 impl Panel {
+    /// Ayar dosyasından gelen yeni tema (vurgu, cam, köşe, hız). Görseller bir
+    /// sonraki yeniden kurulumda yeni renklerle çizilir; açık panel `refresh` ile yenilenir.
+    pub fn set_theme(&mut self, theme: &Theme) {
+        self.theme = *theme;
+        self.motion = Motion::new(&self.comp, theme);
+    }
+
     pub fn new(gfx: &Gfx, hwnd: HWND, theme: &Theme, s: f32) -> Result<Self> {
         let comp = gfx.comp.clone();
         let target = unsafe { comp.cast::<ICompositorDesktopInterop>()?.CreateDesktopWindowTarget(hwnd, true)? };

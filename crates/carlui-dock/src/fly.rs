@@ -26,7 +26,8 @@ use windows::{
     },
 };
 
-/// Küçülme ve açılma süreleri (ms). Windows'un kendi animasyonuna yakın.
+/// Küçülme ve açılma süreleri (ms). Windows'un kendi animasyonuna yakın;
+/// animasyon hızı ayarıyla ölçeklenir (`motion_ms`).
 const MIN_MS: f32 = 250.0;
 const RESTORE_MS: f32 = 230.0;
 /// Simgeye vardığında görüntünün saydamlığı (0-255).
@@ -39,8 +40,11 @@ static SEQ: AtomicU64 = AtomicU64::new(0);
 static LIVE: Mutex<Option<HashMap<isize, u64>>> = Mutex::new(None);
 
 /// Kullanıcı "küçültürken ve büyütürken pencereleri canlandır" ayarını
-/// kapattıysa uçuş da yapılmaz.
+/// kapattıysa ya da CarlUI'de "hareketi azalt" açıksa uçuş da yapılmaz.
 pub fn enabled() -> bool {
+    if carlui_core::theme::reduced_motion() {
+        return false;
+    }
     let mut ai = ANIMATIONINFO { cbSize: std::mem::size_of::<ANIMATIONINFO>() as u32, iMinAnimate: 0 };
     unsafe { SystemParametersInfoW(SPI_GETANIMATION, ai.cbSize, Some(&mut ai as *mut _ as *mut _), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0)).is_ok() && ai.iMinAnimate != 0 }
 }
@@ -193,7 +197,7 @@ unsafe fn run(src: HWND, win: RECT, icon: RECT, minimizing: bool, seq: u64) -> w
         let full = [win.left as f32, win.top as f32, win.right as f32, win.bottom as f32];
         let small = fit(icon, ww, wh);
         let (from, to) = if minimizing { (full, small) } else { (small, full) };
-        let ms = if minimizing { MIN_MS } else { RESTORE_MS };
+        let ms = carlui_core::theme::motion_ms(if minimizing { MIN_MS } else { RESTORE_MS });
         let (ox, oy) = (bounds.left as f32, bounds.top as f32);
         let set = |t: f32| {
             let e = ease(t, minimizing);

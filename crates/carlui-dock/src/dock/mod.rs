@@ -19,6 +19,8 @@
 
 mod actions;
 mod layout;
+mod live_view;
+pub use live_view::LiveView;
 mod mouse;
 mod places;
 pub mod quick;

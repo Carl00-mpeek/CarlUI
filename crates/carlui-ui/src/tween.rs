@@ -81,6 +81,7 @@ pub fn at(tag: &str, x: f32, y: f32) -> u64 {
 }
 
 /// Değeri hedefe yaklaştırır; `speed` büyüdükçe hızlı (12 ≈ 0,25 sn).
+/// Animasyon hızı ayarı hızı çarpar; hareket azaltılmışsa değer hemen hedefe atlar.
 pub fn to(k: u64, target: f32, speed: f32) -> f32 {
     S.with(|s| {
         let mut s = s.borrow_mut();
@@ -88,6 +89,10 @@ pub fn to(k: u64, target: f32, speed: f32) -> f32 {
             return target;
         }
         let (dt, frame) = (s.dt, s.frame);
+        let Some(speed) = rate(speed, carlui_core::theme::motion_scale()) else {
+            s.values.insert(k, (target, frame));
+            return target;
+        };
         let e = s.values.entry(k).or_insert((target, frame));
         let mut v = e.0 + (target - e.0) * (1.0 - (-speed * dt).exp());
         if (target - v).abs() < 0.004 * target.abs().max(1.0) {
@@ -102,6 +107,12 @@ pub fn to(k: u64, target: f32, speed: f32) -> f32 {
     })
 }
 
+/// Yaklaşma hızı süre çarpanına bölünür (çarpan 0,5 → iki kat hızlı);
+/// çarpan 0 ise (hareket azaltılmış) `None`: değer anında hedefte.
+fn rate(speed: f32, scale: f32) -> Option<f32> {
+    (scale > 0.0).then(|| speed / scale)
+}
+
 /// Değeri zorla ayarlar (ör. sayfa değişince içerik aşağıdan başlasın).
 pub fn set(k: u64, v: f32) {
     S.with(|s| {
@@ -110,4 +121,31 @@ pub fn set(k: u64, v: f32) {
         s.values.insert(k, (v, f));
         s.busy = true;
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rate_follows_motion_scale() {
+        assert_eq!(rate(12.0, 1.0), Some(12.0));
+        assert_eq!(rate(12.0, 0.5), Some(24.0));
+        assert_eq!(rate(12.0, 0.0), None);
+    }
+
+    #[test]
+    fn reduced_motion_jumps_to_target() {
+        enable();
+        frame();
+        assert_eq!(to(1, 0.0, 12.0), 0.0);
+        frame();
+        // Normal hızda bir karede hedefe varılmaz.
+        assert!(to(1, 1.0, 12.0) < 1.0);
+        carlui_core::theme::set_motion(0.0);
+        frame();
+        assert_eq!(to(1, 1.0, 12.0), 1.0);
+        assert_eq!(to(1, 0.0, 12.0), 0.0);
+        carlui_core::theme::set_motion(1.0);
+    }
 }

@@ -62,8 +62,9 @@ pub fn draw(app: &App, p: &mut P, f: &mut Flow, kind: Form, fields: &[(&str, &st
         y += 22.0;
     }
     let ok = R::new(card.right() - 16.0 - 104.0, y, 104.0, 32.0);
-    p.button(ok, Some('\u{E73E}'), t!("Ekle", "Add"), Act::Input(3), true, false);
+    p.button(ok, Some('\u{E73E}'), kind.ok_label(), Act::Input(3), true, false);
     p.button(R::new(ok.x - 8.0 - 104.0, y, 104.0, 32.0), None, t!("Vazgeç", "Cancel"), Act::Input(4), true, false);
-    let keys = if fields.len() > 1 { t!("Tab: alan değiştir · Ctrl+V: yapıştır · Enter: ekle · Esc: vazgeç", "Tab: next field · Ctrl+V: paste · Enter: add · Esc: cancel") } else { t!("Ctrl+V: yapıştır · Enter: ekle · Esc: vazgeç", "Ctrl+V: paste · Enter: add · Esc: cancel") };
-    p.text(keys, R::new(x, y, ok.x - 8.0 - 104.0 - x - 8.0, 32.0), 11.5, false, TEXT, 0.4 * a, Align::Left);
+    // Enter açıklaması onay düğmesini izler ("Kaydet" ise "kaydet").
+    let keys = kind.keys_hint(fields.len() > 1);
+    p.text(&keys, R::new(x, y, ok.x - 8.0 - 104.0 - x - 8.0, 32.0), 11.5, false, TEXT, 0.4 * a, Align::Left);
 }

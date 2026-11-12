@@ -259,7 +259,9 @@ fn run(o: &Options, rep: &Reporter) -> Outcome {
     let path = carlui_core::paths::config_file();
     let cfg = match std::fs::read_to_string(&path) {
         Ok(text) => carlui_core::config::from_text(&text).ok(),
-        Err(_) => Some(carlui_core::config::Config::default()),
+        // Dosya yok: ilk kurulum; karşılama işareti açık kalsın (yükseltmede dokunulmaz).
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some(carlui_core::config::Config::fresh()),
+        Err(_) => None,
     };
     if let Some(mut cfg) = cfg.filter(|c| c.ai.assistant != o.assistant) {
         cfg.ai.assistant = o.assistant;

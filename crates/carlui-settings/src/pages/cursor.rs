@@ -28,8 +28,8 @@ fn fmt(c: u32) -> String {
     format!("#{c:06x}")
 }
 
-/// Windows renk seçicisi; iptal edilirse None.
-fn pick(initial: u32) -> Option<u32> {
+/// Windows renk seçicisi; iptal edilirse None. Vurgu rengi de bunu kullanır.
+pub(super) fn pick(initial: u32) -> Option<u32> {
     static mut CUSTOM: [COLORREF; 16] = [COLORREF(0x00FFFFFF); 16];
     let bgr = |c: u32| (c & 0xFF) << 16 | (c & 0xFF00) | (c >> 16) & 0xFF;
     unsafe {

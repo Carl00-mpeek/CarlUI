@@ -20,6 +20,8 @@ mod layouts;
 mod pointer;
 mod supervisor;
 mod taskbar;
+mod wallpaper;
+mod welcome;
 
 use carlui_core::{
     bus::{BusServer, Event},
@@ -360,6 +362,13 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                 with_host(check_fullscreen);
                 LRESULT(0)
             }
+            WM_TIMER if wp.0 == welcome::TIMER => {
+                with_host(|h| {
+                    let busy = h.fullscreen.active || fullscreen::query().active;
+                    welcome::tick(hwnd, &h.cfg, busy);
+                });
+                LRESULT(0)
+            }
             WM_TIMER if wp.0 == TIMER_REAPPLY => {
                 let _ = KillTimer(hwnd, TIMER_REAPPLY);
                 with_host(|h| {
@@ -416,7 +425,13 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                 SetTimer(hwnd, TIMER_CURSOR, 400, None);
                 LRESULT(0)
             }
+            WM_SETTINGCHANGE if wp.0 == SPI_SETDESKWALLPAPER.0 as usize => {
+                // Yalnızca haber verilir; okuma/çözme işçi iş parçacığında.
+                wallpaper::wake();
+                LRESULT(0)
+            }
             WM_DISPLAYCHANGE => {
+                wallpaper::wake();
                 SetTimer(hwnd, TIMER_REAPPLY, 800, None);
                 with_host(|h| {
                     if h.cfg.tools.window_memory {
@@ -443,6 +458,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                     if !new.tools.window_memory {
                         h.windows.clear();
                     }
+                    wallpaper::sync(&new.theme);
                     h.cfg = new;
                 });
                 LRESULT(0)
@@ -575,6 +591,8 @@ fn run() -> Result<()> {
         sup.run_module_with("assist", "carlui-convert.exe", &["--assist-warm"]);
         std::thread::spawn(remove_old_replay);
 
+        // Vurgu "duvar kâğıdından" ise rengi arka planda hesaplayıp ayara yazar.
+        wallpaper::start(&cfg.theme);
         let pending_cfg: Arc<Mutex<Option<Config>>> = Arc::default();
         let pending = pending_cfg.clone();
         config::watch(move |c| {
@@ -596,6 +614,8 @@ fn run() -> Result<()> {
         // Ön plan değişmeden tam ekrana geçen oyunlar için seyrek bir yedek kontrol.
         SetTimer(hwnd, TIMER_FULLSCREEN, 1500, None);
         SetTimer(hwnd, TIMER_WINDOWS, 5000, None);
+        // Yeni kurulumda karşılama (tam ekran yokken, birkaç saniye sonra).
+        welcome::arm(hwnd, &cfg);
 
         HOST.with(|h| {
             *h.borrow_mut() = Some(Host {

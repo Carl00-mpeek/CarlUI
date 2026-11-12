@@ -9,12 +9,14 @@ use carlui_ui::paint::R;
 
 /// "+ Arama motoru ekle" satırı ve açılınca aşağı doğru büyüyen form.
 fn engines_row(app: &App, p: &mut P, f: &mut Flow, custom: Option<String>) {
-    let desc = if app.cfg.launcher.engines.is_empty() {
-        t!("Listede olmayan bir site ekleyin: ad ve {q} içeren arama adresi.", "Add a site that isn't listed: a name and a search address containing {q}.").to_string()
+    // Kayıtlı motor sayısı kartta görünür; nasıl ekleneceği "i" düğmesinde.
+    let r = if app.cfg.launcher.engines.is_empty() {
+        f.row(p, t!("Arama motoru ekle", "Add search engine"), t!("Listede olmayan bir site ekleyin: ad ve {q} içeren arama adresi.", "Add a site that isn't listed: a name and a search address containing {q}."), 230.0)
     } else {
-        t!(format!("{} özel motor kayıtlı. Seçili özel motor silinebilir.", app.cfg.launcher.engines.len()), format!("{} custom engines saved. The selected custom engine can be deleted.", app.cfg.launcher.engines.len()))
+        let n = app.cfg.launcher.engines.len();
+        let sub = t!(format!("{n} özel motor kayıtlı. Seçili özel motor silinebilir."), format!("{n} custom engines saved. The selected custom engine can be deleted."));
+        f.row_sub(p, t!("Arama motoru ekle", "Add search engine"), "", &sub, None, 230.0)
     };
-    let r = f.row(p, t!("Arama motoru ekle", "Add search engine"), &desc, 230.0);
     let by = r.y + (r.h - 32.0) / 2.0;
     let add = R::new(r.right() - 16.0 - 104.0, by, 104.0, 32.0);
     p.button(add, Some('\u{E710}'), t!("Ekle", "Add"), Act::Input(0), app.input.is_none(), false);
@@ -71,11 +73,14 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     engines_row(app, p, f, sel.filter(|&i| i >= ENGINES.len()).map(|i| all[i].0.clone()));
     super::extension::paint(p, f);
 
-    f.section(p, t!("Kısayollar", "Shortcuts"));
-    f.note(p, t!("yt · chatgpt · claude · grok · gemini · wp — yalnız yazınca açar, ardından metin yazınca arar/sorar. @ hepsini listeler.", "yt · chatgpt · claude · grok · gemini · wp — on their own they open the site; followed by text they search or ask. @ lists them all."));
-    f.note(p, t!("wp WhatsApp uygulamasında (kurulu değilse Web'de), wwp her zaman WhatsApp Web'de açar.", "wp opens in the WhatsApp app (or on the web if it's not installed); wwp always opens WhatsApp Web."));
-    f.note(p, t!("/lock · /restart · /shutdown — kilitle, yeniden başlat, kapat (son ikisi iki kez Enter ister).", "/lock · /restart · /shutdown — lock, restart, shut down (the last two need Enter twice)."));
-    f.note(p, t!(":gül · :kalp — emoji kopyalar. > — açık pencereleri listeler. son — son açılan dosyalar.", ":smile · :heart — copies an emoji. > — lists open windows. recent — recently opened files."));
-    f.note(p, t!("wifi kapat · bluetooth aç · ses 30 · sessiz · parlaklık 70 · karanlık mod — hızlı ayarlar.", "wifi off · bluetooth on · volume 30 · mute · brightness 70 · dark mode — quick settings."));
+    // Arama kısaltmalarının listesi bölüm başlığının "i" düğmesinde (paragraf başına bir satır).
+    f.section_info(
+        p,
+        t!("Kısayollar", "Shortcuts"),
+        t!(
+            "yt · chatgpt · claude · grok · gemini · wp — yalnız yazınca açar, ardından metin yazınca arar/sorar. @ hepsini listeler.\nwp WhatsApp uygulamasında (kurulu değilse Web'de), wwp her zaman WhatsApp Web'de açar.\n/lock · /restart · /shutdown — kilitle, yeniden başlat, kapat (son ikisi iki kez Enter ister).\n:gül · :kalp — emoji kopyalar. > — açık pencereleri listeler. son — son açılan dosyalar.\nwifi kapat · bluetooth aç · ses 30 · sessiz · parlaklık 70 · karanlık mod — hızlı ayarlar.",
+            "yt · chatgpt · claude · grok · gemini · wp — on their own they open the site; followed by text they search or ask. @ lists them all.\nwp opens in the WhatsApp app (or on the web if it's not installed); wwp always opens WhatsApp Web.\n/lock · /restart · /shutdown — lock, restart, shut down (the last two need Enter twice).\n:smile · :heart — copies an emoji. > — lists open windows. recent — recently opened files.\nwifi off · bluetooth on · volume 30 · mute · brightness 70 · dark mode — quick settings."
+        ),
+    );
     super::contacts::paint(&app.cfg, p, f);
 }

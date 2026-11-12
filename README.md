@@ -58,6 +58,11 @@
 
 - **Dock:** Pinned and running apps, live window previews, drag and drop,
   auto-hide, Win+1…9, Recycle Bin.
+- **Living dock:** Tiny pixel pets (cat, lizard, spider, snake, dolphin) live
+  on the dock, with scenes like rain, snow, night, clouds and an aquarium.
+  Very light; pauses in fullscreen games and on battery.
+- **Pet from a photo:** Pick a photo and the on-device AI cuts out the subject
+  and turns it into a pixel pet. The photo never leaves your PC.
 - **Island:** Clock at the top center; notifications, now playing (cover,
   progress, per-app volume), download progress with file name, size, speed
   and time left (each can be turned off in Settings). Downloads from other
@@ -133,9 +138,13 @@
 - **Look:** Light / dark / system theme, accent color, glass density, corner
   radius, animation speed and an optional **CarlUI cursor** (turn it off to
   get the Windows cursor back).
+- **Ready-made looks:** One-click themes; export or import your own look as a
+  `.carllook` file. Pick any accent color or take it from your wallpaper, and
+  turn on **Reduce motion**.
 - **Settings:** Everything in one window, applied instantly; export / import
   all settings as a single file. Text doesn't get cut off on small screens
-  (1366×768) either.
+  (1366×768) either. Long explanations sit behind small "i" buttons, and a
+  short welcome guides the first launch.
 - **Shortcuts:** All of them can be changed in **Settings → Shortcuts** (see
   the table below).
 - **English and Turkish:** Follows the Windows display language; change it in

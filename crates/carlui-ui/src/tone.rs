@@ -41,8 +41,11 @@ pub fn literal_if<T>(yes: bool, f: impl FnOnce() -> T) -> T {
 }
 
 /// Ayardaki tema kipini bu sürece uygular.
+/// Hız ayarı ve "hareketi azalt" da buradan sürecin geneline geçer
+/// (bkz. `carlui_core::theme::motion_ms`).
 pub fn follow(t: &carlui_core::config::ThemeConfig) {
     set_light(t.is_light());
+    carlui_core::theme::set_motion(t.motion_scale());
 }
 
 /// Ayardaki tema kipini uygular ve pencerenin başlık/arka plan temasını
@@ -78,7 +81,9 @@ pub fn backdrop() -> windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F {
 
 /// Cam yüzeyli modüller (ada, dock, tepsi) renklerini kurulurken alır; tema
 /// kipi değişince süreç kapanır, gözetmen onu yeni temayla hemen açar.
+/// Hareket ayarı yeniden başlatmadan güncellenir.
 pub fn restart_on_change(t: &carlui_core::config::ThemeConfig) {
+    carlui_core::theme::set_motion(t.motion_scale());
     if t.is_light() != light() {
         carlui_core::info!("tema değişti; yeniden açılıyor");
         std::process::exit(carlui_core::RELOAD_EXIT);

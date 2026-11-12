@@ -6,8 +6,9 @@
 # ve kurulumda Firefox'a otomatik tanıtılır.
 #
 # Güncellemeden sonraki Yenilikler ekranı için sürüm notu (GitHub sürüm notuyla
-# aynı metin, "## Türkçe" … "---" … "## English") dist\release-notes.md'den
-# kurucuya gömülür; dosya yoksa ekran çıkmaz.
+# aynı metin, "## Türkçe" … "---" … "## English") docs\release-notes.md'den
+# (yoksa eski konum dist\release-notes.md'den) kurucuya gömülür; dosya yoksa
+# ekran çıkmaz.
 #
 # Kullanım:  powershell -ExecutionPolicy Bypass -File tools\build-setup.ps1
 
@@ -31,7 +32,7 @@ if ($LASTEXITCODE -ne 0) { throw 'kaldırıcı derlemesi başarısız' }
 $uninstaller = Join-Path $target 'CarlUI-Uninstall.exe'
 Copy-Item (Join-Path $target 'release\CarlUI-Setup.exe') $uninstaller -Force
 
-if (-not (Test-Path (Join-Path $root 'dist\release-notes.md'))) { Write-Warning 'dist\release-notes.md yok: Yenilikler ekranı boş kalacak' }
+if (-not ((Test-Path (Join-Path $root 'docs\release-notes.md')) -or (Test-Path (Join-Path $root 'dist\release-notes.md')))) { Write-Warning 'docs\release-notes.md yok: Yenilikler ekranı boş kalacak' }
 Write-Host '3/3  Kurucu derleniyor (dosyalar sıkıştırılıyor)…'
 $env:CARLUI_UNINSTALLER = $uninstaller
 cargo build --release --target-dir $target -p carlui-setup

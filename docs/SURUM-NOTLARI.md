@@ -1,5 +1,35 @@
 # Sürüm notları
 
+## v0.10.0 — Canlı dock, fotoğraftan hayvan, hazır görünümler (2026-11-12)
+
+**Yeni: Canlı dock.** Dock'ta küçük piksel hayvanlar yaşar: kedi, kertenkele,
+örümcek, yılan, yunus. Yılan dock'un üstünde dolaşır, kenarına sarılır, kıvrılıp
+başını kaldırır ve imleci izler. Yunus dock'un içinde yüzer, üst kenardan sıçrayıp
+geri dalar. Sahneler: yağmur, kar, gece (ay ve yıldızlar), bulutlar, saat, akvaryum.
+Çok az kaynak kullanır (ölçülen: %0,1–0,8 işlemci, birkaç MB bellek); tam ekran
+oyunda ve pilde durur. Ayarlar → Dock → Canlı dock.
+
+**Yeni: Fotoğraftan hayvan.** Bir fotoğraf seç, CarlUI bilgisayarındaki yapay zekâ
+ile özneyi kesip dock'ta yaşayan bir piksel hayvana çevirsin. Fotoğraf bilgisayarından
+çıkmaz. Bir kez 214 MB'lık BiRefNet modeli (MIT lisansı) iner. Net, tek özneli
+fotoğraflar en iyi sonucu verir.
+
+**Yeni: Hazır görünümler.** Tek tıkla tema; kendi görünümünü `.carllook` dosyası
+olarak dışa/içe aktar.
+
+**Yeni: Serbest vurgu rengi.** İstediğin rengi seç ya da duvar kâğıdından otomatik
+al. "Hareketi azalt" seçeneği eklendi.
+
+**Yeni: İlk açılış karşılaması.** İlk kurulumda kısa bir tanıtım ve temel seçimler.
+
+**Yeni: Daha ferah ayarlar.** Uzun açıklamalar küçük "i" düğmelerinin arkasındaki
+bilgi balonlarına taşındı.
+
+**Düzeltmeler:**
+- GitHub'dan indirilen kurucuda güncelleme sonrası "Yenilikler" ekranı boş geliyordu,
+  artık dolu.
+- Hayvan paketi adlarında Windows'un ayrılmış adları (CON, NUL, COM1…) reddediliyor.
+
 ## v0.9.9 — Görev çubuğu panelleri, Hızlı Erişim yığını ve hata düzeltmeleri (2026-11-11)
 
 **Yeni: Görev çubuğunda ayrı paneller.** Compact ve Full görünümde ses simgesi yalnızca

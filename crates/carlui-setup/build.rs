@@ -103,11 +103,20 @@ fn payload(root: &Path, out: &Path) {
     std::fs::write(out.join("payload.rs"), code).unwrap();
 }
 
-/// Sürüm notu (Yenilikler ekranı için): `CARLUI_NOTES` ya da dist\release-notes.md.
+/// Sürüm notu (Yenilikler ekranı için), sırayla: `CARLUI_NOTES` ortam değişkeni,
+/// docs\release-notes.md, eski konum dist\release-notes.md; hiçbiri yoksa boş.
 /// GitHub sürüm notuyla aynı biçim: "## Türkçe" … "---" … "## English" ….
 fn notes(root: &Path) -> String {
     println!("cargo:rerun-if-env-changed=CARLUI_NOTES");
-    let path = std::env::var_os("CARLUI_NOTES").map(PathBuf::from).unwrap_or_else(|| root.join(r"dist\release-notes.md"));
+    let docs = root.join(r"docs\release-notes.md");
+    let dist = root.join(r"dist\release-notes.md");
+    println!("cargo:rerun-if-changed={}", plain(&docs));
+    println!("cargo:rerun-if-changed={}", plain(&dist));
+    let path = match std::env::var_os("CARLUI_NOTES") {
+        Some(p) => PathBuf::from(p),
+        None if docs.exists() => docs,
+        None => dist,
+    };
     println!("cargo:rerun-if-changed={}", plain(&path));
     std::fs::read_to_string(&path).unwrap_or_default()
 }

@@ -1,13 +1,19 @@
-//! Ayar satırları: başlık + açıklama solda, denetim (anahtar, kaydırıcı,
-//! seçici) sağda, her satır bir cam kart. `Flow` satırları yukarıdan aşağı
-//! dizer; sayfalar yalnızca hangi ayarın hangi satırda olduğunu söyler.
+//! Ayar satırları: başlık solda, denetim (anahtar, kaydırıcı, seçici) sağda,
+//! her satır bir cam kart. `Flow` satırları yukarıdan aşağı dizer; sayfalar
+//! yalnızca hangi ayarın hangi satırda olduğunu söyler.
 //!
-//! Açıklamalar hiçbir zaman "…" ile kesilmez: sığmayan metin alt satıra kayar,
-//! kart onunla birlikte uzar. Denetim yanına sığmayacak kadar geniş olunca
-//! (küçük ekran) metnin altına iner. Art arda gelen açık/kapalı ayarlar iki
-//! sütunlu küçük kartlara dizilir; uzun listeler yarı yarıya kısalır.
+//! Sayfalar kalabalık görünmesin diye uzun açıklamalar kartta yazılmaz:
+//! satırlara verilen `info` metni başlığın hemen yanındaki küçük "i"
+//! düğmesinin arkasına gider (bkz. `info.rs`), kart tek satıra iner. Kartta
+//! görünmesi gerekenler (canlı değer, durum, hata, uyarı) `*_sub` / `row_lines`
+//! ile başlığın altına yazılır.
+//!
+//! Metin hiçbir zaman "…" ile kesilmez: sığmayan metin alt satıra kayar, kart
+//! onunla birlikte uzar. Denetim yanına sığmayacak kadar geniş olunca (küçük
+//! ekran) metnin altına iner. Art arda gelen açık/kapalı ayarlar iki sütunlu
+//! küçük kartlara dizilir; uzun listeler yarı yarıya kısalır.
 
-use crate::Act;
+use crate::{info, Act};
 use carlui_core::config::Config;
 use carlui_ui::{
     paint::{self, Align, Painter, R, TEXT},
@@ -20,7 +26,7 @@ pub type P<'a> = Painter<'a, Act>;
 /// İçerik sütununun en geniş hali.
 pub const W_MAX: f32 = 780.0;
 
-/// Açıklama yazısı boyutu ve satır yüksekliği.
+/// Alt satır (durum, değer) yazısı boyutu ve satır yüksekliği.
 const DESC: f32 = 12.0;
 const LINE: f32 = 17.0;
 /// Başlık yazısı boyutu ve satır yüksekliği.
@@ -42,7 +48,7 @@ thread_local! {
 
 /// Metni `max` genişliğe göre satırlara böler; sonuç önbellekte tutulur
 /// (her karede yeniden ölçülmesin).
-fn lines(p: &P, text: &str, size: f32, bold: bool, max: f32) -> Vec<String> {
+pub fn lines(p: &P, text: &str, size: f32, bold: bool, max: f32) -> Vec<String> {
     let key = (text.to_string(), (size * 10.0) as u32, max.max(0.0) as u32, bold);
     if let Some(v) = WRAPS.with(|w| w.borrow().get(&key).cloned()) {
         return v;
@@ -68,10 +74,41 @@ fn desc_color(color: Option<u32>) -> (u32, f32) {
     color.map(|c| (c, 0.95)).unwrap_or((TEXT, 0.55))
 }
 
+/// "i" düğmesi varsa başlığın sığacağı genişlik ondan kadar daralır.
+fn label_w(tw: f32, info: &str) -> f32 {
+    if info.is_empty() {
+        tw
+    } else {
+        tw - info::SIZE - info::GAP
+    }
+}
+
+/// Başlığı satır satır çizer ve "i" düğmesini son satırın hemen sonuna koyar.
+fn label_lines(p: &mut P, lv: &[String], x: f32, y: f32, w: f32, lh: f32, info: &str) {
+    draw_lines(p, lv, x, y, w, LABEL, lh, false, TEXT, 0.95);
+    if let Some(last) = lv.last() {
+        let lw = p.fonts.width(last, LABEL, false).min(w);
+        info::button(p, x + lw + info::GAP, y + (lv.len() - 1) as f32 * lh + lh / 2.0, info);
+    }
+}
+
+/// Başlığın satırları; boş başlık da tek (boş) satır sayılır.
+fn label_of(p: &P, label: &str, w: f32) -> Vec<String> {
+    let v = lines(p, label, LABEL, false, w);
+    if v.is_empty() {
+        vec![label.to_string()]
+    } else {
+        v
+    }
+}
+
 /// Sırası gelince çizilecek açık/kapalı ayar (iki sütunlu dizilim için bekler).
 struct Pending {
     label: String,
-    desc: String,
+    info: String,
+    /// Kartta görünen alt satır (ör. durum) ve rengi.
+    sub: String,
+    color: Option<u32>,
     on: bool,
     act: Act,
 }
@@ -117,8 +154,8 @@ impl Flow {
 
     fn tile_h(&self, p: &P, t: &Pending, w: f32) -> f32 {
         let tw = w - 32.0 - 50.0;
-        let nl = lines(p, &t.label, LABEL, false, tw).len().max(1) as f32;
-        let nd = if t.desc.is_empty() { 0.0 } else { lines(p, &t.desc, DESC, false, tw).len() as f32 };
+        let nl = label_of(p, &t.label, label_w(tw, &t.info)).len() as f32;
+        let nd = if t.sub.is_empty() { 0.0 } else { lines(p, &t.sub, DESC, false, tw).len() as f32 };
         if nd == 0.0 && nl == 1.0 {
             return 50.0;
         }
@@ -134,16 +171,17 @@ impl Flow {
             p.round(r, 8.0, 0xFFFFFF, 0.035 * hv);
         }
         let tw = w - 32.0 - 50.0;
-        let lv = lines(p, &t.label, LABEL, false, tw);
-        if t.desc.is_empty() && lv.len() <= 1 {
+        let lv = label_of(p, &t.label, label_w(tw, &t.info));
+        if t.sub.is_empty() && lv.len() <= 1 {
             // Yanındaki kart uzunsa başlık onunkiyle aynı hizada, üstte durur.
-            let lr = if h <= 64.0 { R::new(r.x + 16.0, r.y, tw, h) } else { R::new(r.x + 16.0, r.y + 12.0, tw, LABEL_LINE) };
-            p.text(&t.label, lr, LABEL, false, TEXT, 0.95, Align::Left);
+            let (y, lh) = if h <= 64.0 { (r.y, h) } else { (r.y + 12.0, LABEL_LINE) };
+            label_lines(p, &lv, r.x + 16.0, y, tw, lh, &t.info);
         } else {
-            draw_lines(p, &lv, r.x + 16.0, r.y + 12.0, tw, LABEL, LABEL_LINE, false, TEXT, 0.95);
-            let dv = lines(p, &t.desc, DESC, false, tw);
-            let dy = r.y + 12.0 + lv.len().max(1) as f32 * LABEL_LINE + 2.0;
-            draw_lines(p, &dv, r.x + 16.0, dy, tw, DESC, LINE, false, TEXT, 0.55);
+            label_lines(p, &lv, r.x + 16.0, r.y + 12.0, tw, LABEL_LINE, &t.info);
+            let dv = lines(p, &t.sub, DESC, false, tw);
+            let dy = r.y + 12.0 + lv.len() as f32 * LABEL_LINE + 2.0;
+            let (c, a) = desc_color(t.color);
+            draw_lines(p, &dv, r.x + 16.0, dy, tw, DESC, LINE, false, c, a);
         }
         p.hit(r, t.act.clone());
         // Anahtar tek satırlık kartta ortada, uzun kartta başlık hizasında.
@@ -153,51 +191,58 @@ impl Flow {
     }
 
     pub fn section(&mut self, p: &mut P, title: &str) {
+        self.section_info(p, title, "");
+    }
+
+    /// Bölüm başlığı; `info` boş değilse bölümün açıklaması başlığın yanındaki
+    /// "i" düğmesinde durur.
+    pub fn section_info(&mut self, p: &mut P, title: &str, info: &str) {
         self.flush(p);
         self.y += 14.0;
         p.text(title, R::new(self.x + 2.0, self.y, self.w, 22.0), 13.0, true, TEXT, 0.7, Align::Left);
+        let tw = p.fonts.width(title, 13.0, true).min(self.w - 30.0);
+        info::button(p, self.x + 2.0 + tw + info::GAP, self.y + 11.0, info);
         self.y += 28.0;
     }
 
-    /// Kart + başlık/açıklama; `ctrl` sağdaki denetimin genişliği. Dönen
-    /// dikdörtgen denetimin dikey ortalanacağı alandır: denetim yana sığmazsa
-    /// metnin altındaki şerit.
-    pub fn row(&mut self, p: &mut P, label: &str, desc: &str, ctrl: f32) -> R {
-        self.row_c(p, label, desc, ctrl, None)
+    /// Kart + başlık (açıklaması `info` düğmesinde); `ctrl` sağdaki denetimin
+    /// genişliği. Dönen dikdörtgen denetimin dikey ortalanacağı alandır:
+    /// denetim yana sığmazsa metnin altındaki şerit.
+    pub fn row(&mut self, p: &mut P, label: &str, info: &str, ctrl: f32) -> R {
+        self.rows(p, label, info, &[], ctrl)
     }
 
-    /// `row` gibi; açıklama verilen renkte (ör. hata için turuncu).
-    pub fn row_c(&mut self, p: &mut P, label: &str, desc: &str, ctrl: f32, color: Option<u32>) -> R {
-        self.rows(p, label, &[(desc, color)], ctrl)
+    /// `row` gibi; başlığın altında kartta görünen bir satır (canlı değer,
+    /// durum, hata) ve rengi (yoksa soluk).
+    pub fn row_sub(&mut self, p: &mut P, label: &str, info: &str, sub: &str, color: Option<u32>, ctrl: f32) -> R {
+        self.rows(p, label, info, &[(sub, color)], ctrl)
     }
 
-    /// `row_c` gibi; altında üçüncü bir satır (ör. önerilen sistem) ve kendi rengi.
-    #[allow(clippy::too_many_arguments)]
-    pub fn row3(&mut self, p: &mut P, label: &str, desc: &str, color: Option<u32>, extra: &str, extra_color: Option<u32>, ctrl: f32) -> R {
-        self.rows(p, label, &[(desc, color), (extra, extra_color)], ctrl)
+    /// `row_sub` gibi; birden çok görünen satır, her biri kendi renginde.
+    pub fn row_lines(&mut self, p: &mut P, label: &str, info: &str, subs: &[(&str, Option<u32>)], ctrl: f32) -> R {
+        self.rows(p, label, info, subs, ctrl)
     }
 
-    fn rows(&mut self, p: &mut P, label: &str, descs: &[(&str, Option<u32>)], ctrl: f32) -> R {
+    fn rows(&mut self, p: &mut P, label: &str, info: &str, descs: &[(&str, Option<u32>)], ctrl: f32) -> R {
         self.flush(p);
         let side = self.w - ctrl - 48.0;
-        let stacked = ctrl > 0.0 && (side < MIN_TEXT || p.fonts.width(label, LABEL, false) > side);
+        let reserve = self.w - label_w(self.w, info);
+        let stacked = ctrl > 0.0 && (side < MIN_TEXT || p.fonts.width(label, LABEL, false) + reserve > side);
         let tw = if stacked { self.w - 32.0 } else { side };
         let blocks: Vec<(Vec<String>, Option<u32>)> = descs.iter().filter(|(d, _)| !d.is_empty()).map(|(d, c)| (lines(p, d, DESC, false, tw), *c)).collect();
-        let lv = lines(p, label, LABEL, false, tw);
+        let lv = label_of(p, label, label_w(tw, info));
         let nd: usize = blocks.iter().map(|(v, _)| v.len()).sum();
         let one = nd == 0 && lv.len() <= 1;
-        let text_h = if one { 50.0 } else { (12.0 + lv.len().max(1) as f32 * LABEL_LINE + 2.0 + nd as f32 * LINE + 12.0).max(64.0) };
+        let text_h = if one { 50.0 } else { (12.0 + lv.len() as f32 * LABEL_LINE + 2.0 + nd as f32 * LINE + 12.0).max(64.0) };
         let band = 44.0;
         let h = if stacked { text_h - 6.0 + band + 6.0 } else { text_h };
         let r = R::new(self.x, self.y, self.w, h);
         p.card(r);
-        if one && !stacked {
-            p.text(label, R::new(r.x + 16.0, r.y, tw, h), LABEL, false, TEXT, 0.95, Align::Left);
-        } else if one {
-            p.text(label, R::new(r.x + 16.0, r.y, tw, 50.0), LABEL, false, TEXT, 0.95, Align::Left);
+        if one {
+            label_lines(p, &lv, r.x + 16.0, r.y, tw, if stacked { 50.0 } else { h }, info);
         } else {
-            draw_lines(p, &lv, r.x + 16.0, r.y + 12.0, tw, LABEL, LABEL_LINE, false, TEXT, 0.95);
-            let mut y = r.y + 12.0 + lv.len().max(1) as f32 * LABEL_LINE + 2.0;
+            label_lines(p, &lv, r.x + 16.0, r.y + 12.0, tw, LABEL_LINE, info);
+            let mut y = r.y + 12.0 + lv.len() as f32 * LABEL_LINE + 2.0;
             for (v, c) in &blocks {
                 let (c, a) = desc_color(*c);
                 draw_lines(p, v, r.x + 16.0, y, tw, DESC, LINE, false, c, a);
@@ -214,14 +259,20 @@ impl Flow {
 
     /// Açık/kapalı ayar; kartın tamamı tıklanabilir. Art arda gelenler iki
     /// sütunlu küçük kartlara dizilir (bir sonraki çağrıda çizilir).
-    pub fn toggle(&mut self, _p: &mut P, label: &str, desc: &str, on: bool, f: impl Fn(&mut Config) + 'static) {
-        self.pending.push(Pending { label: label.to_string(), desc: desc.to_string(), on, act: edit(f) });
+    pub fn toggle(&mut self, p: &mut P, label: &str, info: &str, on: bool, f: impl Fn(&mut Config) + 'static) {
+        self.toggle_sub(p, label, info, "", None, on, f);
+    }
+
+    /// `toggle` gibi; başlığın altında kartta görünen bir satırla (ör. durum).
+    #[allow(clippy::too_many_arguments)]
+    pub fn toggle_sub(&mut self, _p: &mut P, label: &str, info: &str, sub: &str, color: Option<u32>, on: bool, f: impl Fn(&mut Config) + 'static) {
+        self.pending.push(Pending { label: label.to_string(), info: info.to_string(), sub: sub.to_string(), color, on, act: edit(f) });
     }
 
     /// Sayısal ayar: `min..max`, `step` adımla; `fmt` değerin yazısı.
     #[allow(clippy::too_many_arguments)]
-    pub fn slider(&mut self, p: &mut P, label: &str, desc: &str, value: f32, min: f32, max: f32, step: f32, fmt: impl Fn(f32) -> String, set: impl Fn(&mut Config, f32) + 'static) {
-        let r = self.row(p, label, desc, 300.0);
+    pub fn slider(&mut self, p: &mut P, label: &str, info: &str, value: f32, min: f32, max: f32, step: f32, fmt: impl Fn(f32) -> String, set: impl Fn(&mut Config, f32) + 'static) {
+        let r = self.row(p, label, info, 300.0);
         let tr = R::new(r.right() - 16.0 - 200.0, r.y + r.h / 2.0 - 2.0, 200.0, 4.0);
         let frac = ((value - min) / (max - min)).clamp(0.0, 1.0);
         p.text(&fmt(value), R::new(tr.x - 96.0, r.y, 84.0, r.h), 13.0, false, TEXT, 0.75, Align::Right);
@@ -238,13 +289,20 @@ impl Flow {
     }
 
     /// Birkaç seçenekten biri (bölümlü seçici).
-    pub fn choice(&mut self, p: &mut P, label: &str, desc: &str, items: &[(&str, Act)], selected: usize, each: f32) {
+    pub fn choice(&mut self, p: &mut P, label: &str, info: &str, items: &[(&str, Act)], selected: usize, each: f32) {
+        self.choice_sub(p, label, info, "", items, selected, each);
+    }
+
+    /// `choice` gibi; başlığın altında kartta görünen bir satırla (ör. kısayol).
+    #[allow(clippy::too_many_arguments)]
+    pub fn choice_sub(&mut self, p: &mut P, label: &str, info: &str, sub: &str, items: &[(&str, Act)], selected: usize, each: f32) {
         let w = each * items.len() as f32;
-        let r = self.row(p, label, desc, w);
+        let r = self.row_sub(p, label, info, sub, None, w);
         p.segments(R::new(r.right() - 16.0 - w, r.y + (r.h - 32.0) / 2.0, w, 32.0), items, selected);
     }
 
-    /// Soluk açıklama satırı (kart yok); uzunsa alt satıra kayar.
+    /// Soluk açıklama satırı (kart yok); uzunsa alt satıra kayar. Yalnızca
+    /// görünmesi gereken metinler (uyarı, durum) için; açıklamalar `info`'ya.
     pub fn note(&mut self, p: &mut P, text: &str) {
         self.flush(p);
         let v = lines(p, text, DESC, false, self.w - 4.0);

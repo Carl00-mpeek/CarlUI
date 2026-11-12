@@ -289,6 +289,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
     if handled { LRESULT(0) } else { DefWindowProcW(hwnd, msg, wp, lp) }
 }
 
+/// Açılış/kapanış süreleri (ms, varsayılan hızda); `motion_ms` ile ölçeklenir.
 const OPEN_MS: f32 = 190.0;
 const CLOSE_MS: f32 = 120.0;
 
@@ -451,7 +452,7 @@ pub fn run_side(owner: HWND, title: &str, action: (usize, String), empty: &str, 
                     break;
                 }
             }
-            let t = (t0.elapsed().as_secs_f32() * 1000.0 / OPEN_MS).min(1.0);
+            let t = (t0.elapsed().as_secs_f32() * 1000.0 / carlui_core::theme::motion_ms(OPEN_MS)).min(1.0);
             opened = 1.0 - (1.0 - t).powi(3);
             anim.frame(opened);
             let _ = DwmFlush();
@@ -469,7 +470,7 @@ pub fn run_side(owner: HWND, title: &str, action: (usize, String), empty: &str, 
         // Kapanış: hızlanarak dock'a doğru süzülüp kaybolur.
         let t0 = std::time::Instant::now();
         loop {
-            let t = (t0.elapsed().as_secs_f32() * 1000.0 / CLOSE_MS).min(1.0);
+            let t = (t0.elapsed().as_secs_f32() * 1000.0 / carlui_core::theme::motion_ms(CLOSE_MS)).min(1.0);
             anim.frame(opened * (1.0 - t * t));
             if t >= 1.0 {
                 break;

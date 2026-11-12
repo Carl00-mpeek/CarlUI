@@ -1,0 +1,17 @@
+{
+  "name": "Örümcek",
+  "frame_width": 24,
+  "frame_height": 18,
+  "scale": 1,
+  "filter": "nearest",
+  "facing": "right",
+  "baseline": 18,
+  "walk_speed": 20,
+  "states": {
+    "idle": { "file": "idle.png", "frames": 6, "ms": 180 },
+    "walk": { "file": "walk.png", "frames": 8, "ms": 80 },
+    "sleep": { "file": "sleep.png", "frames": 4, "ms": 450 },
+    "alert": { "file": "hop.png", "frames": 6, "ms": 70 },
+    "hop": { "file": "hop.png", "frames": 6, "ms": 70 }
+  }
+}

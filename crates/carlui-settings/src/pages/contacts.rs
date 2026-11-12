@@ -63,11 +63,13 @@ pub fn paint(cfg: &Config, p: &mut P, f: &mut Flow) {
         return;
     }
     let n = c.whatsapp.len();
-    let desc = if n == 0 {
-        t!("Telefonda Kişiler › Dışa aktar ile .vcf dosyası al, buradan seç. Dosya yalnızca bu bilgisayarda okunur.", "Export a .vcf file from Contacts on your phone and pick it here. The file is only read on this PC.").to_string()
-    } else {
-        t!(format!("{n} kişi kayıtlı. Yeni dosya eklenir; aynı adlar güncellenir."), format!("{n} contacts saved. A new file adds to them; same names are updated."))
-    };
     let items = [(t!("İçe aktar…", "Import…"), edit(import)), (t!("Temizle", "Clear"), edit(|c| c.launcher.whatsapp.clear()))];
-    f.choice(p, t!("Rehber", "Contacts"), &desc, if n == 0 { &items[..1] } else { &items }, usize::MAX, 104.0);
+    if n == 0 {
+        let how = t!("Telefonda Kişiler › Dışa aktar ile .vcf dosyası al, buradan seç. Dosya yalnızca bu bilgisayarda okunur.", "Export a .vcf file from Contacts on your phone and pick it here. The file is only read on this PC.");
+        f.choice(p, t!("Rehber", "Contacts"), how, &items[..1], usize::MAX, 104.0);
+    } else {
+        // Kayıtlı kişi sayısı canlı değer: kartta görünür kalır.
+        let sub = t!(format!("{n} kişi kayıtlı. Yeni dosya eklenir; aynı adlar güncellenir."), format!("{n} contacts saved. A new file adds to them; same names are updated."));
+        f.choice_sub(p, t!("Rehber", "Contacts"), "", &sub, &items, usize::MAX, 104.0);
+    }
 }

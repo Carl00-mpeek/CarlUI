@@ -58,6 +58,11 @@
 
 - **Dock:** Sabitlenmiş ve açık uygulamalar, canlı pencere önizlemeleri,
   sürükle-bırak, otomatik gizleme, Win+1…9, Geri Dönüşüm Kutusu.
+- **Canlı dock:** Dock'ta küçük piksel hayvanlar yaşar (kedi, kertenkele,
+  örümcek, yılan, yunus); yağmur, kar, gece, bulut ve akvaryum sahneleri var.
+  Çok hafiftir; tam ekran oyunda ve pilde durur.
+- **Fotoğraftan hayvan:** Bir fotoğraf seç, bilgisayarındaki yapay zekâ özneyi
+  kesip piksel hayvana çevirsin. Fotoğraf bilgisayarından çıkmaz.
 - **Ada:** Üst ortada saat; bildirimler, çalan şarkı (kapak, ilerleme,
   uygulamaya özel ses), indirme ilerlemesi: dosya adı, boyut, hız ve kalan
   süre (her biri Ayarlar'dan kapatılabilir). Başka programların (Steam, Epic,
@@ -132,8 +137,13 @@
 - **Görünüm:** Açık / koyu / sistem teması, vurgu rengi, cam yoğunluğu, köşe
   yuvarlaklığı, animasyon hızı ve isteğe bağlı **CarlUI imleci** (kapatınca
   Windows'un imleci geri gelir).
+- **Hazır görünümler:** Tek tıkla tema; kendi görünümünü `.carllook` dosyası
+  olarak dışa / içe aktarabilirsin. İstediğin vurgu rengini seç ya da duvar
+  kâğıdından al, **Hareketi azalt**'ı aç.
 - **Ayarlar:** Hepsi tek pencerede, anında uygulanır; ayarları tek bir dosyaya
   dışa / içe aktarabilirsin. Küçük ekranlarda (1366×768) da yazılar kesilmez.
+  Uzun açıklamalar küçük "i" düğmelerinin arkasında; ilk açılışta kısa bir
+  karşılama yol gösterir.
 - **Kısayollar:** Hepsi **Ayarlar → Kısayollar** sayfasından değiştirilebilir
   (aşağıdaki tabloya bak).
 - **Türkçe ve İngilizce arayüz:** Windows'un görüntü diline uyar; **Ayarlar →

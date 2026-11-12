@@ -5,7 +5,10 @@
 //! sigmoid'den geçirilip) özgün boyuta büyütülür ve saydamlığa çarpılır.
 
 use crate::{runtime, Image};
-use ort::{session::Session, value::Tensor as OTensor};
+use ort::{
+    session::{RunOptions, Session},
+    value::Tensor as OTensor,
+};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct Remover {
@@ -76,12 +79,36 @@ impl Remover {
         Ok(Self { sess, input, output, w, h, path: onnx.to_path_buf(), on_cpu: !runtime::gpu_allowed() })
     }
 
-    fn infer(&mut self, chw: Vec<f32>, mw: usize, mh: usize) -> Result<(usize, usize, Vec<f32>), String> {
+    /// Modeli bir kez çalıştırır. Çalışma saniyeler sürer; yanındaki gözcü
+    /// iş parçacığı `cancel` kalkınca ONNX Runtime'a "dur" der, böylece
+    /// "Durdur" hesaplamanın bitmesini beklemez.
+    fn infer(&mut self, chw: Vec<f32>, mw: usize, mh: usize, cancel: &AtomicBool) -> Result<(usize, usize, Vec<f32>), String> {
         let t = OTensor::from_array(([1usize, 3, mh, mw], chw)).map_err(|e| e.to_string())?;
-        let out = self.sess.run(ort::inputs![self.input.as_str() => t]).map_err(|e| e.to_string())?;
-        let (shape, d) = out[self.output.as_str()].try_extract_tensor::<f32>().map_err(|e| e.to_string())?;
-        let (oh, ow) = (shape[shape.len() - 2] as usize, shape[shape.len() - 1] as usize);
-        Ok((ow, oh, d[..ow * oh].to_vec()))
+        let opts = RunOptions::new().map_err(|e| e.to_string())?;
+        let done = AtomicBool::new(false);
+        let (sess, input, output) = (&mut self.sess, self.input.as_str(), self.output.as_str());
+        std::thread::scope(|sc| {
+            sc.spawn(|| {
+                while !done.load(Ordering::Relaxed) {
+                    if cancel.load(Ordering::Relaxed) {
+                        let _ = opts.terminate();
+                        return;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(40));
+                }
+            });
+            let r = (|| {
+                let out = sess.run_with_options(ort::inputs![input => t], &opts).map_err(|e| e.to_string())?;
+                let (shape, d) = out[output].try_extract_tensor::<f32>().map_err(|e| e.to_string())?;
+                let (oh, ow) = (shape[shape.len() - 2] as usize, shape[shape.len() - 1] as usize);
+                Ok((ow, oh, d[..ow * oh].to_vec()))
+            })();
+            done.store(true, Ordering::Relaxed);
+            if cancel.load(Ordering::Relaxed) {
+                return Err(t!("Durduruldu", "Stopped").into());
+            }
+            r
+        })
     }
 
     /// Arka planı saydam yapar. `progress(0..1)`.
@@ -100,13 +127,14 @@ impl Remover {
         if cancel.load(Ordering::Relaxed) {
             return Err(t!("Durduruldu", "Stopped").into());
         }
-        let (ow, oh, mut m) = match self.infer(chw.clone(), mw, mh) {
+        let (ow, oh, mut m) = match self.infer(chw.clone(), mw, mh, cancel) {
             Ok(r) => r,
-            Err(e) if !self.on_cpu => {
+            // Durdurulduysa işlemciye geçip yeniden denemek anlamsız.
+            Err(e) if !self.on_cpu && !cancel.load(Ordering::Relaxed) => {
                 carlui_core::warn!("BiRefNet ekran kartında çalışmadı, işlemciye geçiliyor: {e}");
                 self.sess = runtime::session_cpu(runtime::Src::File(&self.path))?;
                 self.on_cpu = true;
-                self.infer(chw, mw, mh)?
+                self.infer(chw, mw, mh, cancel)?
             }
             Err(e) => return Err(e),
         };

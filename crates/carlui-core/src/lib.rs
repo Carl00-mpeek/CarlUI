@@ -7,6 +7,7 @@
 // `t!` makrosu diğer modüllerde de görünsün diye ilk sırada.
 #[macro_use]
 pub mod lang;
+pub mod accent;
 pub mod ai;
 pub mod bus;
 pub mod config;
@@ -14,7 +15,9 @@ pub mod cursor;
 pub mod hotkey;
 pub mod keys;
 pub mod layouts;
+pub mod live;
 pub mod log;
+pub mod looks;
 pub mod paths;
 pub mod power;
 pub mod quick;

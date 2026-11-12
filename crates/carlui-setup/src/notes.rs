@@ -1,6 +1,6 @@
 //! Bu modül güncellemeden sonra "Yenilikler" ekranında ne yazacağı sorununu
-//! çözüyor. Kurucuya derlenirken GitHub sürüm notu gömülür (`payload::NOTES`);
-//! not "## Türkçe" … "---" … "## English" biçiminde iki dillidir. Burada
+//! çözüyor. Kurucuya derlenirken docs\release-notes.md (GitHub sürüm notunun da
+//! kaynağı) gömülür (`payload::NOTES`); not "## Türkçe" … "---" … "## English" biçiminde iki dillidir. Burada
 //! kullanıcının diline uyan bölüm seçilir, ekranda gereksiz satırlar (SHA-256,
 //! kurulum talimatı, ayraçlar) atılır, Markdown işaretleri (`**`, `` ` ``)
 //! temizlenir ve satırlar başlık / madde / paragraf olarak sınıflanır.

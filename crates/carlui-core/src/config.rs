@@ -490,13 +490,34 @@ pub struct GeneralConfig {
     pub language: String,
     /// Günde bir kez GitHub'da yeni sürüm var mı diye bak, varsa bildir.
     pub check_updates: bool,
+    /// Karşılama akışı gösterildi mi. Alan yoksa (eski ayar) `true` sayılır:
+    /// yükseltenler karşılamayı görmez; yalnızca `Config::fresh` false yazar.
+    pub welcomed: bool,
 }
 
 impl Default for GeneralConfig {
     fn default() -> Self {
-        Self { hide_taskbar: true, top_monitor: 0, start_with_windows: true, language: "auto".into(), check_updates: true }
+        Self { hide_taskbar: true, top_monitor: 0, start_with_windows: true, language: "auto".into(), check_updates: true, welcomed: true }
     }
 }
+
+impl Config {
+    /// Gerçekten ilk kurulumda yazılan ayar: varsayılanlar + karşılama bekliyor.
+    pub fn fresh() -> Self {
+        let mut c = Self::default();
+        c.general.welcomed = false;
+        c
+    }
+
+    /// Karşılama akışı açılmalı mı (yalnızca ilk kurulum, bir kez).
+    pub fn needs_welcome(&self) -> bool {
+        !self.general.welcomed
+    }
+}
+
+#[cfg(test)]
+#[path = "config_welcome_tests.rs"]
+mod welcome_tests;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
@@ -510,6 +531,25 @@ pub struct ThemeConfig {
     pub animation_speed: f32,
     /// Koyu, açık ya da Windows'u izle.
     pub mode: ThemeMode,
+    /// Vurgu renginin kaynağı: palet, özel renk ya da duvar kâğıdı.
+    pub accent_source: AccentSource,
+    /// Özel vurgu rengi ("#RRGGBB"); boş ya da bozuksa palete düşülür.
+    pub custom_accent: String,
+    /// Duvar kâğıdından hesaplanan renk ("#RRGGBB"). Yalnızca ana süreç
+    /// (carlui.exe) yazar; boşsa (okunamadı, tek renksiz resim) palete düşülür.
+    pub wallpaper_accent: String,
+    /// Hareketi azalt: animasyonlar kapalı ya da anında biter.
+    pub reduce_motion: bool,
+}
+
+/// Vurgu renginin nereden geldiği.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum AccentSource {
+    #[default]
+    Palette,
+    Custom,
+    Wallpaper,
 }
 
 impl ThemeConfig {
@@ -521,11 +561,45 @@ impl ThemeConfig {
             ThemeMode::System => !crate::quick::dark_mode(),
         }
     }
+
+    /// Süre çarpanı: 1 = varsayılan, küçük = hızlı, 0 = hareket azaltılmış
+    /// (animasyonlar anında biter).
+    pub fn motion_scale(&self) -> f32 {
+        if self.reduce_motion {
+            0.0
+        } else {
+            1.0 / self.animation_speed.clamp(0.25, 3.0)
+        }
+    }
+
+    /// Koyu temadaki vurgu degradesi (iki uç). Özel/duvar kâğıdı rengi
+    /// okunaklılık için sınırlanır; okunamazsa seçili palete düşülür.
+    pub fn accent_pair(&self) -> (crate::theme::Rgba, crate::theme::Rgba) {
+        let from = match self.accent_source {
+            AccentSource::Palette => None,
+            AccentSource::Custom => crate::accent::parse_hex(&self.custom_accent),
+            AccentSource::Wallpaper => crate::accent::parse_hex(&self.wallpaper_accent),
+        };
+        match from {
+            Some(c) => crate::accent::derive(c),
+            None => self.palette.accent(),
+        }
+    }
 }
 
 impl Default for ThemeConfig {
     fn default() -> Self {
-        Self { palette: Palette::BluePurple, glass_density: 0.5, corner_radius: 1.0, animation_speed: 1.0, mode: ThemeMode::Dark }
+        Self {
+            palette: Palette::BluePurple,
+            glass_density: 0.5,
+            corner_radius: 1.0,
+            animation_speed: 1.0,
+            mode: ThemeMode::Dark,
+            accent_source: AccentSource::Palette,
+            custom_accent: String::new(),
+            wallpaper_accent: String::new(),
+            reduce_motion: false,
+        }
     }
 }
 
@@ -624,6 +698,8 @@ pub struct DockConfig {
     pub menu_lists: bool,
     /// İlk açılışta görev çubuğundaki sabitlenmişler içeri aktarıldı mı?
     pub imported_taskbar_pins: bool,
+    /// Canlı dock: evcil hayvan ve sahneler (varsayılan kapalı).
+    pub live: crate::live::LiveConfig,
     pub pinned: Vec<Pinned>,
 }
 
@@ -664,6 +740,7 @@ impl Default for DockConfig {
             menu_accent: "system".into(),
             menu_lists: false,
             imported_taskbar_pins: false,
+            live: crate::live::LiveConfig::default(),
             pinned: Vec::new(),
         }
     }
@@ -908,7 +985,8 @@ fn read() -> Option<Config> {
                 };
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                let cfg = Config::default();
+                // Dosya hiç yok: ilk kurulum, karşılama bekliyor.
+                let cfg = Config::fresh();
                 save(&cfg);
                 return Some(cfg);
             }

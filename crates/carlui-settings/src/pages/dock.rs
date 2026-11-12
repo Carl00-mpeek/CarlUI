@@ -140,4 +140,6 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     }
     f.choice(p, t!("Başlık rengi", "Header color"), t!("Menüdeki kategori başlıkları.", "Category headers in the menu."), &items, sel, 110.0);
     f.toggle(p, t!("Uygulama listeleri", "App lists"), t!("\"Sık ziyaret edilenler\", \"Son oynanan\" gibi listeler de görünür.", "Also shows lists like \"Frequent\" or \"Recently played\"."), c.menu_lists, |c| c.dock.menu_lists ^= true);
+
+    super::dock_live::paint(app, p, f);
 }

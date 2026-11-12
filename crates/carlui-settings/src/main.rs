@@ -12,10 +12,12 @@
 #[macro_use]
 extern crate carlui_core;
 
+mod info;
 mod input;
 mod pages;
 mod recorder;
 mod ui;
+mod welcome;
 
 use carlui_core::{config, config::Config, log};
 use carlui_ui::{
@@ -49,6 +51,7 @@ use windows::{
 };
 
 const WM_APP_RELOAD: u32 = WM_APP + 1;
+const WM_MOUSELEAVE: u32 = 0x02A3;
 const TIMER_ANIM: usize = 2;
 const SIDEBAR: f32 = 220.0;
 const CLASS: PCWSTR = w!("CarlUI.Settings");
@@ -82,6 +85,14 @@ pub enum Act {
     Scroll,
     /// Metin formu: 0 arama motoru, 5 kısaltma, 6 bildirim engeli, 7 pano hariç, 8 genişletici hariç formunu aç; 1/2 alan, 3 ekle, 4 vazgeç.
     Input(u8),
+    /// "i" düğmesi: açıklama baloncuğunu aç/kapat; `None` baloncuğun içi.
+    Info(Option<u64>),
+    /// Görünümler bölümü (uygula, geri al, kaydet, sil, paylaş).
+    Look(pages::looks::LookAct),
+    /// Canlı dock: fotoğraftan hayvan yapma akışı.
+    PetPhoto(pages::dock_live_photo::PhotoAct),
+    /// İlk kurulum karşılamasını (`--welcome`) yeniden aç.
+    Welcome,
 }
 
 pub struct App {
@@ -112,6 +123,8 @@ pub struct App {
     pub fetching: Arc<Mutex<Vec<&'static str>>>,
     /// Model silinemediyse nedeni.
     pub ai_error: Option<String>,
+    /// Görünümler bölümü: kullanıcı görünümleri, geri alma, silme onayı.
+    pub looks: pages::looks::State,
 }
 
 thread_local! {
@@ -130,7 +143,17 @@ impl App {
     }
 
     fn save(&mut self) {
-        config::save(&self.cfg);
+        // Duvar kâğıdı rengini ana süreç yazar; elimizdeki kopya eskimiş olabilir,
+        // dosyadaki değer korunur.
+        let mine = self.cfg.clone();
+        match config::update(move |c| {
+            let keep = std::mem::take(&mut c.theme.wallpaper_accent);
+            *c = mine;
+            c.theme.wallpaper_accent = keep;
+        }) {
+            Some(c) => self.cfg.theme.wallpaper_accent = c.theme.wallpaper_accent,
+            None => config::save(&self.cfg),
+        }
         carlui_ui::tone::follow_window(&self.cfg.theme, self.hwnd);
         self.saved = Some(Instant::now());
         unsafe {
@@ -148,7 +171,19 @@ impl App {
         if !matches!(a, Act::Record(_)) {
             self.stop_recording();
         }
+        // Baloncuğun dışında bir yere tıklamak açık baloncuğu kapatır.
+        if !matches!(a, Act::Info(_)) {
+            info::dismiss();
+        }
+        // Silme onayını yalnızca aynı "Sil" düğmesine ikinci tıklama tamamlar.
+        if !matches!(a, Act::Look(pages::looks::LookAct::Delete(_))) {
+            self.looks.confirm = None;
+        }
         match a {
+            Act::Look(l) => pages::looks::act(self, l),
+            Act::PetPhoto(x) => pages::dock_live_photo::act(self, x),
+            Act::Info(Some(id)) => info::toggle(id),
+            Act::Info(None) => info::keep(),
             Act::Page(pg) => {
                 if self.page != pg {
                     // Yeni sayfa biraz aşağıdan süzülerek gelsin.
@@ -206,6 +241,11 @@ impl App {
             Act::Studio => {
                 let _ = std::process::Command::new(carlui_core::paths::sibling_exe("carlui-convert.exe")).arg("--studio").spawn();
             }
+            Act::Welcome => unsafe {
+                // Karşılama ayrı bir süreç; öne gelebilsin diye izin verilir.
+                let _ = AllowSetForegroundWindow(ASFW_ANY);
+                ShellExecuteW(HWND::default(), w!("open"), &HSTRING::from(carlui_core::paths::sibling_exe("carlui-settings.exe").as_os_str()), w!("--welcome"), PCWSTR::null(), SW_SHOWNORMAL);
+            },
             Act::Tool(arg) => unsafe {
                 ShellExecuteW(HWND::default(), w!("open"), &HSTRING::from(carlui_core::paths::sibling_exe("carlui-tools.exe").as_os_str()), &HSTRING::from(arg), PCWSTR::null(), SW_SHOWNORMAL);
             },
@@ -236,6 +276,11 @@ impl App {
                     i.name = self.cfg.shots.name.clone();
                     self.input = Some(i);
                 }
+                10 => {
+                    let mut i = input::Input::new(input::Form::AccentHex);
+                    i.name = pages::look_accent::current_hex(&self.cfg.theme);
+                    self.input = Some(i);
+                }
                 1 | 2 => {
                     if let Some(i) = self.input.as_mut() {
                         i.field = k - 1;
@@ -250,6 +295,16 @@ impl App {
 
     fn submit_input(&mut self) {
         let Some(mut i) = self.input.take() else { return };
+        if i.kind == input::Form::PetName {
+            pages::dock_live_photo::submit(self);
+            return;
+        }
+        if pages::looks::owns(i.kind) {
+            if !pages::looks::submit(self, &mut i) {
+                self.input = Some(i);
+            }
+            return;
+        }
         if i.apply(&mut self.cfg) {
             self.save();
         } else {
@@ -260,7 +315,10 @@ impl App {
     fn input_char(&mut self, c: u32) -> bool {
         let hwnd = self.hwnd;
         let Some(i) = self.input.as_mut() else { return false };
-        match i.char(hwnd, c) {
+        let r = i.char(hwnd, c);
+        // Hayvan adı her tuşta akışın durumuna yazılır.
+        pages::dock_live_photo::sync_name(self);
+        match r {
             Some(true) => self.submit_input(),
             Some(false) => self.input = None,
             None => {}
@@ -310,6 +368,8 @@ impl App {
             let rt = unsafe { self.factory.CreateHwndRenderTarget(&props, &hp)? };
             unsafe { rt.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE) };
             self.rt = Some(rt);
+            // Eski hedefte yaratılmış bit eşlemler yenisinde kullanılamaz.
+            pages::dock_live_photo::render_target_changed();
         }
         let rt = self.rt.clone().unwrap();
         unsafe {
@@ -324,6 +384,8 @@ impl App {
         hits.clear();
         tween::frame();
         carlui_ui::paint::hover_frame();
+        info::begin();
+        let info_wake;
         unsafe {
             rt.BeginDraw();
             rt.SetTransform(&Matrix3x2 { M11: s, M12: 0.0, M21: 0.0, M22: s, M31: 0.0, M32: 0.0 });
@@ -384,6 +446,8 @@ impl App {
                 p.glyph('\u{E73E}', R::new(r.x + 12.0, r.y, 16.0, r.h), 12.0, carlui_ui::tone::accent(self.accent), t);
                 p.text(m, R::new(r.x + 30.0, r.y, r.w - 38.0, r.h), 13.0, false, TEXT, 0.95 * t, Align::Left);
             }
+            // Açıklama baloncuğu her şeyin üstünde, kırpma alanının dışında.
+            info_wake = info::finish(&mut p, clip, R::new(0.0, 0.0, w, h), &self.cfg.theme);
         }
         self.hits = hits;
         unsafe {
@@ -393,6 +457,9 @@ impl App {
             // Oturmamış animasyon varsa bir sonraki kare (~60 fps); yoksa boşta.
             if tween::busy() {
                 SetTimer(self.hwnd, TIMER_ANIM, 16, None);
+            } else if let Some(d) = info_wake {
+                // Üstüne gelinen "i" düğmesinin baloncuğu bekleme bitince açılsın.
+                SetTimer(self.hwnd, TIMER_ANIM, (d.as_millis() as u32).max(10), None);
             } else if self.input.is_some() {
                 // Form açık: imleç yanıp sönsün.
                 SetTimer(self.hwnd, TIMER_ANIM, 530, None);
@@ -464,6 +531,9 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 // fare hareketinde bütün pencereyi çizmek GPU'yu boşuna yorar.
                 let changed = carlui_ui::paint::hover_changed(&a.hits, a.mouse, pt);
                 a.mouse = pt;
+                // Fare pencereden çıkınca haber gelsin (açıklama baloncuğu kapansın).
+                let mut tme = TRACKMOUSEEVENT { cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32, dwFlags: TME_LEAVE, hwndTrack: hwnd, dwHoverTime: 0 };
+                let _ = TrackMouseEvent(&mut tme);
                 if let Some((f, track)) = a.drag.clone() {
                     f(&mut a.cfg, (a.mouse.0 - track.x) / track.w);
                     a.invalidate();
@@ -482,8 +552,19 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                     // Kayıt sırasında boş yere tıklamak kaydı iptal eder (fare atanamaz).
                     None => {
                         a.stop_recording();
+                        info::dismiss();
                         a.invalidate();
                     }
+                }
+            });
+            LRESULT(0)
+        }
+        WM_MOUSELEAVE => {
+            with_app(|a| {
+                // Sürüklerken (fare yakalıyken) konum korunur.
+                if a.drag.is_none() {
+                    a.mouse = (-1.0, -1.0);
+                    a.invalidate();
                 }
             });
             LRESULT(0)
@@ -501,6 +582,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         WM_RBUTTONDOWN | WM_MBUTTONDOWN | WM_XBUTTONDOWN => {
             with_app(|a| {
                 a.stop_recording();
+                info::dismiss();
                 a.invalidate();
             });
             LRESULT(0)
@@ -516,6 +598,11 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             LRESULT(0)
         }
         WM_CHAR => {
+            // Esc önce açık açıklama baloncuğunu kapatır (formu değil).
+            if wp.0 == 0x1B && info::dismiss() {
+                with_app(|a| a.invalidate());
+                return LRESULT(0);
+            }
             if with_app(|a| a.input_char(wp.0 as u32)) == Some(true) {
                 LRESULT(0)
             } else {
@@ -575,8 +662,29 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
     }
 }
 
+/// Yalnızca hata ayıklama derlemesinde: `CARLUI_TEST_WINDOW=x,y,g,y` pencereyi
+/// o konumda, odak almadan açar (canlı ekran görüntüsü testi kullanıcının
+/// önündeki pencereyi yerinden etmesin). Uygulandıysa `true`.
+fn test_window(hwnd: HWND) -> bool {
+    if !cfg!(debug_assertions) {
+        return false;
+    }
+    let Some(v) = std::env::var("CARLUI_TEST_WINDOW").ok() else { return false };
+    let n: Vec<i32> = v.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+    let [x, y, w, h] = n[..] else { return false };
+    unsafe {
+        let _ = SetWindowPos(hwnd, None, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+        let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+    }
+    true
+}
+
 fn main() -> Result<()> {
     log::init("settings");
+    // İlk kurulum karşılaması aynı exe'nin ayrı bir kipi (kendi penceresi ve kilidi).
+    if std::env::args().any(|a| a == "--welcome") {
+        return welcome::run();
+    }
     // Pencere başlığı da doğru dilde çıksın diye ayar en başta okunur.
     let cfg = config::load();
     carlui_ui::tone::follow(&cfg.theme);
@@ -654,11 +762,14 @@ fn main() -> Result<()> {
             input: None,
             fetching: Arc::default(),
             ai_error: None,
+            looks: pages::looks::State::load(),
         };
         tween::enable();
         APP.with(|a| *a.borrow_mut() = Some(app));
-        let _ = ShowWindow(hwnd, SW_SHOW);
-        let _ = SetForegroundWindow(hwnd);
+        if !test_window(hwnd) {
+            let _ = ShowWindow(hwnd, SW_SHOW);
+            let _ = SetForegroundWindow(hwnd);
+        }
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             let _ = TranslateMessage(&msg);

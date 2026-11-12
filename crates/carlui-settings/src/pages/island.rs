@@ -135,7 +135,8 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     if cfg.notify.sound == NotifySound::File {
         let name = std::path::Path::new(&cfg.notify.sound_file).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let desc = if name.is_empty() { t!("Dosya seçilmedi; Windows'un bildirim sesi çalar.", "No file chosen; the Windows notification sound plays.").to_string() } else { name };
-        let r = f.row(p, t!("Ses dosyası (.wav)", "Sound file (.wav)"), &desc, 120.0);
+        // Seçili dosya (ya da seçilmediği) durum bilgisi: kartta görünür.
+        let r = f.row_sub(p, t!("Ses dosyası (.wav)", "Sound file (.wav)"), "", &desc, None, 120.0);
         p.button(
             R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0),
             Some('\u{E8E5}'),
@@ -166,7 +167,8 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.section(p, t!("Uyarılar", "Alerts"));
     let a = &cfg.alerts;
     let deg = |v: f32| format!("{v:.0} °C");
-    f.toggle(p, t!("CPU ısınınca", "When the CPU gets hot"), t!("CPU sıcaklığı için CarlUI Sensors gerekir.", "CPU temperature needs CarlUI Sensors."), a.cpu, |c| c.alerts.cpu ^= true);
+    // Gereksinim (CarlUI Sensors) kartta görünür kalır.
+    f.toggle_sub(p, t!("CPU ısınınca", "When the CPU gets hot"), "", t!("CPU sıcaklığı için CarlUI Sensors gerekir.", "CPU temperature needs CarlUI Sensors."), None, a.cpu, |c| c.alerts.cpu ^= true);
     if a.cpu {
         f.slider(p, t!("CPU sınırı", "CPU limit"), "", a.cpu_temp as f32, 60.0, 105.0, 1.0, deg, |c, v| c.alerts.cpu_temp = v as u32);
     }

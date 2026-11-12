@@ -15,7 +15,7 @@ use carlui_ai::{
 use carlui_ui::paint::{ORANGE, R};
 use windows::Win32::{Foundation::HWND, Graphics::Gdi::InvalidateRect};
 
-fn mb(bytes: u64) -> String {
+pub(crate) fn mb(bytes: u64) -> String {
     let m = bytes as f64 / 1_048_576.0;
     if m >= 1024.0 {
         t!(format!("{:.1} GB", m / 1024.0).replace('.', ","), format!("{:.1} GB", m / 1024.0))
@@ -106,7 +106,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         );
     }
     if let Some(e) = &app.ai_error {
-        f.row_c(p, t!("Model silinemedi", "Couldn't remove the model"), e, 0.0, Some(ORANGE));
+        f.row_sub(p, t!("Model silinemedi", "Couldn't remove the model"), "", e, Some(ORANGE), 0.0);
     }
 
     let busy = app.fetching.lock().map(|v| v.clone()).unwrap_or_default();
@@ -138,21 +138,24 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
                 format!("{} · {}", m.tier.label(), m.name)
             };
             let ctrl = if pick { 232.0 } else { 120.0 };
+            // Boyut ve lisans kartta kalır (ticari olmayan lisans turuncu uyarıyla);
+            // modelin tanıtımı "i" düğmesine gider.
             let (desc, color) = if m.restricted {
                 let d = t!(
-                    format!("{} · {} · Yalnızca ticari olmayan kullanım · {}", mb(m.size()), m.license, m.about()),
-                    format!("{} · {} · Non-commercial use only · {}", mb(m.size()), m.license, m.about())
+                    format!("{} · {} · Yalnızca ticari olmayan kullanım", mb(m.size()), m.license),
+                    format!("{} · {} · Non-commercial use only", mb(m.size()), m.license)
                 );
                 (d, Some(ORANGE))
             } else {
-                (format!("{} · {} · {}", mb(m.size()), m.license, m.about()), None)
+                (format!("{} · {}", mb(m.size()), m.license), None)
             };
             // Önerilen sistem; bu bilgisayar altındaysa turuncu "uzun sürebilir" uyarısı.
             let (extra, extra_color) = match carlui_ai::hw::warning(m) {
                 Some(w) => (format!("{} · {w}", carlui_ai::hw::summary(m)), Some(ORANGE)),
                 None => (carlui_ai::hw::summary(m), None),
             };
-            let r = f.row3(p, &label, &desc, color, &extra, extra_color, ctrl);
+            let about = m.about();
+            let r = f.row_lines(p, &label, &about, &[(&desc, color), (&extra, extra_color)], ctrl);
             let y = r.y + (r.h - 32.0) / 2.0;
             let x = r.right() - 16.0 - 112.0;
             let bx = R::new(x, y, 112.0, 32.0);

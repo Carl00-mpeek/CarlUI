@@ -19,6 +19,7 @@ pub mod mic;
 pub mod net;
 mod nn;
 pub mod onnx;
+pub mod petgen;
 pub mod rmbg;
 pub mod runtime;
 pub mod spm;

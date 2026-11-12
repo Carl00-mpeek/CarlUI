@@ -22,9 +22,11 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         ColorFormat::Rgb => 1,
         ColorFormat::Hsl => 2,
     };
-    f.choice(
+    // Atanmış kısayol (ya da nereden atanacağı) kartta görünür kalır.
+    f.choice_sub(
         p,
         t!("Panoya kopyalanan biçim", "Format copied to the clipboard"),
+        "",
         &key_hint(&sc.color_picker),
         &[("HEX", edit(|c| c.tools.color_format = ColorFormat::Hex)), ("RGB", edit(|c| c.tools.color_format = ColorFormat::Rgb)), ("HSL", edit(|c| c.tools.color_format = ColorFormat::Hsl))],
         sel,
@@ -32,23 +34,27 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     );
 
     f.section(p, t!("Dosyalar", "Files"));
-    f.toggle(
+    f.toggle_sub(
         p,
         t!("Toplu yeniden adlandırma", "Batch rename"),
         &t!(format!("Gezgin'de dosyaları seçip kısayola basın ({}).", sc.rename), format!("Select files in Explorer and press the shortcut ({}).", sc.rename)),
+        &key_hint(&sc.rename),
+        None,
         c.rename_enabled,
         |c| c.tools.rename_enabled ^= true,
     );
-    f.toggle(p, t!("Disk analizörü", "Disk analyzer"), &key_hint(&sc.disk), c.disk_enabled, |c| c.tools.disk_enabled ^= true);
+    f.toggle_sub(p, t!("Disk analizörü", "Disk analyzer"), "", &key_hint(&sc.disk), None, c.disk_enabled, |c| c.tools.disk_enabled ^= true);
     if c.disk_enabled {
         let r = f.row(p, t!("Disk analizörünü aç", "Open the disk analyzer"), t!("Hangi klasörün ne kadar yer kapladığını gösterir.", "Shows how much space each folder takes."), 120.0);
         p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{EDA2}'), t!("Aç", "Open"), Act::Tool("--disk"), true, false);
     }
 
-    f.toggle(
+    f.toggle_sub(
         p,
         t!("Dosya kilidi açıcı", "File unlocker"),
         &t!(format!("Gezgin'de öğeyi seçip kısayola basın ({}).", sc.unlock), format!("Select an item in Explorer and press the shortcut ({}).", sc.unlock)),
+        &key_hint(&sc.unlock),
+        None,
         c.unlock_enabled,
         |c| c.tools.unlock_enabled ^= true,
     );
@@ -65,7 +71,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         c.window_memory,
         |c| c.tools.window_memory ^= true,
     );
-    let r = f.row(p, t!("Pencere düzenleri", "Window layouts"), &key_hint(&sc.layouts), 120.0);
+    let r = f.row_sub(p, t!("Pencere düzenleri", "Window layouts"), "", &key_hint(&sc.layouts), None, 120.0);
     p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E737}'), t!("Aç", "Open"), Act::Tool("--layouts"), true, false);
 
     f.section(p, t!("Ekran görüntüsü", "Screenshot"));
@@ -98,10 +104,11 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     );
     let ext = if s.format == ShotFormat::Jpg { "jpg" } else { "png" };
     let sample = format!("{}.{ext}", s.file_name("2026-11-05", "14.30.00"));
-    let r = f.row(p, t!("Dosya adı şablonu", "File name template"), &t!(format!("Örnek: {sample}"), format!("Example: {sample}")), 120.0);
+    // Örnek dosya adı ve kayıt klasörü canlı değer: kartta görünür.
+    let r = f.row_sub(p, t!("Dosya adı şablonu", "File name template"), "", &t!(format!("Örnek: {sample}"), format!("Example: {sample}")), None, 120.0);
     p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E70F}'), t!("Değiştir", "Change"), Act::Input(9), app.input.is_none(), false);
     super::form::draw(app, p, f, Form::ShotName, &[(t!("Şablon — {tarih} ve {saat} yerine konur; boş bırakılırsa varsayılan", "Template — {date} and {time} are filled in; leave empty for the default"), t!("Ekran görüntüsü {tarih} {saat}", "Screenshot {date} {time}"))]);
-    let r = f.row(p, t!("Alan kaydı klasörü", "Area recording folder"), &app.cfg.record.folder().display().to_string(), 120.0);
+    let r = f.row_sub(p, t!("Alan kaydı klasörü", "Area recording folder"), "", &app.cfg.record.folder().display().to_string(), None, 120.0);
     p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E838}'), t!("Aç", "Open"), Act::RecordFolder, true, false);
 
     f.section(p, t!("Görev yöneticisi", "Task manager"));
@@ -148,7 +155,8 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         t!("exe adı, ör. cs2.exe", "exe name, e.g. cs2.exe"),
     );
     for (i, s) in c.snippets.iter().enumerate() {
-        let r = f.row(p, &s.key, &s.text.replace('\n', " ⏎ "), 60.0);
+        // Kısaltmanın metni kayıtlı veri: kartta görünür.
+        let r = f.row_sub(p, &s.key, "", &s.text.replace('\n', " ⏎ "), None, 60.0);
         let del = R::new(r.right() - 12.0 - 32.0, r.y + (r.h - 32.0) / 2.0, 32.0, 32.0);
         if p.hover(del) {
             p.round(del, 6.0, 0xFFFFFF, 0.10);

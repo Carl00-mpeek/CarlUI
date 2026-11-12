@@ -36,8 +36,12 @@ pub fn others() -> Vec<Monitor> {
     v
 }
 
-/// Bu dock'un monitörü (ek ekran yoksa `None`: kopya kapanmalı).
+/// Bu dock'un monitörü (ek ekran yoksa `None`: kopya kapanmalı). Kum
+/// havuzunda hep ilk ek monitör.
 pub fn monitor() -> Option<Monitor> {
+    if crate::sandbox::on() {
+        return others().first().copied();
+    }
     match child() {
         Some(n) => others().get(n).copied(),
         None => win::primary_monitor(),
@@ -51,7 +55,7 @@ pub fn rect() -> RECT {
 /// Pencere filtresi: seçenek açık ve ek ekran varken her dock yalnızca
 /// kendi monitöründeki pencereleri gösterir (pencere iki dock'ta birden olmasın).
 pub fn filter(enabled: bool) -> Option<HMONITOR> {
-    if !enabled || others().is_empty() {
+    if !enabled || others().is_empty() || crate::sandbox::on() {
         return None;
     }
     monitor().map(|m| m.handle)
@@ -61,7 +65,7 @@ pub fn filter(enabled: bool) -> Option<HMONITOR> {
 /// Zaten çalışan kopya kendi kilidini görüp hemen çıkar; bu yüzden tekrar
 /// çağırmak (ayar değişimi, monitör takılması) güvenli.
 pub fn spawn(enabled: bool) {
-    if !enabled || child().is_some() {
+    if !enabled || child().is_some() || crate::sandbox::on() {
         return;
     }
     let Ok(exe) = std::env::current_exe() else { return };
@@ -77,6 +81,9 @@ pub fn spawn(enabled: bool) {
 
 /// Tek kopya kilidinin adı (ana dock ve her ek ekran ayrı).
 pub fn mutex_name() -> HSTRING {
+    if crate::sandbox::on() {
+        return HSTRING::from("Local\\CarlUI.DockSandbox");
+    }
     match child() {
         Some(n) => HSTRING::from(format!("Local\\CarlUI.Dock2.{n}")),
         None => HSTRING::from("Local\\CarlUI.Dock"),
