@@ -1,5 +1,18 @@
 # Sürüm notları
 
+## v1.1.3 — Oyunda kısayol, Win menüsü ve dock düzeltmeleri (2026-11-12)
+
+**CarlUI 1.1.3: oyunda kısayol, Win menüsü ve dock düzeltmeleri.**
+
+**Düzeltmeler.** Özel tam ekran oyunda şarkı değişince oyundan atılma düzeltildi (ada
+göstergeden sonra oyunun monitörüne dönmüyor). Kenarlıksız/büyütülmüş pencerede oynanan
+oyunlarda (ör. Minecraft) Ctrl+Space gibi kısayollar çalışmıyor. Win tuşunun bazen
+menüyü açmaması ve menü açılınca dock'un gelmemesi düzeltildi. Çözünürlük değişince
+dock ekran durulunca bir kez kuruluyor, oyun sürerken kurulmuyor.
+
+**SHA-256 (CarlUI-Setup.exe):**
+`307e75c26c97db0b4af26c869840cd011d49eba73c6458b827b40ed9b08e1e53`
+
 ## v1.1.2 — Oyun sırasında indirme ve odak düzeltmeleri (2026-11-12)
 
 **CarlUI 1.1.2: oyun sırasında indirme ve odak düzeltmeleri.**
