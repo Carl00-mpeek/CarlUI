@@ -16,8 +16,16 @@ pub fn force_foreground(hwnd: HWND) {
         Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VIRTUAL_KEY(0xE8), dwFlags: if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) }, ..Default::default() } },
     };
     unsafe {
+        // Öndeki oyunsa yalnızca Windows'un kendi izniyle denenir: sahte tuş,
+        // girdi bağlama ve Alt hilesi oyunu küçültüp arkaya atar (oyundan atılma).
+        // Kullanıcı kısayolla açtıysa Windows izni zaten verir.
+        let game = GetForegroundWindow() != hwnd && game_in_front();
         if SetForegroundWindow(hwnd).as_bool() && GetForegroundWindow() == hwnd {
             let _ = SetFocus(hwnd);
+            return;
+        }
+        if game {
+            crate::info!("öne getirme atlandı: oyun önde ({})", class_name(hwnd));
             return;
         }
         SendInput(&[key(false), key(true)], std::mem::size_of::<INPUT>() as i32);
@@ -371,22 +379,30 @@ pub fn game_in_front() -> bool {
         if SHQueryUserNotificationState().is_ok_and(|q| q == QUNS_RUNNING_D3D_FULL_SCREEN) {
             return true;
         }
-        let fg = GetForegroundWindow();
-        let class = class_name(fg);
-        if fg.is_invalid() || matches!(class.as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd" | "CarlUI.Island" | "CarlUI.Host") {
+    }
+    window_like_game(unsafe { GetForegroundWindow() })
+}
+
+/// Bu pencere tam ekran bir oyun/uygulama penceresine benziyor mu? Monitörünü
+/// çerçevesiz (başlıksız) kaplıyor; kabuk, CarlUI ya da tarayıcı/oynatıcı değil.
+/// Windows'un özel tam ekran durumuna bakmaz (o pencereye değil ekrana aittir).
+pub fn window_like_game(hwnd: HWND) -> bool {
+    unsafe {
+        let class = class_name(hwnd);
+        if hwnd.is_invalid() || matches!(class.as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd" | "CarlUI.Island" | "CarlUI.Host") {
             return false;
         }
         // Tarayıcıda / oynatıcıda tam ekran video oyun değildir.
-        if is_media_window(fg) {
+        if is_media_window(hwnd) {
             return false;
         }
-        if GetWindowLongW(fg, GWL_STYLE) as u32 & WS_CAPTION.0 == WS_CAPTION.0 {
+        if GetWindowLongW(hwnd, GWL_STYLE) as u32 & WS_CAPTION.0 == WS_CAPTION.0 {
             return false;
         }
         let mut r = RECT::default();
-        let _ = GetWindowRect(fg, &mut r);
+        let _ = GetWindowRect(hwnd, &mut r);
         let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
-        let _ = GetMonitorInfoW(MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST), &mut mi);
+        let _ = GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mut mi);
         let m = mi.rcMonitor;
         r.left <= m.left && r.top <= m.top && r.right >= m.right && r.bottom >= m.bottom
     }

@@ -64,8 +64,22 @@ static FULLSCREEN: AtomicBool = AtomicBool::new(false);
 /// oyunun üstünde görünemez. Video/çerçevesiz tam ekranda menü yine açılır.
 static EXCLUSIVE: AtomicBool = AtomicBool::new(false);
 
+/// Özel tam ekranın bittiği an (GetTickCount, ms).
+static EXCLUSIVE_OFF_AT: AtomicU32 = AtomicU32::new(0);
+/// Özel tam ekran bittikten sonra Win tuşu bu kadar süre daha Windows'a bırakılır:
+/// oyun bir anlığına odağı kaybedip (geçiş yüzeyi, başka monitördeki pencere)
+/// tam ekran algısı kısa süre "yok" deyince menümüz oyunun üstünde açılıp onu düşürmesin.
+const EXCLUSIVE_GRACE_MS: u32 = 2000;
+
 pub fn set_exclusive(on: bool) {
-    EXCLUSIVE.store(on, Ordering::Relaxed);
+    if EXCLUSIVE.swap(on, Ordering::Relaxed) && !on {
+        EXCLUSIVE_OFF_AT.store(unsafe { GetTickCount() }, Ordering::Relaxed);
+    }
+}
+
+/// Özel tam ekran var mı ya da az önce mi bitti?
+fn exclusive_recent() -> bool {
+    EXCLUSIVE.load(Ordering::Relaxed) || unsafe { GetTickCount() }.wrapping_sub(EXCLUSIVE_OFF_AT.load(Ordering::Relaxed)) < EXCLUSIVE_GRACE_MS
 }
 /// Dönüştürücü akoru (DIGIT_MODS ile aynı bit düzeni); 0 = kapalı.
 static CONV_MODS: AtomicU8 = AtomicU8::new(0);
@@ -201,7 +215,7 @@ unsafe extern "system" fn keyboard_proc(code: i32, wp: WPARAM, lp: LPARAM) -> LR
                 WIN_DOWN.store(down, Ordering::Relaxed);
                 if up && SWALLOWED.swap(false, Ordering::Relaxed) {
                     send_mask_key();
-                } else if up && WANT_START.load(Ordering::Relaxed) != 0 && !EXCLUSIVE.load(Ordering::Relaxed) && !WIN_USED.load(Ordering::Relaxed) {
+                } else if up && WANT_START.load(Ordering::Relaxed) != 0 && !exclusive_recent() && !WIN_USED.load(Ordering::Relaxed) {
                     let modifier = [VK_SHIFT, VK_CONTROL, VK_MENU].iter().any(|k| GetAsyncKeyState(k.0 as i32) as u16 & 0x8000 != 0);
                     // Menü çalışmıyorsa aramaya, o da yoksa Windows'un Başlat'ına düşer.
                     let opened = || match WANT_START.load(Ordering::Relaxed) {

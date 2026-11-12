@@ -14,6 +14,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod autostart;
+mod focus_log;
 mod fullscreen;
 mod hotkey;
 mod layouts;
@@ -329,6 +330,9 @@ fn follow_foreground(h: &mut Host) {
 
 fn check_fullscreen(h: &mut Host) {
     let s = fullscreen::query();
+    if s.active {
+        focus_log::note_fullscreen();
+    }
     if s != h.fullscreen {
         let class = if s.active { carlui_core::win::class_name(unsafe { GetForegroundWindow() }) } else { String::new() };
         info!("tam ekran: {} (özel: {}, monitör: {}, pencere: {class})", s.active, s.exclusive, s.monitor);
@@ -611,6 +615,8 @@ fn run() -> Result<()> {
             0,
             WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
         );
+        // Oyundan atılmaları teşhis için: odak oyundan kime geçti?
+        let focus_hook = focus_log::install();
         // Ön plan değişmeden tam ekrana geçen oyunlar için seyrek bir yedek kontrol.
         SetTimer(hwnd, TIMER_FULLSCREEN, 1500, None);
         SetTimer(hwnd, TIMER_WINDOWS, 5000, None);
@@ -645,6 +651,7 @@ fn run() -> Result<()> {
         }
 
         let _ = UnhookWinEvent(fg_hook);
+        let _ = UnhookWinEvent(focus_hook);
         if let Some(h) = HOST.with(|h| h.borrow_mut().take()) {
             let _ = UnhookWinEvent(h.explorer_hook);
             let _ = h.hwnd;

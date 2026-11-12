@@ -74,13 +74,23 @@ impl App {
                 self.spot.set_text(&g("text"));
                 self.listen_set(ListenStage::Review, t!("Enter gönderir · Esc vazgeçer", "Enter sends · Esc cancels").into());
                 // Karar sırası kullanıcıda: yazı düzeltilebilsin diye klavye adaya gelir.
+                // Bu adım kullanıcı tıklamasıyla değil olay yolundan gelir: arada
+                // oyun öne geçtiyse ada odak çalmaz (oyun küçülüp arkaya düşerdi),
+                // odak almayan hâliyle kalır.
                 let hwnd = self.island.hwnd;
-                unsafe {
-                    let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-                    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex & !(WS_EX_NOACTIVATE.0 as isize));
+                let game = self.game || searching::game_in_front();
+                if !game {
+                    unsafe {
+                        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+                        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex & !(WS_EX_NOACTIVATE.0 as isize));
+                    }
                 }
                 self.refresh(true);
-                unsafe { searching::force_foreground(hwnd) };
+                if game {
+                    info!("asistan onayı: oyun önde, ada odak almadı");
+                } else {
+                    unsafe { searching::force_foreground(hwnd) };
+                }
             }
             "done" => {
                 self.island.listen_level(0.0);
