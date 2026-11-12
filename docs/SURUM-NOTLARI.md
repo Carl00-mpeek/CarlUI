@@ -1,5 +1,16 @@
 # Sürüm notları
 
+## v1.1.4 — Kenarlıksız oyunda dock tıklaması düzeltmesi (2026-11-12)
+
+**CarlUI 1.1.4: kenarlıksız oyunda dock tıklaması düzeltmesi.**
+
+**Düzeltmeler.** Kenarlıksız tam ekran oyunda (ör. Roblox) Win menüsünü açıp dock'a
+sol ya da sağ tıklayınca dock hemen gizleniyor, tıklama ve sağ tık menüsü çalışmıyordu.
+Artık dock tıklama ya da menü bitene kadar yerinde kalıyor; oyun dock'tan kapatılabiliyor.
+
+**SHA-256 (CarlUI-Setup.exe):**
+`f93fd0e76de21e59e1513da54c0919cd0a6855188749890cf00d83330370198b`
+
 ## v1.1.3 — Oyunda kısayol, Win menüsü ve dock düzeltmeleri (2026-11-12)
 
 **CarlUI 1.1.3: oyunda kısayol, Win menüsü ve dock düzeltmeleri.**

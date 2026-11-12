@@ -68,6 +68,10 @@ const TIMER_REFRESH: usize = 33;
 /// oyun açılıp kapanırken art arda gelen ekran değişimleri tek kuruluşa iner.
 const TIMER_DISPLAY: usize = 35;
 const DISPLAY_SETTLE_MS: u32 = 600;
+/// Tam ekran döndüğünde dock kullanılıyorsa (Win menüsünden tıklama, sağ tık menüsü)
+/// gizleme ertelenir; bu zamanlayıcı iş bitince yeniden bakar.
+const TIMER_FS_HIDE: usize = 36;
+const FS_HIDE_RECHECK_MS: u32 = 400;
 
 struct App {
     gfx: Gfx,
@@ -290,6 +294,27 @@ impl App {
         if let Some(icon) = self.min_rect(w) {
             fly::start(w, icon, minimizing);
         }
+    }
+
+    /// Dock şu an kullanılıyor mu: imleç üstünde, menüsü/önizlemesi açık, tıklama sürüyor.
+    fn dock_busy(&self) -> bool {
+        // mouse_inside bayrakları gizlenen pencerede eski kalabilir; imleç gerçekten bakılır.
+        self.dock.menu_open || self.start_open || self.tray_open || self.dock.cursor_over()
+    }
+
+    /// Tam ekran (kenarlıksız oyun/video) sürerken dock'u gizle; kullanılıyorsa ertele.
+    fn hide_for_fullscreen(&mut self) {
+        if !self.fullscreen {
+            return;
+        }
+        if self.dock_busy() {
+            unsafe {
+                SetTimer(self.hwnd, TIMER_FS_HIDE, FS_HIDE_RECHECK_MS, None);
+            }
+            return;
+        }
+        self.popup.hide();
+        self.dock.set_suppressed(true);
     }
 
     fn intellihide_check(&mut self) {
@@ -591,12 +616,19 @@ impl App {
                 input::set_fullscreen(active);
                 self.watch_locations();
                 if active {
-                    self.popup.hide();
-                } else if self.dock.behavior() == DockBehavior::Intellihide && !self.dock.mouse_inside && self.dock.overlapped(&self.tracker) {
-                    // Tam ekrandan büyütülmüş pencereye dönüş: dock bir an belirip kaybolmasın.
-                    self.dock.park();
+                    // Win menüsünden dock'a tıklayınca odak oyuna döner ve tam ekran yeniden
+                    // gelir: tıklama/sağ tık menüsü bitmeden dock'u gizleme.
+                    self.hide_for_fullscreen();
+                } else {
+                    if self.dock.behavior() == DockBehavior::Intellihide && !self.dock.mouse_inside && self.dock.overlapped(&self.tracker) {
+                        // Tam ekrandan büyütülmüş pencereye dönüş: dock bir an belirip kaybolmasın.
+                        self.dock.park();
+                    }
+                    unsafe {
+                        let _ = KillTimer(self.hwnd, TIMER_FS_HIDE);
+                    }
+                    self.dock.set_suppressed(false);
                 }
-                self.dock.set_suppressed(active && !self.start_open);
                 if !active {
                     if self.display_dirty {
                         unsafe {
@@ -914,6 +946,10 @@ fn dock_proc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
                         let _ = KillTimer(hwnd, id);
                         a.display_settled();
                     }
+                    TIMER_FS_HIDE => {
+                        let _ = KillTimer(hwnd, id);
+                        a.hide_for_fullscreen();
+                    }
                     TIMER_GRACE => {
                         let _ = KillTimer(hwnd, id);
                         let over_popup = a.popup.mouse_inside && a.popup.mode == Mode::Preview;
@@ -935,7 +971,8 @@ fn dock_proc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
                         a.dock.set_suppressed(false);
                         a.dock.show_now();
                     } else {
-                        a.dock.set_suppressed(a.fullscreen);
+                        // Menü dock'a tıklanınca kapanır: tıklama işlenmeden gizlenmesin.
+                        a.hide_for_fullscreen();
                         a.arm_autohide(900);
                     }
                 });

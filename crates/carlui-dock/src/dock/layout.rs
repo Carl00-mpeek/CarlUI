@@ -273,6 +273,18 @@ impl Dock {
         }
     }
 
+    /// İmleç şu an dock penceresinin üstünde mi (tıklama/menü sürüyor olabilir).
+    pub fn cursor_over(&self) -> bool {
+        if self.suppressed {
+            return false;
+        }
+        unsafe {
+            let mut pt = POINT::default();
+            let mut r = RECT::default();
+            GetCursorPos(&mut pt).is_ok() && GetWindowRect(self.hwnd, &mut r).is_ok() && pt.x >= r.left && pt.x < r.right && pt.y >= r.top && pt.y < r.bottom
+        }
+    }
+
     pub fn is_suppressed(&self) -> bool {
         self.suppressed
     }
