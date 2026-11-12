@@ -21,6 +21,9 @@ Ayarlar'da her hayvanın ve rengin yanında küçük bir önizleme resmi görün
 kartının arkasında da görünür; yazı her zaman okunur kalır. Gerçek hava açıksa kart
 da o havayı gösterir. Ayarlar → Ada → "Bildirimlerde sahne efekti".
 
+**SHA-256 (CarlUI-Setup.exe):**
+`5b44789f0f584106c3231e10db0d2f0e2ec72abf6e1da27d0b9685725ec06502`
+
 ## v0.10.0 — Canlı dock, fotoğraftan hayvan, hazır görünümler (2026-11-12)
 
 **Yeni: Canlı dock.** Dock'ta küçük piksel hayvanlar yaşar: kedi, kertenkele,
