@@ -23,6 +23,9 @@ koymuyor. Bozuk düzen dosyası kaybolmak yerine `layouts.json.bad` olarak sakla
 Kaldırıcı, Mağaza uygulaması kaldırması gerçekten başarısız olduğunda bunu bildirir.
 Kaldırıcı listesindeki uzun adlar güvenle kısaltılır.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`f378e6bd457a69b0766bd74c6475aaaff45c7e21b990232d1260451c637ddaa4`
+
 ## v0.11.0 — Canlı hava, yeni hayvanlar ve renkler, bildirim efektleri (2026-11-12)
 
 **Yeni: Canlı hava.** Dock sahnesi seçtiğin şehrin gerçek havasını izleyebilir:
