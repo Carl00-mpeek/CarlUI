@@ -9,6 +9,9 @@ silinemeyebiliyordu; kurucu artık düzgün kapanıyor. Kurucunun başlattığı
 kurucunun bulunduğu klasörü (ör. İndirilenler) kilitli tutmuyor. Kaldırma sırasında
 geçici kopya kurulum klasörünü kilitleyebiliyordu; düzeltildi.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`075a6db708c9cbc1014517619ddefe8a78714f7d1c1a8e4eeccf6fd00543a146`
+
 ## v1.1.0 — Güncelleme sayfası, genişletilmiş ilk kurulum turu (2026-11-12)
 
 **CarlUI 1.1.0: Güncelleme sayfası ve yenilenen ilk kurulum turu.**
