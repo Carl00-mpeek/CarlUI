@@ -9,7 +9,7 @@ Efektin yoğunluğu adanın hâline göre değişir: saat/tarihte hafif, şarkı
 yoğun, bildirimde yoğun.
 
 **SHA-256 (CarlUI-Setup.exe):**
-`SHA_BURAYA`
+`8f7c27918e5ce6f22507f29303059c6dd49f252f191daace427138b610e4e6f2`
 
 ## v1.1.6 — Win menüsü ve adada sahne efekti (2026-11-12)
 
