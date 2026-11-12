@@ -12,7 +12,7 @@ tuşunun Windows Başlat'ını açması düzeltildi (oyunlarda karışılmaz). W
 kurulumda geç açılması düzeltildi (simgeler arka planda yükleniyor).
 
 **SHA-256 (CarlUI-Setup.exe):**
-`SHA_BURAYA`
+`94debf570b0542bcb0d6d66f6b86c29ae6138ab51d7413849c4f2f1343d646ea`
 
 ## v1.1.5 — Oyun listesi ve donmuş programı zorla kapatma (2026-11-12)
 
