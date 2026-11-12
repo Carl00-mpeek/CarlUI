@@ -30,6 +30,9 @@ bilgi balonlarına taşındı.
   artık dolu.
 - Hayvan paketi adlarında Windows'un ayrılmış adları (CON, NUL, COM1…) reddediliyor.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`d4bcc641784736739fd588d8ddfdec0a390c81b7ecdf98a87dc45f97150590b7`
+
 ## v0.9.9 — Görev çubuğu panelleri, Hızlı Erişim yığını ve hata düzeltmeleri (2026-11-11)
 
 **Yeni: Görev çubuğunda ayrı paneller.** Compact ve Full görünümde ses simgesi yalnızca
