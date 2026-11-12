@@ -14,6 +14,9 @@ yazar; yeni sürüm varsa "Güncelle" düğmesi ve kısa bir "Yenilikler" kartı
 ve vurgu rengi, dock hayvanı ve sahnesi, dock, ada, modüller ve "Neler yapabilirsin"
 özetini kapsar. Her adım atlanabilir; tur Ayarlar → Genel'den yeniden açılabilir.
 
+**SHA-256 (CarlUI-Setup.exe):**
+`cc611e4a1a1a5e860de1f0663a3f7e80c5d02ff50a39e39cd58adc7620ce4380`
+
 ## v1.0.0 — Hayvan tepkileri, güvenli iç haberleşme, genişletilmiş yedek (2026-11-12)
 
 **CarlUI 1.0.0: ilk kararlı sürüm.**
