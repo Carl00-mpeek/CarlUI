@@ -1020,6 +1020,7 @@ impl Island {
         }
         self.content = Some(c);
         self.size = (w, h);
+        self.fx_sync(gfx, w, h);
         self.fx_begin();
         if !self.slid_up {
             let new_rect = self.pill_rect();

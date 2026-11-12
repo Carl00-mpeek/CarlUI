@@ -885,6 +885,9 @@ pub struct NotifyConfig {
     /// Sahne `dock.live.scene` ayarından gelir; o kapalıysa hiçbir şey çizilmez.
     #[serde(default = "default_true")]
     pub notif_scene: bool,
+    /// Sahne efekti adanın her hâlinde (saat, medya…) de çizilir; `notif_scene`
+    /// açık değilse yok sayılır.
+    pub scene_always: bool,
 }
 
 fn default_true() -> bool {
@@ -913,7 +916,7 @@ impl NotifyConfig {
 
 impl Default for NotifyConfig {
     fn default() -> Self {
-        Self { enabled: true, media_bar: true, volume_osd: true, duration_ms: 2500, over_maximized: false, hide_windows_banners: true, sound: NotifySound::Windows, sound_file: String::new(), blocked_apps: Vec::new(), notif_scene: true }
+        Self { enabled: true, media_bar: true, volume_osd: true, duration_ms: 2500, over_maximized: false, hide_windows_banners: true, sound: NotifySound::Windows, sound_file: String::new(), blocked_apps: Vec::new(), notif_scene: true, scene_always: false }
     }
 }
 

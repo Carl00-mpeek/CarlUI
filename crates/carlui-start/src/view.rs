@@ -55,7 +55,7 @@ fn bitmap(p: &P, bmp: &ID2D1Bitmap, r: R, alpha: f32) {
 }
 
 fn app_icon(app: &App, p: &P, path: &str, r: R, alpha: f32) {
-    match app.icons.borrow_mut().get(p.rt, path) {
+    match app.icons.borrow_mut().get(path) {
         Some(b) => bitmap(p, &b, r, alpha),
         None => p.glyph('\u{E71D}', r, r.h * 0.6, TEXT, 0.8 * alpha),
     }

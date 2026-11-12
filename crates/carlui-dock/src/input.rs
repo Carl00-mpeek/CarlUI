@@ -90,6 +90,8 @@ static WIN_USED: AtomicBool = AtomicBool::new(false);
 static AT_EDGE: AtomicBool = AtomicBool::new(false);
 static LAST_EVENT: AtomicU64 = AtomicU64::new(0);
 static WIN_DOWN: AtomicBool = AtomicBool::new(false);
+/// Klavye kancasının gördüğü son tuş olayının zamanı (GetTickCount).
+static LAST_KEY: AtomicU32 = AtomicU32::new(0);
 static SWALLOWED: AtomicBool = AtomicBool::new(false);
 static STALL: AtomicBool = AtomicBool::new(false);
 static INPUT_TID: AtomicU32 = AtomicU32::new(0);
@@ -199,6 +201,7 @@ pub fn set_fullscreen(on: bool) {
 unsafe extern "system" fn keyboard_proc(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     if code >= 0 {
         LAST_EVENT.store(GetTickCount() as u64, Ordering::Relaxed);
+        LAST_KEY.store(GetTickCount(), Ordering::Relaxed);
         let info = &*(lp.0 as *const KBDLLHOOKSTRUCT);
         let injected = info.flags.0 & LLKHF_INJECTED.0 != 0;
         let down = wp.0 as u32 == WM_KEYDOWN || wp.0 as u32 == WM_SYSKEYDOWN;
@@ -428,4 +431,14 @@ impl Drop for Input {
             let _ = PostThreadMessageW(self.tid, WM_QUIT, WPARAM(0), LPARAM(0));
         }
     }
+}
+
+/// Windows'un Başlat'ı az önce öne geldi: bizim menümüzle değiştirilmeli mi?
+/// Yalnızca Win tuşu menümüze bağlıysa, tam ekran (oyun) yokken ve klavye
+/// kancası son `ms` içinde hiçbir tuş görmediyse (kanca kör kaldıysa: yönetici
+/// penceresi öndeyken Windows tuşları ona hiç göstermez). Kanca tuşu gördüyse
+/// Başlat'ı kullanıcı bilerek açmıştır (Ctrl+Esc, Shift+Win …): dokunulmaz.
+pub fn start_redirect_ok(ms: u32) -> bool {
+    let quiet = unsafe { GetTickCount() }.wrapping_sub(LAST_KEY.load(Ordering::Relaxed)) > ms;
+    WANT_START.load(Ordering::Relaxed) == 2 && WANT_KEYS.load(Ordering::Relaxed) && !FULLSCREEN.load(Ordering::Relaxed) && !exclusive_recent() && quiet
 }

@@ -679,8 +679,8 @@ impl App {
                 rt.Resize(&D2D_SIZE_U { width: pw, height: ph })?;
             }
         }
-        // Görünürken kare başına az simge (akıcılık), gizli ısıtmada daha çok.
-        self.icons.borrow_mut().frame(if self.visible { 4 } else { 12 });
+        // Arka plandaki işçinin okuduğu simgeler bu hedefte bitmap olur.
+        self.icons.borrow_mut().frame(&rt.cast()?);
         let s = self.scale;
         let mut hits = std::mem::take(&mut self.hits);
         hits.clear();
@@ -701,16 +701,6 @@ impl App {
         unsafe {
             if rt.EndDraw(None, None).is_err() {
                 self.rt = None;
-            }
-        }
-        // Okunamayan simgeler bir sonraki karede (gizliyken WM_PAINT gelmez).
-        if self.icons.borrow().missed {
-            if self.visible {
-                self.invalidate();
-            } else {
-                unsafe {
-                    let _ = PostMessageW(self.hwnd, WM_APP_WARM, WPARAM(0), LPARAM(0));
-                }
             }
         }
         Ok(())
@@ -768,6 +758,15 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             with_app(|a| {
                 a.refresh_list();
                 a.invalidate();
+            });
+            LRESULT(0)
+        }
+        icons::WM_APP_ICON => {
+            // Bir simge hazır: menü açıksa yeniden çiz (gizliyken bir sonraki açılışta çizilir).
+            with_app(|a| {
+                if a.visible {
+                    a.invalidate();
+                }
             });
             LRESULT(0)
         }
@@ -946,7 +945,7 @@ fn main() -> Result<()> {
             rt: None,
             factory: D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None)?,
             fonts: Fonts::new()?,
-            icons: RefCell::new(icons::Icons::new()?),
+            icons: RefCell::new(icons::Icons::new(hwnd)?),
             scale: GetDpiForWindow(hwnd).max(96) as f32 / 96.0,
             mouse: (-1.0, -1.0),
             hits: Vec::new(),

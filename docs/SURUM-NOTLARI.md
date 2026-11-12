@@ -1,5 +1,19 @@
 # Sürüm notları
 
+## v1.1.6 — Win menüsü ve adada sahne efekti (2026-11-12)
+
+**CarlUI 1.1.6: Win menüsü ve adada sahne efekti.**
+
+**Yeni.** Ayarlar → Ada'da "Adada sahne efekti" (Kapalı / Bildirimde / Her zaman):
+dock'taki sahne adada da görünür; "Her zaman" ile saatin ve medya çubuğunun arkasında da.
+
+**Düzeltmeler.** Adadaki sahne efekti artık belirgin. Yönetici penceresi öndeyken Win
+tuşunun Windows Başlat'ını açması düzeltildi (oyunlarda karışılmaz). Win menüsünün ilk
+kurulumda geç açılması düzeltildi (simgeler arka planda yükleniyor).
+
+**SHA-256 (CarlUI-Setup.exe):**
+`SHA_BURAYA`
+
 ## v1.1.5 — Oyun listesi ve donmuş programı zorla kapatma (2026-11-12)
 
 **CarlUI 1.1.5: oyun listesi ve donmuş programı zorla kapatma.**

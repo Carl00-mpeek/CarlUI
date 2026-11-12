@@ -1,4 +1,5 @@
-//! Bildirim kartının arkasındaki sahne efekti (yağmur, kar, gece, bulut).
+//! Adadaki sahne efekti (yağmur, kar, gece, bulut): bildirim kartının arkasında
+//! ya da ("her zaman" seçiliyse) adanın her hâlinde camın içinde.
 //! Dock'un `live/scene.rs` yaklaşımının aynısı: her parçacık türü için küçük bir
 //! bitmap bir kez çizilir, her parçacık bu bitmap'i paylaşan bir SpriteVisual'dır
 //! ve karede yalnızca konum/boyut/saydamlık değişir. Katman kartın içeriğinin EN
@@ -21,14 +22,15 @@ use sim::{Kind, Rng, Sim, Sprite};
 
 pub const TIMER_FX: usize = 52;
 
-/// Saydamlık tavanı. Dock'tan (%55 / %85) belirgin düşük: kartta yazı var ve
-/// kart küçük; yazı her zaman tam okunmalı. Yoğun camda biraz daha azalır.
+/// Saydamlık tavanı. Dock ile (%55 / %85) aynı düzeyde: eskiden belirgin düşüktü
+/// (%35 / %50, camla birlikte ~%27) ve kartta efekt neredeyse hiç seçilmiyordu.
+/// Parçacıklar yazının arkasında kalır; yoğun camda biraz azalır.
 fn opacity_cap(intensity: LiveIntensity, glass_alpha: u8) -> f32 {
     let base = match intensity {
-        LiveIntensity::Subtle => 0.35,
-        LiveIntensity::Normal => 0.5,
+        LiveIntensity::Subtle => 0.55,
+        LiveIntensity::Normal => 0.85,
     };
-    base * (1.0 - 0.3 * glass_alpha as f32 / 255.0)
+    base * (1.0 - 0.15 * glass_alpha as f32 / 255.0)
 }
 
 /// Ayardaki sahneyi (saat kipi dahil) tür ve cam tonuna çevirir. Akvaryum ve
@@ -56,14 +58,16 @@ pub struct NoteScene {
     scene: LiveScene,
     intensity: LiveIntensity,
     weather: carlui_core::live_weather::LiveWeather,
+    /// Yalnızca bildirimde değil, adanın her hâlinde çizilir.
+    always: bool,
 }
 
-/// Ayarlardan kartın sahnesi: bildirim efekti açıksa dock'un sahnesi ya da
-/// gerçek havası (dock'ta ikisi de yoksa hiçbir şey).
+/// Ayarlardan adanın sahnesi: efekt açıksa dock'un sahnesi ya da gerçek havası
+/// (dock'ta ikisi de yoksa hiçbir şey). `scene_always` ile her görünümde çizilir.
 pub fn scene_from(cfg: &carlui_core::config::Config) -> Option<NoteScene> {
     let live = &cfg.dock.live;
     let any = live.scene != LiveScene::None || live.weather.active() || carlui_core::weather::debug_override().is_some();
-    (cfg.notify.notif_scene && any).then(|| NoteScene { scene: live.scene, intensity: live.intensity, weather: live.weather.clone() })
+    (cfg.notify.notif_scene && any).then(|| NoteScene { scene: live.scene, intensity: live.intensity, weather: live.weather.clone(), always: cfg.notify.scene_always })
 }
 
 pub(super) struct Fx {
@@ -72,18 +76,20 @@ pub(super) struct Fx {
     visuals: Vec<SpriteVisual>,
     sim: Sim,
     last: Vec<(f32, f32, f32)>,
+    tint: (u8, u8, u8),
+    size: (f32, f32),
 }
 
 impl Fx {
     fn new(gfx: &Gfx, parent: &ContainerVisual, kind: Kind, tint: (u8, u8, u8), size: (f32, f32), s: f32, intensity: LiveIntensity, theme: &Theme, light: bool) -> Result<Self> {
         let comp = &gfx.comp;
         let root = comp.CreateContainerVisual()?;
-        root.SetRelativeSizeAdjustment(v2(1.0, 1.0))?;
+        root.SetSize(v2(size.0, size.1))?;
         root.SetOpacity(opacity_cap(intensity, theme.glass_tint.3))?;
         // Cam tonu (pus).
         let tint_v = comp.CreateSpriteVisual()?;
         tint_v.SetRelativeSizeAdjustment(v2(1.0, 1.0))?;
-        tint_v.SetBrush(&comp.CreateColorBrushWithColor(carlui_ui::glass::exact(Rgba(tint.0, tint.1, tint.2, if light { 30 } else { 44 })))?)?;
+        tint_v.SetBrush(&comp.CreateColorBrushWithColor(carlui_ui::glass::exact(Rgba(tint.0, tint.1, tint.2, if light { 36 } else { 56 })))?)?;
         root.Children()?.InsertAtTop(&tint_v)?;
 
         let sim = Sim::new(kind, size.0, size.1, s, intensity == LiveIntensity::Normal, Rng::from_time());
@@ -109,7 +115,7 @@ impl Fx {
         }
         parent.Children()?.InsertAtBottom(&root)?;
         let last = vec![(f32::NAN, f32::NAN, f32::NAN); visuals.len()];
-        let mut fx = Self { parent: parent.clone(), root, visuals, sim, last };
+        let mut fx = Self { parent: parent.clone(), root, visuals, sim, last, tint, size };
         fx.render()?;
         Ok(fx)
     }
@@ -159,28 +165,88 @@ pub(super) struct FxState {
 }
 
 impl Island {
-    /// Bildirim kartında çizilecek sahne (`None`: efekt yok). Bir sonraki bildirim
-    /// kurulumunda geçerli olur.
+    /// Adada çizilecek sahne (`None`: efekt yok). Bildirim kipinde bir sonraki
+    /// bildirimde, "her zaman" kipinde bir sonraki görünüm kurulumunda geçerli olur.
     pub fn set_note_scene(&mut self, scene: Option<NoteScene>) {
+        let changed = format!("{scene:?}") != format!("{:?}", self.fx.scene);
         self.fx.scene = scene;
+        if changed {
+            self.fx_stop();
+            self.fx.fx = None;
+        }
     }
 
-    /// Bildirim kartının içeriğine (`c`, `w`×`h` px) sahneyi en alta ekler.
-    /// Sahne kurulamazsa bildirim yine de gösterilir.
-    pub(super) fn fx_attach(&mut self, gfx: &Gfx, c: &ContainerVisual, w: f32, h: f32) {
-        self.fx.fx = None;
-        let Some(ns) = self.fx.scene.as_ref() else { return };
-        let intensity = ns.intensity;
+    fn fx_always(&self) -> bool {
+        self.fx.scene.as_ref().is_some_and(|s| s.always)
+    }
+
+    /// Bu görünümde efekt çalışır mı?
+    fn fx_live_view(&self) -> bool {
+        if self.fx_always() {
+            // Ses göstergesi tam ekran oyunda da çıkar: orada efekt çalışmasın.
+            !matches!(self.view, View::Hidden | View::Osd)
+        } else {
+            self.view == View::Note
+        }
+    }
+
+    /// Ayardaki sahneyi (gerçek hava ya da elle seçilen) tür ve tona çevirir.
+    fn fx_pick(&self) -> Option<(Kind, (u8, u8, u8), LiveIntensity)> {
+        let ns = self.fx.scene.as_ref()?;
         let hour = unsafe { GetLocalTime() }.wHour as u32;
         // Gerçek hava (dosyadan) varsa o; yoksa dock'ta elle seçilen sahne.
         let picked = match carlui_core::weather::state::effective(&ns.weather) {
             Some(wx) => weather::resolve(wx, ns.weather.day_night),
             None => resolve(ns.scene, hour),
         };
-        let Some((kind, tint)) = picked else { return };
-        match Fx::new(gfx, c, kind, tint, (w, h), self.s, intensity, &self.theme, carlui_ui::tone::light()) {
+        picked.map(|(k, t)| (k, t, ns.intensity))
+    }
+
+    fn fx_make(&mut self, gfx: &Gfx, parent: &ContainerVisual, w: f32, h: f32) -> Option<()> {
+        let (kind, tint, intensity) = self.fx_pick()?;
+        match Fx::new(gfx, parent, kind, tint, (w, h), self.s, intensity, &self.theme, carlui_ui::tone::light()) {
             Ok(fx) => self.fx.fx = Some(fx),
-            Err(e) => carlui_core::warn!("bildirim sahnesi kurulamadı: {e}"),
+            Err(e) => carlui_core::warn!("ada sahnesi kurulamadı: {e}"),
+        }
+        Some(())
+    }
+
+    /// Bildirim kipi: kartın içeriğine (`c`, `w`×`h` px) sahneyi en alta ekler.
+    /// Sahne kurulamazsa bildirim yine de gösterilir. "Her zaman" kipinde
+    /// sahne camın içinde durur (`fx_sync`), burada bir şey yapılmaz.
+    pub(super) fn fx_attach(&mut self, gfx: &Gfx, c: &ContainerVisual, w: f32, h: f32) {
+        if self.fx_always() {
+            return;
+        }
+        self.fx.fx = None;
+        self.fx_make(gfx, c, w, h);
+    }
+
+    /// "Her zaman" kipi: görünüm kurulunca camın içindeki sahneyi yeni boyuta
+    /// uydurur. Boyut ve tür aynıysa sahne yerinde kalır (parçacıklar sıfırlanmaz).
+    pub(super) fn fx_sync(&mut self, gfx: &Gfx, w: f32, h: f32) {
+        if !self.fx_always() {
+            return;
+        }
+        if !self.fx_live_view() {
+            self.fx.fx = None;
+            return;
+        }
+        let want = self.fx_pick().map(|(k, t, _)| (k, t));
+        let same = match (&self.fx.fx, want) {
+            (Some(fx), Some((k, t))) => fx.kind() == k && fx.tint == t && fx.size == (w, h),
+            (None, None) => true,
+            _ => false,
+        };
+        if same {
+            return;
+        }
+        self.fx.fx = None;
+        let parent = self.glass.content.clone();
+        if self.fx_make(gfx, &parent, w, h).is_some() {
+            if let Some(fx) = &self.fx.fx {
+                let _ = self.follow_content(&fx.root, w);
+            }
         }
     }
 
@@ -192,10 +258,10 @@ impl Island {
         self.fx.last = None;
     }
 
-    /// Bildirim görünümü kurulduysa ve hareket azaltılmamışsa kareleri başlatır.
+    /// Efektli görünüm kurulduysa ve hareket azaltılmamışsa kareleri başlatır.
     pub(super) fn fx_begin(&mut self) {
         let Some(fx) = &self.fx.fx else { return };
-        if self.view != View::Note || carlui_core::theme::reduced_motion() {
+        if !self.fx_live_view() || carlui_core::theme::reduced_motion() {
             return;
         }
         self.fx.last = Some(Instant::now());
@@ -204,9 +270,9 @@ impl Island {
         }
     }
 
-    /// Bildirim görünümü bittiyse sahneyi bırakır (animasyon sönmesi tamamlandı).
+    /// Efektli görünüm bittiyse sahneyi bırakır (animasyon sönmesi tamamlandı).
     pub(super) fn fx_release(&mut self) {
-        if self.view != View::Note {
+        if !self.fx_live_view() {
             self.fx_stop();
             self.fx.fx = None;
         }
@@ -214,7 +280,7 @@ impl Island {
 
     /// `TIMER_FX`: bir kare ilerlet.
     pub fn fx_tick(&mut self) {
-        if self.view != View::Note || self.fx.fx.is_none() {
+        if !self.fx_live_view() || self.fx.fx.is_none() {
             self.fx_stop();
             return;
         }
@@ -236,8 +302,8 @@ mod tests {
     #[test]
     fn tavan_dock_tavanindan_dusuk_ve_okunur() {
         for a in [0u8, 110, 255] {
-            assert!(opacity_cap(LiveIntensity::Subtle, a) <= 0.35);
-            assert!(opacity_cap(LiveIntensity::Normal, a) <= 0.5);
+            assert!(opacity_cap(LiveIntensity::Subtle, a) <= 0.55);
+            assert!(opacity_cap(LiveIntensity::Normal, a) <= 0.85);
         }
         assert!(opacity_cap(LiveIntensity::Normal, 230) < opacity_cap(LiveIntensity::Normal, 110));
     }

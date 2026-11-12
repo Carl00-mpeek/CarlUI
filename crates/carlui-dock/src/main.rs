@@ -24,6 +24,7 @@ mod procs;
 mod radial;
 mod resolver;
 mod sandbox;
+mod start_guard;
 mod screens;
 mod tracker;
 
@@ -1209,6 +1210,10 @@ fn main() -> Result<()> {
         tracker.set_monitor(screens::filter(cfg.dock.other_screens));
         let dock = Dock::new(&gfx, hwnd, &target, &cfg, &tracker, screens::rect())?;
         let popup = Popup::new(&gfx, popup_hwnd, &dock.theme, dock.scale())?;
+        // Yönetici penceresinin üstünde kancanın göremediği Win basışları için.
+        if child.is_none() && !sandboxed {
+            start_guard::start();
+        }
         let radial = if child.is_none() && !sandboxed { radial::Radial::new(&gfx, &dock.theme).map_err(|e| carlui_core::warn!("çark dock kurulamadı: {e}")).ok() } else { None };
 
         let inbox: Arc<Mutex<VecDeque<Event>>> = Arc::default();
