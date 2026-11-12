@@ -314,6 +314,18 @@ impl Dock {
         }
     }
 
+    /// Win menüsü açıldı: dock nerede olursa olsun görünsün. Zaten "açık"
+    /// sayılıyorsa da bölgesini ve en üstteliğini tazeler (yeniden kuruluş ya da
+    /// başka bir en üst pencere onu gizlemiş olabilir).
+    pub fn show_now(&mut self) {
+        if self.slid_away {
+            self.slide(false);
+        } else {
+            self.set_region(self.width);
+        }
+        self.reassert();
+    }
+
     /// Animasyonsuz gizli konuma al (tam ekrandan dönüşte pencere dock'u örtüyorsa
     /// açılış animasyonu görünmeden gizli kalsın).
     pub fn park(&mut self) {

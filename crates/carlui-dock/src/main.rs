@@ -64,6 +64,10 @@ const TIMER_PREVIEW: usize = 31;
 const TIMER_GRACE: usize = 32;
 /// Meşgulken kaçan pencere listesi yenilemesinin yeniden denemesi.
 const TIMER_REFRESH: usize = 33;
+/// Çözünürlük/ölçek değişiminden sonra dock'u yeniden kurmadan önce beklenir:
+/// oyun açılıp kapanırken art arda gelen ekran değişimleri tek kuruluşa iner.
+const TIMER_DISPLAY: usize = 35;
+const DISPLAY_SETTLE_MS: u32 = 600;
 
 struct App {
     gfx: Gfx,
@@ -86,6 +90,8 @@ struct App {
     tray_open: bool,
     /// Win menüsü açık: dock görünür ve yerinde kalır.
     start_open: bool,
+    /// Ekran değişti, dock henüz yeniden kurulmadı (tam ekran bitince kurulur).
+    display_dirty: bool,
     /// Canlı dock (kapalıyken `None`: hiçbir kaynak yok).
     live: Option<live::Live>,
 }
@@ -590,8 +596,13 @@ impl App {
                     // Tam ekrandan büyütülmüş pencereye dönüş: dock bir an belirip kaybolmasın.
                     self.dock.park();
                 }
-                self.dock.set_suppressed(active);
+                self.dock.set_suppressed(active && !self.start_open);
                 if !active {
+                    if self.display_dirty {
+                        unsafe {
+                            SetTimer(self.hwnd, TIMER_DISPLAY, DISPLAY_SETTLE_MS, None);
+                        }
+                    }
                     self.intellihide_check();
                 }
             }
@@ -696,6 +707,23 @@ impl App {
             }
             Err(e) => carlui_core::error!("dock yeniden kurulamadı: {e}"),
         }
+    }
+
+    /// Ekran değişimi duruldu: dock'u aynı ayarlarla yeniden kur (tam ekran
+    /// sürüyorsa bitene kadar bekle).
+    fn display_settled(&mut self) {
+        if !self.display_dirty || self.fullscreen {
+            return;
+        }
+        self.display_dirty = false;
+        // Monitör takıldıysa onun dock'u da gelsin (çalışanlar kendiliğinden çıkar).
+        screens::spawn(self.dock.cfg.dock.other_screens);
+        let mut cfg = self.dock.cfg.clone();
+        cfg.dock.icon_size += 0.0001; // eşitlik kontrolünü atlat
+        self.apply_config(cfg);
+        let mut c = self.dock.cfg.clone();
+        c.dock.icon_size = config::load().dock.icon_size;
+        self.dock.cfg = c;
     }
 
     /// Canlı dock'u ayara göre (yeniden) kurar; kapalıysa tüm kaynaklarını bırakır.
@@ -882,6 +910,10 @@ fn dock_proc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
                         let _ = KillTimer(hwnd, id);
                         a.refresh_windows();
                     }
+                    TIMER_DISPLAY => {
+                        let _ = KillTimer(hwnd, id);
+                        a.display_settled();
+                    }
                     TIMER_GRACE => {
                         let _ = KillTimer(hwnd, id);
                         let over_popup = a.popup.mouse_inside && a.popup.mode == Mode::Preview;
@@ -898,8 +930,12 @@ fn dock_proc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
                     a.start_open = wp.0 != 0;
                     info!("Win menüsü {}", if a.start_open { "açık: dock tutuluyor" } else { "kapandı" });
                     if a.start_open {
-                        a.dock.slide(false);
+                        // Tam ekran (çerçevesiz oyun/video) yüzünden kapalıysa da menüyle
+                        // birlikte gelsin; özel tam ekranda menü zaten açılmaz.
+                        a.dock.set_suppressed(false);
+                        a.dock.show_now();
                     } else {
+                        a.dock.set_suppressed(a.fullscreen);
                         a.arm_autohide(900);
                     }
                 });
@@ -963,16 +999,10 @@ fn dock_proc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
             }
             WM_DISPLAYCHANGE | WM_DPICHANGED => {
                 // Çözünürlük/ölçek değişince dock aynı ayarlarla yeniden kurulsun.
-                with_app(|a| {
-                    // Monitör takıldıysa onun dock'u da gelsin (çalışanlar kendiliğinden çıkar).
-                    screens::spawn(a.dock.cfg.dock.other_screens);
-                    let mut cfg = a.dock.cfg.clone();
-                    cfg.dock.icon_size += 0.0001; // eşitlik kontrolünü atlat
-                    a.apply_config(cfg);
-                    let mut c = a.dock.cfg.clone();
-                    c.dock.icon_size = config::load().dock.icon_size;
-                    a.dock.cfg = c;
-                });
+                // Hemen değil, ekran durulunca: özel tam ekran oyun açılıp kapanırken
+                // çözünürlük birkaç kez değişir; oyun sürerken dock hiç kurulmaz.
+                with_app(|a| a.display_dirty = true);
+                SetTimer(hwnd, TIMER_DISPLAY, DISPLAY_SETTLE_MS, None);
                 LRESULT(0)
             }
             WM_DESTROY => {
@@ -1184,6 +1214,7 @@ fn main() -> Result<()> {
                 sync_pending: false,
                 tray_open: false,
                 start_open: false,
+                display_dirty: false,
                 live: None,
             })
         });

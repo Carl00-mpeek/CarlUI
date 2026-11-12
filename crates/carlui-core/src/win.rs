@@ -396,16 +396,27 @@ pub fn window_like_game(hwnd: HWND) -> bool {
         if is_media_window(hwnd) {
             return false;
         }
-        if GetWindowLongW(hwnd, GWL_STYLE) as u32 & WS_CAPTION.0 == WS_CAPTION.0 {
-            return false;
-        }
         let mut r = RECT::default();
         let _ = GetWindowRect(hwnd, &mut r);
         let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
         let _ = GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mut mi);
-        let m = mi.rcMonitor;
-        r.left <= m.left && r.top <= m.top && r.right >= m.right && r.bottom >= m.bottom
+        let covers = |m: RECT| r.left <= m.left && r.top <= m.top && r.right >= m.right && r.bottom >= m.bottom;
+        // Oyun motoru penceresi (Minecraft'ın GLFW'si, Unity, Unreal, SDL …) büyütülmüş
+        // ya da ekranı kaplıyorsa başlık çubuğu olsa da oyundur: "kenarlıksız pencere"
+        // modu bazı oyunlarda başlık stilini korur.
+        if is_engine_class(&class) && (IsZoomed(hwnd).as_bool() || covers(mi.rcWork)) {
+            return true;
+        }
+        if GetWindowLongW(hwnd, GWL_STYLE) as u32 & WS_CAPTION.0 == WS_CAPTION.0 {
+            return false;
+        }
+        covers(mi.rcMonitor)
     }
+}
+
+/// Oyun motorlarının pencere sınıfları (yalnızca oyunlar kullanır).
+pub fn is_engine_class(class: &str) -> bool {
+    matches!(class, "GLFW30" | "LWJGL" | "SDL_app" | "UnityWndClass" | "UnrealWindow" | "Valve001" | "CryENGINE" | "LaunchUnrealUWindowsClient")
 }
 
 /// Kilitli bir pano belleğindeki (`GlobalLock`) UTF-16 metnin uzunluğu: ilk

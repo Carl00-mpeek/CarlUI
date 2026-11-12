@@ -1050,7 +1050,11 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
                     }
                     TIMER_HOME => {
                         let _ = KillTimer(hwnd, TIMER_HOME);
-                        if a.osd.is_none() {
+                        // Özel tam ekran oyun sürüyorsa yerine (oyunun monitörüne) dönme:
+                        // en üstte bir pencerenin oyunun ekranına girmesi oyunu masaüstüne
+                        // düşürür (şarkı değişince oyundan atılma). Oyun bitince
+                        // `Event::Fullscreen` adayı yerine götürür.
+                        if a.osd.is_none() && !a.exclusive {
                             a.restore_monitor();
                         }
                     }

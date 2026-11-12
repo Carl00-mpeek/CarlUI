@@ -208,6 +208,14 @@ unsafe extern "system" fn keyboard_proc(code: i32, wp: WPARAM, lp: LPARAM) -> LR
         // Yalnızca kendi maskeleme tuşumuzu ve kendi gönderdiğimiz Win'i yok say;
         // AutoHotkey/uzak masaüstü gibi araçların gönderdiği Win+N de çalışsın.
         if !(injected && (vk == MASK_KEY as u32 || is_win)) {
+            // Win bırakması kaçtıysa (kanca yeniden kurulurken, yönetici penceresi
+            // öndeyken) WIN_DOWN takılı kalır; arada yazılan her tuş Win'i "kullanılmış"
+            // sayar ve sonraki Win basışı menüyü açmaz. GetAsyncKeyState bu olaydan
+            // önceki gerçek durumu verir: Win aslında basılı değilse bayrağı düzelt.
+            let win_held = || [VK_LWIN, VK_RWIN].iter().any(|k| GetAsyncKeyState(k.0 as i32) as u16 & 0x8000 != 0);
+            if WIN_DOWN.load(Ordering::Relaxed) && down && !win_held() {
+                WIN_DOWN.store(false, Ordering::Relaxed);
+            }
             if is_win {
                 if down && !WIN_DOWN.load(Ordering::Relaxed) {
                     WIN_USED.store(false, Ordering::Relaxed);
