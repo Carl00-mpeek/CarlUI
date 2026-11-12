@@ -1,27 +1,19 @@
 ## Türkçe
 
-**CarlUI 1.1.0: Güncelleme sayfası ve yenilenen ilk kurulum turu.**
+**CarlUI 1.1.1: kurucu kapanış düzeltmesi.**
 
-**Yeni: Güncelleme sayfası**
-- Ayarlar'a yeni bir "Güncelleme" sayfası eklendi: CarlUI yazısı, sürüm numarası ve durum bir arada görünür. Altındaki "Güncellemeleri denetle" düğmesiyle yeni sürüm olup olmadığına bakabilirsin.
-- Güncelse "Yazılımınız güncel" yazar. Yeni sürüm varsa "Güncelle" düğmesi ve kısa bir "Yenilikler" kartı çıkar.
-- "Yeni sürümleri bildir" seçeneği Genel'den bu sayfaya taşındı.
-
-**Yeni: Genişletilmiş ilk kurulum turu**
-- İlk açılışta tur artık daha kapsamlı: karşılama, görünüm ve vurgu rengi, dock hayvanı ve sahnesi, dock, ada, modüller ve "Neler yapabilirsin" özeti.
-- Her adım atlanabilir. Turu istediğin zaman Ayarlar → Genel'den yeniden açabilirsin.
+**Düzeltmeler**
+- Kurulum bittikten sonra `CarlUI-Setup.exe` açık kalıp silinemeyebiliyordu; kurucu artık düzgün kapanıyor.
+- Kurucunun başlattığı CarlUI artık kurucunun bulunduğu klasörü (ör. İndirilenler) kilitli tutmuyor.
+- Kaldırma sırasında geçici kopya kurulum klasörünü kilitleyebiliyordu; düzeltildi.
 
 ---
 
 ## English
 
-**CarlUI 1.1.0: an Update page and a revamped first-run tour.**
+**CarlUI 1.1.1: installer exit fix.**
 
-**New: Update page**
-- Settings has a new "Update" page: the CarlUI wordmark, the version number and the status together. The "Check for updates" (Güncellemeleri denetle) button at the bottom looks for a new version.
-- When you are current it says "Your software is up to date". When a new version exists, an "Update" button and a short "What's new" card appear.
-- The "Notify me about new versions" option moved from General to this page.
-
-**New: Extended first-run tour**
-- The first-run tour is now more complete: welcome, look and accent colour, dock pet and scene, dock, island, modules and a "What you can do" summary.
-- Every step can be skipped. You can reopen the tour any time from Settings → General.
+**Fixes**
+- After installation `CarlUI-Setup.exe` could stay open and could not be deleted; the installer now exits cleanly.
+- CarlUI started by the installer no longer keeps the installer's folder (e.g. Downloads) locked.
+- During uninstall the temporary copy could lock the install folder; fixed.

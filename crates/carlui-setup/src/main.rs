@@ -573,7 +573,8 @@ fn relaunch_from_temp(dir: &PathBuf) -> bool {
     if std::fs::copy(&me, &tmp).is_err() {
         return false;
     }
-    std::process::Command::new(&tmp).arg("--uninstall").arg("--temp").arg("--dir").arg(dir).spawn().is_ok()
+    // Çalışma klasörü %TEMP%: kurulum klasöründen devralınırsa kopya onu kilitler, silinemez.
+    std::process::Command::new(&tmp).arg("--uninstall").arg("--temp").arg("--dir").arg(dir).current_dir(std::env::temp_dir()).spawn().is_ok()
 }
 
 fn main() -> Result<()> {
@@ -688,6 +689,14 @@ fn main() -> Result<()> {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
+        // Pencere kaynakları (Direct2D, DirectWrite, WIC) burada, COM ve iş
+        // parçacıkları hâlâ ayaktayken bırakılır. thread_local'da kalırlarsa
+        // süreç kapanırken DLL ayrılma kilidi altında bırakılıyor: süreç
+        // anormal kodla (2170) çıkıyor ya da takılıp kurucu exe'sini kilitli
+        // tutuyordu (kullanıcı CarlUI-Setup.exe'yi silemiyordu).
+        let app = APP.with(|a| a.borrow_mut().take());
+        drop(app);
+        CoUninitialize();
     }
     Ok(())
 }

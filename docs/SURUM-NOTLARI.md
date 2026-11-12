@@ -1,5 +1,14 @@
 # Sürüm notları
 
+## v1.1.1 — Kurucu kapanış düzeltmesi (2026-11-12)
+
+**CarlUI 1.1.1: kurucu kapanış düzeltmesi.**
+
+**Düzeltmeler.** Kurulum bittikten sonra `CarlUI-Setup.exe` açık kalıp
+silinemeyebiliyordu; kurucu artık düzgün kapanıyor. Kurucunun başlattığı CarlUI artık
+kurucunun bulunduğu klasörü (ör. İndirilenler) kilitli tutmuyor. Kaldırma sırasında
+geçici kopya kurulum klasörünü kilitleyebiliyordu; düzeltildi.
+
 ## v1.1.0 — Güncelleme sayfası, genişletilmiş ilk kurulum turu (2026-11-12)
 
 **CarlUI 1.1.0: Güncelleme sayfası ve yenilenen ilk kurulum turu.**

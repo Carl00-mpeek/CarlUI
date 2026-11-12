@@ -283,9 +283,30 @@ pub fn run_elevated(owner: HWND, exe: &Path, args: &str) -> Elevated {
     }
 }
 
+/// Açılan programın çalışma klasörü: hedef bir dosyaysa onun klasörü.
+/// Boş bırakılırsa çocuk kurucunun klasörünü (ör. İndirilenler) devralır ve
+/// CarlUI açık kaldıkça o klasörü kilitli tutar.
+pub fn work_dir(target: &Path) -> Option<PathBuf> {
+    target.is_file().then(|| target.parent().map(Path::to_path_buf)).flatten()
+}
+
 pub fn open(target: &str, args: &str) {
+    let file = HSTRING::from(target);
+    let params = HSTRING::from(args);
+    let dir = work_dir(Path::new(target)).map(|d| HSTRING::from(d.as_os_str()));
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        // Kurulum iş parçacığı hemen bitebilir; açma işi arka planda yarım kalmasın.
+        fMask: SEE_MASK_NOASYNC,
+        lpVerb: w!("open"),
+        lpFile: PCWSTR(file.as_ptr()),
+        lpParameters: PCWSTR(params.as_ptr()),
+        lpDirectory: dir.as_ref().map_or(PCWSTR::null(), |d| PCWSTR(d.as_ptr())),
+        nShow: SW_SHOWNORMAL.0,
+        ..Default::default()
+    };
     unsafe {
-        ShellExecuteW(None, w!("open"), &HSTRING::from(target), &HSTRING::from(args), PCWSTR::null(), SW_SHOWNORMAL);
+        let _ = ShellExecuteExW(&mut info);
     }
 }
 
@@ -341,5 +362,23 @@ pub fn sweep_temp_copies() {
         if name.starts_with("carlui-uninstall-") && name.ends_with(".exe") && me.as_deref() != Some(e.path().as_path()) {
             let _ = std::fs::remove_file(e.path());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn work_dir_is_target_folder() {
+        let dir = std::env::temp_dir().join(format!("carlui-workdir-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("carlui.exe");
+        std::fs::write(&exe, b"x").unwrap();
+        assert_eq!(work_dir(&exe), Some(dir.clone()));
+        // Klasör ya da olmayan hedef (adres, kayıtlı program adı): Windows'a bırakılır.
+        assert_eq!(work_dir(&dir), None);
+        assert_eq!(work_dir(Path::new("about:debugging")), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
