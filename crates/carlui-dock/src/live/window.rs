@@ -113,6 +113,16 @@ impl PerchWindow {
         }
     }
 
+    /// Pencerenin ekrandaki sol üst köşesi.
+    pub fn origin(&self) -> (i32, i32) {
+        (self.left, self.edge - self.rise)
+    }
+
+    /// Yerleştirildiği pill üst kenarı.
+    pub fn edge(&self) -> i32 {
+        self.edge
+    }
+
     /// Ekran x'inin pencere içi karşılığı.
     pub fn local_x(&self, screen_x: i32) -> f32 {
         (screen_x - self.left) as f32

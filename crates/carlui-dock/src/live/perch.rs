@@ -7,6 +7,7 @@ use super::{
     gpu,
     load::Decoded,
     pack::{self, Anim, Facing, Filter, ANIMS, N_ANIMS},
+    perch_react::{self, Reactions},
     pet::{self, Pet},
     rng::Rng,
     window::PerchWindow,
@@ -32,12 +33,17 @@ pub struct Perch {
     k: f32,
     fw: f32,
     facing: Facing,
-    last: Option<(Anim, u32, bool, i32)>,
+    /// Son çizilen (durum, kare, ayna, x, dans salınımı).
+    last: Option<(Anim, u32, bool, i32, (i32, i32))>,
+    /// Hayvanın üstünde parçacıklar için bırakılan pay (piksel; tepkiler kapalıyken 0).
+    head: f32,
+    /// Tepkiler (ayar kapalıysa `None`).
+    pub react: Option<Reactions>,
 }
 
 impl Perch {
     /// Yalnızca altta duran ana dock'ta çağrılır.
-    pub fn new(gfx: &Gfx, view: &LiveView, d: Decoded) -> Result<Self> {
+    pub fn new(gfx: &Gfx, view: &LiveView, d: Decoded, reactions: bool) -> Result<Self> {
         let m = &d.manifest;
         let k = pack::display_scale(m, view.scale);
         let (fw, fh) = (m.fw as f32 * k, m.fh as f32 * k);
@@ -63,16 +69,31 @@ impl Perch {
             pet::Strip { frames: frames[a as usize].len().max(1) as u32, fps: spec.rate(), own: m.states[a as usize].is_some(), reverse_out: spec.reverse_out }
         });
 
-        let rise = (m.baseline as f32 * k).round() as i32;
-        let win = PerchWindow::new(gfx, view, rise, fh.ceil() as i32)?;
+        // Tepkiler açıkken pencere yukarı doğru uzar (kalpler/notalar başın üstüne çıkar);
+        // pencere tıklama geçirdiği için bunun bir maliyeti yok.
+        let head = if reactions { (perch_react::HEAD_PX * k).round() } else { 0.0 };
+        let rise = (m.baseline as f32 * k).round() as i32 + head as i32;
+        let win = PerchWindow::new(gfx, view, rise, fh.ceil() as i32 + head as i32)?;
         let sprite = gfx.comp.CreateSpriteVisual()?;
         sprite.SetSize(v2(fw, fh))?;
-        sprite.SetCenterPoint(v3(fw / 2.0, 0.0))?;
+        // Ayna yatayda ortadan; dansta yana yatış ayaklardan.
+        sprite.SetCenterPoint(v3(fw / 2.0, fh))?;
         win.root.Children()?.InsertAtTop(&sprite)?;
+        let react = if reactions {
+            match Reactions::new(gfx, &win.root, view.hwnd, k, perch_react::boxes(&d)) {
+                Ok(r) => Some(r),
+                Err(e) => {
+                    carlui_core::warn!("canlı dock: hayvan tepkileri kurulamadı: {e}");
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
         let x = ((view.pill.left + view.pill.right) / 2 - win.left) as f32;
         let pet = Pet::new(strips, m.walk_speed * k, x, Rng::from_time());
-        let mut p = Self { win, sprite, frames, pet, k, fw, facing: m.facing, last: None };
+        let mut p = Self { win, sprite, frames, pet, k, fw, facing: m.facing, last: None, head, react };
         p.render()?;
         Ok(p)
     }
@@ -99,19 +120,54 @@ impl Perch {
         self.win.show(on);
     }
 
+    /// Çalışıyor mu (tıklama alanı yalnızca çalışırken durur). Kapanırken
+    /// alan hemen gizlenir; açılırken sonraki çizimde yerine konur.
+    pub fn set_live(&mut self, on: bool) {
+        if let Some(r) = self.react.as_mut() {
+            r.set_live(on);
+        }
+        self.last = None;
+        self.pet.dirty = true;
+    }
+
+    /// `dt` saniye ilerletir ve gerekirse çizer. Dönüş: sonraki tike kadar ms.
+    pub fn step(&mut self, dt: f32, pill: RECT, s: f32) -> f32 {
+        self.follow(pill);
+        let (lo, hi) = self.range(pill, s);
+        self.pet.update(dt * 1000.0, lo, hi);
+        let (cap, fx) = match self.react.as_mut() {
+            Some(r) => r.step(&mut self.pet, dt),
+            None => (None, false),
+        };
+        if self.pet.take_dirty() || fx {
+            let _ = self.render();
+        }
+        let ms = self.pet.next_ms();
+        cap.map_or(ms, |c| ms.min(c.max(1.0)))
+    }
+
     /// Dock'un üst kenarı kaydıysa tüneği taşır.
     pub fn follow(&mut self, pill: RECT) {
+        if pill.top != self.win.edge() {
+            // Tünek kaydı: tıklama alanı da yeniden yerleşsin.
+            self.last = None;
+            self.pet.dirty = true;
+        }
         self.win.follow(pill);
     }
 
     /// Hayvanın şimdiki karesini ve konumunu görsele aktarır; değişmediyse dokunmaz.
     pub fn render(&mut self) -> Result<()> {
         let anim = self.pet.anim();
+        if self.react.is_some() {
+            self.render_fx(anim);
+        }
         let list = &self.frames[anim as usize];
         let frame = self.pet.frame.min(list.len().saturating_sub(1) as u32);
         let mirror = (self.facing == Facing::Right) != self.pet.right;
         let x = (self.pet.x - self.fw / 2.0).round() as i32;
-        let now = (anim, frame, mirror, x);
+        let sway = self.pet.sway_now();
+        let now = (anim, frame, mirror, x, sway);
         if self.last == Some(now) {
             return Ok(());
         }
@@ -123,9 +179,27 @@ impl Perch {
         if self.last.map(|l| l.2) != Some(mirror) {
             self.sprite.SetScale(Vector3 { X: if mirror { -1.0 } else { 1.0 }, Y: 1.0, Z: 1.0 })?;
         }
-        self.sprite.SetOffset(v3(x as f32, 0.0))?;
+        if self.last.map(|l| l.4.1) != Some(sway.1) {
+            self.sprite.SetRotationAngleInDegrees(sway.1 as f32)?;
+        }
+        let y = self.head - sway.0 as f32 * self.k;
+        self.sprite.SetOffset(v3(x as f32, y))?;
         self.last = Some(now);
+        if let Some(r) = self.react.as_mut() {
+            let k = self.k;
+            let fw_art = (self.fw / k).round() as u32;
+            r.place_hit(anim, self.win.origin(), (x, y as i32), k, fw_art, mirror, self.win.edge());
+        }
         Ok(())
+    }
+
+    /// Parçacıkları hayvanın başının üstünde çizer.
+    fn render_fx(&mut self, anim: Anim) {
+        let (k, head, x) = (self.k, self.head, self.pet.x);
+        if let Some(r) = self.react.as_mut() {
+            let top = head + r.head_top(anim) * k;
+            r.draw_fx((x, top));
+        }
     }
 
     pub fn scale(&self) -> f32 {

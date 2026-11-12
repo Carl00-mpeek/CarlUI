@@ -47,11 +47,14 @@ pub struct LiveConfig {
     pub pause_on_battery: bool,
     /// Sahne gerçek havayı izlesin (Open-Meteo); kapalıyken hiç istek yapılmaz.
     pub weather: crate::live_weather::LiveWeather,
+    /// Hayvan bilgisayardaki olaylara tepki versin (müzik, bildirim, boşta
+    /// kalma, okşama). Eski dosyalarda alan yoksa açık gelir (`serde(default)`).
+    pub reactions: bool,
 }
 
 impl Default for LiveConfig {
     fn default() -> Self {
-        Self { pet: String::new(), scene: LiveScene::None, intensity: LiveIntensity::Subtle, pause_on_battery: true, weather: Default::default() }
+        Self { pet: String::new(), scene: LiveScene::None, intensity: LiveIntensity::Subtle, pause_on_battery: true, weather: Default::default(), reactions: true }
     }
 }
 
@@ -189,6 +192,7 @@ mod tests {
         assert_eq!(c.dock.icon_size, 40.0);
         assert!(c.dock.live.is_off());
         assert!(c.dock.live.pause_on_battery);
+        assert!(c.dock.live.reactions, "tepkiler varsayılan açık");
         assert_eq!(c.dock.live, LiveConfig::default());
     }
 
@@ -203,7 +207,7 @@ mod tests {
     #[test]
     fn gidip_gelir() {
         let mut c = Config::default();
-        c.dock.live = LiveConfig { pet: "dolphin".into(), scene: LiveScene::Aquarium, intensity: LiveIntensity::Normal, pause_on_battery: false, weather: crate::live_weather::LiveWeather { enabled: true, place: "Ankara".into(), lat: 39.93, lon: 32.86, day_night: true } };
+        c.dock.live = LiveConfig { pet: "dolphin".into(), scene: LiveScene::Aquarium, intensity: LiveIntensity::Normal, pause_on_battery: false, weather: crate::live_weather::LiveWeather { enabled: true, place: "Ankara".into(), lat: 39.93, lon: 32.86, day_night: true }, reactions: false };
         let s = toml::to_string(&c).unwrap();
         let back: Config = toml::from_str(&s).unwrap();
         assert_eq!(back.dock.live, c.dock.live);

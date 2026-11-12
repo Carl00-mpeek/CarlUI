@@ -228,12 +228,13 @@ impl App {
             Act::Backup(export) => {
                 let r = if export { pages::backup::export(&self.cfg) } else { pages::backup::import(&mut self.cfg) };
                 match r {
-                    Ok(false) => {}
-                    Ok(true) if !export => {
-                        self.notice = Some(t!("Ayarlar içe aktarıldı.", "Settings imported.").into());
-                        self.save();
+                    Ok(None) => {}
+                    Ok(Some(msg)) => {
+                        if !export {
+                            self.save();
+                        }
+                        self.notice = Some(msg);
                     }
-                    Ok(true) => self.notice = Some(t!("Ayarlar dışa aktarıldı.", "Settings exported.").into()),
                     Err(e) => self.notice = Some(e),
                 }
             }

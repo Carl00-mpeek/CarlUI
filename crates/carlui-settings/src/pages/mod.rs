@@ -3,6 +3,7 @@
 
 pub mod ai;
 pub mod backup;
+mod backup_set;
 mod applist;
 mod clipboard;
 mod contacts;

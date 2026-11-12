@@ -15,14 +15,53 @@ pub fn shorten(p: &Painter<A>, s: &str, size: f32, max: f32) -> String {
     if w <= max {
         return s.to_string();
     }
+    let n = s.chars().count();
+    let keep = ((n as f32 * max / w) as usize).saturating_sub(2);
+    cut_middle(s, keep)
+}
+
+/// Karakter sayısı `keep`i aşan metni ortadan kısaltır: baştan %40, sondan kalanı.
+/// Bayt değil karakter sayar; Türkçe yollarda ve kısa metinde panik olmaz.
+fn cut_middle(s: &str, keep: usize) -> String {
     let c: Vec<char> = s.chars().collect();
-    let keep = ((c.len() as f32 * max / w) as usize).saturating_sub(2);
+    if c.len() <= keep {
+        return s.to_string();
+    }
     let head = keep * 2 / 5;
     let tail = keep - head;
     let mut out: String = c[..head].iter().collect();
     out.push('…');
     out.extend(&c[c.len() - tail..]);
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cut_middle;
+
+    #[test]
+    fn short_and_exact_unchanged() {
+        assert_eq!(cut_middle("abc", 10), "abc");
+        assert_eq!(cut_middle("abcdefghij", 10), "abcdefghij");
+        assert_eq!(cut_middle("", 0), "");
+    }
+
+    #[test]
+    fn long_ascii() {
+        assert_eq!(cut_middle("0123456789ABCDEFGHIJ", 10), "0123…EFGHIJ");
+    }
+
+    #[test]
+    fn turkish_chars_no_panic() {
+        let s = "ğüşıöç".repeat(10);
+        for keep in 0..70 {
+            let r = cut_middle(&s, keep);
+            if keep < 60 {
+                assert_eq!(r.chars().count(), keep + 1);
+            }
+        }
+        assert_eq!(cut_middle("ğüşıöçğüşıöç", 5), "ğü…ıöç");
+    }
 }
 
 fn date(d: &str) -> String {

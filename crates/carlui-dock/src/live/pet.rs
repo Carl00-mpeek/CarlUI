@@ -40,7 +40,7 @@ impl Strip {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum Mode {
+pub(super) enum Mode {
     /// Durgun oturuş; süre dolunca yeni bir şey seçilir.
     Idle,
     /// Oturma şeridini bir kez oynatır (göz kırpma, kuyruk).
@@ -57,6 +57,8 @@ enum Mode {
     Bask,
     /// Zıplama: 1-3. karelerde havada, ileri gider.
     Hop,
+    /// Müzikte dans: oturma şeridi döner, gövde ritimle sallanır (`react.rs`).
+    Dance,
 }
 
 /// İmleç bu kadar yakınsa (piksel, ölçekli) evcil hayvan ona bakar.
@@ -71,21 +73,27 @@ pub struct Pet {
     /// Sağa mı bakıyor (sanat sağa bakar; sola bakınca aynalanır).
     pub right: bool,
     pub frame: u32,
-    mode: Mode,
+    pub(super) mode: Mode,
     strips: [Strip; N_ANIMS],
     /// Yürüme hızı, piksel/saniye.
     speed: f32,
-    mode_left: f32,
+    pub(super) mode_left: f32,
     frame_left: f32,
     /// Son imleç/dürtmeden beri geçen süre: uzun sessizlikte uyuma olasılığı artar.
     quiet: f32,
-    rng: Rng,
-    dirty: bool,
+    pub(super) rng: Rng,
+    pub(super) dirty: bool,
+    /// Kullanıcı uzakta: uyku kendiliğinden bitmez (bkz. `react.rs`).
+    pub(super) held: bool,
+    /// İrkilme bitince başını kaldırıp bir süre yukarı (adaya) bakar.
+    pub(super) look_after: bool,
+    /// Dans salınımının son çizilen (piksel, derece) hali.
+    pub(super) sway_key: (i32, i32),
 }
 
 impl Pet {
     pub fn new(strips: [Strip; N_ANIMS], speed: f32, x: f32, rng: Rng) -> Self {
-        let mut p = Self { x, right: true, frame: 0, mode: Mode::Idle, strips, speed: speed.max(1.0), mode_left: 0.0, frame_left: 0.0, quiet: 0.0, rng, dirty: true };
+        let mut p = Self { x, right: true, frame: 0, mode: Mode::Idle, strips, speed: speed.max(1.0), mode_left: 0.0, frame_left: 0.0, quiet: 0.0, rng, dirty: true, held: false, look_after: false, sway_key: (0, 0) };
         p.enter(Mode::Idle);
         p
     }
@@ -93,7 +101,7 @@ impl Pet {
     /// Ekrandaki animasyon durumu.
     pub fn anim(&self) -> Anim {
         match self.mode {
-            Mode::Idle | Mode::Fidget => Anim::Sit,
+            Mode::Idle | Mode::Fidget | Mode::Dance => Anim::Sit,
             Mode::Walk { .. } => Anim::Walk,
             Mode::Sleep => Anim::Sleep,
             Mode::Stretch => Anim::Stretch,
@@ -131,13 +139,14 @@ impl Pet {
 
     /// Döngüde oynayan modlar; ötekiler bir kez oynar ve son karede kalır.
     fn looping(&self) -> bool {
-        matches!(self.mode, Mode::Walk { .. } | Mode::Sleep | Mode::Bask)
+        matches!(self.mode, Mode::Walk { .. } | Mode::Sleep | Mode::Bask | Mode::Dance)
     }
 
-    fn enter(&mut self, m: Mode) {
+    pub(super) fn enter(&mut self, m: Mode) {
         self.mode = m;
         self.frame = 0;
         self.dirty = true;
+        self.sway_key = (0, 0);
         let s = self.strip();
         self.frame_left = s.frame_ms();
         self.mode_left = match m {
@@ -150,6 +159,7 @@ impl Pet {
             Mode::Look => 20_000.0,
             Mode::Out => 0.0,
             Mode::Alert => s.once_ms(0.0).max(1_200.0),
+            Mode::Dance => super::react::DANCE_MS,
         };
     }
 
@@ -208,7 +218,7 @@ impl Pet {
         own.get(i.min(own.len().saturating_sub(1))).copied()
     }
 
-    fn own(&self, a: Anim) -> bool {
+    pub(super) fn own(&self, a: Anim) -> bool {
         self.strips[a as usize].own
     }
 
@@ -265,10 +275,16 @@ impl Pet {
             self.x = clamped;
             self.dirty = true;
         }
+        if self.mode == Mode::Dance {
+            self.sway_tick();
+        }
         self.mode_left -= dt;
         if self.mode_left <= 0.0 {
             match self.mode {
                 Mode::Idle => self.choose(lo, hi),
+                // Kullanıcı uzakta: uyku sürer (girdi gelince `wake`).
+                Mode::Sleep if self.held => self.mode_left = super::react::HELD_MS,
+                Mode::Alert if self.look_after => self.look_up(),
                 Mode::Sleep if self.own(Anim::Stretch) => self.enter(Mode::Stretch),
                 Mode::Look => self.leave_look(),
                 _ => self.enter(Mode::Idle),
@@ -307,6 +323,7 @@ impl Pet {
     /// Bir uygulama açıldı: uyuyorsa uyanır, değilse irkilir.
     pub fn poke(&mut self) {
         self.quiet = 0.0;
+        self.held = false;
         if self.mode != Mode::Alert {
             self.enter(Mode::Alert);
         }
@@ -323,6 +340,9 @@ impl Pet {
             // Kare değişmese de konum akar: yürüme şeridinin hızında güncelle.
             let fps = self.strip().fps.clamp(8.0, 12.0);
             ms = ms.min(1000.0 / fps);
+        }
+        if self.mode == Mode::Dance {
+            ms = ms.min(super::react::SWAY_STEP_MS);
         }
         ms
     }

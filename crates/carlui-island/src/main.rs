@@ -38,6 +38,7 @@ mod launcher;
 mod media;
 mod netwatch;
 mod notify;
+mod pet_signal;
 mod searching;
 mod shots;
 mod steam;
@@ -145,6 +146,8 @@ struct App {
     note_open: bool,
     /// Son gösterilen bildirimler (tray balonu + aynı bildirimin Windows kopyası tekrar görünmesin).
     recent: VecDeque<(String, Instant)>,
+    /// Dock'taki hayvana son bildirilen çalma durumu (bkz. `pet_signal`).
+    pet_music: Option<bool>,
     expanded: bool,
     date: bool,
     fullscreen: bool,
@@ -449,6 +452,8 @@ impl App {
             return;
         }
         info!("bildirim: {} — {}", n.app, n.title);
+        // Dock'taki hayvan adaya baksın: yalnızca olay adı, içerik yok.
+        self.bus.send(&pet_signal::note());
         if self.cfg.notify.sound == NotifySound::File {
             timing::play_file(&self.cfg.notify.sound_file);
         }
@@ -476,6 +481,10 @@ impl App {
             self.expanded = false;
         }
         let changed = new.as_ref().is_some_and(|m| new_track(&mut self.last_track, &m.title, &m.artist, m.playing));
+        // Dock'taki hayvan müzikte dans etsin: yalnızca çalıyor/durdu, değişince.
+        if let Some(ev) = pet_signal::music(&mut self.pet_music, new.as_ref().is_some_and(|m| m.playing)) {
+            self.bus.send(&ev);
+        }
         self.media = new;
         if changed && self.cfg.notify.media_bar {
             self.show_osd(Osd::Track);
@@ -1316,6 +1325,7 @@ fn main() -> Result<()> {
                 note: None,
                 note_open: false,
                 recent: VecDeque::new(),
+                pet_music: None,
                 expanded: false,
                 date: false,
                 fullscreen: false,

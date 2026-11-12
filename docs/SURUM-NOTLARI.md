@@ -1,5 +1,28 @@
 # Sürüm notları
 
+## v1.0.0 — Hayvan tepkileri, güvenli iç haberleşme, genişletilmiş yedek (2026-11-12)
+
+**CarlUI 1.0.0: ilk kararlı sürüm.**
+
+**Yeni: Hayvan tepkileri.** Dock'taki hayvan müzik çalarken müzik notalarıyla dans
+eder, bildirim gelince kulak kabartır, 3 dakika boş kalınca uyur, döndüğünde gerinir,
+üzerine tıklayınca (sevince) kalpler çıkarır. Ayarlar → Dock → "Hayvan tepkileri";
+varsayılan olarak açık.
+
+**Güvenlik.** CarlUI modülleri arasındaki iç haberleşme kısıtlandı: borular yalnızca
+sahibine açık; iki taraf da karşısındakinin aynı kurulum klasöründen, aynı kullanıcı
+ve oturumdaki bir CarlUI programı olduğunu doğrular. Aşırı uzun mesajlar atılır.
+
+**Genişletilmiş yedek.** Ayarlar → Genel → Yedek artık `CarlUI-yedek-YYYY-MM-DD`
+klasörü dışa aktarır: ayarlar, kayıtlı görünümler, pencere düzenleri ve özel
+hayvanlar. İçe aktarma bunları geri yükler, başarısız olan bölüm varsa bildirir. Kasa
+ve pano geçmişi bilerek dahil değildir. Eski tek `.toml` yedekleri hâlâ içe aktarılır.
+
+**Düzeltmeler.** Pencere düzenleri monitör değişince bir pencereyi ekran dışına geri
+koymuyor. Bozuk düzen dosyası kaybolmak yerine `layouts.json.bad` olarak saklanır. Tam
+Kaldırıcı, Mağaza uygulaması kaldırması gerçekten başarısız olduğunda bunu bildirir.
+Kaldırıcı listesindeki uzun adlar güvenle kısaltılır.
+
 ## v0.11.0 — Canlı hava, yeni hayvanlar ve renkler, bildirim efektleri (2026-11-12)
 
 **Yeni: Canlı hava.** Dock sahnesi seçtiğin şehrin gerçek havasını izleyebilir:

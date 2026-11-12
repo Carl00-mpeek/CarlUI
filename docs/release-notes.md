@@ -1,41 +1,43 @@
 ## Türkçe
 
-**Yeni: Canlı hava**
-- Dock sahnesi seçtiğin şehrin gerçek havasını izleyebilir: yağmur, kar, bulut ve gece (ay ve yıldızlar). Bağlantı yoksa seçtiğin sahne gösterilir.
-- Sahne yoğunluğu Hafif / Normal olarak ayarlanır; canlı dock tam ekran oyunda ve pilde durur.
-- Yalnızca seçtiğin yerin koordinatları (iki ondalık basamağa yuvarlanmış) Open-Meteo'ya gider; hesap ya da anahtar yoktur. Şehir ararken yazdığın şehir adı da Open-Meteo'nun arama servisine gönderilir. Veri en çok 20 dakikada bir yenilenir.
-- Ayarlar → Dock → Canlı hava.
-- Hava verisi: [Open-Meteo.com](https://open-meteo.com), CC BY 4.0 lisansıyla.
+**CarlUI 1.0.0: ilk kararlı sürüm.**
 
-**Yeni: Hayvanlar ve renkler**
-- Köpek (altın rengi), fare ve sincap eklendi.
-- Renk seçenekleri: kedi (siyah, gri, beyaz), köpek (siyah, kahverengi, beyaz). Ayarlar'da "Renk" seçeneği.
-- Ayarlar'da her hayvanın ve rengin yanında küçük bir önizleme resmi görünür.
+**Yeni: Hayvan tepkileri**
+- Dock'taki hayvan müzik çalarken müzik notalarıyla dans eder, bildirim gelince kulak kabartır, 3 dakika boş kalınca uyur, döndüğünde gerinir, üzerine tıklayınca (sevince) kalpler çıkarır.
+- Ayarlar → Dock → "Hayvan tepkileri". Varsayılan olarak açıktır.
 
-**Akvaryum**
-- Balıklar küçüldü, iki yeni balık türü eklendi; yunus biraz büyüdü.
+**Güvenlik**
+- CarlUI modülleri arasındaki iç haberleşme kısıtlandı: borular yalnızca sahibine açık; iki taraf da karşısındakinin aynı kurulum klasöründen, aynı kullanıcı ve oturumdaki bir CarlUI programı olduğunu doğrular. Aşırı uzun mesajlar atılır.
 
-**Bildirim efektleri**
-- Dock'ta seçili sahne (yağmur, kar, gece, bulut) bildirim kartının arkasında da görünür; yazı her zaman okunur kalır. Gerçek hava açıksa kart da o havayı gösterir. Ayarlar → Ada → "Bildirimlerde sahne efekti".
+**Genişletilmiş yedek**
+- Ayarlar → Genel → Yedek artık `CarlUI-yedek-YYYY-MM-DD` klasörü dışa aktarır: ayarlar, kayıtlı görünümler, pencere düzenleri ve özel hayvanlar. İçe aktarma bunları geri yükler, başarısız olan bölüm varsa bildirir.
+- Kasa ve pano geçmişi bilerek yedeğe dahil değildir. Eski tek `.toml` yedekleri hâlâ içe aktarılır.
+
+**Düzeltmeler**
+- Pencere düzenleri, monitör değişince bir pencereyi ekran dışına geri koymuyor.
+- Bozuk düzen dosyası kaybolmak yerine `layouts.json.bad` olarak saklanır.
+- Tam Kaldırıcı, Mağaza uygulaması kaldırması gerçekten başarısız olduğunda bunu bildirir.
+- Kaldırıcı listesindeki uzun adlar güvenle kısaltılır.
 
 ---
 
 ## English
 
-**New: Live weather**
-- The dock scene can follow the real weather of a city you pick: rain, snow, clouds and night (moon and stars). Without a connection the scene you picked is shown.
-- Scene intensity is Subtle / Normal; the living dock pauses in fullscreen games and on battery.
-- Only the coordinates of your chosen place (rounded to two decimals) are sent to Open-Meteo; there is no account or key. When you search for a city, the name you type is sent to Open-Meteo's search service as well. Data is refreshed at most every 20 minutes.
-- Settings → Dock → Live weather.
-- Weather data by [Open-Meteo.com](https://open-meteo.com), licensed CC BY 4.0.
+**CarlUI 1.0.0: the first stable release.**
 
-**New: Pets and colours**
-- Added a dog (golden), a mouse and a squirrel.
-- Colour variants: cat (black, gray, white), dog (black, brown, white). A "Colour" option in Settings.
-- Settings shows a small preview picture next to every animal and colour option.
+**New: Pet reactions**
+- The dock pet dances with music notes while music plays, perks up when a notification arrives, falls asleep after 3 minutes idle and stretches when you return, and shows hearts when you click (pet) it.
+- Settings → Dock → "Pet reactions" (Hayvan tepkileri). On by default.
 
-**Aquarium**
-- Fish are smaller, two new fish kinds were added; the dolphin is a bit larger.
+**Security**
+- The internal messaging between CarlUI modules is now restricted: pipes are owner-only, and both sides verify that the peer is a CarlUI program from the same install folder, same user and session. Over-long messages are dropped.
 
-**Notification effects**
-- The scene chosen for the dock (rain, snow, night, clouds) also shows behind the notification card; the text always stays readable. With live weather on, the card shows that weather. Settings → Island → "Scene effect on notifications".
+**Extended backup**
+- Settings → General → Backup now exports a `CarlUI-yedek-YYYY-MM-DD` folder with settings, saved looks, window layouts and custom pets. Import restores them and reports any part that failed.
+- The vault and clipboard history are deliberately not included. Old single `.toml` backups still import.
+
+**Fixes**
+- Window layouts no longer restore a window off-screen after a monitor change.
+- A corrupt layouts file is kept as `layouts.json.bad` instead of being lost.
+- The Full Uninstaller now reports when a Store app removal actually failed.
+- Long names in the uninstaller list are shortened safely.

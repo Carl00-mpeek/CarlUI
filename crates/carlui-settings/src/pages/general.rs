@@ -27,7 +27,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.toggle(p, t!("Yeni sürümleri bildir", "Notify about new versions"), t!("Günde bir kez GitHub'a bakılır; yeni sürüm kendiliğinden kurulmaz.", "Checks GitHub once a day; nothing is installed automatically."), c.check_updates, |c| c.general.check_updates ^= true);
     f.toggle(p, t!("Windows görev çubuğunu gizle", "Hide the Windows taskbar"), t!("Dock çalışırken Windows'un kendi görev çubuğu görünmez.", "The Windows taskbar stays hidden while the dock runs."), c.hide_taskbar, |c| c.general.hide_taskbar ^= true);
     f.section(p, t!("Yedekleme", "Backup"));
-    let r = f.row(p, t!("Ayarları dışa / içe aktar", "Export / import settings"), t!("Tüm ayarlar tek bir .toml dosyasına yazılır; başka bilgisayarda içe aktarılabilir.", "All settings go into one .toml file you can import on another PC."), 230.0);
+    let r = f.row(p, t!("Ayarları dışa / içe aktar", "Export / import settings"), t!("Ayarlar, görünümler, pencere düzenleri ve hayvan paketleri seçtiğin yerde CarlUI-yedek-tarih klasörüne yazılır; Vault ve pano geçmişi yedeğe girmez. İçe aktarırken o klasördeki config.toml'u seç (tek bir .toml da olur).", "Settings, looks, window layouts and pet packs go into a CarlUI-yedek-date folder where you choose; Vault and clipboard history are not included. To import, pick the config.toml inside that folder (a lone .toml works too)."), 230.0);
     let by = r.y + (r.h - 32.0) / 2.0;
     p.button(R::new(r.right() - 16.0 - 104.0, by, 104.0, 32.0), Some('\u{E8B5}'), t!("İçe aktar", "Import"), Act::Backup(false), true, false);
     p.button(R::new(r.right() - 16.0 - 216.0, by, 104.0, 32.0), Some('\u{EDE1}'), t!("Dışa aktar", "Export"), Act::Backup(true), true, false);

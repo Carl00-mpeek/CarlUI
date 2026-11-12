@@ -608,6 +608,12 @@ impl App {
                 }
             }
             Event::Custom { name, .. } if name == "dock-dump" => self.dump_state(),
+            // Adadan hayvan tepkisi sinyali (bildirim/müzik; içerik taşımaz).
+            Event::Custom { name, data } if name.starts_with("pet-") => {
+                if let Some(l) = self.live.as_mut() {
+                    l.pet_signal(&name, &data);
+                }
+            }
             // Test: çark dock imleçte, tıklama bekleyen kipte açılır.
             Event::Custom { name, data } if name == "dock-radial" => {
                 let at = data.get("x").and_then(|x| x.as_i64()).zip(data.get("y").and_then(|y| y.as_i64())).map(|(x, y)| (x as i32, y as i32));

@@ -5,12 +5,23 @@
 //! Mesajlar satır başına bir JSON'dur. İki ayrı boru kullanılmasının sebebi,
 //! Windows'ta aynı senkron handle üzerinde okuma beklerken yazmanın
 //! kilitlenmesidir.
+//!
+//! Güvenlik: borular yalnızca bu kullanıcıya açık kurulur; iki uç da karşısındaki
+//! sürecin aynı klasörden, aynı oturum ve kullanıcıyla çalıştığını doğrular
+//! (`auth`). Satırlar `line::MAX_LINE` ile sınırlıdır; aşan bağlantı düşer.
 
+mod auth;
+mod line;
+
+use line::MAX_LINE;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
-    io::{BufRead, BufReader, Write},
-    os::windows::io::FromRawHandle,
+    io::{BufReader, Write},
+    os::windows::{
+        fs::OpenOptionsExt,
+        io::{AsRawHandle, FromRawHandle},
+    },
     sync::{
         mpsc::{self, SyncSender, TrySendError},
         Arc, Mutex, OnceLock,
@@ -29,14 +40,30 @@ use windows::{
 /// Boru adları oturuma özel: aynı bilgisayarda başka bir kullanıcı oturumundaki
 /// CarlUI ile karışmasın.
 fn names() -> &'static (String, String) {
-    static N: OnceLock<(String, String)> = OnceLock::new();
-    N.get_or_init(|| {
+    NAMES.get_or_init(|| {
         let mut session = 0;
         unsafe {
             let _ = ProcessIdToSessionId(GetCurrentProcessId(), &mut session);
         }
         (format!(r"\\.\pipe\carlui-bus-up-{session}"), format!(r"\\.\pipe\carlui-bus-down-{session}"))
     })
+}
+
+static NAMES: OnceLock<(String, String)> = OnceLock::new();
+
+/// Yalnızca testler: bu süreçte olay yolu canlı borular yerine
+/// `carlui-bus-test-{tag}-up/down` adlarını kullansın (canlı CarlUI'ye dokunmadan
+/// süreçler arası deneme). Borular ilk kullanılmadan önce çağrılmalı; adlar
+/// zaten belirlendiyse `false`. Ürün kodu çağırmaz; doğrulama aynen geçerli.
+#[doc(hidden)]
+pub fn use_test_pipes(tag: &str) -> bool {
+    NAMES.set((format!(r"\\.\pipe\carlui-bus-test-{tag}-up"), format!(r"\\.\pipe\carlui-bus-test-{tag}-down"))).is_ok()
+}
+
+/// Yalnızca testler: (yukarı, aşağı) boru adları; ham istemci denemeleri için.
+#[doc(hidden)]
+pub fn pipe_names() -> (&'static str, &'static str) {
+    (up_name(), down_name())
 }
 
 fn up_name() -> &'static str {
@@ -80,6 +107,14 @@ fn pipe_name(s: &str) -> HSTRING {
 }
 
 fn create_instance(name: &str, inbound: bool) -> Result<HANDLE> {
+    // Yalnızca bu kullanıcı + SYSTEM; kurulamazsa Windows'un varsayılanı
+    // (o da yazmayı sahiple sınırlar) ve süreç doğrulaması yine devrede.
+    let sec = auth::PipeSecurity::new();
+    if sec.is_none() {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| crate::warn!("bus: boru güvenlik tanımı kurulamadı, varsayılan kullanılıyor"));
+    }
+    let sa = sec.as_ref().map(|s| s.attrs());
     unsafe {
         let mode = if inbound { PIPE_ACCESS_INBOUND } else { PIPE_ACCESS_OUTBOUND };
         let h = CreateNamedPipeW(
@@ -90,7 +125,7 @@ fn create_instance(name: &str, inbound: bool) -> Result<HANDLE> {
             64 * 1024,
             64 * 1024,
             0,
-            None,
+            sa.as_ref().map(|s| s as *const _),
         );
         if h.is_invalid() {
             return Err(Error::from_win32());
@@ -104,6 +139,58 @@ fn wait_client(h: HANDLE) -> bool {
         match ConnectNamedPipe(h, None) {
             Ok(()) => true,
             Err(e) => e.code() == ERROR_PIPE_CONNECTED.to_hresult(),
+        }
+    }
+}
+
+/// Sunucu tarafı: bağlanan istemciyi doğrular; yabancıysa loglar ve `false`
+/// (çağıran handle'ı bırakınca bağlantı kapanır).
+fn client_ok(f: &File, pipe: &str) -> bool {
+    let pid = auth::client_pid(HANDLE(f.as_raw_handle() as _));
+    match auth::verify_pid(pid) {
+        Ok(()) => true,
+        Err(e) => {
+            if auth::should_log(&format!("{pipe}:{e}"), Duration::from_secs(60)) {
+                crate::warn!("bus ({pipe}): bağlantı reddedildi, {e}");
+            }
+            false
+        }
+    }
+}
+
+/// İstemci tarafı: borunun sunucusu gerçekten bizim ana süreç mi (boru adını
+/// önce kapan bir sahte sunucuya olay sızmasın).
+fn server_ok(f: &File) -> bool {
+    let pid = auth::server_pid(HANDLE(f.as_raw_handle() as _));
+    match auth::verify_pid(pid) {
+        Ok(()) => true,
+        Err(e) => {
+            // Bağlanma döngüsü 2 sn'de bir dener; uyarı 5 dakikada bir.
+            if auth::should_log(&format!("sunucu:{e}"), Duration::from_secs(300)) {
+                crate::warn!("bus: sunucu doğrulanamadı, bağlanılmadı: {e}");
+            }
+            false
+        }
+    }
+}
+
+/// Satırları sınırlı okuyup çözer; akış bitince, okuma hatasında ya da
+/// `MAX_LINE`'ı aşan satırda döner (çağıran bağlantıyı düşürür).
+fn read_events(f: File, who: &str, mut on: impl FnMut(Event)) {
+    let mut r = BufReader::new(f);
+    loop {
+        match line::read_line(&mut r, MAX_LINE) {
+            Ok(Some(l)) => match serde_json::from_slice::<Event>(&l) {
+                Ok(ev) => on(ev),
+                Err(e) => crate::warn!("bus ({who}): geçersiz mesaj: {e}"),
+            },
+            Ok(None) => return,
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::InvalidData {
+                    crate::warn!("bus ({who}): {MAX_LINE} baytı aşan satır, bağlantı düşürüldü");
+                }
+                return;
+            }
         }
     }
 }
@@ -155,6 +242,9 @@ impl BusServer {
                 match create_instance(down_name(), false) {
                     Ok(h) if wait_client(h) => {
                         let f = unsafe { File::from_raw_handle(h.0 as _) };
+                        if !client_ok(&f, "aşağı") {
+                            continue;
+                        }
                         if let Some(tx) = spawn_writer(f) {
                             down.clients.lock().unwrap_or_else(|e| e.into_inner()).push(tx);
                         }
@@ -179,17 +269,15 @@ impl BusServer {
                         let f = unsafe { File::from_raw_handle(h.0 as _) };
                         let srv = up.clone();
                         let cb = on_event.clone();
+                        // Doğrulama da bu iş parçacığında: kabul döngüsü beklemesin.
                         std::thread::spawn(move || {
-                            for line in BufReader::new(f).lines() {
-                                let Ok(line) = line else { break };
-                                match serde_json::from_str::<Event>(&line) {
-                                    Ok(ev) => {
-                                        cb(&ev);
-                                        srv.publish(&ev);
-                                    }
-                                    Err(e) => crate::warn!("bus: geçersiz mesaj: {e}"),
-                                }
+                            if !client_ok(&f, "yukarı") {
+                                return;
                             }
+                            read_events(f, "yukarı", |ev| {
+                                cb(&ev);
+                                srv.publish(&ev);
+                            });
                         });
                     }
                     Ok(h) => unsafe {
@@ -210,7 +298,13 @@ impl BusServer {
     /// (donmuş) bağlantıları düşürür: yazıcı biter, boru kapanır, modül
     /// kopmayı görüp yeniden bağlanır.
     pub fn publish(&self, ev: &Event) {
-        let line = Arc::new(encode(ev));
+        let line = encode(ev);
+        // Modüllerin okuyucusu bunu reddedip bağlantıyı düşürürdü.
+        if line.len() > MAX_LINE {
+            crate::warn!("bus: {} baytlık olay yayınlanmadı (sınır {MAX_LINE})", line.len());
+            return;
+        }
+        let line = Arc::new(line);
         let mut clients = self.clients.lock().unwrap_or_else(|e| e.into_inner());
         clients.retain(|tx| match tx.try_send(line.clone()) {
             Ok(()) => true,
@@ -230,8 +324,12 @@ pub struct BusClient {
     up: Arc<Mutex<Option<File>>>,
 }
 
+/// Boruyu açar ve sunucusunu doğrular. Yazma ucunda sunucu kimliği
+/// sorgulanabilsin diye öznitelik okuma hakkı da istenir.
 fn open_pipe(name: &str, write: bool) -> Option<File> {
-    OpenOptions::new().read(!write).write(write).open(name).ok()
+    let access = if write { FILE_GENERIC_WRITE.0 | FILE_READ_ATTRIBUTES.0 } else { FILE_GENERIC_READ.0 };
+    let f = OpenOptions::new().read(!write).write(write).access_mode(access).open(name).ok()?;
+    server_ok(&f).then_some(f)
 }
 
 impl BusClient {
@@ -249,12 +347,7 @@ impl BusClient {
                 *me.up.lock().unwrap_or_else(|e| e.into_inner()) = Some(up);
                 me.send(&Event::Hello { module: module.clone() });
                 crate::info!("olay yoluna bağlanıldı");
-                for line in BufReader::new(down).lines() {
-                    let Ok(line) = line else { break };
-                    if let Ok(ev) = serde_json::from_str::<Event>(&line) {
-                        on_event(ev);
-                    }
-                }
+                read_events(down, "aşağı", &on_event);
                 *me.up.lock().unwrap_or_else(|e| e.into_inner()) = None;
                 crate::warn!("olay yolu bağlantısı koptu");
                 std::thread::sleep(Duration::from_secs(1));
@@ -287,5 +380,31 @@ impl BusClient {
                 *up = None;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Canlı olay yoluna dokunmadan, bu sürece özel bir boruyla: DACL'li boru
+    /// kurulur, aynı süreç istemci olarak bağlanır, iki uç da birbirini
+    /// doğrular ve olay sınırlı okuyucuyla geri okunur.
+    #[test]
+    fn ayni_surec_boruda_dogrulanir() {
+        let name = format!(r"\\.\pipe\carlui-bus-test-{}", unsafe { GetCurrentProcessId() });
+        let h = create_instance(&name, true).expect("boru");
+        let n2 = name.clone();
+        let t = std::thread::spawn(move || {
+            let mut f = open_pipe(&n2, true).expect("istemci açılıp sunucu doğrulanmalı");
+            write_line(&mut f, &Event::Custom { name: "x".into(), data: serde_json::json!({ "a": 1 }) }).unwrap();
+        });
+        assert!(wait_client(h));
+        let f = unsafe { File::from_raw_handle(h.0 as _) };
+        assert!(client_ok(&f, "test"));
+        t.join().unwrap();
+        let mut got = Vec::new();
+        read_events(f, "test", |ev| got.push(ev));
+        assert_eq!(got, vec![Event::Custom { name: "x".into(), data: serde_json::json!({ "a": 1 }) }]);
     }
 }

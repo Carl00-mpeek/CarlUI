@@ -62,7 +62,9 @@
   sincap, kertenkele, örümcek, yılan, yunus; bazıları farklı renklerde); yağmur,
   kar, gece, bulut ve akvaryum sahneleri var. Sahne seçtiğin şehrin gerçek
   havasını da izleyebilir (veri: Open-Meteo.com, CC BY 4.0) ve bildirim
-  kartlarının arkasında da görünür. Çok hafiftir; tam ekran oyunda ve pilde durur.
+  kartlarının arkasında da görünür. Hayvan tepki de verir: müzikle dans eder,
+  bildirimde kulak kabartır, boş kalınca uyur, sevince kalp çıkarır. Çok hafiftir;
+  tam ekran oyunda ve pilde durur.
 - **Fotoğraftan hayvan:** Bir fotoğraf seç, bilgisayarındaki yapay zekâ özneyi
   kesip piksel hayvana çevirsin. Fotoğraf bilgisayarından çıkmaz.
 - **Ada:** Üst ortada saat; bildirimler, çalan şarkı (kapak, ilerleme,

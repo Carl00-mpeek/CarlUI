@@ -22,11 +22,17 @@ mod pack;
 mod particles;
 mod pause;
 mod perch;
+mod perch_react;
 mod pet;
+mod pet_fx;
+mod pet_fx_view;
+mod pet_hit;
 mod power;
+mod react;
 mod rng;
 mod scene;
 mod scene_art;
+mod signal;
 mod sky;
 mod sky_weather;
 mod snake;
@@ -35,6 +41,7 @@ mod weather_poll;
 mod window;
 
 pub use load::WM_APP_LIVE;
+use pet_hit::WM_APP_PET_CLICK;
 use weather_poll::WM_APP_WEATHER;
 
 use crate::dock::Dock;
@@ -112,6 +119,8 @@ pub struct Live {
     pet_last: Instant,
     pet_due: Instant,
     loading: Option<mpsc::Receiver<Result<load::Loaded, String>>>,
+    /// Adanın bildirdiği son müzik durumu (hayvan sonradan yüklenirse de uygulanır).
+    music: bool,
     windows: usize,
     stats: Option<Stats>,
 }
@@ -151,6 +160,7 @@ impl Live {
             pet_last: now,
             pet_due: now,
             loading: None,
+            music: false,
             windows,
             stats: std::env::var_os("CARLUI_LIVE_DEBUG").map(|_| Stats { since: now, frames: 0, total: Duration::ZERO, max: Duration::ZERO }),
         };
@@ -164,6 +174,7 @@ impl Live {
                 warn!("canlı dock: geçersiz paket adı {:?}", cfg.pet);
             }
         }
+        l.ask_music();
         l.start_poller(view.hwnd);
         l.build_scene(gfx, dock);
         l.refresh(gfx, dock);
@@ -226,6 +237,7 @@ impl Live {
         self.state = st;
         if let Some(p) = self.perch.as_mut() {
             p.show(st.visible());
+            p.set_live(st == State::Running);
         }
         match st {
             State::Running => {
@@ -352,9 +364,11 @@ impl Live {
         let Ok(r) = rx.try_recv() else { return };
         self.loading = None;
         match r {
-            Ok(d) => match Creature::new(gfx, &dock.live_view(), d) {
+            Ok(d) => match Creature::new(gfx, &dock.live_view(), d, self.cfg.reactions) {
                 Ok(mut p) => {
                     p.show(self.state.visible());
+                    p.set_live(self.state == State::Running);
+                    p.music(self.music);
                     info!("canlı dock: evcil hayvan hazır (x{})", p.scale());
                     self.perch = Some(p);
                     self.pet_last = Instant::now();
@@ -412,6 +426,9 @@ impl Live {
                     self.kill();
                 }
             }
+            WM_APP_PET_CLICK => self.pet_click(),
+            signal::WM_APP_PET_DEMO => self.pet_demo(wp.0),
+            crate::media::WM_APP_MEDIA => self.media_changed(),
             WM_MOUSEMOVE => self.cursor(true),
             WM_MOUSELEAVE => self.cursor(false),
             _ => {}

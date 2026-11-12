@@ -22,9 +22,10 @@ fn cursor_pos() -> Option<POINT> {
 }
 
 impl Creature {
-    pub fn new(gfx: &Gfx, view: &LiveView, l: Loaded) -> Result<Self> {
+    /// `reactions`: hayvan tepkileri (yalnızca şerit hayvanlarda kurulur).
+    pub fn new(gfx: &Gfx, view: &LiveView, l: Loaded, reactions: bool) -> Result<Self> {
         Ok(match l {
-            Loaded::Strip(d) => Self::Strip(Perch::new(gfx, view, d)?),
+            Loaded::Strip(d) => Self::Strip(Perch::new(gfx, view, d, reactions)?),
             Loaded::Snake(s) => Self::Snake(Snake::new(gfx, view, s)?),
             Loaded::Dolphin(s) => Self::Dolphin(Dolphin::new(gfx, view, s)?),
         })
@@ -49,15 +50,7 @@ impl Creature {
     /// `dt` saniye ilerletir ve çizer. Dönüş: sonraki tike kadar ms.
     pub fn step(&mut self, dt: f32, pill: RECT, size: (f32, f32), s: f32) -> f32 {
         match self {
-            Self::Strip(p) => {
-                p.follow(pill);
-                let (lo, hi) = p.range(pill, s);
-                p.pet.update(dt * 1000.0, lo, hi);
-                if p.pet.take_dirty() {
-                    let _ = p.render();
-                }
-                p.pet.next_ms()
-            }
+            Self::Strip(p) => p.step(dt, pill, s),
             // İmleç yalnızca çalışırken, tikte okunur (ayrı kanca yok).
             Self::Snake(sn) => sn.step(dt, pill, cursor_pos()),
             Self::Dolphin(d) => d.step(dt, pill, size),
@@ -82,6 +75,46 @@ impl Creature {
             Self::Strip(p) => p.pet.poke(),
             Self::Snake(s) => s.poke(),
             Self::Dolphin(d) => d.poke(),
+        }
+    }
+
+    /// Müzik çalmaya başladı/durdu (yalnızca şerit hayvan dans eder).
+    pub fn music(&mut self, on: bool) {
+        if let Self::Strip(Perch { react: Some(r), .. }) = self {
+            r.music(on);
+        }
+    }
+
+    /// Bildirim geldi: şerit hayvan irkilip adaya bakar, diğerleri dürtülür.
+    pub fn note(&mut self) {
+        match self {
+            Self::Strip(Perch { react: Some(r), pet, .. }) => r.note(pet),
+            _ => self.poke(),
+        }
+    }
+
+    /// Hayvana tıklandı (okşama). Tepkiler yoksa `false`.
+    pub fn click(&mut self) -> bool {
+        match self {
+            Self::Strip(Perch { react: Some(r), pet, .. }) => {
+                r.click(pet);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Kum havuzu denemesi: kullanıcı uzaktaymış gibi say.
+    pub fn fake_idle(&mut self, on: bool) {
+        if let Self::Strip(Perch { react: Some(r), .. }) = self {
+            r.fake_idle(on);
+        }
+    }
+
+    /// Çalışıyor mu (okşama alanı yalnızca çalışırken durur).
+    pub fn set_live(&mut self, on: bool) {
+        if let Self::Strip(p) = self {
+            p.set_live(on);
         }
     }
 

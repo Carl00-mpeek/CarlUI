@@ -84,6 +84,16 @@ pub fn find(id: &AppId) -> Option<Session> {
     SESSIONS.lock().ok()?.iter().find(|s| belongs(id, &s.app)).cloned()
 }
 
+/// Listede çalan bir oturum var mı (duraklatılmışlar sayılmaz).
+pub fn any_playing(list: &[Session]) -> bool {
+    list.iter().any(|s| s.playing)
+}
+
+/// Son taramada bir şey çalıyor muydu; beklemez (canlı dock'taki hayvan için).
+pub fn playing() -> bool {
+    SESSIONS.lock().map(|l| any_playing(&l)).unwrap_or(false)
+}
+
 fn scan() -> Vec<Session> {
     let Ok(mgr) = Manager::RequestAsync().and_then(|op| op.get()) else { return Vec::new() };
     let Ok(list) = mgr.GetSessions() else { return Vec::new() };
@@ -205,6 +215,14 @@ mod tests {
         // Tek pencere (Spotify duraklatınca başlığı "Spotify" olur): o pencere.
         assert_eq!(pick(&["Spotify Premium"], &m("Song")), Some(0));
         assert_eq!(pick(&[], &m("Song")), None);
+    }
+
+    #[test]
+    fn calan_var_mi() {
+        let s = |playing: bool| Session { app: "x".into(), playing, can_prev: false, can_next: false, title: "t".into() };
+        assert!(!any_playing(&[]));
+        assert!(!any_playing(&[s(false)]), "duraklatılmış müzik dans ettirmez");
+        assert!(any_playing(&[s(false), s(true)]));
     }
 }
 

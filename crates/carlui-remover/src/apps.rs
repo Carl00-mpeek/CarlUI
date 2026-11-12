@@ -183,7 +183,25 @@ pub fn list() -> Vec<App> {
 pub fn remove_package(full: &str) -> Result<(), String> {
     let m = PackageManager::new().map_err(|e| e.to_string())?;
     let op = m.RemovePackageAsync(&HSTRING::from(full)).map_err(|e| e.to_string())?;
-    op.get().map(|_| ()).map_err(|e| e.message().to_string())
+    let res = op.get().map_err(|e| e.message().to_string())?;
+    // İşlem "tamamlandı" dese de dağıtım hata raporlayabilir.
+    let code = res.ExtendedErrorCode().map(|h| h.0).unwrap_or(0);
+    let text = res.ErrorText().map(|s| s.to_string()).unwrap_or_default();
+    if code < 0 || !text.trim().is_empty() {
+        let text = text.trim();
+        return Err(if text.is_empty() { format!("0x{code:08X}") } else { text.to_string() });
+    }
+    // Son kontrol: paket bu kullanıcı için hâlâ kuruluysa kaldırma başarısızdır.
+    if package_installed(full) {
+        return Err(t!("Paket kaldırılamadı; hâlâ kurulu görünüyor.", "The package could not be removed; it still appears installed.").to_string());
+    }
+    Ok(())
+}
+
+/// Tam adı verilen Mağaza paketi geçerli kullanıcı için kurulu mu?
+fn package_installed(full: &str) -> bool {
+    let Ok(list) = PackageManager::new().and_then(|m| m.FindPackagesByUserSecurityId(&HSTRING::new())) else { return false };
+    list.into_iter().any(|p| p.Id().and_then(|id| id.FullName()).is_ok_and(|n| n.to_string().eq_ignore_ascii_case(full)))
 }
 
 #[cfg(test)]

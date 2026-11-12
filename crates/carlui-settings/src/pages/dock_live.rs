@@ -218,6 +218,18 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         c.pause_on_battery,
         |c| c.dock.live.pause_on_battery ^= true,
     );
+    if c.has_pet() {
+        f.toggle(
+            p,
+            t!("Hayvan tepkileri", "Pet reactions"),
+            t!(
+                "Müzik çalarken arada dans eder, bildirim gelince adaya bakar, uzun süre dokunmazsanız uyur; üstüne tıklarsanız sevinir. Bildirimin içeriği hiç okunmaz.",
+                "Dances now and then while music plays, looks up at the island when a notification arrives, sleeps when you are away for a while and cheers up when you click it. Notification content is never read."
+            ),
+            c.reactions,
+            |c| c.dock.live.reactions ^= true,
+        );
+    }
 }
 
 #[cfg(test)]

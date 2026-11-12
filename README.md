@@ -62,8 +62,9 @@
   snake, dolphin; several in different colours) live on the dock, with scenes
   like rain, snow, night, clouds and an aquarium. The scene can follow the real
   weather of a city you pick (data by Open-Meteo.com, CC BY 4.0) and also shows
-  behind notification cards. Very light; pauses in fullscreen games and on
-  battery.
+  behind notification cards. The pet reacts too: it dances to music, perks up
+  at notifications, naps when you are idle and shows hearts when you pet it.
+  Very light; pauses in fullscreen games and on battery.
 - **Pet from a photo:** Pick a photo and the on-device AI cuts out the subject
   and turns it into a pixel pet. The photo never leaves your PC.
 - **Island:** Clock at the top center; notifications, now playing (cover,

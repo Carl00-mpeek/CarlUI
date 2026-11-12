@@ -53,9 +53,33 @@ fn path() -> PathBuf {
     crate::paths::data_dir().join("layouts.json")
 }
 
+fn backup_bad(p: &std::path::Path) {
+    let mut name = p.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(".bad");
+    let _ = std::fs::copy(p, p.with_file_name(name));
+}
+
 impl Store {
     pub fn load() -> Self {
-        std::fs::read_to_string(path()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+        Self::load_from(&path())
+    }
+
+    /// Dosya yoksa sessizce boş döner. Var ama çözülemiyorsa sonraki `save` ezmesin
+    /// diye önce `layouts.json.bad` olarak yedeklenir (eski .bad ezilir).
+    pub fn load_from(p: &std::path::Path) -> Self {
+        let Ok(text) = std::fs::read_to_string(p) else {
+            if p.exists() {
+                backup_bad(p);
+            }
+            return Self::default();
+        };
+        match serde_json::from_str(&text) {
+            Ok(s) => s,
+            Err(_) => {
+                backup_bad(p);
+                Self::default()
+            }
+        }
     }
 
     pub fn save(&self) -> std::io::Result<()> {
@@ -162,6 +186,42 @@ pub fn pair(saved: &[Entry], open: &[Entry]) -> Vec<(isize, Spot)> {
     out
 }
 
+/// Yerin en az ~100x60 pikseli (pencere daha küçükse tamamı) bir çalışma alanıyla
+/// kesişiyorsa aynen döner; yoksa boyut korunarak en yakın çalışma alanına taşınır,
+/// alandan büyükse alana sığacak kadar küçültülür. Dikdörtgenler: sol, üst, sağ, alt.
+/// `screens` boş değilse ilk eleman (birincil ekran) eşit uzaklıkta tercih edilir.
+pub fn clamp_to_screens(rect: [i32; 4], screens: &[[i32; 4]]) -> [i32; 4] {
+    let [l, t, r, b] = rect;
+    let (w, h) = ((r - l).max(1), (b - t).max(1));
+    if screens.is_empty() {
+        return rect;
+    }
+    // Tutma şeridi: pencerenin üst 40 pikseli (tam genişlik). Şeridin en az
+    // min(100, genişlik) piksellik kısmı, tam yüksekliğiyle bir çalışma alanında olmalı.
+    let need_w = w.min(100);
+    let strip = h.min(40);
+    let visible = |s: &[i32; 4]| (r.min(s[2]) - l.max(s[0])) >= need_w && (t + strip).min(s[3]) - t.max(s[1]) >= strip;
+    if screens.iter().any(visible) {
+        return rect;
+    }
+    let (cx, cy) = (l as i64 + w as i64 / 2, t as i64 + h as i64 / 2);
+    let dist = |s: &[i32; 4]| {
+        let (sx, sy) = ((s[0] as i64 + s[2] as i64) / 2, (s[1] as i64 + s[3] as i64) / 2);
+        (cx - sx).pow(2) + (cy - sy).pow(2)
+    };
+    let mut best = &screens[0];
+    for s in &screens[1..] {
+        if dist(s) < dist(best) {
+            best = s;
+        }
+    }
+    let nw = w.min((best[2] - best[0]).max(1));
+    let nh = h.min((best[3] - best[1]).max(1));
+    let nl = l.clamp(best[0], (best[2] - nw).max(best[0]));
+    let nt = t.clamp(best[1], (best[3] - nh).max(best[1]));
+    [nl, nt, nl + nw, nt + nh]
+}
+
 /// Pencereyi yerine koyar; odak değişmez. `true`: pencere yerinde.
 pub fn place(hwnd: isize, s: &Spot) -> bool {
     let h = HWND(hwnd as _);
@@ -171,6 +231,13 @@ pub fn place(hwnd: isize, s: &Spot) -> bool {
     if read_spot(h).is_some_and(|now| now.rect == s.rect && now.show == s.show) {
         return true;
     }
+    // Kayıtlı yer artık bağlı olmayan bir ekrandaysa pencere görünür alana alınır.
+    let mut screens: Vec<win::Monitor> = win::monitors();
+    screens.sort_by_key(|m| !m.primary);
+    let works: Vec<[i32; 4]> = screens.iter().map(|m| [m.work.left, m.work.top, m.work.right, m.work.bottom]).collect();
+    let mut moved = *s;
+    moved.rect = clamp_to_screens(s.rect, &works);
+    let s = &moved;
     let show = match SHOW_WINDOW_CMD(s.show as i32) {
         SW_SHOWMINIMIZED => SW_SHOWMINNOACTIVE,
         SW_SHOWMAXIMIZED => SW_SHOWMAXIMIZED,
@@ -247,6 +314,62 @@ mod tests {
         s.put(Layout { name: "OYUN".into(), windows: vec![e(1, "a.exe", "t", 1)] });
         assert_eq!(s.layouts.len(), 2);
         assert_eq!(s.layouts[1].windows.len(), 1);
+    }
+
+    const SCREEN: [i32; 4] = [0, 0, 1920, 1040];
+
+    #[test]
+    fn clamp_visible_unchanged() {
+        let r = [100, 100, 900, 700];
+        assert_eq!(clamp_to_screens(r, &[SCREEN]), r);
+        // İki ekran: ikincideki pencere yerinde kalır.
+        let two = [SCREEN, [1920, 0, 3840, 1040]];
+        let r2 = [2500, 200, 3200, 800];
+        assert_eq!(clamp_to_screens(r2, &two), r2);
+    }
+
+    #[test]
+    fn clamp_off_screen_moves_in() {
+        assert_eq!(clamp_to_screens([3000, 100, 3800, 700], &[SCREEN]), [1120, 100, 1920, 700]);
+        assert_eq!(clamp_to_screens([-2000, -500, -1200, 100], &[SCREEN]), [0, 0, 800, 600]);
+    }
+
+    #[test]
+    fn clamp_title_strip_rules() {
+        // Üstü ekranın dışında: başlık çubuğu erişilemez, içeri alınır.
+        let up = clamp_to_screens([200, -200, 1000, 400], &[SCREEN]);
+        assert!(up[1] >= SCREEN[1] && up[3] <= SCREEN[3]);
+        assert_eq!(up, [200, 0, 1000, 600]);
+        // Başlık şeridi görünür, gövde ekranın altına taşıyor: aynen kalır.
+        let low = [200, 1000, 1000, 1600];
+        assert_eq!(clamp_to_screens(low, &[SCREEN]), low);
+    }
+
+    #[test]
+    fn clamp_bigger_than_screen_shrinks() {
+        assert_eq!(clamp_to_screens([3000, 0, 5000, 2000], &[SCREEN]), SCREEN);
+    }
+
+    #[test]
+    fn clamp_nearest_screen_and_empty() {
+        let two = [SCREEN, [1920, 0, 3840, 1040]];
+        assert_eq!(clamp_to_screens([5000, 100, 5600, 500], &two), [3240, 100, 3840, 500]);
+        assert_eq!(clamp_to_screens([5, 5, 50, 50], &[]), [5, 5, 50, 50]);
+    }
+
+    #[test]
+    fn corrupt_file_is_backed_up_missing_is_silent() {
+        let dir = std::env::temp_dir().join(format!("carlui-layouts-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("layouts.json");
+        assert_eq!(Store::load_from(&p), Store::default());
+        assert!(!dir.join("layouts.json.bad").exists());
+        std::fs::write(dir.join("layouts.json.bad"), "eski").unwrap();
+        std::fs::write(&p, "{bozuk").unwrap();
+        assert_eq!(Store::load_from(&p), Store::default());
+        assert_eq!(std::fs::read_to_string(dir.join("layouts.json.bad")).unwrap(), "{bozuk");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
