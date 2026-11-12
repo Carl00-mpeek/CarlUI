@@ -24,6 +24,10 @@ const START_RX: f64 = 1.0 * MB;
 const START_W: f64 = 0.5 * MB;
 /// Başladıktan sonra bu hızın altı "durdu" sayılır.
 const KEEP_RX: f64 = 0.125 * MB;
+/// Sürmesi için süreç de en az bu hızla yazmalı. Steam, Discord gibi
+/// programlar oyun/sesli sohbet sırasında hep biraz yazar; bu kırıntılar ve
+/// oyunun ağ trafiği indirmeyi sonsuza dek açık tutmasın.
+const KEEP_W: f64 = 0.25 * MB;
 /// Bu kadar saniye üst üste aynı süreç çıkınca gösterilir.
 const CONFIRM: u8 = 3;
 /// Bu kadar saniye iz kalmazsa biter.
@@ -82,6 +86,11 @@ fn launcher_done(app: &str, game: &str) -> Option<bool> {
 
 /// Exe adından okunur program adı.
 fn label(exe: &str) -> String {
+    known(exe).map_or_else(|| default_label(exe), Into::into)
+}
+
+/// Tanınan programın adı.
+fn known(exe: &str) -> Option<&'static str> {
     let stem = exe.strip_suffix(".exe").or_else(|| exe.strip_suffix(".EXE")).unwrap_or(exe);
     let known = match stem.to_lowercase().as_str() {
         "steam" | "steamservice" => "Steam",
@@ -102,25 +111,47 @@ fn label(exe: &str) -> String {
         "winstore.app" | "wsappx" => "Microsoft Store",
         _ => "",
     };
-    if !known.is_empty() {
-        return known.into();
-    }
-    let mut c = stem.chars();
-    c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default()
+    (!known.is_empty()).then_some(known)
 }
 
-/// En çok yazan süreç, alımla birlikte indirme gibi görünüyorsa.
-fn pick(rx: f64, writes: &[(u32, String, f64)]) -> Option<usize> {
+/// En çok yazan süreç, alımla birlikte indirme gibi görünüyorsa. `game`:
+/// önde tam ekran oyun var; o sırada yalnızca bilinen indiriciler sayılır
+/// (oyun, ses/sohbet ve kayıt programları yazarken ağdan da veri alır).
+fn pick(rx: f64, writes: &[(u32, String, f64)], game: bool) -> Option<usize> {
     if rx < START_RX {
         return None;
     }
     let (i, w) = writes.iter().enumerate().max_by(|a, b| a.1 .2.total_cmp(&b.1 .2))?;
     // Video ve yayın izlerken bu programlar önbelleğe de yazar; 4K akış ~3 MB/sn'yi geçmez.
-    let streaming = STREAMING.contains(&w.1.to_lowercase().as_str());
-    if streaming && rx < STREAM_RX {
+    let streaming = is_streaming(&w.1);
+    if streaming && (rx < STREAM_RX || game) {
+        return None;
+    }
+    if game && !is_downloader(&w.1) {
         return None;
     }
     (w.2 >= START_W && w.2 >= rx * 0.2).then_some(i)
+}
+
+/// Sürüyor mu: alım ve sürecin kendi yazımı birlikte devam etmeli.
+fn keeps(rx: f64, write: f64, exe: &str) -> bool {
+    let min_rx = if is_streaming(exe) { STREAM_KEEP_RX } else { KEEP_RX };
+    rx >= min_rx && write >= KEEP_W
+}
+
+fn is_streaming(exe: &str) -> bool {
+    STREAMING.contains(&exe.to_lowercase().as_str())
+}
+
+/// Bilinen indirme programı (oyun mağazası, torrent, Windows Update…).
+fn is_downloader(exe: &str) -> bool {
+    !is_streaming(exe) && known(exe).is_some()
+}
+
+fn default_label(exe: &str) -> String {
+    let stem = exe.strip_suffix(".exe").or_else(|| exe.strip_suffix(".EXE")).unwrap_or(exe);
+    let mut c = stem.chars();
+    c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default()
 }
 
 /// Tarayıcılar ve yayın/görüşme uygulamaları: asıl işleri akış olduğu için
@@ -140,12 +171,22 @@ const STREAMING: &[&str] = &[
     "zoom.exe",
     "slack.exe",
     "spotify.exe",
+    // Steam'in arayüzü (mağaza, yayın, arkadaş listesi); asıl indirici steam.exe.
+    "steamwebhelper.exe",
+    "epicwebhelper.exe",
+    "claude.exe",
+    "whatsapp.exe",
+    "telegram.exe",
+    "lunar client.exe",
 ];
 const STREAM_RX: f64 = 5.0 * MB;
+/// Akış programı bir kez indirme sayıldıysa sürmesi için gereken alım.
+const STREAM_KEEP_RX: f64 = 1.0 * MB;
 
 struct Active {
     pid: u32,
     name: String,
+    exe: String,
     got: f64,
     miss: u8,
 }
@@ -183,8 +224,11 @@ impl Watch {
         self.w = seen;
 
         if let Some(a) = &mut self.active {
-            let wrote = writes.iter().any(|w| w.0 == a.pid && w.2 > 0.0);
-            if rx >= KEEP_RX && wrote {
+            let wrote = writes.iter().find(|w| w.0 == a.pid).map_or(0.0, |w| w.2);
+            // Steam kendi kaydında indirme yokken (oyun oynarken önbellek,
+            // atölye, arayüz) yazsa da indirmiyordur.
+            let steam_ok = a.name != "Steam" || crate::steam::downloading().is_some();
+            if steam_ok && keeps(rx, wrote, &a.exe) {
                 a.miss = 0;
             } else {
                 a.miss += 1;
@@ -197,7 +241,8 @@ impl Watch {
             a.got += rx * dt;
             return Some((a.name.clone(), a.got as u64, rx));
         }
-        let Some(i) = pick(rx, &writes) else {
+        let game = rx >= START_RX && carlui_core::win::game_in_front();
+        let Some(i) = pick(rx, &writes, game) else {
             self.cand = None;
             return None;
         };
@@ -211,8 +256,12 @@ impl Watch {
             return None;
         }
         let name = label(&writes[i].1);
+        if name == "Steam" && crate::steam::downloading().is_none() {
+            self.cand = None;
+            return None;
+        }
         carlui_core::info!("indirme sezildi: {name} ({:.1} MB/sn)", rx / MB);
-        self.active = Some(Active { pid, name: name.clone(), got: rx * dt * CONFIRM as f64, miss: 0 });
+        self.active = Some(Active { pid, name: name.clone(), exe: writes[i].1.clone(), got: rx * dt * CONFIRM as f64, miss: 0 });
         Some((name, (rx * dt * CONFIRM as f64) as u64, rx))
     }
 }
@@ -311,21 +360,50 @@ mod tests {
     fn picks() {
         let w = |v: &[(u32, f64)]| v.iter().map(|&(p, r)| (p, format!("p{p}.exe"), r * MB)).collect::<Vec<_>>();
         // Hızlı alım + hızlı yazım: en çok yazan seçilir.
-        assert_eq!(pick(40.0 * MB, &w(&[(1, 0.2), (2, 38.0)])), Some(1));
+        assert_eq!(pick(40.0 * MB, &w(&[(1, 0.2), (2, 38.0)]), false), Some(1));
         // Alım yok: yazım ne kadar çok olursa olsun indirme değil.
-        assert_eq!(pick(0.1 * MB, &w(&[(2, 300.0)])), None);
+        assert_eq!(pick(0.1 * MB, &w(&[(2, 300.0)]), false), None);
         // Video izlerken: alım var ama kimse kayda değer yazmıyor.
-        assert_eq!(pick(8.0 * MB, &w(&[(2, 0.3)])), None);
+        assert_eq!(pick(8.0 * MB, &w(&[(2, 0.3)]), false), None);
         // Yazım alımın çok altında (başka bir şey yazıyor).
-        assert_eq!(pick(50.0 * MB, &w(&[(2, 4.0)])), None);
+        assert_eq!(pick(50.0 * MB, &w(&[(2, 4.0)]), false), None);
         // Tarayıcıda 4K video: önbelleğe yazsa da indirme sayılmaz.
         let ff = vec![(9, "firefox.exe".to_string(), 3.0 * MB)];
-        assert_eq!(pick(3.0 * MB, &ff), None);
-        assert_eq!(pick(30.0 * MB, &[(9, "firefox.exe".to_string(), 30.0 * MB)]), Some(0));
+        assert_eq!(pick(3.0 * MB, &ff, false), None);
+        assert_eq!(pick(30.0 * MB, &[(9, "firefox.exe".to_string(), 30.0 * MB)], false), Some(0));
         // Discord'da yayın izlemek indirme değil; gerçekten hızlı inerse sayılır.
         let dc = |r: f64| vec![(7, "Discord.exe".to_string(), r * MB)];
-        assert_eq!(pick(2.0 * MB, &dc(1.5)), None);
-        assert_eq!(pick(20.0 * MB, &dc(20.0)), Some(0));
+        assert_eq!(pick(2.0 * MB, &dc(1.5), false), None);
+        assert_eq!(pick(20.0 * MB, &dc(20.0), false), Some(0));
+        // Steam arayüzü ve Electron sohbet uygulamaları da akış sayılır.
+        let one = |exe: &str, r: f64| vec![(5, exe.to_string(), r * MB)];
+        assert_eq!(pick(1.2 * MB, &one("steamwebhelper.exe", 1.0), false), None);
+        assert_eq!(pick(1.1 * MB, &one("claude.exe", 1.0), false), None);
+    }
+
+    #[test]
+    fn in_game() {
+        let one = |exe: &str, r: f64| vec![(5, exe.to_string(), r * MB)];
+        // Oyun önde: bilinmeyen süreç ya da Discord indirme sayılmaz…
+        assert_eq!(pick(30.0 * MB, &one("cs2.exe", 20.0), true), None);
+        assert_eq!(pick(30.0 * MB, &one("Discord.exe", 20.0), true), None);
+        assert_eq!(pick(30.0 * MB, &one("obs64.exe", 20.0), true), None);
+        // …Steam güncellemesi ya da torrent sayılır.
+        assert_eq!(pick(30.0 * MB, &one("steam.exe", 25.0), true), Some(0));
+        assert_eq!(pick(30.0 * MB, &one("qbittorrent.exe", 25.0), true), Some(0));
+    }
+
+    #[test]
+    fn keep() {
+        // Sürekli küçük yazım + oyun trafiği indirmeyi açık tutmaz.
+        assert!(!keeps(0.5 * MB, 0.05 * MB, "steam.exe"));
+        assert!(!keeps(0.3 * MB, 0.01 * MB, "Discord.exe"));
+        // Gerçek indirme sürer.
+        assert!(keeps(20.0 * MB, 18.0 * MB, "steam.exe"));
+        assert!(keeps(0.5 * MB, 0.4 * MB, "aria2c.exe"));
+        // Akış programı yavaşlayınca biter.
+        assert!(!keeps(0.6 * MB, 0.6 * MB, "Discord.exe"));
+        assert!(keeps(8.0 * MB, 8.0 * MB, "Discord.exe"));
     }
 
     /// Canlı: `cargo test -p carlui-island -- --ignored live --nocapture`
