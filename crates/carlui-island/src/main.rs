@@ -568,6 +568,7 @@ impl App {
         self.island.apply_theme(&theme);
         self.pop.apply_theme(&theme);
         self.island.set_style(cfg.island.style, cfg.island.top_margin);
+        self.island.set_note_scene(island::scene_from(&cfg));
         let monitor_changed = cfg.general.top_monitor != self.cfg.general.top_monitor;
         let banners = cfg.notify.enabled && cfg.notify.hide_windows_banners;
         if banners != (self.cfg.notify.enabled && self.cfg.notify.hide_windows_banners) {
@@ -1008,6 +1009,7 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
             WM_TIMER => {
                 with_app(|a| match wp.0 {
                     island::TIMER_REGION => a.island.region_done(),
+                    island::TIMER_FX => a.island.fx_tick(),
                     TIMER_CLOCK => {
                         let (_, sec, _, _) = island::now_hm();
                         SetTimer(hwnd, TIMER_CLOCK, (60 - sec as u32) * 1000 + 50, None);
@@ -1230,6 +1232,7 @@ fn main() -> Result<()> {
         let s = dpi.0 as f32 / 96.0;
         let mut island = Island::new(&gfx, hwnd, &theme, s, cfg.island.top_margin)?;
         island.set_style(cfg.island.style, cfg.island.top_margin);
+        island.set_note_scene(island::scene_from(&cfg));
 
         let hwnd_raw = hwnd.0 as isize;
         let inbox: Arc<Mutex<VecDeque<Event>>> = Arc::default();

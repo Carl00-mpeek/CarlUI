@@ -33,11 +33,13 @@ pub type Tint = (u8, u8, u8);
 pub struct Resolved {
     pub kind: Kind,
     pub tint: Option<Tint>,
+    /// Canlı havada şiddet, gece katmanı ve cam damlaları; elle seçilen sahnede varsayılan.
+    pub mix: super::mix::Mix,
 }
 
 /// Ayardaki sahneyi (saat kipi dahil) somut sahneye çevirir. `None`: sahne yok.
 pub fn resolve(scene: LiveScene, hour: u32, minute: u32) -> Option<Resolved> {
-    let r = |kind, tint| Some(Resolved { kind, tint });
+    let r = |kind, tint| Some(Resolved { kind, tint, mix: Default::default() });
     match scene {
         LiveScene::None => None,
         LiveScene::Rain => r(Kind::Rain, Some((90, 110, 140))),

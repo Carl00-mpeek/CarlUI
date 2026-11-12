@@ -58,9 +58,11 @@
 
 - **Dock:** Sabitlenmiş ve açık uygulamalar, canlı pencere önizlemeleri,
   sürükle-bırak, otomatik gizleme, Win+1…9, Geri Dönüşüm Kutusu.
-- **Canlı dock:** Dock'ta küçük piksel hayvanlar yaşar (kedi, kertenkele,
-  örümcek, yılan, yunus); yağmur, kar, gece, bulut ve akvaryum sahneleri var.
-  Çok hafiftir; tam ekran oyunda ve pilde durur.
+- **Canlı dock:** Dock'ta küçük piksel hayvanlar yaşar (kedi, köpek, fare,
+  sincap, kertenkele, örümcek, yılan, yunus; bazıları farklı renklerde); yağmur,
+  kar, gece, bulut ve akvaryum sahneleri var. Sahne seçtiğin şehrin gerçek
+  havasını da izleyebilir (veri: Open-Meteo.com, CC BY 4.0) ve bildirim
+  kartlarının arkasında da görünür. Çok hafiftir; tam ekran oyunda ve pilde durur.
 - **Fotoğraftan hayvan:** Bir fotoğraf seç, bilgisayarındaki yapay zekâ özneyi
   kesip piksel hayvana çevirsin. Fotoğraf bilgisayarından çıkmaz.
 - **Ada:** Üst ortada saat; bildirimler, çalan şarkı (kapak, ilerleme,

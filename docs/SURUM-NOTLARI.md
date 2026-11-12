@@ -1,5 +1,26 @@
 # Sürüm notları
 
+## v0.11.0 — Canlı hava, yeni hayvanlar ve renkler, bildirim efektleri (2026-11-12)
+
+**Yeni: Canlı hava.** Dock sahnesi seçtiğin şehrin gerçek havasını izleyebilir:
+yağmur, kar, bulut ve gece (ay ve yıldızlar). Bağlantı yoksa seçtiğin sahne
+gösterilir. Yoğunluk Hafif / Normal; canlı dock tam ekran oyunda ve pilde durur.
+Yalnızca seçtiğin yerin koordinatları (iki ondalık basamağa yuvarlanmış)
+Open-Meteo'ya gider; hesap ya da anahtar yoktur. Şehir ararken yazdığın ad da
+Open-Meteo'nun arama servisine gönderilir. Veri en çok 20 dakikada bir yenilenir.
+Ayarlar → Dock → Canlı hava. Hava verisi: Open-Meteo.com (https://open-meteo.com),
+CC BY 4.0.
+
+**Yeni: Hayvanlar ve renkler.** Köpek (altın rengi), fare ve sincap eklendi. Kedi
+(siyah, gri, beyaz) ve köpek (siyah, kahverengi, beyaz) için "Renk" seçeneği var.
+Ayarlar'da her hayvanın ve rengin yanında küçük bir önizleme resmi görünür.
+
+**Akvaryum.** Balıklar küçüldü, iki yeni balık türü eklendi; yunus biraz büyüdü.
+
+**Bildirim efektleri.** Dock'ta seçili sahne (yağmur, kar, gece, bulut) bildirim
+kartının arkasında da görünür; yazı her zaman okunur kalır. Gerçek hava açıksa kart
+da o havayı gösterir. Ayarlar → Ada → "Bildirimlerde sahne efekti".
+
 ## v0.10.0 — Canlı dock, fotoğraftan hayvan, hazır görünümler (2026-11-12)
 
 **Yeni: Canlı dock.** Dock'ta küçük piksel hayvanlar yaşar: kedi, kertenkele,

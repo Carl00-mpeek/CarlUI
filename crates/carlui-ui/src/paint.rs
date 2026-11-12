@@ -422,6 +422,13 @@ impl<A: Clone> Painter<'_, A> {
     /// Bölümlü seçici; seçili olan vurgu renginde. Vurgu seçenekler arasında
     /// kayar, üstüne gelinen hücre yumuşakça aydınlanır.
     pub fn segments(&mut self, r: R, items: &[(&str, A)], selected: usize) {
+        self.segments_lead(r, items, selected, &[], &|_, _, _| {});
+    }
+
+    /// `segments`; her hücrenin yazısının soluna `lead_w[i]` genişliğinde bir
+    /// simge alanı ayrılır (0 ya da eksik: yok) ve `draw(painter, i, alan)`
+    /// o alana çizer. Simge + yazı hücrede birlikte ortalanır.
+    pub fn segments_lead(&mut self, r: R, items: &[(&str, A)], selected: usize, lead_w: &[f32], draw: &dyn Fn(&Self, usize, R)) {
         self.round(r, 7.0, 0xFFFFFF, 0.06);
         self.outline(r, 7.0, 0xFFFFFF, 0.08);
         let w = r.w / items.len() as f32;
@@ -444,7 +451,18 @@ impl<A: Clone> Painter<'_, A> {
             let cell = R::new(r.x + w * i as f32, r.y, w, r.h).inset(3.0);
             // Yazı rengi vurgu altına girdikçe koyulaşır.
             let under = (1.0 - (pos - i as f32).abs()).clamp(0.0, 1.0) * vis;
-            self.text(label, cell, 13.0, i == selected, mix(TEXT, 0x000000, under), 0.9, Align::Center);
+            let lead = lead_w.get(i).copied().unwrap_or(0.0);
+            if lead > 0.0 {
+                const GAP: f32 = 6.0;
+                // Hep kalın ölçülür: seçim değişince grup kaymasın.
+                let group = lead + GAP + self.fonts.width(label, 13.0, true);
+                let x0 = cell.x + ((cell.w - group) / 2.0).max(0.0);
+                draw(self, i, R::new(x0, cell.y, lead, cell.h));
+                let tr = R::new(x0 + lead + GAP, cell.y, (cell.right() - x0 - lead - GAP).max(0.0), cell.h);
+                self.text(label, tr, 13.0, i == selected, mix(TEXT, 0x000000, under), 0.9, Align::Left);
+            } else {
+                self.text(label, cell, 13.0, i == selected, mix(TEXT, 0x000000, under), 0.9, Align::Center);
+            }
             self.hit(cell, act.clone());
         }
     }

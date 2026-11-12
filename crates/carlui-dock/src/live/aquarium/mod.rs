@@ -14,7 +14,7 @@ use carlui_ui::{
     gfx::Gfx,
     glass::{v2, v3},
 };
-use sim::{Sim, BUBBLE, FISH};
+use sim::{Sim, BUBBLE, KINDS};
 use windows::{
     core::*,
     Foundation::Numerics::Vector3,
@@ -22,14 +22,17 @@ use windows::{
     UI::Composition::*,
 };
 
-/// Kabarcık büyütmesi (tam sayı): 8 px sanat 16 px görünür.
-const BUBBLE_ZOOM: f32 = 2.0;
+/// Kabarcık büyütmesi (tam sayı): balıklar da büyütülmediği için 1; kabarcık
+/// balıktan iri görünmesin.
+const BUBBLE_ZOOM: f32 = 1.0;
 
-const FILES: Files = embed!("scenes/aquarium": "fish_a.png", "fish_b.png", "fish_c.png", "bubble.png");
+/// Balık dosyaları `sim::KINDS` sırasıyla.
+const FISH_FILES: [&str; 5] = ["fish_a.png", "fish_b.png", "fish_c.png", "fish_d.png", "fish_e.png"];
+const FILES: Files = embed!("scenes/aquarium": "fish_a.png", "fish_b.png", "fish_c.png", "fish_d.png", "fish_e.png", "bubble.png");
 
 pub struct Aquarium {
     sim: Sim,
-    fish: [Vec<CompositionSurfaceBrush>; 3],
+    fish: Vec<Vec<CompositionSurfaceBrush>>,
     bubble: Vec<CompositionSurfaceBrush>,
     v_fish: Vec<SpriteVisual>,
     v_bubble: Vec<SpriteVisual>,
@@ -49,14 +52,12 @@ impl Aquarium {
             }
             gpu::frames(gfx, sh, sh.w / fw as u32)
         };
-        let fish = [get("fish_a.png", FISH.0, FISH.1)?, get("fish_b.png", FISH.0, FISH.1)?, get("fish_c.png", FISH.0, FISH.1)?];
+        let fish = FISH_FILES.iter().zip(KINDS).map(|(n, (fw, fh))| get(n, fw, fh)).collect::<Result<Vec<_>>>()?;
         let bubble = get("bubble.png", BUBBLE, BUBBLE)?;
         drop(sheets);
         let k = s.round().max(1.0);
-        // Balık camın ~%60'ı boyunda olsun; büyütme tam sayı (keskin piksel).
-        let fz = sim::zoom_for(size.1 / k);
-        let sim = Sim::new(size.0 / k, size.1 / k, dense, fz, Rng::from_time());
-        let (fw, fh) = sim.fish_size();
+        // Balıklar yunusla aynı ölçekte (büyütme yok): yunusun ≈%25-38'i.
+        let sim = Sim::new(size.0 / k, size.1 / k, dense, Rng::from_time());
         let bz = BUBBLE * BUBBLE_ZOOM;
         let kids = root.Children()?;
         let mk =|w: f32, h: f32| -> Result<SpriteVisual> {
@@ -68,7 +69,7 @@ impl Aquarium {
         };
         // Kabarcıklar balıkların arkasında.
         let v_bubble = (0..sim.bubbles.len()).map(|_| mk(bz, bz)).collect::<Result<Vec<_>>>()?;
-        let v_fish = (0..sim.fish.len()).map(|_| mk(fw, fh)).collect::<Result<Vec<_>>>()?;
+        let v_fish = sim.fish.iter().map(|f| mk(f.size().0, f.size().1)).collect::<Result<Vec<_>>>()?;
         let mut a = Self { sim, fish, bubble, v_fish, v_bubble, k, last: Vec::new() };
         a.render()?;
         Ok(a)
@@ -86,10 +87,10 @@ impl Aquarium {
     pub fn render(&mut self) -> Result<()> {
         let k = self.k;
         let h = self.sim.h;
-        let fs = self.sim.fish_size();
         let bz = BUBBLE * BUBBLE_ZOOM;
-        let fish = self.sim.fish.iter().map(|f| (f.kind, f.frame, f.x, f.y, f.dir < 0.0, fs));
-        let bubbles = self.sim.bubbles.iter().map(|b| (3, b.frame(h), b.x, b.y, false, (bz, bz)));
+        let nf = self.fish.len() as u8;
+        let fish = self.sim.fish.iter().map(|f| (f.kind, f.frame, f.x, f.y, f.dir < 0.0, f.size()));
+        let bubbles = self.sim.bubbles.iter().map(|b| (nf, b.frame(h), b.x, b.y, false, (bz, bz)));
         let visuals = self.v_fish.iter().chain(&self.v_bubble);
         self.last.resize(self.v_fish.len() + self.v_bubble.len(), (u8::MAX, 0, 0, false));
         for (i, ((set, frame, x, y, mirror, size), v)) in fish.chain(bubbles).zip(visuals).enumerate() {
@@ -99,7 +100,7 @@ impl Aquarium {
                 continue;
             }
             if last.0 != now.0 {
-                let list = if set < 3 { &self.fish[set as usize] } else { &self.bubble };
+                let list = self.fish.get(set as usize).unwrap_or(&self.bubble);
                 if let Some(b) = list.get(frame as usize) {
                     v.SetBrush(b)?;
                 }

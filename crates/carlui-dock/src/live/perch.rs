@@ -1,4 +1,4 @@
-//! Şerit hayvanın (kedi, kertenkele, örümcek, kullanıcı paketi) tüneği.
+//! Şerit hayvanın (kedi, köpek, kertenkele, örümcek, kullanıcı paketi) tüneği.
 //! Pencere bir kare yüksekliğindedir ve alt kenarı hayvanın taban çizgisidir
 //! (bkz. `window.rs`). Her kare, paket yüklenirken bir kez oluşturulan
 //! yüzeylerden birine fırça değiştirmektir.

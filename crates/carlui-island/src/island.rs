@@ -36,6 +36,7 @@ use windows::{
 };
 
 mod clipview;
+mod fx;
 mod hub;
 mod listen;
 mod mood;
@@ -44,6 +45,7 @@ mod spot;
 mod wave;
 
 pub use clipview::panel_size as clip_panel_size;
+pub use fx::{scene_from, TIMER_FX};
 pub use hub::{groups, HubView, Stat};
 pub use listen::{ListenStage, ListenView};
 use mood::hsv_to_rgb;
@@ -286,6 +288,8 @@ pub struct Island {
     listen_strips: Option<((u32, u32, bool), Vec<CompositionDrawingSurface>)>,
     /// Hub'ın üst satırı: (kap, genişlik, gösterge sayısı); saniyelik yenileme için.
     hub_stats: Option<(ContainerVisual, f32, usize)>,
+    /// Bildirim kartının sahne efekti (bkz. `fx.rs`).
+    fx: fx::FxState,
 }
 
 impl Island {
@@ -351,6 +355,7 @@ impl Island {
             listen_fx,
             listen_strips: None,
             hub_stats: None,
+            fx: Default::default(),
         })
     }
 
@@ -800,6 +805,7 @@ impl Island {
                         px += pw + 6.0 * s;
                     }
                 }
+                self.fx_attach(gfx, &c, w, h);
                 (w, h)
             }
             View::Search => self.build_search(gfx, &kids, m)?,
@@ -906,6 +912,7 @@ impl Island {
     /// (saat dakikası, şarkı durumu gibi küçük güncellemeler).
     pub fn set_view(&mut self, gfx: &Gfx, view: View, m: &Model, animate: bool) -> Result<()> {
         let was = self.view;
+        self.fx_stop();
         let old_rect = self.pill_rect();
         // Eski içerikleri temizle (önceki geçişten kalanlar).
         for o in self.old.drain(..) {
@@ -1013,6 +1020,7 @@ impl Island {
         }
         self.content = Some(c);
         self.size = (w, h);
+        self.fx_begin();
         if !self.slid_up {
             let new_rect = self.pill_rect();
             let union = RECT {
@@ -1057,6 +1065,7 @@ impl Island {
             }
         }
         self.drop_old_cards();
+        self.fx_release();
         if self.view == View::Hidden || self.slid_up {
             self.set_region(None);
         } else if let Some(r) = self.card_region() {

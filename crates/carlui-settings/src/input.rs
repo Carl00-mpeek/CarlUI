@@ -39,6 +39,9 @@ pub enum Form {
     /// Fotoğraftan yapılan hayvanın adı (tek alan; `pages::dock_live_photo`
     /// işler, alan kendi satırında çizilir).
     PetName,
+    /// Canlı hava: aranacak şehir adı (tek alan; `pages::dock_live_weather`
+    /// işler, alan kendi satırında çizilir).
+    City,
 }
 
 pub struct Input {
@@ -95,7 +98,7 @@ impl Input {
     /// Ayara ekler; olmazsa hatayı yazar ve false döner.
     pub fn apply(&mut self, cfg: &mut Config) -> bool {
         // Görünüm formları ayara değil görünüm listesine yazar (bkz. `pages::looks`).
-        if matches!(self.kind, Form::LookName | Form::LookRename | Form::PetName) {
+        if matches!(self.kind, Form::LookName | Form::LookRename | Form::PetName | Form::City) {
             return false;
         }
         if self.kind.single() {
@@ -217,7 +220,7 @@ mod tests {
 impl Form {
     /// Tek alanlı form mu (yalnızca ad).
     pub fn single(self) -> bool {
-        matches!(self, Form::NotifyApp | Form::ClipApp | Form::ExpandApp | Form::ShotName | Form::AccentHex | Form::LookName | Form::LookRename | Form::PetName)
+        matches!(self, Form::NotifyApp | Form::ClipApp | Form::ExpandApp | Form::ShotName | Form::AccentHex | Form::LookName | Form::LookRename | Form::PetName | Form::City)
     }
 
     /// Onay düğmesinin yazısı.
@@ -225,6 +228,7 @@ impl Form {
         match self {
             Form::LookName | Form::LookRename => carlui_core::t!("Kaydet", "Save"),
             Form::PetName => carlui_core::t!("Oluştur", "Create"),
+            Form::City => carlui_core::t!("Ara", "Search"),
             _ => carlui_core::t!("Ekle", "Add"),
         }
     }
@@ -234,6 +238,7 @@ impl Form {
         match self {
             Form::LookName | Form::LookRename => carlui_core::t!("kaydet", "save"),
             Form::PetName => carlui_core::t!("oluştur", "create"),
+            Form::City => carlui_core::t!("ara", "search"),
             _ => carlui_core::t!("ekle", "add"),
         }
     }
@@ -328,7 +333,7 @@ mod accent_tests {
     /// İpucundaki Enter fiili onay düğmesiyle aynı olmalı.
     #[test]
     fn hint_follows_ok_label() {
-        for kind in [Form::Engine, Form::Snippet, Form::NotifyApp, Form::AccentHex, Form::LookName, Form::LookRename, Form::PetName] {
+        for kind in [Form::Engine, Form::Snippet, Form::NotifyApp, Form::AccentHex, Form::LookName, Form::LookRename, Form::PetName, Form::City] {
             let hint = kind.keys_hint(!kind.single());
             assert!(hint.contains(&format!("Enter: {}", kind.ok_label().to_lowercase())), "{kind:?}: {hint}");
         }

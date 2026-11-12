@@ -1,0 +1,19 @@
+{
+  "name": "Gri Kedi",
+  "frame_width": 32,
+  "frame_height": 24,
+  "scale": 1,
+  "filter": "nearest",
+  "facing": "right",
+  "baseline": 24,
+  "walk_speed": 18,
+  "states": {
+    "idle": { "file": "idle.png", "frames": 8, "ms": 150 },
+    "walk": { "file": "walk.png", "frames": 8, "ms": 100 },
+    "sleep": { "file": "sleep.png", "frames": 4, "ms": 400 },
+    "stretch": { "file": "stretch.png", "frames": 8, "ms": 120 },
+    "sit_up": { "file": "sit_up.png", "frames": 4, "ms": 110, "reverse_out": true },
+    "alert": { "file": "sit_up.png", "frames": 4, "ms": 110 },
+    "lick": { "file": "lick.png", "frames": 6, "ms": 130 }
+  }
+}

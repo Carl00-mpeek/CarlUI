@@ -1,5 +1,5 @@
-//! Evcil hayvanların yüklenmesi. Şerit paketleri (yerleşik kedi, kertenkele,
-//! örümcek ve kullanıcı paketleri) AYNI yoldan geçer: `pet.json` doğrulanır,
+//! Evcil hayvanların yüklenmesi. Şerit paketleri (yerleşik kedi, köpek,
+//! kertenkele, örümcek ve kullanıcı paketleri) AYNI yoldan geçer: `pet.json` doğrulanır,
 //! PNG şeritleri ayrı bir iş parçacığında WIC ile çözülür, sonuç dock
 //! penceresine bir mesajla bildirilir. Yılan ve yunus kendi çizim
 //! parçalarıyla (adlı sayfalar) gelir. Yüzeyler (GPU) UI iş parçacığında bir
@@ -32,6 +32,16 @@ pub(crate) use embed;
 fn strip_pack(name: &str) -> Option<Files> {
     Some(match name {
         "cat" => embed!("pets/cat": "pet.json", "idle.png", "walk.png", "sleep.png", "stretch.png", "sit_up.png", "lick.png"),
+        // Golden retriever: "lick" soluma, "hop" kısa koşu, "stretch" oyun daveti.
+        "cat_black" => embed!("pets/cat_black": "pet.json", "idle.png", "walk.png", "sleep.png", "stretch.png", "sit_up.png", "lick.png"),
+        "cat_gray" => embed!("pets/cat_gray": "pet.json", "idle.png", "walk.png", "sleep.png", "stretch.png", "sit_up.png", "lick.png"),
+        "cat_white" => embed!("pets/cat_white": "pet.json", "idle.png", "walk.png", "sleep.png", "stretch.png", "sit_up.png", "lick.png"),
+        "dog" => embed!("pets/dog": "pet.json", "idle.png", "walk.png", "sleep.png", "stretch.png", "sit_up.png", "alert.png", "pant.png", "run.png"),
+        "dog_black" => embed!("pets/dog_black": "pet.json", "idle.png", "walk.png", "sleep.png", "stretch.png", "sit_up.png", "alert.png", "pant.png", "run.png"),
+        "dog_brown" => embed!("pets/dog_brown": "pet.json", "idle.png", "walk.png", "sleep.png", "stretch.png", "sit_up.png", "alert.png", "pant.png", "run.png"),
+        "dog_white" => embed!("pets/dog_white": "pet.json", "idle.png", "walk.png", "sleep.png", "stretch.png", "sit_up.png", "alert.png", "pant.png", "run.png"),
+        "mouse" => embed!("pets/mouse": "pet.json", "idle.png", "walk.png", "sleep.png", "stretch.png", "sit_up.png", "alert.png", "pant.png", "run.png"),
+        "squirrel" => embed!("pets/squirrel": "pet.json", "idle.png", "walk.png", "sleep.png", "stretch.png", "sit_up.png", "alert.png", "pant.png", "run.png"),
         "lizard" => embed!("pets/lizard": "pet.json", "idle.png", "walk.png", "bask.png", "look_up.png"),
         "spider" => embed!("pets/spider": "pet.json", "idle.png", "walk.png", "sleep.png", "hop.png"),
         _ => return None,
@@ -54,7 +64,7 @@ pub const DOLPHIN_FILES: Files = embed!("pets/dolphin": "swim.png", "leap.png", 
 /// Hangi hayvan yüklenecek.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Source {
-    /// Gömülü şerit paketi (cat / lizard / spider).
+    /// Gömülü şerit paketi (cat / dog / lizard / spider).
     Builtin(&'static str),
     Snake,
     Dolphin,
@@ -248,7 +258,7 @@ mod tests {
     fn yerlesik_paketler_gecerli() {
         com();
         let mut total = 0usize;
-        for name in ["cat", "lizard", "spider"] {
+        for name in ["cat", "cat_black", "cat_gray", "cat_white", "dog", "dog_black", "dog_brown", "dog_white", "mouse", "squirrel", "lizard", "spider"] {
             total += strip_pack(name).unwrap().iter().map(|(_, b)| b.len()).sum::<usize>();
             let Ok(Loaded::Strip(d)) = decode(&Source::Builtin(name)) else { panic!("{name} çözülemedi") };
             assert!(d.strips.len() >= 4, "{name}");
@@ -275,6 +285,7 @@ mod tests {
         assert_eq!(Source::from_config(""), None);
         assert_eq!(Source::from_config(" cat "), Some(Source::Builtin("cat")));
         assert_eq!(Source::from_config("spider"), Some(Source::Builtin("spider")));
+        assert_eq!(Source::from_config("dog"), Some(Source::Builtin("dog")));
         assert_eq!(Source::from_config("snake"), Some(Source::Snake));
         assert_eq!(Source::from_config("dolphin"), Some(Source::Dolphin));
         assert_eq!(Source::from_config("tilki"), Some(Source::User("tilki".into())));

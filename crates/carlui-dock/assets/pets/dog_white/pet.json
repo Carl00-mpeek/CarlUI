@@ -1,0 +1,2 @@
+{"name":"Beyaz Köpek","frame_width":32,"frame_height":24,"scale":1,"filter":"nearest","facing":"right","baseline":24,"walk_speed":20,
+ "states":{"idle":{"file":"idle.png","frames":8,"ms":140},"walk":{"file":"walk.png","frames":8,"ms":95},"sleep":{"file":"sleep.png","frames":4,"ms":450},"stretch":{"file":"stretch.png","frames":8,"ms":130},"sit_up":{"file":"sit_up.png","frames":4,"ms":110,"reverse_out":true},"alert":{"file":"alert.png","frames":4,"ms":160},"lick":{"file":"pant.png","frames":6,"ms":150},"hop":{"file":"run.png","frames":6,"ms":80}}}

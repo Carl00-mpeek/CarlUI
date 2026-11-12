@@ -11,6 +11,8 @@ mod dock;
 mod dock_live;
 pub mod dock_live_photo;
 mod dock_live_photo_job;
+pub mod dock_live_thumbs;
+pub mod dock_live_weather;
 pub mod extension;
 mod game;
 mod form;

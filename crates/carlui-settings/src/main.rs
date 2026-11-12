@@ -91,6 +91,8 @@ pub enum Act {
     Look(pages::looks::LookAct),
     /// Canlı dock: fotoğraftan hayvan yapma akışı.
     PetPhoto(pages::dock_live_photo::PhotoAct),
+    /// Canlı dock: gerçek hava (şehir arama ve seçme).
+    Weather(pages::dock_live_weather::WeatherAct),
     /// İlk kurulum karşılamasını (`--welcome`) yeniden aç.
     Welcome,
 }
@@ -182,6 +184,7 @@ impl App {
         match a {
             Act::Look(l) => pages::looks::act(self, l),
             Act::PetPhoto(x) => pages::dock_live_photo::act(self, x),
+            Act::Weather(x) => pages::dock_live_weather::act(self, x),
             Act::Info(Some(id)) => info::toggle(id),
             Act::Info(None) => info::keep(),
             Act::Page(pg) => {
@@ -299,6 +302,11 @@ impl App {
             pages::dock_live_photo::submit(self);
             return;
         }
+        if i.kind == input::Form::City {
+            // Metin zaten durumda (`sync`); Enter aramayı başlatır.
+            pages::dock_live_weather::submit(self);
+            return;
+        }
         if pages::looks::owns(i.kind) {
             if !pages::looks::submit(self, &mut i) {
                 self.input = Some(i);
@@ -318,6 +326,7 @@ impl App {
         let r = i.char(hwnd, c);
         // Hayvan adı her tuşta akışın durumuna yazılır.
         pages::dock_live_photo::sync_name(self);
+        pages::dock_live_weather::sync(self);
         match r {
             Some(true) => self.submit_input(),
             Some(false) => self.input = None,
@@ -370,6 +379,7 @@ impl App {
             self.rt = Some(rt);
             // Eski hedefte yaratılmış bit eşlemler yenisinde kullanılamaz.
             pages::dock_live_photo::render_target_changed();
+            pages::dock_live_thumbs::render_target_changed();
         }
         let rt = self.rt.clone().unwrap();
         unsafe {

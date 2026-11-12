@@ -3,7 +3,10 @@
 //! Burada yalnızca konum/boyut/saydamlık hesaplanır; çizim `scene.rs`'de
 //! önbellekteki bitmap'lerin yerleştirilmesiyle yapılır.
 
-use super::rng::Rng;
+use super::{
+    mix::{self, Mix},
+    rng::Rng,
+};
 
 /// Sahne türü (saat kipi bunlardan birine çözülür, bkz. `sky.rs`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,6 +44,8 @@ pub enum Sprite {
     Cloud,
     /// Gece sahnesinde tek, duran ay (solda).
     Moon,
+    /// Camda kayan damlanın ince, silinen ıslak izi (yalnız `droplets.rs` kullanır).
+    Trail,
 }
 
 /// Tek parçacık. `x`, `y` merkez; `r` yarıçap (piksel); `len` dikey uzama
@@ -85,22 +90,22 @@ const MOON_R: f32 = 14.0;
 
 impl Sim {
     /// `dense` normal yoğunluk; değilse hafif (daha az parçacık).
+    #[cfg(test)]
     pub fn new(kind: Kind, w: f32, h: f32, s: f32, dense: bool, rng: Rng) -> Self {
-        let counts: &[(Sprite, usize, usize)] = match kind {
-            // Yağmur: ağırlık yağmur çizgilerinde (ilk bakışta "yağmur" okunsun),
-            // camdaki damlalar ikinci planda.
-            Kind::Rain => &[(Sprite::Drop, 6, 10), (Sprite::Streak, 24, 40)],
-            Kind::Snow => &[(Sprite::Flake, 26, 44)],
-            // Sıra çizim sırasıdır: ay yıldızların önünde, ateşböceklerinin arkasında.
-            Kind::Night => &[(Sprite::Star, 14, 24), (Sprite::Moon, 1, 1), (Sprite::Firefly, 4, 7)],
-            Kind::Clouds => &[(Sprite::Cloud, 4, 6)],
-            Kind::Aquarium => &[],
-        };
-        let n: usize = counts.iter().map(|c| if dense { c.2 } else { c.1 }).sum();
+        Self::with_mix(kind, w, h, s, dense, rng, Mix::default())
+    }
+
+    /// Canlı hava için: sayılar şiddete göre ölçeklenir, gece katmanı eklenebilir.
+    pub fn with_mix(kind: Kind, w: f32, h: f32, s: f32, dense: bool, rng: Rng, mix: Mix) -> Self {
+        let counts = mix::counts(kind, dense, mix);
+        // Yeniden doğma sırası `u8` dizinle tutulur: havuz 255'i aşmasın.
+        let n: usize = counts.iter().map(|c| c.1).sum::<usize>().min(255);
         let mut pool = Vec::with_capacity(n);
-        for &(sp, light, heavy) in counts {
-            for _ in 0..if dense { heavy } else { light } {
-                pool.push(P::new(sp));
+        for &(sp, count) in &counts {
+            for _ in 0..count {
+                if pool.len() < n {
+                    pool.push(P::new(sp));
+                }
             }
         }
         let mut sim = Self { kind, w: w.max(1.0), h: h.max(1.0), s: s.max(0.5), pool, rng, t: 0.0 };
@@ -143,6 +148,8 @@ impl Sim {
         match self.kind {
             Kind::Clouds => self.h * 1.2,
             Kind::Night => MOON_R * self.s,
+            // Yağış/bulut altına gece katmanı eklenmişse ay da sığmalı.
+            _ if self.pool.iter().any(|p| p.sprite == Sprite::Moon) => MOON_R * self.s,
             _ => 6.0 * self.s,
         }
     }
@@ -198,6 +205,7 @@ impl Sim {
                 p.y = h * 0.42;
                 p.a = 0.95;
             }
+            Sprite::Trail => {}
             Sprite::Star => {
                 p.x = r.range(0.0, w);
                 p.y = r.range(0.0, h);
@@ -279,7 +287,7 @@ impl Sim {
                     p.a = p.goal * (0.65 + 0.35 * (t * p.vx + p.phase).sin());
                     false
                 }
-                Sprite::Moon => false,
+                Sprite::Moon | Sprite::Trail => false,
                 Sprite::Firefly => {
                     p.vx = (p.vx + self.rng.range(-12.0, 12.0) * s * dt).clamp(-8.0 * s, 8.0 * s);
                     p.vy = (p.vy + self.rng.range(-8.0, 8.0) * s * dt).clamp(-4.0 * s, 4.0 * s);
@@ -436,6 +444,22 @@ mod tests {
             slid |= sim.pool.iter().any(|p| p.sprite == Sprite::Drop && p.sliding);
         }
         assert!(slid, "damlalar bir süre sonra kaymalı");
+    }
+
+    #[test]
+    fn hava_karisimi_sinirda_ve_ay_altta() {
+        for kind in [Kind::Rain, Kind::Snow, Kind::Clouds] {
+            let mix = Mix { level: Some(100), night: true, droplets: false };
+            let mut sim = Sim::with_mix(kind, 420.0, 52.0, 1.5, true, Rng::new(9), mix);
+            let n = sim.pool.len();
+            assert!(n > 20 && n <= 255);
+            // Gece katmanı en altta: ilk parçacıklar yıldız.
+            assert_eq!(sim.pool[0].sprite, Sprite::Star);
+            for _ in 0..20_000 {
+                sim.step(0.05);
+            }
+            check(&sim, n);
+        }
     }
 
     #[test]

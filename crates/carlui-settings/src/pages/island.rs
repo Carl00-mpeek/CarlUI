@@ -115,6 +115,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.slider(p, t!("Ekranda kalma süresi", "Time on screen"), "", cfg.notify.duration_ms as f32, 1000.0, 10000.0, 250.0, |v| t!(format!("{:.1} sn", v / 1000.0).replace('.', ","), format!("{:.1} s", v / 1000.0)), |c, v| c.notify.duration_ms = v as u32);
     f.toggle(p, t!("Tam ekran pencerede de göster", "Also show over maximized windows"), "", cfg.notify.over_maximized, |c| c.notify.over_maximized ^= true);
     f.toggle(p, t!("Windows bildirim balonlarını gizle", "Hide Windows notification banners"), t!("Bildirimler yalnızca adada görünür; Bildirim Merkezi'ne yine düşer.", "Notifications only show on the island; they still reach the Notification Center."), cfg.notify.hide_windows_banners, |c| c.notify.hide_windows_banners ^= true);
+    f.toggle(p, t!("Bildirimlerde sahne efekti", "Scene effect on notifications"), t!("Dock'ta seçili sahne (yağmur, kar, gece, bulut) bildirim kartında da görünür.", "The scene chosen for the dock (rain, snow, night, clouds) also shows on the notification card."), cfg.notify.notif_scene, |c| c.notify.notif_scene ^= true);
     let sel = match cfg.notify.sound {
         NotifySound::Windows => 0,
         NotifySound::Silent => 1,

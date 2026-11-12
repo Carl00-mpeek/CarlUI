@@ -8,6 +8,7 @@
 
 use super::{
     aquarium::Aquarium,
+    droplets_view::DropletsView,
     particles::{Kind, Sim, Sprite},
     rng::Rng,
     scene_art::{draw, palette, sprite_px, visual_size},
@@ -38,8 +39,12 @@ pub struct Scene {
     visuals: Vec<SpriteVisual>,
     sim: Sim,
     aquarium: Option<Aquarium>,
+    /// Gündüz yağmuru: camdaki damlalar (yalnız canlı havada).
+    droplets: Option<DropletsView>,
     pub resolved: Resolved,
     last: Vec<(f32, f32, f32)>,
+    /// Kök saydamlığın tavanı; geçişte `cap * fade` uygulanır.
+    cap: f32,
 }
 
 impl Scene {
@@ -47,7 +52,8 @@ impl Scene {
         let comp = &gfx.comp;
         let root = comp.CreateContainerVisual()?;
         root.SetRelativeSizeAdjustment(v2(1.0, 1.0))?;
-        root.SetOpacity(opacity_cap(intensity, theme.glass_tint.3))?;
+        let cap = opacity_cap(intensity, theme.glass_tint.3);
+        root.SetOpacity(cap)?;
         // Cam tonu (pus): saydamlığı düşük, tavanla birlikte daha da azalır.
         if let Some((r, g, b)) = resolved.tint {
             // Tavan yükseldi; pus aynı kalsın diye ton biraz azaltıldı.
@@ -57,7 +63,7 @@ impl Scene {
             tint.SetBrush(&comp.CreateColorBrushWithColor(exact(Rgba(r, g, b, a)))?)?;
             root.Children()?.InsertAtTop(&tint)?;
         }
-        let sim = Sim::new(resolved.kind, size.0, size.1, s, intensity == LiveIntensity::Normal, Rng::from_time());
+        let sim = Sim::with_mix(resolved.kind, size.0, size.1, s, intensity == LiveIntensity::Normal, Rng::from_time(), resolved.mix);
         let pal = palette(light, theme);
         // Türe göre önbellek: her bitmap bir kez çizilir, fırça paylaşılır.
         let mut cache: Vec<(Sprite, CompositionSurfaceBrush)> = Vec::new();
@@ -84,10 +90,15 @@ impl Scene {
             Kind::Aquarium => Some(Aquarium::new(gfx, &root, size, s, intensity == LiveIntensity::Normal)?),
             _ => None,
         };
+        // Gündüz yağmuru: pencere camındaki damlalar (kendi modülünde).
+        let droplets = match (resolved.kind, resolved.mix.droplets) {
+            (Kind::Rain, true) => Some(DropletsView::new(gfx, &root, size, s, resolved.mix.level.unwrap_or(50), &pal)?),
+            _ => None,
+        };
         parent.Children()?.InsertAtBottom(&root)?;
         // Son gönderilen (genişlik, yükseklik, saydamlık); bir kez ayrılır.
         let last = vec![(f32::NAN, f32::NAN, f32::NAN); visuals.len()];
-        let mut sc = Self { parent: parent.clone(), root, visuals, sim, aquarium, resolved, last };
+        let mut sc = Self { parent: parent.clone(), root, visuals, sim, aquarium, droplets, resolved, last, cap };
         sc.render()?;
         Ok(sc)
     }
@@ -104,10 +115,21 @@ impl Scene {
         if let Some(a) = self.aquarium.as_mut() {
             a.resize(size);
         }
+        if let Some(d) = self.droplets.as_mut() {
+            d.resize(size);
+        }
+    }
+
+    /// Geçiş: sahnenin görünürlüğü 0..=1 (tavan ile çarpılır; tavan aşılmaz).
+    pub fn set_fade(&self, f: f32) -> Result<()> {
+        self.root.SetOpacity(self.cap * f.clamp(0.0, 1.0))
     }
 
     pub fn step(&mut self, dt: f32) -> Result<()> {
         self.sim.step(dt);
+        if let Some(d) = self.droplets.as_mut() {
+            d.step(dt);
+        }
         if let Some(a) = self.aquarium.as_mut() {
             a.step(dt)?;
         }
@@ -118,6 +140,9 @@ impl Scene {
     pub fn render(&mut self) -> Result<()> {
         if let Some(a) = self.aquarium.as_mut() {
             a.render()?;
+        }
+        if let Some(d) = self.droplets.as_mut() {
+            d.render()?;
         }
         let last = &mut self.last;
         for (i, (p, v)) in self.sim.pool.iter().zip(&self.visuals).enumerate() {

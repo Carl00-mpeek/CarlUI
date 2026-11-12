@@ -12,8 +12,12 @@
 mod aquarium;
 mod creature;
 mod dolphin;
+mod droplets;
+mod droplets_view;
+mod fade;
 mod gpu;
 mod load;
+mod mix;
 mod pack;
 mod particles;
 mod pause;
@@ -24,10 +28,14 @@ mod rng;
 mod scene;
 mod scene_art;
 mod sky;
+mod sky_weather;
 mod snake;
+mod weather_link;
+mod weather_poll;
 mod window;
 
 pub use load::WM_APP_LIVE;
+use weather_poll::WM_APP_WEATHER;
 
 use crate::dock::Dock;
 use carlui_core::{info, live::LiveConfig, warn};
@@ -89,6 +97,15 @@ pub struct Live {
     scene: Option<Scene>,
     scene_last: Instant,
     scene_due: Instant,
+    /// Gerçek hava (dosyadan; `None`: özellik kapalı/veri yok → elle seçilen sahne).
+    wx: Option<carlui_core::weather::Weather>,
+    wx_checked: Instant,
+    /// Hava yoklayıcısı (yalnızca özellik açıkken; bırakılınca durur).
+    poll: Option<weather_poll::Poller>,
+    /// İlk kurulum bitti: bundan sonraki sahne değişimleri geçişli olur.
+    started: bool,
+    fade_in: Option<fade::Fade>,
+    fade_out: Option<(Scene, fade::Fade)>,
     /// Saat kipinde son bakılan dakika (dakikada en çok bir kez).
     clock_min: Option<u32>,
     perch: Option<Creature>,
@@ -123,6 +140,12 @@ impl Live {
             scene: None,
             scene_last: now,
             scene_due: now,
+            wx: carlui_core::weather::state::effective(&cfg.weather),
+            wx_checked: now,
+            poll: None,
+            started: false,
+            fade_in: None,
+            fade_out: None,
             clock_min: None,
             perch: None,
             pet_last: now,
@@ -141,8 +164,10 @@ impl Live {
                 warn!("canlı dock: geçersiz paket adı {:?}", cfg.pet);
             }
         }
+        l.start_poller(view.hwnd);
         l.build_scene(gfx, dock);
         l.refresh(gfx, dock);
+        l.started = true;
         Some(l)
     }
 
@@ -155,19 +180,22 @@ impl Live {
         let t = unsafe { GetLocalTime() };
         let (h, m) = (t.wHour as u32, t.wMinute as u32);
         self.clock_min = Some(h * 60 + m);
-        let Some(resolved) = sky::resolve(self.cfg.scene, h, m) else {
-            self.scene = None;
-            return;
-        };
-        if self.scene.as_ref().is_some_and(|s| s.resolved == resolved) {
+        let resolved = self.resolve_scene(h, m);
+        if self.scene.as_ref().map(|s| s.resolved) == resolved {
             return;
         }
-        self.scene = None; // eskisi önce gitsin (bellek)
+        // Eskisi önce ayrılır: geçişli ise silinerek gider, değilse hemen bırakılır (bellek).
+        let old = self.scene.take();
+        let Some(resolved) = resolved else {
+            self.begin_fade(old);
+            return;
+        };
         let view = dock.live_view();
         match Scene::new(gfx, &view.content, resolved, view.size, view.scale, self.cfg.intensity, &view.theme, view.light) {
             Ok(s) => self.scene = Some(s),
             Err(e) => warn!("canlı dock: sahne kurulamadı: {e}"),
         }
+        self.begin_fade(old);
         self.scene_last = Instant::now();
         self.scene_due = self.scene_last;
     }
@@ -236,6 +264,9 @@ impl Live {
     /// Hareketi azalt: tek, durağan kare (zamanlayıcı yok).
     fn draw_static(&mut self, gfx: &Gfx, dock: &Dock) {
         self.check_clock(gfx, dock);
+        self.check_weather(gfx, dock, false);
+        // Hareketi azalt: geçiş yok, tek durağan kare.
+        self.finish_fades();
         if let Some(s) = self.scene.as_mut() {
             let _ = s.render();
         }
@@ -246,7 +277,8 @@ impl Live {
 
     /// Saat kipinde dakika değiştiyse bölümü yeniden çözer.
     fn check_clock(&mut self, gfx: &Gfx, dock: &Dock) {
-        if self.cfg.scene != carlui_core::live::LiveScene::Clock {
+        // Gerçek hava varken saat kipi kullanılmaz (hava kendi gece/gündüzünü verir).
+        if self.cfg.scene != carlui_core::live::LiveScene::Clock || self.wx.is_some() {
             return;
         }
         let t = unsafe { GetLocalTime() };
@@ -264,6 +296,7 @@ impl Live {
         }
         let start = Instant::now();
         self.check_clock(gfx, dock);
+        self.check_weather(gfx, dock, false);
         let now = Instant::now();
         let pill = dock.live_pill();
         let scale = dock.live_view_scale();
@@ -278,6 +311,8 @@ impl Live {
                 self.scene_due = now + Duration::from_millis(s.kind().interval_ms() as u64);
             }
         }
+        // Sahne geçişi sürüyorsa kareler sıklaşır (sahne aralığı seyrek olsa da).
+        self.step_fades(now);
         if let Some(p) = self.perch.as_mut() {
             if now >= self.pet_due {
                 let dt = (now - self.pet_last).as_secs_f32();
@@ -295,7 +330,7 @@ impl Live {
     fn arm(&self) {
         let now = Instant::now();
         let mut want: Option<Duration> = None;
-        if self.scene.is_some() {
+        if self.scene.is_some() || self.fade_out.is_some() {
             want = Some(self.scene_due.saturating_duration_since(now));
         }
         if self.perch.is_some() {
@@ -360,6 +395,16 @@ impl Live {
         }
         match msg {
             WM_APP_LIVE => self.loaded(gfx, dock),
+            // Yoklayıcı yeni hava yazdı: sahne değiştiyse hemen yansıt.
+            WM_APP_WEATHER => {
+                if self.check_weather(gfx, dock, true) {
+                    match self.state {
+                        State::Running => self.tick(gfx, dock),
+                        State::Static => self.draw_static(gfx, dock),
+                        _ => {}
+                    }
+                }
+            }
             _ if timer => {
                 if self.state == State::Running {
                     self.tick(gfx, dock);

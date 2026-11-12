@@ -78,6 +78,10 @@ pub fn tweak(cfg: &mut Config) {
     }
     // Pil/tasarruf ölçümü bozmasın.
     d.live.pause_on_battery = false;
+    // Hava denemesi (`CARLUI_LIVE_WEATHER`): gece/gündüz döngüsü de açık görünsün.
+    if std::env::var_os("CARLUI_LIVE_WEATHER").is_some() {
+        d.live.weather.day_night = true;
+    }
 }
 
 #[cfg(test)]

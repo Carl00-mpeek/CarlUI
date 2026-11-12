@@ -113,6 +113,14 @@ struct Pending {
     act: Act,
 }
 
+/// `Flow::choice_lead_rows` için bir düğme satırı.
+pub struct LeadRow<'a> {
+    pub items: &'a [(&'a str, Act)],
+    pub selected: usize,
+    pub each: f32,
+    pub lead_w: &'a [f32],
+}
+
 pub struct Flow {
     pub x: f32,
     pub y: f32,
@@ -299,6 +307,35 @@ impl Flow {
         let w = each * items.len() as f32;
         let r = self.row_sub(p, label, info, sub, None, w);
         p.segments(R::new(r.right() - 16.0 - w, r.y + (r.h - 32.0) / 2.0, w, 32.0), items, selected);
+    }
+
+    /// Tek kartta bir ya da birkaç düğme satırı (sağa yaslı); her düğmenin
+    /// yazısının soluna `lead_w[i]` genişliğinde simge alanı ayrılır, `draw`
+    /// (satır, düğme, alan) oraya çizer. Başlık yanına sığarsa solda ortada,
+    /// sığmazsa düğmelerin üstünde durur; satırlar arası sıkı.
+    pub fn choice_lead_rows(&mut self, p: &mut P, label: &str, info: &str, rows: &[LeadRow], draw: &dyn Fn(&P, usize, usize, R)) {
+        self.flush(p);
+        const BTN: f32 = 32.0;
+        let widest = rows.iter().map(|r| r.each * r.items.len() as f32).fold(0.0, f32::max);
+        let n = rows.len() as f32;
+        let grid = n * BTN + (n - 1.0) * GAP;
+        let lw = p.fonts.width(label, LABEL, false) + if info.is_empty() { 0.0 } else { info::SIZE + info::GAP };
+        let beside = lw + widest + 32.0 + 24.0 <= self.w;
+        let h = if beside { (grid + 18.0).max(50.0) } else { 12.0 + LABEL_LINE + 6.0 + grid + 12.0 };
+        let r = R::new(self.x, self.y, self.w, h);
+        p.card(r);
+        let top = if beside { r.y + (h - grid) / 2.0 } else { r.y + 12.0 + LABEL_LINE + 6.0 };
+        if !label.is_empty() {
+            let ly = if beside { r.y + (h - LABEL_LINE) / 2.0 } else { r.y + 12.0 };
+            let lv = label_of(p, label, label_w(self.w - 32.0, info));
+            label_lines(p, &lv, r.x + 16.0, ly, self.w - 32.0, LABEL_LINE, info);
+        }
+        for (i, row) in rows.iter().enumerate() {
+            let w = row.each * row.items.len() as f32;
+            let seg = R::new(r.right() - 16.0 - w, top + i as f32 * (BTN + GAP), w, BTN);
+            p.segments_lead(seg, row.items, row.selected, row.lead_w, &|p, j, a| draw(p, i, j, a));
+        }
+        self.y += h + GAP;
     }
 
     /// Soluk açıklama satırı (kart yok); uzunsa alt satıra kayar. Yalnızca

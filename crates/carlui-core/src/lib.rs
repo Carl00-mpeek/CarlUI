@@ -16,6 +16,7 @@ pub mod hotkey;
 pub mod keys;
 pub mod layouts;
 pub mod live;
+pub mod live_weather;
 pub mod log;
 pub mod looks;
 pub mod paths;
@@ -26,6 +27,7 @@ pub mod theme;
 pub mod tools;
 pub mod vaultlink;
 pub mod vcard;
+pub mod weather;
 pub mod win;
 pub mod wired;
 

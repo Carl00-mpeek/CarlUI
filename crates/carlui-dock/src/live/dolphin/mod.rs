@@ -23,12 +23,14 @@ use windows::{
 };
 
 /// Tüneğin kenar üstündeki yüksekliği (sanat pikseli): sıçramanın tepesi sığar.
-const UP: f32 = 52.0;
+/// Tepe: SURFACE_Y - LEAP_H - LEAP.1/2 = 7 - 33 - 24 = -50; 12 px pay.
+const UP: f32 = 62.0;
 /// Camın içindeki kopyanın saydamlığı.
 const UNDER: f32 = 0.55;
-const SWIM: (f32, f32) = (40.0, 24.0);
-const LEAP: (f32, f32) = (40.0, 40.0);
-const SPLASH: (f32, f32) = (32.0, 16.0);
+// Şeritler ilk çizimin ×1,2'si (en yakın komşu + dış çizgi inceltme, bulanıklık yok).
+const SWIM: (f32, f32) = (48.0, 28.0);
+const LEAP: (f32, f32) = (48.0, 48.0);
+const SPLASH: (f32, f32) = (40.0, 20.0);
 
 type Brushes = Vec<CompositionSurfaceBrush>;
 

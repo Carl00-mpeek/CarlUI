@@ -18,6 +18,7 @@ pub fn sprite_px(sp: Sprite) -> (f32, f32) {
         Sprite::Firefly => (24.0, 24.0),
         Sprite::Cloud => (96.0, 48.0),
         Sprite::Moon => (64.0, 64.0),
+        Sprite::Trail => (6.0, 32.0),
     }
 }
 
@@ -122,6 +123,12 @@ pub unsafe fn draw(dc: &ID2D1DeviceContext, sp: Sprite, p: &Palette) -> Result<(
             for (x, y, rx, ry) in [(30.0, 28.0, 26.0, 16.0), (52.0, 22.0, 28.0, 20.0), (70.0, 30.0, 24.0, 14.0), (46.0, 34.0, 36.0, 12.0)] {
                 glow(dc, x, y, rx, ry, p.cloud, 0.55, 0.0)?;
             }
+        }
+        Sprite::Trail => {
+            // Camda ince, soluk ıslak iz (saydamlığı görsel başına verilir).
+            let rr = D2D1_ROUNDED_RECT { rect: D2D_RECT_F { left: 1.0, top: 0.0, right: w - 1.0, bottom: h }, radiusX: 2.0, radiusY: 2.0 };
+            let b = dc.CreateSolidColorBrush(&col(p.water, 0.8), None)?;
+            dc.FillRoundedRectangle(&rr, &b);
         }
         Sprite::Moon => {
             // Hale, dolu disk ve hafif kraterler (disk yarıçapı bitmap'in dörtte biri).

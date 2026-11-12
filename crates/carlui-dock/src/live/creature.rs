@@ -1,4 +1,4 @@
-//! Dock'taki hayvan: şerit paketi (kedi, kertenkele, örümcek, kullanıcı
+//! Dock'taki hayvan: şerit paketi (kedi, köpek, kertenkele, örümcek, kullanıcı
 //! paketi), yılan ya da yunus. `Live` hepsini aynı arayüzle sürer: tek
 //! zamanlayıcı, her tikte `step` ve bir sonraki tike kadar beklenecek süre.
 

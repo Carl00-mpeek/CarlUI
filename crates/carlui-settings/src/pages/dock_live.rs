@@ -3,6 +3,7 @@
 //! satır başlığının yanındaki "i" baloncuğunda. Ayarlar Görünümler'e (looks)
 //! girmez.
 
+use super::dock_live_thumbs as thumbs;
 use crate::{
     ui::{edit, Flow, P},
     App,
@@ -54,6 +55,15 @@ fn short(s: &str) -> String {
 fn builtin_label(id: &str) -> &'static str {
     match id {
         "cat" => t!("Kedi", "Cat"),
+        "cat_black" => t!("Kara kedi", "Black cat"),
+        "cat_gray" => t!("Gri kedi", "Gray cat"),
+        "cat_white" => t!("Beyaz kedi", "White cat"),
+        "dog" => t!("Köpek", "Dog"),
+        "dog_black" => t!("Kara köpek", "Black dog"),
+        "dog_brown" => t!("Kahverengi köpek", "Brown dog"),
+        "dog_white" => t!("Beyaz köpek", "White dog"),
+        "mouse" => t!("Fare", "Mouse"),
+        "squirrel" => t!("Sincap", "Squirrel"),
         "lizard" => t!("Kertenkele", "Lizard"),
         "spider" => t!("Örümcek", "Spider"),
         "snake" => t!("Yılan", "Snake"),
@@ -62,23 +72,47 @@ fn builtin_label(id: &str) -> &'static str {
     }
 }
 
+/// Ana satırdaki düğme kimliği: renk varyantları temel hayvanın düğmesine,
+/// fare ve sincap kendi düğmelerine bağlanır.
+fn main_id(pet: &str) -> &str {
+    if pet == "mouse" || pet == "squirrel" {
+        pet
+    } else {
+        live::pet_base(pet)
+    }
+}
+
+/// Renk satırı: (varyant kimliği, ad). Yalnızca kedi ve köpekte vardır.
+fn colour_variants(pet: &str) -> Option<[(&'static str, &'static str); 4]> {
+    match main_id(pet) {
+        "cat" => Some([("cat", t!("Turuncu", "Orange")), ("cat_black", t!("Kara", "Black")), ("cat_gray", t!("Gri", "Gray")), ("cat_white", t!("Beyaz", "White"))]),
+        "dog" => Some([("dog", t!("Altın", "Golden")), ("dog_black", t!("Kara", "Black")), ("dog_brown", t!("Kahverengi", "Brown")), ("dog_white", t!("Beyaz", "White"))]),
+        _ => None,
+    }
+}
+
 fn pet_rows(app: &App, p: &mut P, f: &mut Flow, pet: &str) {
     let mut items = vec![(t!("Yok", "None"), edit(|c| c.dock.live.pet.clear()))];
-    for id in live::BUILTIN_PETS {
-        items.push((builtin_label(id), edit(move |c| c.dock.live.pet = id.into())));
+    let mains: Vec<&str> = live::BUILTIN_PETS.iter().copied().filter(|id| main_id(id) == *id).collect();
+    for id in &mains {
+        let id = *id;
+        // Varyant seçiliyken ana düğmeye basmak varyantı korur.
+        items.push((builtin_label(id), edit(move |c| if main_id(&c.dock.live.pet) != id { c.dock.live.pet = id.into() })));
     }
-    let sel = if pet.is_empty() { 0 } else { live::BUILTIN_PETS.iter().position(|b| *b == pet).map_or(usize::MAX, |i| i + 1) };
-    f.choice(
-        p,
-        t!("Evcil hayvan", "Pet"),
-        t!(
-            "Dock'un üstünde yaşayan küçük bir hayvan. Tıklamayı hiç engellemez; yalnızca alttaki ana dock'ta görünür.\nKedi, kertenkele ve örümcek oturur, uyur, gezinir, imlece bakar ve bir uygulama açılınca uyanır.\nYılan dock'un üstünde süzülür, kenarına dolanır, kıvrılıp başını kaldırır ve başıyla imleci izler.\nYunus camın içinde soluk yüzer, ara sıra sudan sıçrayıp geri dalar.",
-            "A small pet living on the dock. It never blocks clicks and only appears on the bottom main dock.\nThe cat, lizard and spider sit, sleep, wander, watch the cursor and wake up when an app opens.\nThe snake glides along the dock, wraps around its edge, coils up, raises its head and follows the cursor with it.\nThe dolphin swims faintly inside the glass and now and then leaps out and dives back in."
-        ),
-        &items,
-        sel,
-        78.0,
-    );
+    let sel = if pet.is_empty() { 0 } else { mains.iter().position(|b| *b == main_id(pet)).map_or(usize::MAX, |i| i + 1) };
+    let info = t!(
+        "Dock'un üstünde yaşayan küçük bir hayvan. Tıklamayı hiç engellemez; yalnızca alttaki ana dock'ta görünür.\nKedi, kertenkele ve örümcek oturur, uyur, gezinir, imlece bakar ve bir uygulama açılınca uyanır.\nKöpek, fare ve sincap kuyruk sallar, soluk alır, oyun daveti için öne eğilir, kısa koşular atar ve bir uygulama açılınca irkilir. Kedi ve köpeğin renk seçenekleri var.\nYılan dock'un üstünde süzülür, kenarına dolanır, kıvrılıp başını kaldırır ve başıyla imleci izler.\nYunus camın içinde soluk yüzer, ara sıra sudan sıçrayıp geri dalar.",
+            "A small pet living on the dock. It never blocks clicks and only appears on the bottom main dock.\nThe cat, lizard and spider sit, sleep, wander, watch the cursor and wake up when an app opens.\nThe dog, mouse and squirrel wag their tails, pant, drop into a play bow, make short dashes and perk up when an app opens. The cat and dog come in colours.\nThe snake glides along the dock, wraps around its edge, coils up, raises its head and follows the cursor with it.\nThe dolphin swims faintly inside the glass and now and then leaps out and dives back in."
+        );
+    // Önizlemeli düğmeler tek satıra sığmaz: aynı kartta 5'erli satırlara bölünür.
+    let ids: Vec<&str> = std::iter::once("").chain(mains.iter().copied()).collect();
+    thumbs::choice(p, f, t!("Evcil hayvan", "Pet"), info, &items, &ids, sel);
+    if let Some(vars) = colour_variants(pet) {
+        let row: Vec<(&str, _)> = vars.iter().map(|&(id, name)| (name, edit(move |c| c.dock.live.pet = id.into()))).collect();
+        let ids: Vec<&str> = vars.iter().map(|v| v.0).collect();
+        let sel = vars.iter().position(|(id, _)| *id == pet).unwrap_or(usize::MAX);
+        thumbs::choice(p, f, t!("Renk", "Colour"), "", &row, &ids, sel);
+    }
 
     let packs = user_packs();
     let is_user = !pet.is_empty() && !live::is_builtin(pet);
@@ -154,6 +188,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     pet_rows(app, p, f, c.pet.trim());
     super::dock_live_photo::paint(app, p, f);
     scene_row(p, f, c.scene);
+    super::dock_live_weather::paint(app, p, f);
 
     if c.is_off() {
         return;
@@ -183,4 +218,30 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         c.pause_on_battery,
         |c| c.dock.live.pause_on_battery ^= true,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn renk_satiri_yalniz_kedi_ve_kopekte() {
+        assert!(colour_variants("").is_none());
+        assert!(colour_variants("mouse").is_none());
+        assert!(colour_variants("squirrel").is_none());
+        assert!(colour_variants("lizard").is_none());
+        assert_eq!(colour_variants("cat_gray").unwrap()[0].0, "cat");
+        assert_eq!(colour_variants("dog_white").unwrap()[3].0, "dog_white");
+        assert_eq!(colour_variants("dog").unwrap()[2].0, "dog_brown");
+    }
+
+    #[test]
+    fn ana_satir_dugmeleri() {
+        assert_eq!(main_id("cat_black"), "cat");
+        assert_eq!(main_id("dog_brown"), "dog");
+        assert_eq!(main_id("mouse"), "mouse");
+        assert_eq!(main_id("squirrel"), "squirrel");
+        let mains: Vec<_> = live::BUILTIN_PETS.iter().filter(|id| main_id(id) == **id).collect();
+        assert_eq!(mains.len(), 8);
+    }
 }

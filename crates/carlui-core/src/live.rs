@@ -45,11 +45,13 @@ pub struct LiveConfig {
     pub intensity: LiveIntensity,
     /// Pilde çalışırken her şeyi duraklat.
     pub pause_on_battery: bool,
+    /// Sahne gerçek havayı izlesin (Open-Meteo); kapalıyken hiç istek yapılmaz.
+    pub weather: crate::live_weather::LiveWeather,
 }
 
 impl Default for LiveConfig {
     fn default() -> Self {
-        Self { pet: String::new(), scene: LiveScene::None, intensity: LiveIntensity::Subtle, pause_on_battery: true }
+        Self { pet: String::new(), scene: LiveScene::None, intensity: LiveIntensity::Subtle, pause_on_battery: true, weather: Default::default() }
     }
 }
 
@@ -61,7 +63,7 @@ impl LiveConfig {
 
     /// Özellik tamamen kapalı mı (kapalıyken hiçbir kaynak ayrılmaz).
     pub fn is_off(&self) -> bool {
-        !self.has_pet() && self.scene == LiveScene::None
+        !self.has_pet() && self.scene == LiveScene::None && !self.weather.active()
     }
 }
 
@@ -69,7 +71,21 @@ impl LiveConfig {
 pub const BUILTIN_CAT: &str = "cat";
 
 /// Yerleşik hayvanların `pet` değerleri (ayar sayfasındaki sırayla).
-pub const BUILTIN_PETS: [&str; 5] = [BUILTIN_CAT, "lizard", "spider", "snake", "dolphin"];
+pub const BUILTIN_PETS: [&str; 14] = [
+    BUILTIN_CAT, "cat_black", "cat_gray", "cat_white", "dog", "dog_black", "dog_brown", "dog_white", "mouse", "squirrel", "lizard", "spider", "snake", "dolphin",
+];
+
+/// Renk/tür varyantının temel hayvanı: `cat_*` -> "cat", `dog_*`, "mouse" ve "squirrel" -> "dog"
+/// (köpekle aynı şerit düzeni); diğerleri kendisi.
+pub fn pet_base(id: &str) -> &str {
+    if id.starts_with("cat_") {
+        "cat"
+    } else if id.starts_with("dog_") || id == "mouse" || id == "squirrel" {
+        "dog"
+    } else {
+        id
+    }
+}
 
 /// `pet` değeri yerleşik bir hayvan mı?
 pub fn is_builtin(pet: &str) -> bool {
@@ -187,10 +203,21 @@ mod tests {
     #[test]
     fn gidip_gelir() {
         let mut c = Config::default();
-        c.dock.live = LiveConfig { pet: "dolphin".into(), scene: LiveScene::Aquarium, intensity: LiveIntensity::Normal, pause_on_battery: false };
+        c.dock.live = LiveConfig { pet: "dolphin".into(), scene: LiveScene::Aquarium, intensity: LiveIntensity::Normal, pause_on_battery: false, weather: crate::live_weather::LiveWeather { enabled: true, place: "Ankara".into(), lat: 39.93, lon: 32.86, day_night: true } };
         let s = toml::to_string(&c).unwrap();
         let back: Config = toml::from_str(&s).unwrap();
         assert_eq!(back.dock.live, c.dock.live);
+    }
+
+    #[test]
+    fn temel_hayvan() {
+        for (id, base) in [("cat", "cat"), ("cat_gray", "cat"), ("dog", "dog"), ("dog_brown", "dog"), ("mouse", "dog"), ("squirrel", "dog"), ("lizard", "lizard"), ("", "")] {
+            assert_eq!(pet_base(id), base, "{id}");
+        }
+        // Her yerleşik adın temeli yine yerleşik bir ad olmalı.
+        for b in BUILTIN_PETS {
+            assert!(is_builtin(pet_base(b)), "{b}");
+        }
     }
 
     #[test]

@@ -3,7 +3,7 @@
 //! kenarı (su yüzeyi), aşağı pozitif.
 //!
 //! Yunus camın içinde, orta derinlikte yüzer; uçlarda döner. Ara sıra yüzeye
-//! yükselir ve ≈40 px ileriye, ≈28 px yükseğe, 0,9 sn süren bir parabolle
+//! yükselir ve ≈48 px ileriye, ≈33 px yükseğe, 0,9 sn süren bir parabolle
 //! sıçrar. Sıçrama karesi hız vektörünün açısına (atan2(-vy, vx)) en yakın
 //! eğim karesidir; sola giderken aynalanır. Kalkışta `splash_out`, açı
 //! -45°'nin altına inince giriş noktasında `splash_in` oynar.
@@ -11,20 +11,20 @@
 use crate::live::rng::Rng;
 
 /// Sıçrama boyutları.
-pub const LEAP_W: f32 = 40.0;
-pub const LEAP_H: f32 = 28.0;
+pub const LEAP_W: f32 = 48.0;
+pub const LEAP_H: f32 = 33.0;
 pub const LEAP_T: f32 = 0.9;
 /// Sıçrama karelerinin eğimleri (derece, yukarı pozitif): sanat sırası.
 pub const LEAP_PITCH: [f32; 5] = [60.0, 30.0, 0.0, -30.0, -60.0];
 /// Sıçramadan önce yükseldiği derinlik (merkez).
-pub const SURFACE_Y: f32 = 6.0;
+pub const SURFACE_Y: f32 = 7.0;
 const SWIM_SPEED: f32 = 14.0;
 const SWIM_FRAMES: u8 = 8;
 const SWIM_MS: f32 = 0.1;
 pub const SPLASH_FRAMES: u8 = 6;
 const SPLASH_MS: f32 = 0.07;
 /// Yunusun yarı genişliği: uçlarda bu kadar pay bırakır.
-const HALF: f32 = 20.0;
+const HALF: f32 = 24.0;
 
 /// Sıçramanın `t` (0..1) anındaki konumu (kalkışa göre, +x ileri).
 pub fn leap_pos(t: f32) -> (f32, f32) {

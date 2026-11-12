@@ -881,6 +881,14 @@ pub struct NotifyConfig {
     pub sound_file: String,
     /// Bu uygulamaların bildirimleri adada gösterilmez (ad, büyük/küçük harf duyarsız).
     pub blocked_apps: Vec<String>,
+    /// Bildirim kartında dock'un sahne efekti (yağmur, kar, gece, bulut…) çizilir.
+    /// Sahne `dock.live.scene` ayarından gelir; o kapalıysa hiçbir şey çizilmez.
+    #[serde(default = "default_true")]
+    pub notif_scene: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -905,7 +913,7 @@ impl NotifyConfig {
 
 impl Default for NotifyConfig {
     fn default() -> Self {
-        Self { enabled: true, media_bar: true, volume_osd: true, duration_ms: 2500, over_maximized: false, hide_windows_banners: true, sound: NotifySound::Windows, sound_file: String::new(), blocked_apps: Vec::new() }
+        Self { enabled: true, media_bar: true, volume_osd: true, duration_ms: 2500, over_maximized: false, hide_windows_banners: true, sound: NotifySound::Windows, sound_file: String::new(), blocked_apps: Vec::new(), notif_scene: true }
     }
 }
 
