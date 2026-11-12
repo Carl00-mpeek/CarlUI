@@ -1,5 +1,21 @@
 # Sürüm notları
 
+## v1.1.2 — Oyun sırasında indirme ve odak düzeltmeleri (2026-11-12)
+
+**CarlUI 1.1.2: oyun sırasında indirme ve odak düzeltmeleri.**
+
+**Düzeltmeler.** Oyun oynarken Steam ya da Discord adada sürekli indirme gibi
+görünüyordu; Steam artık yalnızca kendi kaydında süren bir indirme varken gösterilir,
+oyun öndeyken yalnızca bilinen indirme programları sayılır. Oyun öndeyken CarlUI
+pencereleri oyunu arkaya atacak şekilde zorla öne gelmiyor; Win tuşu tam ekranın kısa
+düşüşlerinde menüyü oyunun üstünde açmıyor.
+
+**Teşhis.** Odak oyundan başka bir pencereye geçerse günlüğe hangi programın aldığı
+yazılır ("odak oyundan gitti").
+
+**SHA-256 (CarlUI-Setup.exe):**
+`444313ee4b67d33100106eb29ce4329aaf9bdfe22b69740bc660ff0d23008191`
+
 ## v1.1.1 — Kurucu kapanış düzeltmesi (2026-11-12)
 
 **CarlUI 1.1.1: kurucu kapanış düzeltmesi.**
