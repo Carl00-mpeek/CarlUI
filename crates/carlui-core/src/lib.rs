@@ -12,6 +12,7 @@ pub mod ai;
 pub mod bus;
 pub mod config;
 pub mod cursor;
+pub mod game_apps;
 pub mod hotkey;
 pub mod keys;
 pub mod layouts;

@@ -1,5 +1,17 @@
 # Sürüm notları
 
+## v1.1.5 — Oyun listesi ve donmuş programı zorla kapatma (2026-11-12)
+
+**CarlUI 1.1.5: oyun listesi ve donmuş programı zorla kapatma.**
+
+**Yeni.** Ayarlar → Oyun'da "Oyun sayılan programlar" listesi: listedeki programın
+büyütülmüş ya da kenarlıksız penceresi oyun sayılır, kısayollar oyuna bırakılır
+(Roblox baştan listede). Dock'ta donmuş programın menüsünde en üstte "Yanıt vermiyor:
+zorla kapat" çıkar.
+
+**SHA-256 (CarlUI-Setup.exe):**
+`ed4e26136901d871102f7cbe294157d16e094482016a99bb82690cc07dddbfad`
+
 ## v1.1.4 — Kenarlıksız oyunda dock tıklaması düzeltmesi (2026-11-12)
 
 **CarlUI 1.1.4: kenarlıksız oyunda dock tıklaması düzeltmesi.**

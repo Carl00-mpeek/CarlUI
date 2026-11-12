@@ -404,7 +404,9 @@ pub fn window_like_game(hwnd: HWND) -> bool {
         // Oyun motoru penceresi (Minecraft'ın GLFW'si, Unity, Unreal, SDL …) büyütülmüş
         // ya da ekranı kaplıyorsa başlık çubuğu olsa da oyundur: "kenarlıksız pencere"
         // modu bazı oyunlarda başlık stilini korur.
-        if is_engine_class(&class) && (IsZoomed(hwnd).as_bool() || covers(mi.rcWork)) {
+        // Ayarlardaki oyun listesindeki programlar da aynı kuralla oyundur.
+        let fills = IsZoomed(hwnd).as_bool() || covers(mi.rcWork);
+        if fills && (is_engine_class(&class) || crate::game_apps::is_listed(&window_exe(hwnd))) {
             return true;
         }
         if GetWindowLongW(hwnd, GWL_STYLE) as u32 & WS_CAPTION.0 == WS_CAPTION.0 {

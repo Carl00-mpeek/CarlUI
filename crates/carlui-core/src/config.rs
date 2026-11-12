@@ -927,11 +927,14 @@ pub struct GameConfig {
     pub hold_notes: bool,
     /// Tam ekranda gizliyken şarkı değişince ve ses açılıp kısılınca ada kısa süre görünür.
     pub show_osd: bool,
+    /// Oyun sayılan programlar (exe adı). Pencere sınıfından tanınmayan oyunlar
+    /// (ör. Roblox) büyütülmüş pencerede de oyun sayılsın, kısayollar çalışmasın.
+    pub apps: Vec<String>,
 }
 
 impl Default for GameConfig {
     fn default() -> Self {
-        Self { hide_on_fullscreen: true, hold_notes: true, show_osd: true }
+        Self { hide_on_fullscreen: true, hold_notes: true, show_osd: true, apps: vec!["RobloxPlayerBeta.exe".into()] }
     }
 }
 

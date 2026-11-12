@@ -28,6 +28,8 @@ pub enum Form {
     NotifyApp,
     ClipApp,
     ExpandApp,
+    /// Oyun sayılan programlar (`game.apps`).
+    GameApp,
     /// Ekran görüntüsü dosya adı şablonu (tek alan; boş = varsayılan).
     ShotName,
     /// Özel vurgu rengi ("#RRGGBB"; tek alan).
@@ -220,7 +222,7 @@ mod tests {
 impl Form {
     /// Tek alanlı form mu (yalnızca ad).
     pub fn single(self) -> bool {
-        matches!(self, Form::NotifyApp | Form::ClipApp | Form::ExpandApp | Form::ShotName | Form::AccentHex | Form::LookName | Form::LookRename | Form::PetName | Form::City)
+        matches!(self, Form::NotifyApp | Form::ClipApp | Form::ExpandApp | Form::GameApp | Form::ShotName | Form::AccentHex | Form::LookName | Form::LookRename | Form::PetName | Form::City)
     }
 
     /// Onay düğmesinin yazısı.
@@ -272,6 +274,7 @@ impl Input {
         let list = match self.kind {
             Form::NotifyApp => &mut cfg.notify.blocked_apps,
             Form::ClipApp => &mut cfg.clipboard.excluded_apps,
+            Form::GameApp => &mut cfg.game.apps,
             _ => &mut cfg.tools.expand_excluded,
         };
         if !list.iter().any(|a| a.eq_ignore_ascii_case(&name)) {

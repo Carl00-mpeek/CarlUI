@@ -278,6 +278,7 @@ impl App {
                 6 => self.input = Some(input::Input::new(input::Form::NotifyApp)),
                 7 => self.input = Some(input::Input::new(input::Form::ClipApp)),
                 8 => self.input = Some(input::Input::new(input::Form::ExpandApp)),
+                11 => self.input = Some(input::Input::new(input::Form::GameApp)),
                 9 => {
                     let mut i = input::Input::new(input::Form::ShotName);
                     i.name = self.cfg.shots.name.clone();

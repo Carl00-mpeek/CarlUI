@@ -158,6 +158,12 @@ pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Opti
             rows.push(Row::Sep);
         }
         rows.push(Row::Label(e.name.clone(), logo));
+        // Donmuş program "Pencereyi kapat"a cevap vermez: zorla kapatma en üstte, hemen görünsün.
+        let hung = !e.is_explorer() && suspended == Some(false) && e.windows.iter().any(|&w| unsafe { IsHungAppWindow(w) }.as_bool());
+        if hung {
+            rows.push(item(8, t!("Yanıt vermiyor: zorla kapat", "Not responding: force close"), Icon::Glyph(G_KILL, Some(RED))));
+            rows.push(Row::Sep);
+        }
         rows.push(item(1, t!("Yeni pencere", "New window"), glyph(G_NEW_WINDOW)));
         // Açık Explorer'a "sabitle" önerilmez; ama sabitlenmişse kaldırılabilmeli.
         if e.pin.is_some() {
@@ -177,7 +183,9 @@ pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Opti
         if let (Some(s), false) = (suspended, e.is_explorer()) {
             rows.push(Row::Sep);
             rows.push(if s { item(7, t!("Programı sürdür", "Resume program"), glyph(G_PLAY)) } else { item(6, t!("Programı durdur", "Suspend program"), Icon::Glyph(G_BLOCKED, Some(RED))) });
-            rows.push(item(8, t!("Programı kapat", "Kill program"), Icon::Glyph(G_KILL, Some(RED))));
+            if !hung {
+                rows.push(item(8, t!("Programı kapat", "Kill program"), Icon::Glyph(G_KILL, Some(RED))));
+            }
         }
     }
 
