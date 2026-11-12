@@ -1,5 +1,16 @@
 # Sürüm notları
 
+## v1.1.7 — Adada sahne efekti iyileştirmeleri (2026-11-12)
+
+**CarlUI 1.1.7: adada sahne efekti iyileştirmeleri.**
+
+**İyileştirmeler.** "Adada sahne efekti" ayarı Ayarlar → Ada'nın üst bölümüne taşındı.
+Efektin yoğunluğu adanın hâline göre değişir: saat/tarihte hafif, şarkıda biraz daha
+yoğun, bildirimde yoğun.
+
+**SHA-256 (CarlUI-Setup.exe):**
+`SHA_BURAYA`
+
 ## v1.1.6 — Win menüsü ve adada sahne efekti (2026-11-12)
 
 **CarlUI 1.1.6: Win menüsü ve adada sahne efekti.**

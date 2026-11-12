@@ -64,6 +64,28 @@ pub struct NoteScene {
 
 /// Ayarlardan adanın sahnesi: efekt açıksa dock'un sahnesi ya da gerçek havası
 /// (dock'ta ikisi de yoksa hiçbir şey). `scene_always` ile her görünümde çizilir.
+/// Görünüme göre efekt düzeyi. Küçük ada (saat, tarih) dar olduğu için hafif;
+/// şarkı çalarken biraz daha yoğun; bildirimde yoğun.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Level {
+    /// Parçacık sayısı çarpanı.
+    fill: f32,
+    /// Saydamlık çarpanı (tavan 0,95).
+    alpha: f32,
+    /// Ayardaki yoğunluktan bağımsız hep yoğun.
+    dense: bool,
+}
+
+impl Level {
+    pub(super) fn of(view: View) -> Self {
+        match view {
+            View::Note => Self { fill: 1.0, alpha: 1.2, dense: true },
+            View::Media | View::MediaFull | View::Hub | View::Offer => Self { fill: 0.75, alpha: 1.0, dense: false },
+            _ => Self { fill: 0.4, alpha: 0.75, dense: false },
+        }
+    }
+}
+
 pub fn scene_from(cfg: &carlui_core::config::Config) -> Option<NoteScene> {
     let live = &cfg.dock.live;
     let any = live.scene != LiveScene::None || live.weather.active() || carlui_core::weather::debug_override().is_some();
@@ -78,21 +100,22 @@ pub(super) struct Fx {
     last: Vec<(f32, f32, f32)>,
     tint: (u8, u8, u8),
     size: (f32, f32),
+    level: Level,
 }
 
 impl Fx {
-    fn new(gfx: &Gfx, parent: &ContainerVisual, kind: Kind, tint: (u8, u8, u8), size: (f32, f32), s: f32, intensity: LiveIntensity, theme: &Theme, light: bool) -> Result<Self> {
+    fn new(gfx: &Gfx, parent: &ContainerVisual, kind: Kind, tint: (u8, u8, u8), size: (f32, f32), s: f32, intensity: LiveIntensity, level: Level, theme: &Theme, light: bool) -> Result<Self> {
         let comp = &gfx.comp;
         let root = comp.CreateContainerVisual()?;
         root.SetSize(v2(size.0, size.1))?;
-        root.SetOpacity(opacity_cap(intensity, theme.glass_tint.3))?;
+        root.SetOpacity((opacity_cap(intensity, theme.glass_tint.3) * level.alpha).min(0.95))?;
         // Cam tonu (pus).
         let tint_v = comp.CreateSpriteVisual()?;
         tint_v.SetRelativeSizeAdjustment(v2(1.0, 1.0))?;
         tint_v.SetBrush(&comp.CreateColorBrushWithColor(carlui_ui::glass::exact(Rgba(tint.0, tint.1, tint.2, if light { 36 } else { 56 })))?)?;
         root.Children()?.InsertAtTop(&tint_v)?;
 
-        let sim = Sim::new(kind, size.0, size.1, s, intensity == LiveIntensity::Normal, Rng::from_time());
+        let sim = Sim::new(kind, size.0, size.1, s, level.dense || intensity == LiveIntensity::Normal, level.fill, Rng::from_time());
         let pal = palette(light, theme);
         let mut cache: Vec<(Sprite, CompositionSurfaceBrush)> = Vec::new();
         let mut visuals = Vec::with_capacity(sim.pool.len());
@@ -115,7 +138,7 @@ impl Fx {
         }
         parent.Children()?.InsertAtBottom(&root)?;
         let last = vec![(f32::NAN, f32::NAN, f32::NAN); visuals.len()];
-        let mut fx = Self { parent: parent.clone(), root, visuals, sim, last, tint, size };
+        let mut fx = Self { parent: parent.clone(), root, visuals, sim, last, tint, size, level };
         fx.render()?;
         Ok(fx)
     }
@@ -204,7 +227,7 @@ impl Island {
 
     fn fx_make(&mut self, gfx: &Gfx, parent: &ContainerVisual, w: f32, h: f32) -> Option<()> {
         let (kind, tint, intensity) = self.fx_pick()?;
-        match Fx::new(gfx, parent, kind, tint, (w, h), self.s, intensity, &self.theme, carlui_ui::tone::light()) {
+        match Fx::new(gfx, parent, kind, tint, (w, h), self.s, intensity, Level::of(self.view), &self.theme, carlui_ui::tone::light()) {
             Ok(fx) => self.fx.fx = Some(fx),
             Err(e) => carlui_core::warn!("ada sahnesi kurulamadı: {e}"),
         }
@@ -234,7 +257,7 @@ impl Island {
         }
         let want = self.fx_pick().map(|(k, t, _)| (k, t));
         let same = match (&self.fx.fx, want) {
-            (Some(fx), Some((k, t))) => fx.kind() == k && fx.tint == t && fx.size == (w, h),
+            (Some(fx), Some((k, t))) => fx.kind() == k && fx.tint == t && fx.size == (w, h) && fx.level == Level::of(self.view),
             (None, None) => true,
             _ => false,
         };
@@ -306,6 +329,14 @@ mod tests {
             assert!(opacity_cap(LiveIntensity::Normal, a) <= 0.85);
         }
         assert!(opacity_cap(LiveIntensity::Normal, 230) < opacity_cap(LiveIntensity::Normal, 110));
+    }
+
+    #[test]
+    fn duzey_kucukte_hafif_bildirimde_yogun() {
+        let (c, m, n) = (Level::of(View::Clock), Level::of(View::Media), Level::of(View::Note));
+        assert!(c.fill < m.fill && m.fill <= n.fill);
+        assert!(c.alpha < m.alpha && m.alpha < n.alpha);
+        assert!(n.dense && !c.dense);
     }
 
     #[test]

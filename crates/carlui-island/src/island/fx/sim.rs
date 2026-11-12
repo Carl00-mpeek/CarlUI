@@ -110,7 +110,8 @@ const MAX_DT: f32 = 0.25;
 const MOON_R: f32 = 14.0;
 
 impl Sim {
-    pub fn new(kind: Kind, w: f32, h: f32, s: f32, dense: bool, rng: Rng) -> Self {
+    /// `fill`: parçacık sayısı çarpanı (küçük adada az parçacık; ay hep tek).
+    pub fn new(kind: Kind, w: f32, h: f32, s: f32, dense: bool, fill: f32, rng: Rng) -> Self {
         let counts: &[(Sprite, usize, usize)] = match kind {
             Kind::Rain => &[(Sprite::Drop, 6, 10), (Sprite::Streak, 24, 40)],
             Kind::Snow => &[(Sprite::Flake, 26, 44)],
@@ -120,7 +121,9 @@ impl Sim {
         };
         let mut pool = Vec::new();
         for &(sp, light, heavy) in counts {
-            for _ in 0..if dense { heavy } else { light } {
+            let n = if dense { heavy } else { light };
+            let n = if n <= 1 { n } else { ((n as f32 * fill).round() as usize).max(1) };
+            for _ in 0..n {
                 pool.push(P::new(sp));
             }
         }
@@ -361,7 +364,7 @@ mod tests {
             for dense in [false, true] {
                 // Bildirim kartı boyutu ve uç boyutlar.
                 for (w, h) in [(380.0, 62.0), (380.0, 108.0), (1.0, 1.0), (0.0, 0.0)] {
-                    let mut sim = Sim::new(kind, w, h, 1.5, dense, Rng::new(7));
+                    let mut sim = Sim::new(kind, w, h, 1.5, dense, 1.0, Rng::new(7));
                     let n = sim.pool.len();
                     assert!(n <= 64, "yeniden doğma dizisi 64 ile sınırlı");
                     let cap = sim.pool.capacity();
@@ -386,7 +389,7 @@ mod tests {
 
     #[test]
     fn gece_tek_ay_ve_duran() {
-        let mut sim = Sim::new(Kind::Night, 380.0, 62.0, 1.0, true, Rng::new(5));
+        let mut sim = Sim::new(Kind::Night, 380.0, 62.0, 1.0, true, 1.0, Rng::new(5));
         let m0 = *sim.pool.iter().find(|p| p.sprite == Sprite::Moon).unwrap();
         assert_eq!(sim.pool.iter().filter(|p| p.sprite == Sprite::Moon).count(), 1);
         for _ in 0..200 {
