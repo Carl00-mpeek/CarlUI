@@ -22,7 +22,7 @@ use windows::{
             Gdi::*,
         },
         System::{Com::*, LibraryLoader::GetModuleHandleW, Threading::CreateMutexW},
-        UI::{Controls::MARGINS, HiDpi::*, Input::KeyboardAndMouse::*, Shell::ShellExecuteW, WindowsAndMessaging::*},
+        UI::{HiDpi::*, Input::KeyboardAndMouse::*, Shell::ShellExecuteW, WindowsAndMessaging::*},
     },
 };
 
@@ -250,9 +250,7 @@ pub fn run() -> Result<()> {
         let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         carlui_ui::tone::caption(hwnd);
-        let backdrop = DWMSBT_TRANSIENTWINDOW;
-        let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
-        let _ = DwmExtendFrameIntoClientArea(hwnd, &MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
+        carlui_ui::tone::glass_frame(hwnd);
 
         let reload: Arc<Mutex<Option<Config>>> = Arc::default();
         {
@@ -289,6 +287,9 @@ pub fn run() -> Result<()> {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
+        // Direct2D kaynakları süreç kapanmadan bırakılır (bkz. carlui-setup).
+        let wel = WEL.with(|w| w.borrow_mut().take());
+        drop(wel);
     }
     Ok(())
 }

@@ -45,7 +45,7 @@ use windows::{
             Gdi::*,
         },
         System::{Com::*, LibraryLoader::GetModuleHandleW},
-        UI::{Controls::MARGINS, HiDpi::*, Input::KeyboardAndMouse::*, WindowsAndMessaging::*},
+        UI::{HiDpi::*, Input::KeyboardAndMouse::*, WindowsAndMessaging::*},
     },
 };
 
@@ -785,9 +785,7 @@ fn main() -> Result<()> {
         let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         carlui_ui::tone::caption(hwnd);
-        let backdrop = DWMSBT_TRANSIENTWINDOW;
-        let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
-        let _ = DwmExtendFrameIntoClientArea(hwnd, &MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
+        carlui_ui::tone::glass_frame(hwnd);
 
         let signs = sign::Checker::new({
             let h = hwnd.0 as isize;
@@ -847,6 +845,9 @@ fn main() -> Result<()> {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
+        // Direct2D kaynakları süreç kapanmadan bırakılır (bkz. carlui-setup).
+        let app = APP.with(|a| a.borrow_mut().take());
+        drop(app);
     }
     Ok(())
 }

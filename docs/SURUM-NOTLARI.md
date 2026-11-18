@@ -1,5 +1,14 @@
 # Sürüm notları
 
+## v1.1.9 — Windows 10 düzeltmeleri (2026-11-18)
+
+**CarlUI 1.1.9: Windows 10 düzeltmeleri.**
+
+**Düzeltmeler.** Windows 10'da CarlUI pencerelerini sürüklerken yaşanan takılma giderildi:
+Windows 10'da işe yaramayan cam çerçevesi artık uygulanmıyor. Ayarlar ve diğer CarlUI
+pencereleri kapatılırken çıkan "bilinmeyen yazılım özel durumu (0x0000087a)" hatası
+düzeltildi. Carl Office ve Carl Vault pencereleri artık dock'ta görünür.
+
 ## v1.1.8 — Windows 10 desteği ve Carl Vault yedeği (2026-11-18)
 
 **CarlUI 1.1.8: Windows 10 desteği ve Carl Vault yedeği.**
@@ -14,6 +23,9 @@ belirtilir. `.carlvault` yedeği İçe aktar'dan, ek dosyalarıyla birlikte geri
 birçok simgenin görünmemesi düzeltildi: Windows 11 yazı tipleri yoksa simgeler Segoe MDL2
 Assets, metinler Segoe UI ile gösterilir; cam bulanıklığı yerine düz, hafif saydam bir
 katman kullanılır.
+
+**SHA-256 (CarlUI-Setup.exe):**
+`83d6a43695235ec57d525fc2fdd68762dba46e6925bea5afe4f0c5cfa43b7872`
 
 ## v1.1.7 — Adada sahne efekti iyileştirmeleri (2026-11-12)
 

@@ -59,7 +59,7 @@ use windows::{
             Imaging::*,
         },
         System::{Com::*, LibraryLoader::GetModuleHandleW, Threading::CreateMutexW},
-        UI::{Controls::MARGINS, HiDpi::*, WindowsAndMessaging::*},
+        UI::{HiDpi::*, WindowsAndMessaging::*},
     },
 };
 
@@ -667,9 +667,7 @@ fn main() -> Result<()> {
         let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         carlui_ui::tone::caption(hwnd);
-        let backdrop = DWMSBT_TRANSIENTWINDOW;
-        let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
-        let _ = DwmExtendFrameIntoClientArea(hwnd, &MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
+        carlui_ui::tone::glass_frame(hwnd);
 
         let mut app = App::new(hwnd, args.mode, dir.clone(), args.dry)?;
         app.scale = GetDpiForWindow(hwnd).max(96) as f32 / 96.0;

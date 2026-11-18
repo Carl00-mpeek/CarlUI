@@ -71,6 +71,25 @@ pub fn caption(hwnd: windows::Win32::Foundation::HWND) {
     }
 }
 
+/// Pencereye sistem akrilik arka planını verir (yalnızca Windows 11).
+///
+/// Windows 10'da Mica/akrilik yok ve `backdrop()` zaten opak çizer; çerçeveyi
+/// bütün pencereye genişletmek orada yalnızca DWM'yi her karede tüm pencereyi
+/// saydamlıkla birleştirmeye zorlar, sürüklerken pencere takılarak ilerler.
+/// Bu yüzden Windows 10'da pencere sıradan (opak) bırakılır.
+pub fn glass_frame(hwnd: windows::Win32::Foundation::HWND) {
+    use windows::Win32::Graphics::Dwm::{DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMSBT_TRANSIENTWINDOW, DWMWA_SYSTEMBACKDROP_TYPE};
+    use windows::Win32::UI::Controls::MARGINS;
+    if !carlui_core::os::is_win11() {
+        return;
+    }
+    let backdrop = DWMSBT_TRANSIENTWINDOW;
+    unsafe {
+        let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
+        let _ = DwmExtendFrameIntoClientArea(hwnd, &MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
+    }
+}
+
 /// Akrilik pencerenin her karedeki zemini (`Clear` düz renk ister, alfayı kendi çarpar). Pencere
 /// odağı kaybedince DWM akriliği düz griye çevirir; açık temada bu beyaz perde
 /// camı süt beyazında tutar. Koyu temada zemin saydamdır.

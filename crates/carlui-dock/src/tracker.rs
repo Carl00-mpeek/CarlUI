@@ -127,8 +127,8 @@ fn is_app_window(hwnd: HWND, own_pid: u32) -> bool {
         }
         let class = carlui_core::win::class_name(hwnd);
         // CarlUI'nin yüzen katmanları dock'ta görünmez; görev yöneticisi ve
-        // ayarlar ise gerçek uygulama pencereleri.
-        let own_app = matches!(class.as_str(), "CarlUI.TaskMgr" | "CarlUI.Settings");
+        // ayarlar, Office ve Vault ise gerçek uygulama pencereleri.
+        let own_app = matches!(class.as_str(), "CarlUI.TaskMgr" | "CarlUI.Settings" | "CarlUI.Office" | "CarlUI.Vault");
         if IGNORED_CLASSES.contains(&class.as_str()) || class.starts_with("CarlUI.") && !own_app {
             return false;
         }

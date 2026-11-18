@@ -280,11 +280,9 @@ pub fn run(shared: Arc<Shared>, accent: u32, start: impl FnOnce()) -> Result<()>
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         let round = DWMWCP_ROUND;
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &round as *const _ as _, 4);
-        let backdrop = DWMSBT_TRANSIENTWINDOW;
-        let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
         let border: u32 = if carlui_ui::tone::light() { 0x00E4DCD8 } else { 0x00505050 };
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &border as *const _ as _, 4);
-        let _ = DwmExtendFrameIntoClientArea(hwnd, &windows::Win32::UI::Controls::MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
+        carlui_ui::tone::glass_frame(hwnd);
         shared.hwnd.store(hwnd.0 as isize, Ordering::SeqCst);
         WIN.with(|w| {
             *w.borrow_mut() = Some(Win {
@@ -307,6 +305,9 @@ pub fn run(shared: Arc<Shared>, accent: u32, start: impl FnOnce()) -> Result<()>
         }
         // Pencere kapandıysa iş sürüyorsa da durdur.
         shared.cancel.store(true, Ordering::SeqCst);
+        // Direct2D kaynakları süreç kapanmadan bırakılır (bkz. carlui-setup).
+        let win = WIN.with(|w| w.borrow_mut().take());
+        drop(win);
     }
     Ok(())
 }

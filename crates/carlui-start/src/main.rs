@@ -979,6 +979,9 @@ fn main() -> Result<()> {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
+        // Direct2D kaynakları süreç kapanmadan bırakılır (bkz. carlui-setup).
+        let app = APP.with(|a| a.borrow_mut().take());
+        drop(app);
     }
     Ok(())
 }

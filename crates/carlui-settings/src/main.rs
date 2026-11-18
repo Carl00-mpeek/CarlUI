@@ -46,7 +46,7 @@ use windows::{
             Gdi::*,
         },
         System::{Com::*, LibraryLoader::GetModuleHandleW, Threading::CreateMutexW},
-        UI::{Controls::MARGINS, HiDpi::*, Input::KeyboardAndMouse::*, Shell::ShellExecuteW, WindowsAndMessaging::*},
+        UI::{HiDpi::*, Input::KeyboardAndMouse::*, Shell::ShellExecuteW, WindowsAndMessaging::*},
     },
 };
 
@@ -739,9 +739,7 @@ fn main() -> Result<()> {
         let on = i32::from(!carlui_ui::tone::light());
         let _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &on as *const _ as _, 4);
         carlui_ui::tone::caption(hwnd);
-        let backdrop = DWMSBT_TRANSIENTWINDOW;
-        let _ = DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop as *const _ as _, 4);
-        let _ = DwmExtendFrameIntoClientArea(hwnd, &MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 });
+        carlui_ui::tone::glass_frame(hwnd);
 
         let reload: Arc<Mutex<Option<Config>>> = Arc::default();
         {
@@ -790,6 +788,14 @@ fn main() -> Result<()> {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
+        // Direct2D hedefi (ve D3D aygıtı) süreç kapanmadan bırakılır; ana iş
+        // parçacığının thread_local'i çıkışta düşürülmez. Açık kalınca Windows
+        // 10'da (ör. NVIDIA sürücüsüyle) kapanış takılıp 0x87A (2170) hatası
+        // veriyordu. Kurucudaki düzeltmenin aynısı.
+        pages::dock_live_photo::render_target_changed();
+        pages::dock_live_thumbs::render_target_changed();
+        let app = APP.with(|a| a.borrow_mut().take());
+        drop(app);
     }
     Ok(())
 }
