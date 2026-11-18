@@ -645,7 +645,7 @@ impl Overlay {
         rt.DrawRoundedRectangle(&D2D1_ROUNDED_RECT { rect: bar, radiusX: th / 2.0, radiusY: th / 2.0 }, &edge, 1.0, None);
         let icons = self
             .dw
-            .CreateTextFormat(w!("Segoe Fluent Icons"), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 16.0 * s, w!("tr-tr"))
+            .CreateTextFormat(carlui_core::os::icon_font_w(), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 16.0 * s, w!("tr-tr"))
             .or_else(|_| self.dw.CreateTextFormat(w!("Segoe MDL2 Assets"), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 16.0 * s, w!("tr-tr")))?;
         icons.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
         icons.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
@@ -680,7 +680,7 @@ impl Overlay {
                     rt.FillEllipse(&D2D1_ELLIPSE { point: p, radiusX: rad, radiusY: rad }, &cb);
                 }
                 _ => {
-                    let g: Vec<u16> = glyph.to_string().encode_utf16().collect();
+                    let g: Vec<u16> = carlui_core::os::glyph(*glyph).to_string().encode_utf16().collect();
                     let usable = !matches!(btn, Btn::Undo) || !self.marks.is_empty();
                     rt.DrawText(&g, &icons, &br, if usable { &fg } else { &dimfg }, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
                 }
@@ -731,7 +731,7 @@ impl Overlay {
         centered.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
         let icons = self
             .dw
-            .CreateTextFormat(w!("Segoe Fluent Icons"), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 16.0 * s, w!("tr-tr"))
+            .CreateTextFormat(carlui_core::os::icon_font_w(), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 16.0 * s, w!("tr-tr"))
             .or_else(|_| self.dw.CreateTextFormat(w!("Segoe MDL2 Assets"), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 16.0 * s, w!("tr-tr")))?;
         icons.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
         icons.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;

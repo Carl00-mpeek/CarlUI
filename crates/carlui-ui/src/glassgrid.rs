@@ -142,7 +142,7 @@ impl State {
         let name = text_format(&self.dw, 11.5, DWRITE_FONT_WEIGHT_NORMAL)?;
         let glyphs = unsafe {
             self.dw
-                .CreateTextFormat(w!("Segoe Fluent Icons"), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 30.0, w!("tr-tr"))
+                .CreateTextFormat(carlui_core::os::icon_font_w(), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 30.0, w!("tr-tr"))
                 .or_else(|_| self.dw.CreateTextFormat(w!("Segoe MDL2 Assets"), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 30.0, w!("tr-tr")))?
         };
         unsafe {
@@ -205,7 +205,7 @@ impl State {
                     (Icon::Image(_), Some(Some(bmp))) => rt.DrawBitmap(bmp, Some(&icon), 1.0, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, None),
                     (Icon::Glyph(g, col), _) => {
                         let b = col.and_then(|c| brush(pen(c, 1.0)).ok());
-                        let t: Vec<u16> = g.to_string().encode_utf16().collect();
+                        let t: Vec<u16> = carlui_core::os::glyph(*g).to_string().encode_utf16().collect();
                         rt.DrawText(&t, &glyphs, &icon, b.as_ref().unwrap_or(&white), D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
                     }
                     _ => {

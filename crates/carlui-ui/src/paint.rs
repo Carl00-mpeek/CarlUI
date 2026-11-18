@@ -120,7 +120,7 @@ impl Fonts {
         }
         let weight = if bold { DWRITE_FONT_WEIGHT_SEMI_BOLD } else { DWRITE_FONT_WEIGHT_NORMAL };
         let f = unsafe {
-            let fam = if icon { w!("Segoe Fluent Icons") } else { w!("Segoe UI Variable Text") };
+            let fam = if icon { carlui_core::os::icon_font_w() } else { carlui_core::os::ui_font_w() };
             let f = self.dw.CreateTextFormat(fam, None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr")).or_else(|_| self.dw.CreateTextFormat(if icon { w!("Segoe MDL2 Assets") } else { w!("Segoe UI") }, None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr"))).ok()?;
             let _ = f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             let _ = f.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -264,7 +264,7 @@ impl<A: Clone> Painter<'_, A> {
 
     pub fn glyph(&self, g: char, r: R, size: f32, c: u32, a: f32) {
         let (Some(f), Some(b)) = (self.fonts.get(size, false, Align::Center, true), self.pen(c, a)) else { return };
-        let w: Vec<u16> = g.to_string().encode_utf16().collect();
+        let w: Vec<u16> = carlui_core::os::glyph(g).to_string().encode_utf16().collect();
         unsafe { self.rt.DrawText(&w, &f, &r.d2d(), &b, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL) };
     }
 

@@ -156,8 +156,8 @@ impl Status {
     }
 
     fn draw(&mut self, gfx: &Gfx, h: f32, s: f32) -> Result<()> {
-        let icon_f = self.format(w!("Segoe Fluent Icons"), (15.0 * s).round(), DWRITE_TEXT_ALIGNMENT_CENTER)?;
-        let text_f = self.format(w!("Segoe UI Variable Text"), (12.0 * s).round(), DWRITE_TEXT_ALIGNMENT_TRAILING)?;
+        let icon_f = self.format(carlui_core::os::icon_font_w(), (15.0 * s).round(), DWRITE_TEXT_ALIGNMENT_CENTER)?;
+        let text_f = self.format(carlui_core::os::ui_font_w(), (12.0 * s).round(), DWRITE_TEXT_ALIGNMENT_TRAILING)?;
         let glyphs = self.glyphs();
         let cell = (26.0 * s).round();
         let gap = (10.0 * s).round();
@@ -171,7 +171,7 @@ impl Status {
             let (r, g, b) = carlui_ui::tone::unit(1.0, 1.0, 1.0);
             let brush = dc.CreateSolidColorBrush(&D2D1_COLOR_F { r, g, b, a: carlui_ui::tone::ink_alpha(0.92) }, None)?;
             for (k, c) in glyphs.iter().enumerate() {
-                let t: Vec<u16> = c.to_string().encode_utf16().collect();
+                let t: Vec<u16> = carlui_core::os::glyph(*c).to_string().encode_utf16().collect();
                 let x = k as f32 * cell;
                 let rect = D2D_RECT_F { left: x, top: 0.0, right: x + cell, bottom: h };
                 dc.DrawText(&t, &icon_f, &rect, &brush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);

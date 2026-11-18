@@ -75,7 +75,15 @@ pub fn caption(hwnd: windows::Win32::Foundation::HWND) {
 /// odağı kaybedince DWM akriliği düz griye çevirir; açık temada bu beyaz perde
 /// camı süt beyazında tutar. Koyu temada zemin saydamdır.
 pub fn backdrop() -> windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F {
-    let (v, a) = if light() { (1.0, 0.88) } else { (0.0, 0.0) };
+    // Windows 10'da Mica/Acrylic sistem arka planı olmadığından saydam taban
+    // siyah/boş görünür; orada opak bir zemin çizeriz.
+    let win10 = !carlui_core::os::is_win11();
+    let (v, a) = match (light(), win10) {
+        (true, false) => (1.0, 0.88),
+        (false, false) => (0.0, 0.0),
+        (true, true) => (0.95, 1.0),
+        (false, true) => (0.125, 1.0),
+    };
     windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F { r: v, g: v, b: v, a }
 }
 

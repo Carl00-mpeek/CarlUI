@@ -95,7 +95,7 @@ fn close_rect() -> D2D_RECT_F {
 impl Win {
     fn text(&self, rt: &ID2D1RenderTarget, s: &str, r: D2D_RECT_F, size: f32, bold: bool, c: u32, a: f32, right: bool, icon: bool) {
         unsafe {
-            let fam = if icon { w!("Segoe Fluent Icons") } else { w!("Segoe UI Variable Text") };
+            let fam = if icon { carlui_core::os::icon_font_w() } else { carlui_core::os::ui_font_w() };
             let Ok(f) = self.dw.CreateTextFormat(fam, None, if bold { DWRITE_FONT_WEIGHT_SEMI_BOLD } else { DWRITE_FONT_WEIGHT_NORMAL }, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr")) else { return };
             let _ = f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             let _ = f.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);

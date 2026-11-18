@@ -64,7 +64,7 @@ impl Text {
         if s.is_empty() {
             return 0.0;
         }
-        self.layout(s, "Segoe UI Variable Text", size, bold, 100_000.0)
+        self.layout(s, carlui_core::os::ui_font(), size, bold, 100_000.0)
             .and_then(|(l, _, _)| unsafe {
                 let mut m = DWRITE_TEXT_METRICS::default();
                 l.GetMetrics(&mut m)?;
@@ -75,12 +75,12 @@ impl Text {
 
     /// Metni beyaz (opaklık `alpha`) olarak kendi boyutundaki bir yüzeye çizer.
     pub fn render(&self, gfx: &Gfx, s: &str, size: f32, bold: bool, max_w: f32, alpha: f32) -> Result<Rendered> {
-        self.render_font(gfx, s, "Segoe UI Variable Text", size, bold, max_w, alpha)
+        self.render_font(gfx, s, carlui_core::os::ui_font(), size, bold, max_w, alpha)
     }
 
     /// Simge fontundan bir karakter (ör. "Segoe Fluent Icons" içindeki Wi-Fi simgesi).
     pub fn glyph(&self, gfx: &Gfx, code: char, size: f32, alpha: f32) -> Result<Rendered> {
-        self.render_font(gfx, &code.to_string(), "Segoe Fluent Icons", size, false, size * 2.0, alpha)
+        self.render_font(gfx, &carlui_core::os::glyph(code).to_string(), carlui_core::os::icon_font(), size, false, size * 2.0, alpha)
     }
 
     /// Çok satırlı metin bloğu (pano önizlemesi). `wrap`: bu genişlikte satır
@@ -89,7 +89,7 @@ impl Text {
     pub fn render_block(&self, gfx: &Gfx, s: &str, size: f32, wrap: Option<f32>, max: f32, alpha: f32) -> Result<Rendered> {
         unsafe {
             let format = self.factory.CreateTextFormat(
-                w!("Segoe UI Variable Text"),
+                carlui_core::os::ui_font_w(),
                 None,
                 DWRITE_FONT_WEIGHT_NORMAL,
                 DWRITE_FONT_STYLE_NORMAL,
@@ -120,7 +120,7 @@ impl Text {
     pub fn render_field(&self, gfx: &Gfx, s: &str, size: f32, max_w: f32, max_lines: u32, caret: usize, alpha: f32) -> Result<FieldText> {
         unsafe {
             let format = self.factory.CreateTextFormat(
-                w!("Segoe UI Variable Text"),
+                carlui_core::os::ui_font_w(),
                 None,
                 DWRITE_FONT_WEIGHT_NORMAL,
                 DWRITE_FONT_STYLE_NORMAL,

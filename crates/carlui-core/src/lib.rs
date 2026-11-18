@@ -20,6 +20,7 @@ pub mod live;
 pub mod live_weather;
 pub mod log;
 pub mod looks;
+pub mod os;
 pub mod paths;
 pub mod power;
 pub mod quick;

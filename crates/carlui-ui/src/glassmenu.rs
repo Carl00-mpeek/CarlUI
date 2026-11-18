@@ -112,7 +112,7 @@ pub fn system_accent() -> u32 {
 
 pub(crate) fn text_format(dw: &IDWriteFactory, size: f32, weight: DWRITE_FONT_WEIGHT) -> Result<IDWriteTextFormat> {
     unsafe {
-        let f = dw.CreateTextFormat(w!("Segoe UI Variable Text"), None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr")).or_else(|_| dw.CreateTextFormat(w!("Segoe UI"), None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr")))?;
+        let f = dw.CreateTextFormat(carlui_core::os::ui_font_w(), None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr")).or_else(|_| dw.CreateTextFormat(w!("Segoe UI"), None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("tr-tr")))?;
         f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
         f.SetWordWrapping(DWRITE_WORD_WRAPPING_EMERGENCY_BREAK)?;
         let trim = DWRITE_TRIMMING { granularity: DWRITE_TRIMMING_GRANULARITY_CHARACTER, delimiter: 0, delimiterCount: 0 };
@@ -205,7 +205,7 @@ impl State {
         let head = text_format(&self.dw, 12.0, DWRITE_FONT_WEIGHT_SEMI_BOLD)?;
         let glyphs = unsafe {
             self.dw
-                .CreateTextFormat(w!("Segoe Fluent Icons"), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 15.0, w!("tr-tr"))
+                .CreateTextFormat(carlui_core::os::icon_font_w(), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 15.0, w!("tr-tr"))
                 .or_else(|_| self.dw.CreateTextFormat(w!("Segoe MDL2 Assets"), None, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 15.0, w!("tr-tr")))?
         };
         unsafe {
@@ -244,12 +244,12 @@ impl State {
                 };
                 let draw_icon = |icon: &Icon| match icon {
                     Icon::Glyph(c, col) => {
-                        let t: Vec<u16> = c.to_string().encode_utf16().collect();
+                        let t: Vec<u16> = carlui_core::os::glyph(*c).to_string().encode_utf16().collect();
                         let b = col.map(|c| brush(pen(c, 1.0)).ok()).flatten();
                         rt.DrawText(&t, &glyphs, &D2D_RECT_F { left: 12.0, top: imid - ITEM_H / 2.0, right: 12.0 + ICON + 6.0, bottom: imid + ITEM_H / 2.0 }, b.as_ref().unwrap_or(&white), D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
                     }
                     Icon::Swatch(c, col) => {
-                        let t: Vec<u16> = c.to_string().encode_utf16().collect();
+                        let t: Vec<u16> = carlui_core::os::glyph(*c).to_string().encode_utf16().collect();
                         let b = brush(exact(*col, 1.0)).ok();
                         rt.DrawText(&t, &glyphs, &D2D_RECT_F { left: 12.0, top: imid - ITEM_H / 2.0, right: 12.0 + ICON + 6.0, bottom: imid + ITEM_H / 2.0 }, b.as_ref().unwrap_or(&white), D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
                     }

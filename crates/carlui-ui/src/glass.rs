@@ -72,7 +72,14 @@ impl Glass {
         };
 
         // 1) Sistem arka plan bulanıklığı
-        layer(&comp.CreateHostBackdropBrush()?.cast()?)?;
+        // Windows 10'da host backdrop fırçası yok (çağrı hata verir ya da boş
+        // çizer); yerine opak bir taban rengi koyarız ki yüzey okunur kalsın.
+        if carlui_core::os::is_win11() {
+            layer(&comp.CreateHostBackdropBrush()?.cast()?)?;
+        } else {
+            let base = if crate::tone::light() { Rgba(0xF3, 0xF3, 0xF3, 0xF5) } else { Rgba(0x20, 0x20, 0x20, 0xF5) };
+            layer(&comp.CreateColorBrushWithColor(exact(base))?.cast()?)?;
+        }
         // 2) Füme (açık temada süt beyazı) tint
         let tint_brush = comp.CreateColorBrushWithColor(exact(theme.glass_tint))?;
         layer(&tint_brush.cast()?)?;
