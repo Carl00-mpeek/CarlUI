@@ -326,6 +326,22 @@ impl Dock {
         }
     }
 
+    /// İmleç açık dock'un hizasında mı (dock'a doğru gidiyor ya da üstünde)?
+    /// Kenardan çağrılan dock, imleç içine girmeden önce gizlenmesin diye.
+    pub fn cursor_near(&self) -> bool {
+        let mut pt = POINT::default();
+        if unsafe { GetCursorPos(&mut pt) }.is_err() {
+            return false;
+        }
+        let r = self.pill_rect(self.width);
+        let pad = (36.0 * self.m.s) as i32;
+        match self.side {
+            DockPosition::Bottom => pt.y >= r.top - pad && pt.x >= r.left - pad && pt.x <= r.right + pad,
+            DockPosition::Left => pt.x <= r.right + pad && pt.y >= r.top - pad && pt.y <= r.bottom + pad,
+            DockPosition::Right => pt.x >= r.left - pad && pt.y >= r.top - pad && pt.y <= r.bottom + pad,
+        }
+    }
+
     /// Win menüsü açıldı: dock nerede olursa olsun görünsün. Zaten "açık"
     /// sayılıyorsa da bölgesini ve en üstteliğini tazeler (yeniden kuruluş ya da
     /// başka bir en üst pencere onu gizlemiş olabilir).

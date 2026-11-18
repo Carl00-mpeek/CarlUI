@@ -44,6 +44,8 @@ pub const WM_APP_WINKEY: u32 = WM_APP + 21;
 pub const WM_APP_CONVERT: u32 = WM_APP + 23;
 const WM_APP_REHOOK: u32 = WM_APP + 22;
 const WM_APP_RELOAD: u32 = WM_APP + 24;
+/// Kar oyunu: wp 0 basış, 1 bırakış (lp konum), 2 hareket (konum `snow_take_move` ile okunur).
+pub const WM_APP_SNOW: u32 = WM_APP + 25;
 const MASK_KEY: u16 = 0xE8;
 
 static DOCK: AtomicIsize = AtomicIsize::new(0);
@@ -52,6 +54,13 @@ static SPAN_R: AtomicI32 = AtomicI32::new(0);
 static EDGE_Y: AtomicI32 = AtomicI32::new(i32::MAX);
 static WANT_EDGE: AtomicBool = AtomicBool::new(false);
 static WANT_KEYS: AtomicBool = AtomicBool::new(false);
+/// Kar oyunu fareyi dinliyor mu (kar yağarken ve canlı dock çalışırken).
+static WANT_SNOW: AtomicBool = AtomicBool::new(false);
+static SNOW_X: AtomicI32 = AtomicI32::new(0);
+static SNOW_Y: AtomicI32 = AtomicI32::new(0);
+/// Bir hareket mesajı yolda: yenisi gönderilmez, konum güncellenir (birleştirme).
+static SNOW_MOVE: AtomicBool = AtomicBool::new(false);
+static SNOW_DOWN: AtomicBool = AtomicBool::new(false);
 /// Uygulama numaraları için gereken değiştiriciler (bit: 1 Win, 2 Ctrl, 4 Alt, 8 Shift); 0 = kapalı.
 static DIGIT_MODS: AtomicU8 = AtomicU8::new(0);
 /// Windows tuşu tek başına: 0 = Windows'a bırak, 1 = arama, 2 = Win menüsü.
@@ -123,6 +132,24 @@ pub fn set_span(l: i32, r: i32, edge: i32, side: carlui_core::config::DockPositi
     );
 }
 
+/// Kar oyunu fareyi dinlesin mi. Kanca hep kuruludur; bu yalnızca mesajları açar.
+pub fn set_snow(on: bool) {
+    if WANT_SNOW.swap(on, Ordering::SeqCst) != on && !on && SNOW_DOWN.swap(false, Ordering::SeqCst) {
+        post(WM_APP_SNOW, 1);
+    }
+}
+
+/// Son hareket konumu (birleştirilmiş); bir sonraki hareket mesajına izin verir.
+pub fn snow_take_move() -> (i32, i32) {
+    SNOW_MOVE.store(false, Ordering::SeqCst);
+    (SNOW_X.load(Ordering::SeqCst), SNOW_Y.load(Ordering::SeqCst))
+}
+
+/// Basış/bırakış mesajının konumu.
+pub fn snow_point(lp: LPARAM) -> (i32, i32) {
+    ((lp.0 as u32 & 0xffff) as u16 as i16 as i32, ((lp.0 as u32 >> 16) & 0xffff) as u16 as i16 as i32)
+}
+
 fn post(msg: u32, wp: usize) {
     unsafe {
         let _ = PostMessageW(HWND(DOCK.load(Ordering::SeqCst) as _), msg, WPARAM(wp), LPARAM(0));
@@ -148,6 +175,31 @@ unsafe extern "system" fn mouse_proc(code: i32, wp: WPARAM, lp: LPARAM) -> LRESU
             let at = at_edge && along >= SPAN_L.load(Ordering::Relaxed) - slack && along <= SPAN_R.load(Ordering::Relaxed) + slack;
             if AT_EDGE.swap(at, Ordering::Relaxed) != at {
                 post(WM_APP_EDGE, at as usize);
+            }
+        }
+        if WANT_SNOW.load(Ordering::Relaxed) {
+            let info = &*(lp.0 as *const MSLLHOOKSTRUCT);
+            let (x, y) = (info.pt.x, info.pt.y);
+            let packed = ((x as i16 as u16 as u32) | ((y as i16 as u16 as u32) << 16)) as isize;
+            // Tıklama yutulmaz: yalnızca haber verilir, olay yoluna devam eder.
+            match wp.0 as u32 {
+                WM_LBUTTONDOWN => {
+                    SNOW_DOWN.store(true, Ordering::Relaxed);
+                    let _ = PostMessageW(HWND(DOCK.load(Ordering::Relaxed) as _), WM_APP_SNOW, WPARAM(0), LPARAM(packed));
+                }
+                WM_LBUTTONUP => {
+                    if SNOW_DOWN.swap(false, Ordering::Relaxed) {
+                        let _ = PostMessageW(HWND(DOCK.load(Ordering::Relaxed) as _), WM_APP_SNOW, WPARAM(1), LPARAM(packed));
+                    }
+                }
+                WM_MOUSEMOVE => {
+                    SNOW_X.store(x, Ordering::Relaxed);
+                    SNOW_Y.store(y, Ordering::Relaxed);
+                    if !SNOW_MOVE.swap(true, Ordering::Relaxed) {
+                        post(WM_APP_SNOW, 2);
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -333,7 +385,7 @@ impl Input {
     /// ne açar (0 Windows'unki, 1 arama, 2 Win menüsü).
     /// `clip`: pano kısayolu; yalnızca Win içerenler burada yakalanır.
     /// `convert`: dönüştürücü akoru (yalnızca değiştiriciler, ör. Win+Alt).
-    pub fn start(dock: HWND, edge: bool, digits: Option<Mods>, start: u8, clip: Option<Combo>, convert: Option<Mods>) -> Option<Self> {
+    pub fn start(dock: HWND, edge: bool, snow: bool, digits: Option<Mods>, start: u8, clip: Option<Combo>, convert: Option<Mods>) -> Option<Self> {
         let bits = |m: Mods| m.win as u8 | (m.ctrl as u8) << 1 | (m.alt as u8) << 2 | (m.shift as u8) << 3;
         let mask = digits.map(bits).unwrap_or(0);
         let clip = clip.filter(|c| c.mods.win).map(|c| (bits(c.mods) as u32) << 16 | c.vk).unwrap_or(0);
@@ -342,7 +394,7 @@ impl Input {
         CONV_MODS.store(conv, Ordering::SeqCst);
         CONV_ARMED.store(false, Ordering::SeqCst);
         let keys = mask != 0 || start != 0 || clip != 0 || conv != 0;
-        if !edge && !keys {
+        if !edge && !keys && !snow {
             return None;
         }
         DOCK.store(dock.0 as isize, Ordering::SeqCst);

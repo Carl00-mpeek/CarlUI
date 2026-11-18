@@ -38,6 +38,10 @@ mod signal;
 mod sky;
 mod sky_weather;
 mod snake;
+mod shimmer;
+mod snowball;
+mod snowfall;
+mod snowplay;
 mod weather_link;
 mod weather_poll;
 mod window;
@@ -127,8 +131,12 @@ pub struct Live {
     stats: Option<Stats>,
     /// Kar birikintisi / yağmur ıslaklığı (yalnız kar ya da yağmur varken, eriyene dek).
     ledge: Option<ledge_view::LedgeView>,
+    /// Yağmurda simgelerin üstünden kayan parlaklık.
+    shimmer: Option<shimmer::Shimmer>,
     /// Dock altta: pill'in üstü de kar tutar.
     bottom: bool,
+    /// Fare kancası kar olaylarını gönderiyor.
+    snow_hook: bool,
 }
 
 impl Live {
@@ -170,7 +178,9 @@ impl Live {
             windows,
             stats: std::env::var_os("CARLUI_LIVE_DEBUG").map(|_| Stats { since: now, frames: 0, total: Duration::ZERO, max: Duration::ZERO }),
             ledge: None,
+            shimmer: None,
             bottom: pet_allowed,
+            snow_hook: false,
         };
         if cfg.has_pet() && !pet_allowed {
             info!("canlı dock: evcil hayvan yalnızca alttaki dock'ta");
@@ -219,6 +229,20 @@ impl Live {
         self.scene_last = Instant::now();
         self.scene_due = self.scene_last;
         self.sync_ledge(gfx, dock);
+    }
+
+    /// Yağmurun şiddeti (sahne yağmur değilse `None`).
+    fn rain_level(&self) -> Option<f32> {
+        let s = self.scene.as_ref()?;
+        (s.resolved.kind == particles::Kind::Rain).then(|| (s.resolved.mix.level.unwrap_or(60) as f32 / 100.0).clamp(0.15, 1.0))
+    }
+
+    /// Yağmurda simge parlaklığını eşler; değilse kaldırır.
+    fn sync_shimmer(&mut self, gfx: &Gfx, dock: &Dock, now: Instant) {
+        match self.rain_level() {
+            Some(l) => self.shimmer.get_or_insert_with(|| shimmer::Shimmer::new(l)).sync(gfx, dock, now, l),
+            None => self.shimmer = None,
+        }
     }
 
     /// Sahne kar ya da yağmursa kenar birikintisini kurar; değilse eritmeye bırakır.
@@ -280,6 +304,10 @@ impl Live {
         if let Some(l) = self.ledge.as_mut() {
             l.show(st.visible());
         }
+        if st != State::Running {
+            // Duraklayınca/gizlenince parlaklık da durur (animasyon boşa dönmesin).
+            self.shimmer = None;
+        }
         match st {
             State::Running => {
                 // Duraklamadan dönüş: aradaki süre "geçmemiş" sayılır.
@@ -327,6 +355,7 @@ impl Live {
             p.render(dock.live_pill());
         }
         let pill = self.bottom.then(|| dock.live_pill());
+        self.shimmer = None;
         if let Some(l) = self.ledge.as_mut() {
             if let Err(e) = l.settle(gfx, pill) {
                 warn!("canlı dock: kar katmanı çizilemedi: {e}");
@@ -384,6 +413,7 @@ impl Live {
                 }
             }
         }
+        self.sync_shimmer(gfx, dock, now);
         if let Some(p) = self.perch.as_mut() {
             if now >= self.pet_due {
                 let dt = (now - self.pet_last).as_secs_f32();
@@ -494,6 +524,7 @@ impl Live {
             crate::media::WM_APP_MEDIA => self.media_changed(),
             WM_MOUSEMOVE => self.cursor(true),
             WM_MOUSELEAVE => self.cursor(false),
+            crate::input::WM_APP_SNOW => self.snow_mouse(dock, wp, lp),
             _ => {}
         }
         // Yeni pencere açıldı: hayvan irkilir/uyanır.
@@ -511,6 +542,31 @@ impl Live {
         self.windows = windows;
         if changed {
             self.refresh(gfx, dock);
+        }
+        self.sync_snow_hook();
+    }
+
+    /// Kar yağarken ve dock canlıyken fare kancası kar olaylarını da göndersin.
+    fn sync_snow_hook(&mut self) {
+        let want = self.state == State::Running && self.ledge.as_ref().is_some_and(|l| l.snowy());
+        if want != self.snow_hook {
+            self.snow_hook = want;
+            crate::input::set_snow(want);
+        }
+    }
+
+    /// Kar topu oyunu: basış, bırakış, hareket.
+    fn snow_mouse(&mut self, dock: &Dock, wp: WPARAM, lp: LPARAM) {
+        if self.state != State::Running {
+            return;
+        }
+        let (x, y) = if wp.0 == 2 { crate::input::snow_take_move() } else { crate::input::snow_point(lp) };
+        let pill = self.bottom.then(|| dock.live_pill());
+        let hwnd = self.hwnd;
+        if let Some(l) = self.ledge.as_mut() {
+            if l.mouse(wp.0, x, y, hwnd, pill) {
+                self.arm();
+            }
         }
     }
 
@@ -535,6 +591,9 @@ impl Drop for Live {
     fn drop(&mut self) {
         self.settle = None;
         self.kill();
+        if self.snow_hook {
+            crate::input::set_snow(false);
+        }
         // Sahne, tünek ve güç kayıtları kendi Drop'larında bırakılır.
     }
 }

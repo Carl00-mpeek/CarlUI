@@ -10,9 +10,11 @@
 //! ışığın konumu/saydamlığı gönderilir.
 
 use super::{
-    ledge::{max_height, visible, Edge, Ledge, Ledges, R4},
+    ledge::{max_height, visible, Edge, Ledge, Ledges, R4, ROUGH},
     rng::Rng,
-    window::overlay_window,
+    snowfall::{Plow, Snowfall},
+    snowplay::SnowPlay,
+    window::{overlay_window, BackdropWindow},
 };
 use crate::dock::LiveView;
 use carlui_core::live::LiveIntensity;
@@ -52,10 +54,19 @@ pub enum Mode {
 const GATHER: Duration = Duration::from_millis(150);
 /// Yağmurda ışık akıcı kaysın diye kare aralığı.
 const RAIN_FRAME: Duration = Duration::from_millis(50);
+/// Kar topu hareket ederken kare aralığı (akıcı uçuş).
+const PLAY_FRAME: Duration = Duration::from_millis(16);
 /// Karda/erirken kare aralığı (birikme yavaş).
 const SLOW_FRAME: Duration = Duration::from_millis(150);
 /// Işığın kenarı geçme süresi (sn).
 const GLINT_RUN: f32 = 2.5;
+/// Ekranın alt kenarı boyunca uzanan birikinti.
+const DRIFT_KEY: isize = -2;
+/// Dock'taki kar: daha kalın, bir yerde tepecik yapar.
+const DOCK_DEPTH: f32 = 1.5;
+const DOCK_MOUND: f32 = 0.8;
+/// Kenarın üstünde ayrılan en yüksek kar (kalınlık × tepecik).
+const PEAK: f32 = DOCK_DEPTH * (1.0 + DOCK_MOUND);
 
 type C = (u8, u8, u8);
 
@@ -129,6 +140,15 @@ pub struct LedgeView {
     last: Instant,
     gathered: Option<Instant>,
     due: Instant,
+    /// Yağan kar (yalnızca kar modunda, hareket azaltılmamışken).
+    /// Yağan karın çizildiği, pencerelerin arkasındaki katman.
+    backdrop: Option<BackdropWindow>,
+    backdrop_z: Instant,
+    snowfall: Option<Snowfall>,
+    plow: Option<Plow>,
+    next_plow: Instant,
+    /// Kar topları ve kardan adamlar.
+    play: SnowPlay,
 }
 
 impl LedgeView {
@@ -180,6 +200,12 @@ impl LedgeView {
             last: now,
             gathered: None,
             due: now,
+            backdrop: None,
+            backdrop_z: now,
+            snowfall: None,
+            plow: None,
+            next_plow: now + Duration::from_secs(75),
+            play: SnowPlay::new(s, mon, DRIFT_KEY),
         })
     }
 
@@ -188,6 +214,9 @@ impl LedgeView {
             self.shown = on;
             unsafe {
                 let _ = ShowWindow(self.hwnd, if on { SW_SHOWNOACTIVATE } else { SW_HIDE });
+            }
+            if let Some(b) = self.backdrop.as_mut() {
+                b.show(on);
             }
         }
     }
@@ -199,7 +228,7 @@ impl LedgeView {
 
     /// Kar biriktiren yüzey yüksekliği (pencere içinde kenarın üstü).
     fn above(&self) -> i32 {
-        (max_height(1.0, self.s) + 3.0 * self.s).ceil() as i32
+        (max_height(1.0, self.s) * PEAK + 3.0 * self.s).ceil() as i32
     }
 
     /// Kenarın altı (gölge, ıslaklık).
@@ -217,7 +246,18 @@ impl LedgeView {
         // Dock en üstte: önünde hiçbir şey yok.
         if let Some(p) = pill {
             if p.right - p.left > 20 {
-                edges.push(Edge { key: -1, x0: p.left, x1: p.right, y: p.top, room: ha, taper: ((p.bottom - p.top) / 2).max(4), spans: vec![(p.left, p.right)] });
+                edges.push(Edge {
+                    key: -1,
+                    x0: p.left,
+                    x1: p.right,
+                    y: p.top,
+                    room: ha,
+                    taper: ((p.bottom - p.top) / 2).max(4),
+                    spans: vec![(p.left, p.right)],
+                    depth: DOCK_DEPTH,
+                    rough: ROUGH,
+                    mound: DOCK_MOUND,
+                });
             }
         }
         let mut found: Vec<HWND> = Vec::new();
@@ -232,7 +272,8 @@ impl LedgeView {
         let mon_area = (mon.right - mon.left) as i64 * (mon.bottom - mon.top) as i64;
         let mut cover: Vec<R4> = Vec::new();
         for h in found {
-            if edges.len() >= super::ledge::MAX_LEDGES {
+            // Bir yer alt kenar birikintisine kalır.
+            if edges.len() >= super::ledge::MAX_LEDGES - 1 {
                 break;
             }
             unsafe {
@@ -249,6 +290,10 @@ impl LedgeView {
                     continue;
                 }
                 let class = carlui_core::win::class_name(h);
+                // Masaüstünün kendisi (simgeler, duvar kâğıdı) örtücü değildir.
+                if class == "Progman" || class == "WorkerW" {
+                    continue;
+                }
                 let island = class == "CarlUI.Island";
                 let r = if island { island_rect(h) } else { frame_rect(h) };
                 let Some(r) = r else { continue };
@@ -272,12 +317,15 @@ impl LedgeView {
                     if room > 0 && x1 - x0 > 20 {
                         let taper = if island { ((r.bottom - r.top) / 2).max(4) } else { (8.0 * s) as i32 };
                         let spans = visible(x0, x1, r.top - ha, r.top + hb, &cover);
-                        edges.push(Edge { key: h.0 as isize, x0, x1, y: r.top, room, taper, spans });
+                        edges.push(Edge { key: h.0 as isize, x0, x1, y: r.top, room, taper, spans, depth: 1.0, rough: ROUGH, mound: 0.3 });
                     }
                 }
                 cover.push((r.left, r.top, r.right, r.bottom));
             }
         }
+        // Ekranın alt kenarı: en arkada, önündeki pencereler örter; dalgalı.
+        let spans = visible(mon.left, mon.right, mon.bottom - ha, mon.bottom, &cover);
+        edges.push(Edge { key: DRIFT_KEY, x0: mon.left, x1: mon.right, y: mon.bottom, room: ha, taper: 0, spans, depth: 1.2, rough: 0.32, mound: 0.0 });
         edges
     }
 
@@ -412,12 +460,69 @@ impl LedgeView {
         };
         let rain = matches!(self.mode, Some((Mode::Rain, _)));
         self.model.grow(dt, snow, rain);
+        self.weather(gfx, now, dt, snow)?;
+        let back = self.backdrop.as_ref().map(|b| b.root.clone());
+        self.play.step(gfx, dt, snow.is_some(), pill, &self.model, &self.root, back.as_ref())?;
         let target = self.sheen_target();
         let k = 0.5 * dt;
         self.sheen = if self.sheen < target { (self.sheen + k).min(target) } else { (self.sheen - k).max(target) };
         self.redraw(false)?;
         self.glints(dt, true)?;
-        self.due = now + if rain || self.sheen > 0.0 { RAIN_FRAME } else { SLOW_FRAME };
+        self.due = now + if self.play.busy() {
+            PLAY_FRAME
+        } else if rain || self.sheen > 0.0 || self.plow.is_some() { RAIN_FRAME } else { SLOW_FRAME };
+        Ok(())
+    }
+
+    /// Yağan kar ve kar küreme aracı (yalnızca kar yağarken).
+    fn weather(&mut self, gfx: &Gfx, now: Instant, dt: f32, snow: Option<f32>) -> Result<()> {
+        let Some(level) = snow else {
+            self.snowfall = None;
+            self.plow = None;
+            // Toplar/adamlar erirken arka katman kalır.
+            if self.play.is_empty() {
+                self.backdrop = None;
+            }
+            return Ok(());
+        };
+        let (w, h) = ((self.mon.right - self.mon.left) as f32, (self.mon.bottom - self.mon.top) as f32);
+        if self.snowfall.as_ref().is_none_or(|f| (f.level - level).abs() > 0.2) {
+            // Önce eskisi gitsin; ikisi üst üste binmesin.
+            self.snowfall = None;
+            if self.backdrop.is_none() {
+                let mut b = BackdropWindow::new(gfx, self.mon)?;
+                b.show(self.shown);
+                self.backdrop = Some(b);
+                self.backdrop_z = now;
+            }
+            let parent = self.backdrop.as_ref().map(|b| b.root.clone()).unwrap_or_else(|| self.root.clone());
+            self.snowfall = Some(Snowfall::new(gfx, &parent, w, h, self.s, level, &mut self.rng)?);
+        }
+        // Masaüstü öne gelirse (Win+D, masaüstüne tıklama) kar yeniden onun üstüne.
+        if now - self.backdrop_z >= Duration::from_secs(2) {
+            self.backdrop_z = now;
+            if let Some(b) = self.backdrop.as_mut() {
+                b.keep_z();
+            }
+        }
+        if self.plow.is_none() && now >= self.next_plow {
+            if self.model.fullness(DRIFT_KEY, level) > 0.6 {
+                self.plow = Some(Plow::new(gfx, &self.root, w, h, self.s)?);
+                self.next_plow = now + Duration::from_secs_f32(self.rng.range(90.0, 180.0));
+            } else {
+                self.next_plow = now + Duration::from_secs(20);
+            }
+        }
+        if let Some(p) = self.plow.as_mut() {
+            match p.advance(dt) {
+                Some((a, b)) => {
+                    let left = self.mon.left as f32;
+                    self.model.clear(DRIFT_KEY, a + left, b + left);
+                    self.play.snow.clear(DRIFT_KEY, a + left, b + left);
+                }
+                None => self.plow = None,
+            }
+        }
         Ok(())
     }
 
@@ -426,6 +531,10 @@ impl LedgeView {
         let edges = self.gather(pill);
         self.model.sync(edges);
         self.sync_slots(gfx)?;
+        self.snowfall = None;
+        self.play.reset(&self.root, self.backdrop.as_ref().map(|b| &b.root));
+        self.backdrop = None;
+        self.plow = None;
         match self.mode {
             Some((Mode::Snow, l)) => self.model.settle(l),
             _ => self.model.list.iter_mut().for_each(|l| l.h.iter_mut().for_each(|h| *h = 0.0)),
@@ -437,7 +546,24 @@ impl LedgeView {
 
     /// Kar kalmadı, kurudu ve hava artık kar/yağmur değil: bırakılabilir.
     pub fn finished(&self) -> bool {
-        self.mode.is_none() && self.sheen == 0.0 && self.model.bare()
+        self.mode.is_none() && self.sheen == 0.0 && self.model.bare() && self.play.is_empty()
+    }
+
+    /// Kar modunda mı (kar topu oyunu açık)?
+    pub fn snowy(&self) -> bool {
+        matches!(self.mode, Some((Mode::Snow, _)))
+    }
+
+    /// Fare olayı (`input::WM_APP_SNOW`). Bir şey değiştiyse kare hemen gelir.
+    pub fn mouse(&mut self, kind: usize, x: i32, y: i32, dock: HWND, pill: Option<RECT>) -> bool {
+        if !self.shown || (!self.snowy() && kind == super::snowplay::DOWN) {
+            return false;
+        }
+        let changed = self.play.mouse(kind, x, y, dock, pill, &mut self.model);
+        if changed {
+            self.due = Instant::now();
+        }
+        changed
     }
 
     /// Bir sonraki karenin zamanı.

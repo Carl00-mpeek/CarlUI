@@ -1,37 +1,31 @@
 ## Türkçe
 
-**CarlUI 1.1.11: Bluetooth paneli, ağ geçişi ve kar birikintisi.**
+**CarlUI 1.1.12: Kardan adam, tüm ekrana kar ve tepside Bluetooth.**
 
 **Yenilikler**
-- Dock'un durum alanına (Compact ve Full) Bluetooth simgesi eklendi. Tıklayınca bağlı ve eşleştirilebilir cihazlar CarlUI'nin kendi panelinde listelenir; Bluetooth buradan açılıp kapatılabilir ve cihaza bağlanılabilir.
-- Ağ panelinde Ethernet satırına sağ tıklayınca Wi-Fi'ye, Wi-Fi'ye sağ tıklayınca Ethernet'e geçilir.
-- Minimal ve Full görünümde ağ simgesine sağ tıklamak Ağ ve İnternet ayarlarını, Bluetooth simgesine sağ tıklamak Bluetooth ayarlarını açar.
-- Hava durumu efekti: kar yağarken açık pencerelerin, dock'un ve adanın üst kenarında kar birikir; yağmurda aynı kenarlarda ıslak bir parıltı görünür.
-- CPU sıcaklığı artık sürücü olmadan da okunur: PawnIO yoksa çalışan HWiNFO'dan ("Shared Memory Support" açıkken, Intel ve AMD), o da yoksa Windows'un ACPI ısı bölgesinden. Hiçbiri yoksa "—" görünür.
+- Kar yağarken kar artık yalnızca dock'un çevresine değil tüm masaüstüne yağar; dock'un üstünde ve ekranın altında kar birikir.
+- Biriken kara basılı tutunca kartopu yapılır ve imleçle taşınır. Bırakılan top düşer, yuvarlanır; imleçle itilebilir. Üst üste üç top kardan adama dönüşür (havuç burun, atkı, dal kollar). Kar küreme aracı alttaki birikintiyi ve topları temizler.
+- Yağmurda dock simgelerinin üstünde ıslak bir parıltı görünür.
+- Bluetooth artık varsayılan olarak tepside: ok panelinin başındaki Bluetooth satırı Bluetooth panelini açar. Ayarlar → Dock → "Bluetooth dock'ta" ile simge yine durum alanında gösterilebilir.
 
 **Düzeltmeler**
-- Ekranı kaplayan bir pencere küçültülüp dock'tan açılınca küçük boyutta geliyordu; artık Alt+Tab'daki gibi ekranı kaplayarak açılır.
-- Tray okunun arkasındaki zemin artık yalnızca panel açıkken görünür; kapalıyken iz kalmaz.
-
-**Diğer**
-- Carl Vault'un Linux sürümü kaldırıldı ve artık yayımlanmıyor.
+- Tepsi ikonuna sağ tıklayınca uygulamanın menüsü panelin üstünde açılır ve panel kapanmaz; Discord'un sağ tık menüsü (Çıkış) artık her seferinde açılıyor.
+- Ekranı kaplayan pencereler dock'tan açılırken doğru boyutta geri gelir.
+- Tarayıcıdayken dock'un titremesi giderildi.
 
 ---
 
 ## English
 
-**CarlUI 1.1.11: Bluetooth panel, network switching and snow build-up.**
+**CarlUI 1.1.12: Snowmen, full-screen snow and Bluetooth in the tray.**
 
 **New**
-- A Bluetooth icon was added to the dock's status area (Compact and Full). Clicking it lists connected and pairable devices in CarlUI's own panel, where you can also turn Bluetooth on or off and connect to a device.
-- In the network panel, right-click the Ethernet row to switch to Wi-Fi, and right-click Wi-Fi to switch back to Ethernet.
-- In Minimal and Full views, right-clicking the network icon opens Network & Internet settings, and right-clicking the Bluetooth icon opens Bluetooth settings.
-- Weather effect: while it snows, snow builds up on the top edges of open windows, the dock and the island; in rain the same edges get a wet shimmer.
-- CPU temperature now works without a driver: without PawnIO it's read from a running HWiNFO (with "Shared Memory Support" on, Intel and AMD), or else from Windows' ACPI thermal zone. If none is available it shows "—".
+- Snow now falls across the whole desktop, not just around the dock, and builds up on the dock and along the bottom of the screen.
+- Press and hold on settled snow to make a snowball and drag it with the cursor. Dropped balls fall and roll, and you can push them with the cursor. Stack three balls to build a snowman (carrot nose, scarf, stick arms). The snowplow clears the bottom drift and the balls on it.
+- In rain, dock icons get a wet shimmer.
+- Bluetooth now lives in the tray by default: the Bluetooth row at the top of the arrow panel opens the Bluetooth panel. Settings → Dock → "Bluetooth on the dock" puts the icon back in the status area.
 
 **Fixes**
-- A maximized window that was minimized came back at its smaller size when clicked in the dock; it now opens maximized, like with Alt+Tab.
-- The plate behind the tray arrow now only shows while the panel is open; nothing is left behind when it's closed.
-
-**Other**
-- The Linux version of Carl Vault was removed and is no longer published.
+- Right-clicking a tray icon opens the app's menu on top of the panel without closing it; Discord's right-click menu (Quit) now opens every time.
+- Maximized windows come back at the right size when opened from the dock.
+- Fixed the dock flickering while a browser is in front.

@@ -44,12 +44,17 @@ unsafe fn create_window() -> Result<HWND> {
 /// Tıklamayı geçiren, odak almayan, saydam katman penceresi (gizli başlar).
 /// Sınıf ilk çağrıda bir kez kaydedilir.
 pub(super) unsafe fn overlay_window(class: PCWSTR, once: &'static Once) -> Result<HWND> {
+    layer_window(class, once, WS_EX_TOPMOST)
+}
+
+/// `overlay_window` gibi ama en üstte değil: sıradan pencerelerin arkasında kalabilir.
+unsafe fn layer_window(class: PCWSTR, once: &'static Once, extra: WINDOW_EX_STYLE) -> Result<HWND> {
     let instance = GetModuleHandleW(None)?;
     once.call_once(|| {
         RegisterClassW(&WNDCLASSW { lpfnWndProc: Some(perch_proc), hInstance: instance.into(), lpszClassName: class, ..Default::default() });
     });
     let hwnd = CreateWindowExW(
-        WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
+        WS_EX_TOOLWINDOW | extra | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP,
         class,
         w!(""),
         WS_POPUP,
@@ -141,4 +146,97 @@ impl Drop for PerchWindow {
             let _ = DestroyWindow(self.hwnd);
         }
     }
+}
+
+/// Masaüstünün hemen üstünde, sıradan pencerelerin arkasında duran,
+/// monitör boyutunda tıklamayı geçiren katman (yağan kar burada çizilir:
+/// pencerelerin önüne değil, masaüstüne yağar).
+pub struct BackdropWindow {
+    hwnd: HWND,
+    _target: DesktopWindowTarget,
+    pub root: ContainerVisual,
+    shown: bool,
+}
+
+impl BackdropWindow {
+    pub fn new(gfx: &Gfx, mon: RECT) -> Result<Self> {
+        static CLASS: Once = Once::new();
+        let class = if crate::sandbox::on() { w!("CarlUI.DockSandboxSnowBack") } else { w!("CarlUI.DockSnowBack") };
+        let hwnd = unsafe { layer_window(class, &CLASS, WINDOW_EX_STYLE(0))? };
+        unsafe {
+            let _ = SetWindowPos(hwnd, None, mon.left, mon.top, (mon.right - mon.left).max(1), (mon.bottom - mon.top).max(1), SWP_NOACTIVATE | SWP_NOZORDER);
+        }
+        let made = (|| -> Result<_> {
+            let target = unsafe { gfx.comp.cast::<ICompositorDesktopInterop>()?.CreateDesktopWindowTarget(hwnd, false)? };
+            let root = gfx.comp.CreateContainerVisual()?;
+            target.SetRoot(&root)?;
+            Ok((target, root))
+        })();
+        match made {
+            Ok((target, root)) => {
+                let mut me = Self { hwnd, _target: target, root, shown: false };
+                me.keep_z();
+                Ok(me)
+            }
+            Err(e) => {
+                unsafe {
+                    let _ = DestroyWindow(hwnd);
+                }
+                Err(e)
+            }
+        }
+    }
+
+    pub fn show(&mut self, on: bool) {
+        if on != self.shown {
+            self.shown = on;
+            unsafe {
+                let _ = ShowWindow(self.hwnd, if on { SW_SHOWNOACTIVATE } else { SW_HIDE });
+            }
+            if on {
+                self.keep_z();
+            }
+        }
+    }
+
+    /// Masaüstü penceresinin (simgeleri taşıyan Progman/WorkerW) hemen üstüne
+    /// yerleşir. Zaten oradaysa dokunmaz.
+    pub fn keep_z(&mut self) {
+        unsafe {
+            let Some(desk) = desktop_host() else { return };
+            let prev = GetWindow(desk, GW_HWNDPREV).unwrap_or_default();
+            if prev == self.hwnd {
+                return;
+            }
+            // Önünde sıradan pencere yoksa (hepsi simge durumunda) en üstteki
+            // sıradan pencere konumu: en üstte kalıcı (topmost) olmadan.
+            let topmost = !prev.is_invalid() && (GetWindowLongW(prev, GWL_EXSTYLE) as u32) & WS_EX_TOPMOST.0 != 0;
+            let after = if prev.is_invalid() || topmost { HWND_NOTOPMOST } else { prev };
+            let _ = SetWindowPos(self.hwnd, after, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER);
+        }
+    }
+}
+
+impl Drop for BackdropWindow {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = DestroyWindow(self.hwnd);
+        }
+    }
+}
+
+/// Masaüstü simgelerini taşıyan üst düzey pencere (Progman ya da bir WorkerW).
+pub(super) fn desktop_host() -> Option<HWND> {
+    unsafe extern "system" fn cb(h: HWND, data: LPARAM) -> BOOL {
+        if FindWindowExW(h, None, w!("SHELLDLL_DefView"), None).is_ok_and(|v| !v.is_invalid()) {
+            *(data.0 as *mut HWND) = h;
+            return FALSE;
+        }
+        TRUE
+    }
+    let mut found = HWND::default();
+    unsafe {
+        let _ = EnumWindows(Some(cb), LPARAM(&mut found as *mut _ as isize));
+    }
+    (!found.is_invalid()).then_some(found)
 }

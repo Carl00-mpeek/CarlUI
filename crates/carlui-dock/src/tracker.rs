@@ -301,18 +301,28 @@ pub fn is_minimized(hwnd: HWND) -> bool {
 pub fn activate(hwnd: HWND) {
     unsafe {
         if IsIconic(hwnd).as_bool() {
-            // Küçültülmüş pencere: Alt+Tab'ın yolu. Yönetici olarak çalışan
-            // pencereye (çoğu oyun istemcisi) ShowWindow ulaşmayabiliyor; eskiden
-            // pencere öne geçip simge durumunda kalıyordu. Ağır yük altındaki
-            // oyun geri yüklemeyi geç işlese de istek kuyrukta bekler.
+            // Küçültülmüş pencere: Alt+Tab'ın yolu. Pencere küçültülmeden önce
+            // ekranı kaplıyorsa ekranı kaplayarak açılır.
             //
-            // Küçültülmeden önce ekranı kaplıyorsa ekranı kaplayarak açılmalı:
-            // SwitchToThisWindow pencereyi zaten ekranı kaplar hâle getirmiş
-            // olabilir; o durumda SW_RESTORE "geri yükle" boyutuna küçültürdü.
-            let mut wp = WINDOWPLACEMENT { length: std::mem::size_of::<WINDOWPLACEMENT>() as u32, ..Default::default() };
-            let maximized = GetWindowPlacement(hwnd, &mut wp).is_ok() && (wp.flags & WPF_RESTORETOMAXIMIZED) == WPF_RESTORETOMAXIMIZED;
+            // Hemen ardından ikinci bir geri yükleme gönderilmez: SwitchToThisWindow
+            // geri yüklemeyi kuyruğa koyar, ikinci istek pencere çoktan büyümüşken
+            // işlenirse (Chrome, Edge) "geri yükle" boyutuna küçültür. Yönetici
+            // olarak çalışan pencereye (çoğu oyun istemcisi) istek ulaşmazsa
+            // pencere simge durumunda kalmasın diye kısa süre sonra bir kez daha
+            // denenir; ağır yük altındaki oyun geç işlese de istek kuyrukta bekler.
             SwitchToThisWindow(hwnd, true);
-            let _ = ShowWindowAsync(hwnd, if maximized { SW_SHOWMAXIMIZED } else { SW_RESTORE });
+            let raw = hwnd.0 as isize;
+            std::thread::spawn(move || {
+                let hwnd = HWND(raw as _);
+                for _ in 0..10 {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    if !IsWindow(hwnd).as_bool() || !IsIconic(hwnd).as_bool() {
+                        return;
+                    }
+                }
+                // Simge durumundaki pencerede SW_RESTORE büyütülmüş hâli de korur.
+                let _ = ShowWindowAsync(hwnd, SW_RESTORE);
+            });
         }
         // Pencerenin açık bir iletişim kutusu varsa o öne gelsin (giriş ekranı vb.).
         let popup = GetLastActivePopup(hwnd);

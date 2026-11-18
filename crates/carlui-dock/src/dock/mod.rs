@@ -371,6 +371,7 @@ impl Dock {
         if taskbar {
             let mut st = status::Status::new(&dock.comp, tsize == TaskbarSize::Full)?;
             st.hour = cfg.clock.hour;
+            st.bt_shown = cfg.dock.bluetooth_in_dock;
             st.refresh(gfx, m.h, s, true)?;
             dock.items.Children()?.InsertAtTop(&st.visual)?;
             dock.status = Some(st);
@@ -403,6 +404,11 @@ impl Dock {
     /// Öğenin simge fırçası (çark dock aynı simgeyi yeniden çizmeden paylaşır).
     pub fn icon_brush(&self, i: usize) -> Option<CompositionBrush> {
         self.entries.get(i)?.icon.Brush().ok()
+    }
+
+    /// Canlı dock: uygulama/klasör simgelerinin görselleri (yağmur parıltısı için).
+    pub fn icon_visuals(&self) -> Vec<SpriteVisual> {
+        self.entries.iter().filter(|e| e.leaving.is_none() && e.kind != Kind::Tray).map(|e| e.icon.clone()).collect()
     }
 
     fn vert(&self) -> bool {

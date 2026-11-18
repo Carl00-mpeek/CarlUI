@@ -146,9 +146,9 @@ impl App {
         self.input = if sandbox::on() {
             None
         } else if screens::child().is_some() {
-            Input::start(self.hwnd, edge, None, 0, None, None)
+            Input::start(self.hwnd, edge, false, None, 0, None, None)
         } else {
-            Input::start(self.hwnd, edge, k.app_number_mods(), start, cfg.clipboard.enabled.then(|| k.clipboard_combo()).flatten(), k.converter_mods())
+            Input::start(self.hwnd, edge, !cfg.dock.live.is_off(), k.app_number_mods(), start, cfg.clipboard.enabled.then(|| k.clipboard_combo()).flatten(), k.converter_mods())
         };
         input::set_fullscreen(self.fullscreen);
         self.watch_locations();
@@ -324,6 +324,12 @@ impl App {
             return;
         }
         let covered = self.dock.overlapped(&self.tracker);
+        // Kenardan çağrılmış dock, imleç ona doğru giderken gizlenmesin: tarayıcı
+        // başlık/konum değiştirdikçe bu denetim sık çalışır, dock gelip giderdi.
+        if covered && !self.dock.slid_away && self.dock.cursor_near() {
+            self.arm_autohide(500);
+            return;
+        }
         if covered && !self.popup.mouse_inside {
             self.popup.hide();
         }
@@ -415,6 +421,7 @@ impl App {
             info!("otomatik gizleme zamanlayıcısı (dock_in={}, pop_in={})", self.dock.mouse_inside, self.popup.mouse_inside);
         }
         match self.dock.behavior() {
+            DockBehavior::AutoHide if self.dock.cursor_near() => self.arm_autohide(500),
             DockBehavior::AutoHide => {
                 self.popup.hide();
                 self.dock.slide(true);
@@ -706,6 +713,10 @@ impl App {
         if mine == *old {
             self.dock.cfg = cfg;
             self.rebuild_live();
+            // Kar oyunu fare kancası ister: kanca hiç kurulmamışsa şimdi kurulsun.
+            if self.input.is_none() && self.live.is_some() {
+                self.start_input();
+            }
             return;
         }
         // Ek ekran dock'u: seçenek kapandıysa ya da monitörü yoksa kapan.

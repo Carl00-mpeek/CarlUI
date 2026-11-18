@@ -21,7 +21,7 @@ pub const MIN_SPAN: i32 = 10;
 pub type R4 = (i32, i32, i32, i32);
 
 /// Ekrandaki bir üst kenar (toplayıcının çıktısı).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Edge {
     /// Pencere tanıtıcısı ya da özel yüzeyler için sabit anahtar.
     pub key: isize,
@@ -35,7 +35,16 @@ pub struct Edge {
     pub taper: i32,
     /// Kenarın önünde başka pencere olmayan aralıklar (ekran x'i, artan).
     pub spans: Vec<(i32, i32)>,
+    /// Kalınlık çarpanı (dock'ta kar daha kalın).
+    pub depth: f32,
+    /// Tepedeki pürüzün genliği (0..=0.5; alt kenar birikintisinde dalgalı).
+    pub rough: f32,
+    /// Bir noktada yığılan tepeciğin genliği (0 = yok).
+    pub mound: f32,
 }
+
+/// Pencere üstleri için olağan pürüz.
+pub const ROUGH: f32 = 0.16;
 
 /// `spans` aralıklarından `cut` aralığını çıkarır.
 pub fn subtract(spans: &mut Vec<(i32, i32)>, cut: (i32, i32)) {
@@ -133,8 +142,14 @@ impl Ledge {
         let u = (d / taper).clamp(0.0, 1.0);
         let ends = u * u * (3.0 - 2.0 * u);
         let k = i as f32;
-        let bumps = 0.84 + 0.16 * (0.6 * (k * 0.9 + self.seed).sin() + 0.4 * (k * 0.31 + self.seed * 2.3).sin());
-        (max_h * ends * bumps).min(self.edge.room.max(0) as f32)
+        let r = self.edge.rough.clamp(0.0, 0.5);
+        let bumps = 1.0 - r + r * (0.6 * (k * 0.9 + self.seed).sin() + 0.4 * (k * 0.31 + self.seed * 2.3).sin());
+        // Tepecik: kenarın tohuma bağlı bir yerinde yumuşak yığın.
+        let w = (self.edge.x1 - self.edge.x0).max(1) as f32;
+        let c = self.edge.x0 as f32 + w * (0.2 + 0.6 * (self.seed / std::f32::consts::TAU).clamp(0.0, 1.0));
+        let sigma = (0.1 * w).max(20.0);
+        let mound = 1.0 + self.edge.mound.max(0.0) * (-((x - c) / sigma).powi(2)).exp();
+        (max_h * self.edge.depth.max(0.0) * ends * bumps * mound).min(self.edge.room.max(0) as f32)
     }
 
     /// Hiç kar yok.
@@ -212,8 +227,9 @@ impl Ledges {
             match snow {
                 Some(level) => {
                     let max_h = max_height(level, s);
-                    // Yoğun karda ~1 dk, hafifte ~3 dk'da dolar.
-                    let rate = max_h / (50.0 + 130.0 * (1.0 - level.clamp(0.0, 1.0)));
+                    // Yoğun karda ~1 dk, hafifte ~3 dk'da dolar (kalın yüzeyler de aynı sürede).
+                    let peak = l.edge.depth.max(0.0) * (1.0 + l.edge.mound.max(0.0));
+                    let rate = max_h * peak / (50.0 + 130.0 * (1.0 - level.clamp(0.0, 1.0)));
                     for i in 0..l.h.len() {
                         let lim = l.limit(i, max_h);
                         let old = l.h[i];
@@ -249,6 +265,35 @@ impl Ledges {
         }
     }
 
+    /// Kürek geçti: `key` yüzeyinde `[a, b]` ekran aralığındaki kar temizlenir
+    /// (sonra yeniden birikir).
+    pub fn clear(&mut self, key: isize, a: f32, b: f32) {
+        let Some(l) = self.list.iter_mut().find(|l| l.edge.key == key) else { return };
+        let mut any = false;
+        for i in 0..l.h.len() {
+            let x = l.col_x(i);
+            if x >= a && x <= b && l.h[i] > 0.0 {
+                l.h[i] = 0.0;
+                any = true;
+            }
+        }
+        if any {
+            l.dirty = true;
+        }
+    }
+
+    /// `key` yüzeyinin dolu oranı (ortalama yükseklik / sınır), yoksa 0.
+    pub fn fullness(&self, key: isize, level: f32) -> f32 {
+        let Some(l) = self.list.iter().find(|l| l.edge.key == key) else { return 0.0 };
+        let max_h = max_height(level, self.s);
+        let (mut h, mut lim) = (0.0, 0.0);
+        for i in 0..l.h.len() {
+            h += l.h[i];
+            lim += l.limit(i, max_h);
+        }
+        if lim > 0.0 { h / lim } else { 0.0 }
+    }
+
     /// Hiçbir yüzeyde kar kalmadı.
     pub fn bare(&self) -> bool {
         self.list.iter().all(Ledge::bare)
@@ -265,7 +310,7 @@ mod tests {
     use super::*;
 
     fn edge(key: isize, x0: i32, x1: i32, y: i32) -> Edge {
-        Edge { key, x0, x1, y, room: 40, taper: 8, spans: vec![(x0, x1)] }
+        Edge { key, x0, x1, y, room: 40, taper: 8, spans: vec![(x0, x1)], depth: 1.0, rough: ROUGH, mound: 0.0 }
     }
 
     #[test]
@@ -353,6 +398,24 @@ mod tests {
         assert!(!m.list[0].dirty);
         m.sync(vec![Edge { spans: vec![(0, 200)], ..edge(1, 0, 400, 300) }]);
         assert!(m.list[0].dirty);
+    }
+
+    #[test]
+    fn tepecik_ve_kurek() {
+        let mut m = Ledges::new(1.0, Rng::new(11));
+        let e = edge(1, 0, 1000, 500);
+        m.sync(vec![e.clone(), Edge { key: 2, depth: 1.5, mound: 0.9, ..e }]);
+        m.settle(1.0);
+        let top = |l: &Ledge| l.h.iter().cloned().fold(0.0f32, f32::max);
+        let (flat, peak) = (top(&m.list[0]), top(&m.list[1]));
+        assert!(peak > flat * 2.0, "{flat} {peak}");
+        assert!(peak <= 40.0 + 0.01);
+        assert!(m.fullness(2, 1.0) > 0.9);
+        m.clear(2, 300.0, 1000.0);
+        assert!(m.list[1].height_at(600.0) == 0.0 && m.list[1].height_at(100.0) > 0.0);
+        assert!(m.list[1].dirty);
+        assert!(m.fullness(2, 1.0) < 0.5);
+        assert_eq!(m.fullness(9, 1.0), 0.0);
     }
 
     #[test]
