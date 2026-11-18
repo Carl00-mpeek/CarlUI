@@ -23,6 +23,281 @@ use zeroize::Zeroizing;
 
 const MIN_PASSWORD: usize = 8;
 
+// ------------------------------------------------------------ görünüm
+// Windows'taki Carl Vault'un renkleri ve ölçüleri.
+
+const ACCENT: Color32 = Color32::from_rgb(0x4F, 0x8B, 0xFF);
+const ACCENT2: Color32 = Color32::from_rgb(0x8B, 0x5C, 0xF6);
+const GREEN: Color32 = Color32::from_rgb(0x6C, 0xCB, 0x5F);
+const ORANGE: Color32 = Color32::from_rgb(0xFF, 0xB4, 0x54);
+const RED: Color32 = Color32::from_rgb(0xFF, 0x6B, 0x6B);
+const BG: Color32 = Color32::from_rgb(0x12, 0x12, 0x16);
+const SIDEBAR: Color32 = Color32::from_rgb(0x17, 0x17, 0x1C);
+const LIST: Color32 = Color32::from_rgb(0x15, 0x15, 0x1A);
+const CARD: Color32 = Color32::from_rgb(0x1E, 0x1E, 0x25);
+const INPUT: Color32 = Color32::from_rgb(0x26, 0x26, 0x2E);
+const LINE: Color32 = Color32::from_rgb(0x2C, 0x2C, 0x34);
+const TEXT: Color32 = Color32::from_rgb(0xEC, 0xEC, 0xF1);
+const DIM: Color32 = Color32::from_rgb(0x9A, 0x9A, 0xA6);
+const CARD_W: f32 = 460.0;
+
+fn style(ctx: &egui::Context) {
+    use egui::{FontId, Stroke, TextStyle};
+    ctx.set_visuals(egui::Visuals::dark());
+    ctx.style_mut(|s| {
+        s.text_styles.insert(TextStyle::Body, FontId::proportional(14.0));
+        s.text_styles.insert(TextStyle::Button, FontId::proportional(14.0));
+        s.text_styles.insert(TextStyle::Small, FontId::proportional(12.0));
+        s.text_styles.insert(TextStyle::Heading, FontId::proportional(22.0));
+        s.text_styles.insert(TextStyle::Monospace, FontId::monospace(14.0));
+        s.spacing.item_spacing = egui::vec2(8.0, 8.0);
+        s.spacing.button_padding = egui::vec2(12.0, 6.0);
+        s.spacing.interact_size.y = 30.0;
+        s.spacing.menu_margin = egui::Margin::same(8);
+        let v = &mut s.visuals;
+        v.override_text_color = Some(TEXT);
+        v.panel_fill = BG;
+        v.window_fill = CARD;
+        v.window_stroke = Stroke::new(1.0_f32, LINE);
+        v.window_corner_radius = 12.into();
+        v.menu_corner_radius = 10.into();
+        v.extreme_bg_color = INPUT;
+        v.faint_bg_color = CARD;
+        v.selection.bg_fill = ACCENT.gamma_multiply(0.45);
+        v.selection.stroke = Stroke::new(1.0_f32, ACCENT);
+        v.hyperlink_color = ACCENT;
+        v.warn_fg_color = ORANGE;
+        v.error_fg_color = RED;
+        for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
+            w.corner_radius = 8.into();
+        }
+        v.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, LINE);
+        v.widgets.inactive.weak_bg_fill = Color32::from_rgb(0x2A, 0x2A, 0x33);
+        v.widgets.inactive.bg_fill = Color32::from_rgb(0x2A, 0x2A, 0x33);
+        v.widgets.inactive.bg_stroke = Stroke::NONE;
+        v.widgets.hovered.weak_bg_fill = Color32::from_rgb(0x34, 0x34, 0x3E);
+        v.widgets.hovered.bg_fill = Color32::from_rgb(0x34, 0x34, 0x3E);
+        v.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, Color32::from_rgb(0x44, 0x44, 0x50));
+        v.widgets.active.weak_bg_fill = Color32::from_rgb(0x3C, 0x3C, 0x48);
+        v.widgets.active.bg_stroke = Stroke::new(1.0_f32, ACCENT);
+        v.widgets.open.weak_bg_fill = Color32::from_rgb(0x34, 0x34, 0x3E);
+    });
+}
+
+/// Ortalanmış kilit ekranı kartı: simge, başlık, açıklama ve içerik.
+fn lock_card(ui: &mut egui::Ui, title: &str, text: &str, add: impl FnOnce(&mut egui::Ui)) {
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        let pad = ((ui.available_width() - CARD_W) / 2.0).max(0.0);
+        ui.add_space((ui.available_height() * 0.12).clamp(16.0, 90.0));
+        ui.horizontal(|ui| {
+            ui.add_space(pad);
+            egui::Frame::new().fill(CARD).stroke(egui::Stroke::new(1.0_f32, LINE)).corner_radius(12).inner_margin(32).show(ui, |ui| {
+                ui.set_width(CARD_W - 64.0);
+                ui.vertical(|ui| {
+                    lock_icon(ui);
+                    ui.add_space(6.0);
+                    ui.label(RichText::new(title).size(20.0).strong());
+                    if !text.is_empty() {
+                        ui.label(RichText::new(text).size(13.0).color(DIM));
+                    }
+                    ui.add_space(10.0);
+                    add(ui);
+                });
+            });
+        });
+        ui.add_space(24.0);
+    });
+}
+
+/// 44 piksellik vurgu renkli kilit simgesi.
+fn lock_icon(ui: &mut egui::Ui) {
+    let (r, _) = ui.allocate_exact_size(egui::vec2(44.0, 44.0), egui::Sense::hover());
+    let p = ui.painter();
+    gradient_rect(p, r, 12);
+    let c = r.center();
+    let body = egui::Rect::from_center_size(c + egui::vec2(0.0, 4.0), egui::vec2(18.0, 13.0));
+    p.rect_filled(body, 3, Color32::WHITE);
+    let pts: Vec<egui::Pos2> = (0..=16).map(|i| {
+        let a = std::f32::consts::PI * (i as f32 / 16.0);
+        egui::pos2(c.x - 5.5 * a.cos(), c.y - 2.0 - 6.0 * a.sin())
+    }).collect();
+    let mut shackle = vec![egui::pos2(c.x - 5.5, c.y)];
+    shackle.extend(pts);
+    shackle.push(egui::pos2(c.x + 5.5, c.y));
+    p.add(egui::Shape::line(shackle, egui::Stroke::new(2.4_f32, Color32::WHITE)));
+}
+
+/// Mavi → mor geçişli yuvarlak dikdörtgen.
+fn gradient_rect(p: &egui::Painter, r: egui::Rect, radius: u8) {
+    p.rect_filled(r, radius, ACCENT);
+    let mut mesh = egui::Mesh::default();
+    let t = Color32::TRANSPARENT;
+    let a = ACCENT2.gamma_multiply(0.9);
+    let inner = r.shrink(radius as f32 * 0.3);
+    mesh.colored_vertex(inner.left_top(), t);
+    mesh.colored_vertex(inner.right_top(), a.gamma_multiply(0.5));
+    mesh.colored_vertex(inner.right_bottom(), a);
+    mesh.colored_vertex(inner.left_bottom(), a.gamma_multiply(0.5));
+    mesh.add_triangle(0, 1, 2);
+    mesh.add_triangle(0, 2, 3);
+    p.add(mesh);
+}
+
+/// Tam genişlikte, 38 piksellik giriş kutusu.
+fn input<'a>(text: &'a mut dyn egui::TextBuffer, hint: &str) -> egui::TextEdit<'a> {
+    egui::TextEdit::singleline(text).hint_text(hint).desired_width(f32::INFINITY).margin(egui::Margin::symmetric(10, 10))
+}
+
+fn password_edit(ui: &mut egui::Ui, value: &mut Zeroizing<String>, hint: &str) -> egui::Response {
+    ui.add(input(&mut **value, hint).password(true))
+}
+
+/// Vurgu renkli birincil düğme.
+fn primary(text: &str) -> egui::Button<'_> {
+    egui::Button::new(RichText::new(text).strong().color(Color32::WHITE)).fill(ACCENT)
+}
+
+/// Tam genişlikte, 40 piksellik birincil düğme.
+fn primary_wide(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    ui.add_sized([ui.available_width(), 40.0], primary(text))
+}
+
+/// Çerçevesiz, kenarlığı ince ikincil düğme.
+fn ghost(text: &str) -> egui::Button<'_> {
+    egui::Button::new(text).fill(Color32::TRANSPARENT).stroke(egui::Stroke::new(1.0_f32, LINE))
+}
+
+fn error_text(ui: &mut egui::Ui, msg: &str) {
+    if !msg.is_empty() {
+        ui.label(RichText::new(msg).color(RED).size(13.0));
+    }
+}
+
+/// Ayarlar ve düzenleyicideki bölüm kartı.
+fn section(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui)) {
+    egui::Frame::new().fill(CARD).stroke(egui::Stroke::new(1.0_f32, LINE)).corner_radius(12).inner_margin(20).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.label(RichText::new(title).size(15.0).strong());
+        ui.add_space(4.0);
+        add(ui);
+    });
+    ui.add_space(12.0);
+}
+
+fn cat_color(c: Category) -> Color32 {
+    match c {
+        Category::Password => ACCENT,
+        Category::Email => Color32::from_rgb(0x3F, 0xB6, 0xC8),
+        Category::Card => ORANGE,
+        Category::Identity => GREEN,
+        Category::Note => Color32::from_rgb(0xE8, 0xC5, 0x47),
+        Category::License => ACCENT2,
+        Category::TwoFactor => Color32::from_rgb(0xF0, 0x6B, 0xB0),
+        Category::File => Color32::from_rgb(0x8E, 0x9A, 0xAF),
+    }
+}
+
+fn cat_short(c: Category) -> &'static str {
+    match c {
+        Category::Password => "••",
+        Category::Email => "@",
+        Category::Card => "▭",
+        Category::Identity => "ID",
+        Category::Note => "¶",
+        Category::License => "#",
+        Category::TwoFactor => "2F",
+        Category::File => "⎘",
+    }
+}
+
+/// Kategori rengindeki yuvarlak kare rozet.
+fn chip(ui: &mut egui::Ui, c: Category, size: f32) {
+    let (r, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
+    paint_chip(ui.painter(), r, c);
+}
+
+fn paint_chip(p: &egui::Painter, r: egui::Rect, c: Category) {
+    let col = cat_color(c);
+    p.rect_filled(r, (r.width() * 0.28) as u8, col.gamma_multiply(0.22));
+    p.text(r.center(), egui::Align2::CENTER_CENTER, cat_short(c), egui::FontId::proportional(r.width() * 0.4), col);
+}
+
+/// Kenar çubuğu satırı: ad solda, sayı sağda.
+fn nav_row(ui: &mut egui::Ui, selected: bool, label: &str, count: Option<usize>) -> bool {
+    let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 34.0), egui::Sense::click());
+    let p = ui.painter();
+    if selected {
+        p.rect_filled(r, 8, ACCENT.gamma_multiply(0.18));
+        p.rect_filled(egui::Rect::from_min_size(r.min + egui::vec2(0.0, 9.0), egui::vec2(3.0, 16.0)), 2, ACCENT);
+    } else if resp.hovered() {
+        p.rect_filled(r, 8, Color32::from_white_alpha(10));
+    }
+    let col = if selected { TEXT } else { Color32::from_rgb(0xC4, 0xC4, 0xCE) };
+    p.text(r.left_center() + egui::vec2(14.0, 0.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(14.0), col);
+    if let Some(n) = count {
+        p.text(r.right_center() - egui::vec2(10.0, 0.0), egui::Align2::RIGHT_CENTER, n.to_string(), egui::FontId::proportional(12.0), DIM);
+    }
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, selected, label));
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
+}
+
+/// Liste satırı: rozet, ad ve "kategori · tarih".
+fn item_row(ui: &mut egui::Ui, selected: bool, name: &str, cat: Category, updated: u64) -> bool {
+    let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 58.0), egui::Sense::click());
+    let p = ui.painter();
+    if selected {
+        p.rect_filled(r, 10, ACCENT.gamma_multiply(0.18));
+    } else if resp.hovered() {
+        p.rect_filled(r, 10, Color32::from_white_alpha(8));
+    }
+    let chip_r = egui::Rect::from_min_size(r.min + egui::vec2(10.0, 11.0), egui::vec2(36.0, 36.0));
+    paint_chip(p, chip_r, cat);
+    let x = chip_r.right() + 12.0;
+    let galley = p.layout_no_wrap(name.to_string(), egui::FontId::proportional(14.0), TEXT);
+    let clip = egui::Rect::from_min_max(egui::pos2(x, r.top()), egui::pos2(r.right() - 8.0, r.bottom()));
+    p.with_clip_rect(clip).galley(egui::pos2(x, r.top() + 11.0), galley, TEXT);
+    p.with_clip_rect(clip).text(egui::pos2(x, r.top() + 31.0), egui::Align2::LEFT_TOP, format!("{} · {}", cat.title(), date(updated)), egui::FontId::proportional(12.0), DIM);
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, selected, name));
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked()
+}
+
+/// Unix saniyesini gg.aa.yyyy yazar (yalnızca gün).
+fn date(secs: u64) -> String {
+    let days = (secs / 86_400) as i64;
+    // Howard Hinnant'ın civil_from_days algoritması.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    format!("{d:02}.{m:02}.{y}")
+}
+
+/// Üç parçalı parola gücü çubuğu.
+fn strength_bar(ui: &mut egui::Ui, pw: &str) {
+    let (n, col, txt) = match gen::strength(pw) {
+        gen::Strength::Weak => (1, RED, t!("Zayıf", "Weak")),
+        gen::Strength::Fair => (2, ORANGE, t!("Orta", "Fair")),
+        gen::Strength::Strong => (3, GREEN, t!("Güçlü", "Strong")),
+    };
+    ui.horizontal(|ui| {
+        let w = 46.0;
+        for i in 0..3 {
+            let (r, _) = ui.allocate_exact_size(egui::vec2(w, 4.0), egui::Sense::hover());
+            ui.painter().rect_filled(r, 2, if i < n { col } else { LINE });
+        }
+        ui.label(RichText::new(txt).size(12.0).color(col));
+    });
+}
+
+fn small_label(ui: &mut egui::Ui, text: &str) {
+    ui.label(RichText::new(text).size(12.0).color(DIM));
+}
+
 struct Editor {
     id: Option<String>,
     name: String,
@@ -66,7 +341,7 @@ pub struct App {
     recovery: Option<Zeroizing<String>>,
     // liste
     generation: u64,
-    items: Vec<(String, String, Category)>,
+    items: Vec<(String, String, Category, u64)>,
     search: String,
     filter: Option<Category>,
     editor: Option<Editor>,
@@ -87,7 +362,7 @@ impl App {
             cc.egui_ctx.send_viewport_cmd(ViewportCommand::Minimized(true));
         }
         let _ = shared.ctx.set(cc.egui_ctx.clone());
-        cc.egui_ctx.set_visuals(egui::Visuals::dark());
+        style(&cc.egui_ctx);
         Self {
             shared,
             clip: Clip::default(),
@@ -143,7 +418,7 @@ impl App {
         self.generation = c.generation;
         self.items = match c.vault.as_ref().filter(|v| v.is_open()) {
             Some(v) => {
-                let mut l: Vec<_> = v.items().iter().map(|i| (i.id.clone(), i.meta.name.clone(), i.meta.category)).collect();
+                let mut l: Vec<_> = v.items().iter().map(|i| (i.id.clone(), i.meta.name.clone(), i.meta.category, i.meta.updated)).collect();
                 l.sort_by_key(|a| a.1.to_lowercase());
                 l
             }
@@ -224,30 +499,30 @@ impl App {
             if visible.is_empty() {
                 return;
             }
-            egui::TopBottomPanel::top("asks").show(ctx, |ui| {
+            egui::TopBottomPanel::top("asks").frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin::symmetric(16, 4))).show_separator_line(false).show(ctx, |ui| {
                 for a in visible {
-                    ui.add_space(6.0);
-                    egui::Frame::group(ui.style()).fill(ui.visuals().faint_bg_color).show(ui, |ui| {
+                    ui.add_space(8.0);
+                    egui::Frame::new().fill(CARD).stroke(egui::Stroke::new(1.0_f32, ACCENT.gamma_multiply(0.6))).corner_radius(12).inner_margin(16).show(ui, |ui| {
                         ui.set_width(ui.available_width());
                         let left = crate::core::ASK_TTL.saturating_sub(a.at.elapsed()).as_secs();
                         match &a.kind {
                             AskKind::Pair(who) => {
-                                ui.label(RichText::new(t!("Eklenti bağlantısı", "Extension connection")).strong());
-                                ui.label(crate::pairing::prompt(who));
+                                ui.label(RichText::new(t!("Eklenti bağlantısı", "Extension connection")).size(15.0).strong());
+                                ui.label(RichText::new(crate::pairing::prompt(who)).color(DIM));
                                 ui.horizontal(|ui| {
-                                    if ui.button(t!("Onayla", "Approve")).clicked() {
+                                    if ui.add(primary(t!("Onayla", "Approve"))).clicked() {
                                         answers.push((a.id, Some(0)));
                                     }
-                                    if ui.button(t!("Hayır", "No")).clicked() {
+                                    if ui.add(ghost(t!("Hayır", "No"))).clicked() {
                                         answers.push((a.id, None));
                                     }
-                                    ui.weak(format!("{left} sn"));
+                                    small_label(ui, &format!("{left} sn"));
                                 });
                             }
                             AskKind::Passkey(p) => {
                                 match &p.kind {
                                     PasskeyKind::Create { user_name, .. } => {
-                                        ui.label(RichText::new(t!(format!("{} için passkey oluşturulsun mu?", p.site()), format!("Create a passkey for {}?", p.site()))).strong());
+                                        ui.label(RichText::new(t!(format!("{} için passkey oluşturulsun mu?", p.site()), format!("Create a passkey for {}?", p.site()))).size(15.0).strong());
                                         ui.label(format!("{}: {user_name}", t!("Kullanıcı", "User")));
                                         let target = match p.choices.first() {
                                             Some(c) => t!(format!("“{}” kaydına eklenecek.", c.name), format!("Will be added to “{}”.", c.name)),
@@ -255,27 +530,27 @@ impl App {
                                         };
                                         ui.weak(target);
                                         ui.horizontal(|ui| {
-                                            if ui.button(t!("Oluştur", "Create")).clicked() {
+                                            if ui.add(primary(t!("Oluştur", "Create"))).clicked() {
                                                 answers.push((a.id, Some(0)));
                                             }
-                                            if ui.button(t!("Tarayıcıya bırak", "Let the browser handle it")).clicked() {
+                                            if ui.add(ghost(t!("Tarayıcıya bırak", "Let the browser handle it"))).clicked() {
                                                 answers.push((a.id, None));
                                             }
-                                            ui.weak(format!("{left} sn"));
+                                            small_label(ui, &format!("{left} sn"));
                                         });
                                     }
                                     PasskeyKind::Get { .. } => {
-                                        ui.label(RichText::new(t!(format!("{} passkey ile giriş istiyor", p.site()), format!("{} wants to sign in with a passkey", p.site()))).strong());
+                                        ui.label(RichText::new(t!(format!("{} passkey ile giriş istiyor", p.site()), format!("{} wants to sign in with a passkey", p.site()))).size(15.0).strong());
                                         for (i, c) in p.choices.iter().enumerate() {
-                                            if ui.button(format!("{} · {}", c.name, c.user)).clicked() {
+                                            if ui.add(primary(&format!("{} · {}", c.name, c.user))).clicked() {
                                                 answers.push((a.id, Some(i)));
                                             }
                                         }
                                         ui.horizontal(|ui| {
-                                            if ui.button(t!("Tarayıcıya bırak", "Let the browser handle it")).clicked() {
+                                            if ui.add(ghost(t!("Tarayıcıya bırak", "Let the browser handle it"))).clicked() {
                                                 answers.push((a.id, None));
                                             }
-                                            ui.weak(format!("{left} sn"));
+                                            small_label(ui, &format!("{left} sn"));
                                         });
                                     }
                                 }
@@ -314,10 +589,10 @@ impl App {
             }
         };
         if let Some(m) = msg {
-            egui::TopBottomPanel::bottom("toast").show(ctx, |ui| {
-                ui.add_space(4.0);
-                ui.label(m);
-                ui.add_space(4.0);
+            egui::Area::new(egui::Id::new("toast")).anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -24.0)).order(egui::Order::Foreground).interactable(false).show(ctx, |ui| {
+                egui::Frame::new().fill(Color32::from_rgb(0x2A, 0x2A, 0x33)).stroke(egui::Stroke::new(1.0_f32, Color32::from_rgb(0x3A, 0x3A, 0x46))).corner_radius(10).inner_margin(egui::Margin::symmetric(16, 10)).show(ui, |ui| {
+                    ui.label(m);
+                });
             });
         }
     }
@@ -325,32 +600,28 @@ impl App {
 
 // ------------------------------------------------------------ kurulum ve kilit
 
-fn password_edit(ui: &mut egui::Ui, value: &mut Zeroizing<String>, hint: &str) -> egui::Response {
-    ui.add(egui::TextEdit::singleline(&mut **value).password(true).hint_text(hint).desired_width(320.0))
-}
-
 impl App {
     fn setup(&mut self, ui: &mut egui::Ui) {
-        ui.vertical_centered(|ui| {
-            ui.add_space(60.0);
-            ui.heading("Carl Vault");
-            ui.label(t!("Bu bilgisayarda henüz kasa yok. Bir ana parola belirle.", "There's no vault on this computer yet. Choose a master password."));
-            ui.add_space(12.0);
+        let mut create = false;
+        lock_card(ui, t!("Carl Vault'a hoş geldin", "Welcome to Carl Vault"), t!("Kasanı korumak için bir ana parola belirle.", "Choose a master password to protect your vault."), |ui| {
             password_edit(ui, &mut self.pw, t!("Ana parola", "Master password"));
             let enter = password_edit(ui, &mut self.pw2, t!("Ana parola (tekrar)", "Master password (again)")).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            ui.weak(t!("Ana parola unutulursa kasa açılamaz; kurtarma anahtarı birazdan gösterilecek.", "If you forget the master password the vault can't be opened; a recovery key is shown next."));
-            if ui.button(t!("Kasayı oluştur", "Create vault")).clicked() || enter {
-                self.create();
+            if !self.pw.is_empty() {
+                strength_bar(ui, &self.pw);
             }
-            if !self.error.is_empty() {
-                ui.colored_label(Color32::LIGHT_RED, &self.error);
-            }
-            ui.add_space(20.0);
-            ui.weak(t!(
-                "Windows'taki kasayı taşımak için: kasa klasörünü ~/.local/share/CarlUI/vault altına kopyala ya da kasayı oluşturup Ayarlar'dan .carlvault yedeğini geri yükle.",
-                "To move your Windows vault: copy the vault folder to ~/.local/share/CarlUI/vault, or create a vault and restore a .carlvault backup from Settings."
-            ));
+            ui.label(RichText::new(t!("Ana parola unutulursa kasa açılamaz. Birazdan bir kurtarma anahtarı gösterilecek.", "If you forget the master password the vault can't be opened. A recovery key is shown next.")).size(13.0).color(ORANGE));
+            error_text(ui, &self.error);
+            ui.add_space(4.0);
+            create = primary_wide(ui, t!("Kasayı oluştur", "Create vault")).clicked() || enter;
+            ui.add_space(8.0);
+            ui.label(RichText::new(t!(
+                "Windows'taki kasayı taşımak için kasa klasörünü ~/.local/share/CarlUI/vault altına kopyala ya da kasayı oluşturup Ayarlar'dan .carlvault yedeğini geri yükle.",
+                "To move your Windows vault, copy the vault folder to ~/.local/share/CarlUI/vault, or create a vault and restore a .carlvault backup from Settings."
+            )).size(12.0).color(DIM));
         });
+        if create {
+            self.create();
+        }
     }
 
     fn create(&mut self) {
@@ -382,53 +653,57 @@ impl App {
     fn unlock(&mut self, ui: &mut egui::Ui) {
         let waiting = self.shared.asks().waiting_unlock.clone();
         let wait = self.shared.core().throttle.left(now());
-        ui.vertical_centered(|ui| {
-            ui.add_space(60.0);
-            ui.heading("Carl Vault");
-            if let Some(site) = waiting {
-                ui.colored_label(Color32::LIGHT_BLUE, t!(format!("{site} passkey istiyor. Devam etmek için kasayı aç."), format!("{site} is asking for a passkey. Unlock the vault to continue.")));
+        let has_recovery = self.shared.core().vault.as_ref().is_some_and(|v| v.has_recovery());
+        let (title, text) = if self.use_recovery {
+            (t!("Kurtarma anahtarıyla aç", "Open with the recovery key"), t!("Kasayı oluştururken kaydettiğin anahtarı yaz. Sonra yeni bir ana parola belirleyeceksin.", "Type the key you saved when you created the vault. You'll then choose a new master password."))
+        } else {
+            (t!("Kasa kilitli", "Vault locked"), t!("Devam etmek için ana parolanı yaz.", "Type your master password to continue."))
+        };
+        let (mut unlock, mut toggle, mut quit) = (false, false, false);
+        lock_card(ui, title, text, |ui| {
+            if let Some(site) = &waiting {
+                ui.label(RichText::new(t!(format!("{site} passkey istiyor. Devam etmek için kasayı aç."), format!("{site} is asking for a passkey. Unlock the vault to continue."))).size(13.0).color(ACCENT));
             }
-            ui.add_space(12.0);
-            let enter = if self.use_recovery {
-                ui.label(t!("Kurtarma anahtarı", "Recovery key"));
-                let r = ui.add(egui::TextEdit::singleline(&mut *self.pw).desired_width(420.0));
-                r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
+            let r = if self.use_recovery {
+                ui.add(input(&mut *self.pw, t!("Kurtarma anahtarı", "Recovery key")).font(egui::TextStyle::Monospace))
             } else {
-                let r = password_edit(ui, &mut self.pw, t!("Ana parola", "Master password"));
-                if self.pw.is_empty() && self.error.is_empty() {
-                    r.request_focus();
-                }
-                r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                password_edit(ui, &mut self.pw, t!("Ana parola", "Master password"))
             };
+            if self.pw.is_empty() && self.error.is_empty() {
+                r.request_focus();
+            }
+            let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            error_text(ui, &self.error);
+            ui.add_space(4.0);
             match wait {
                 Some(s) => {
-                    ui.weak(t!(format!("Çok fazla yanlış deneme. {s} sn bekle."), format!("Too many wrong attempts. Wait {s} s.")));
+                    ui.label(RichText::new(t!(format!("Çok fazla yanlış deneme. {s} sn bekle."), format!("Too many wrong attempts. Wait {s} s."))).color(ORANGE));
                 }
-                None => {
-                    if ui.button(t!("Kilidi aç", "Unlock")).clicked() || enter {
-                        self.try_unlock();
-                    }
+                None => unlock = primary_wide(ui, t!("Kilidi aç", "Unlock")).clicked() || enter,
+            }
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                if has_recovery {
+                    let label = if self.use_recovery { t!("Ana parolayla aç", "Use the master password") } else { t!("Parolamı unuttum", "Forgot password") };
+                    toggle = ui.link(label).clicked();
                 }
-            }
-            if !self.error.is_empty() {
-                ui.colored_label(Color32::LIGHT_RED, &self.error);
-            }
-            ui.add_space(8.0);
-            let has_recovery = self.shared.core().vault.as_ref().is_some_and(|v| v.has_recovery());
-            if has_recovery {
-                let label = if self.use_recovery { t!("Ana parolayla aç", "Use the master password") } else { t!("Parolamı unuttum (kurtarma anahtarı)", "Forgot password (recovery key)") };
-                if ui.link(label).clicked() {
-                    self.use_recovery = !self.use_recovery;
-                    self.pw = Default::default();
-                    self.error.clear();
-                }
-            }
-            ui.add_space(20.0);
-            if ui.button(t!("Çık", "Quit")).clicked() {
-                self.quitting = true;
-                ui.ctx().send_viewport_cmd(ViewportCommand::Close);
-            }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    quit = ui.add(egui::Button::new(RichText::new(t!("Çık", "Quit")).color(DIM)).frame(false)).clicked();
+                });
+            });
         });
+        if unlock {
+            self.try_unlock();
+        }
+        if toggle {
+            self.use_recovery = !self.use_recovery;
+            self.pw = Default::default();
+            self.error.clear();
+        }
+        if quit {
+            self.quitting = true;
+            ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+        }
     }
 
     fn try_unlock(&mut self) {
@@ -455,44 +730,55 @@ impl App {
     }
 
     fn show_recovery(&mut self, ui: &mut egui::Ui, key: &str) {
-        ui.vertical_centered(|ui| {
-            ui.add_space(60.0);
-            ui.heading(t!("Kurtarma anahtarı", "Recovery key"));
-            ui.label(t!(
-                "Ana parolayı unutursan kasayı bu anahtarla açabilirsin. Bir kâğıda yaz ya da güvenli bir yerde sakla; bir daha gösterilmeyecek.",
-                "If you forget the master password you can open the vault with this key. Write it down or keep it somewhere safe; it won't be shown again."
-            ));
-            ui.add_space(12.0);
-            ui.label(RichText::new(key).monospace().size(18.0));
-            ui.add_space(12.0);
-            ui.horizontal(|ui| {
-                if ui.button(t!("Kopyala", "Copy")).clicked() {
-                    self.copy(key);
-                }
-                if ui.button(t!("Kaydettim", "I've saved it")).clicked() {
-                    self.recovery = None;
-                }
+        let (mut copy, mut done) = (false, false);
+        lock_card(ui, t!("Kurtarma anahtarın", "Your recovery key"), t!(
+            "Ana parolayı unutursan kasayı bu anahtarla açabilirsin.",
+            "If you forget the master password you can open the vault with this key."
+        ), |ui| {
+            // Anahtar iki satıra bölünür (Windows'taki gibi).
+            let groups: Vec<&str> = key.split('-').collect();
+            let half = groups.len().div_ceil(2);
+            let shown = if groups.len() > 2 { format!("{}\n{}", groups[..half].join("-"), groups[half..].join("-")) } else { key.to_string() };
+            egui::Frame::new().fill(INPUT).stroke(egui::Stroke::new(1.0_f32, ACCENT)).corner_radius(10).inner_margin(16).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.vertical_centered(|ui| ui.label(RichText::new(shown).monospace().size(17.0).color(TEXT)));
+            });
+            ui.label(RichText::new(t!("Bir kâğıda yaz ya da güvenli bir yerde sakla. Bir daha gösterilmeyecek.", "Write it down or keep it somewhere safe. It won't be shown again.")).size(13.0).color(ORANGE));
+            ui.add_space(4.0);
+            ui.columns(2, |c| {
+                copy = c[0].add_sized([c[0].available_width(), 40.0], ghost(t!("Kopyala", "Copy"))).clicked();
+                done = primary_wide(&mut c[1], t!("Kaydettim", "I've saved it")).clicked();
             });
         });
+        if copy {
+            self.copy(key);
+        }
+        if done {
+            self.recovery = None;
+        }
     }
 
     fn reset_password(&mut self, ui: &mut egui::Ui) {
-        ui.vertical_centered(|ui| {
-            ui.add_space(60.0);
-            ui.heading(t!("Yeni ana parola", "New master password"));
-            ui.label(t!("Kasa kurtarma anahtarıyla açıldı. Devam etmeden yeni bir ana parola belirle.", "The vault was opened with the recovery key. Choose a new master password to continue."));
+        let mut save = false;
+        lock_card(ui, t!("Yeni ana parola", "New master password"), t!("Kasa kurtarma anahtarıyla açıldı. Devam etmeden yeni bir ana parola belirle.", "The vault was opened with the recovery key. Choose a new master password to continue."), |ui| {
             password_edit(ui, &mut self.new_pw, t!("Yeni parola", "New password"));
-            password_edit(ui, &mut self.new_pw2, t!("Yeni parola (tekrar)", "New password (again)"));
-            if ui.button(t!("Kaydet", "Save")).clicked() {
-                match self.set_password() {
-                    Ok(()) => self.must_reset = false,
-                    Err(e) => self.error = e,
-                }
+            let enter = password_edit(ui, &mut self.new_pw2, t!("Yeni parola (tekrar)", "New password (again)")).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            if !self.new_pw.is_empty() {
+                strength_bar(ui, &self.new_pw);
             }
-            if !self.error.is_empty() {
-                ui.colored_label(Color32::LIGHT_RED, &self.error);
-            }
+            error_text(ui, &self.error);
+            ui.add_space(4.0);
+            save = primary_wide(ui, t!("Kaydet", "Save")).clicked() || enter;
         });
+        if save {
+            match self.set_password() {
+                Ok(()) => {
+                    self.must_reset = false;
+                    self.error.clear();
+                }
+                Err(e) => self.error = e,
+            }
+        }
     }
 
     fn set_password(&mut self) -> Result<(), String> {
@@ -526,77 +812,149 @@ impl<T> OkOrDefault<T> for Option<T> {
 // ------------------------------------------------------------ ana ekran
 
 impl App {
+    fn new_item(&mut self, cat: Category) {
+        let mut body = Body::default();
+        body.fields = cat.template();
+        self.editor = Some(Editor { id: None, name: String::new(), category: cat, body, reveal: HashSet::new(), confirm_delete: false });
+        self.pane = Pane::Items;
+    }
+
     fn main(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("bar").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.heading("Carl Vault");
-                ui.add_space(12.0);
-                ui.menu_button(t!("+ Yeni", "+ New"), |ui| {
-                    for cat in Category::ALL {
-                        if ui.button(cat.title()).clicked() {
-                            self.editor = Some(Editor { id: None, name: String::new(), category: cat, body: { let mut b = Body::default(); b.fields = cat.template(); b }, reveal: HashSet::new(), confirm_delete: false });
-                            self.pane = Pane::Items;
-                            ui.close();
+        // Sol kenar çubuğu: kategoriler, ayarlar, kilit.
+        let mut lock = false;
+        let mut quit = false;
+        egui::SidePanel::left("nav").exact_width(212.0).resizable(false).show_separator_line(false).frame(egui::Frame::new().fill(SIDEBAR).inner_margin(egui::Margin::symmetric(12, 16))).show(ctx, |ui| {
+            ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+                ui.spacing_mut().item_spacing.y = 2.0;
+                if nav_row(ui, false, t!("Çık", "Quit"), None) {
+                    quit = true;
+                }
+                if nav_row(ui, false, t!("Kilitle", "Lock"), None) {
+                    lock = true;
+                }
+                if nav_row(ui, self.pane == Pane::Settings, t!("Ayarlar", "Settings"), None) {
+                    self.pane = Pane::Settings;
+                }
+                ui.add_space(6.0);
+                ui.separator();
+                ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                    ui.horizontal(|ui| {
+                        let (r, _) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::hover());
+                        gradient_rect(ui.painter(), r, 8);
+                        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "C", egui::FontId::proportional(15.0), Color32::WHITE);
+                        ui.label(RichText::new("Carl Vault").size(16.0).strong());
+                    });
+                    ui.add_space(14.0);
+                    small_label(ui, t!("KATEGORİLER", "CATEGORIES"));
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    let items = self.pane == Pane::Items;
+                    if nav_row(ui, items && self.filter.is_none(), t!("Tümü", "All items"), Some(self.items.len())) {
+                        self.filter = None;
+                        self.pane = Pane::Items;
+                    }
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        for c in Category::ALL {
+                            let n = self.items.iter().filter(|i| i.2 == c).count();
+                            if nav_row(ui, items && self.filter == Some(c), c.title(), Some(n)) {
+                                self.filter = Some(c);
+                                self.pane = Pane::Items;
+                            }
                         }
-                    }
-                });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(t!("Çık", "Quit")).clicked() {
-                        self.quitting = true;
-                        ui.ctx().send_viewport_cmd(ViewportCommand::Close);
-                    }
-                    if ui.button(t!("Kilitle", "Lock")).clicked() {
-                        self.lock();
-                    }
-                    let settings = self.pane == Pane::Settings;
-                    if ui.selectable_label(settings, t!("Ayarlar", "Settings")).clicked() {
-                        self.pane = if settings { Pane::Items } else { Pane::Settings };
-                    }
+                    });
                 });
             });
         });
+        if quit {
+            self.quitting = true;
+            ctx.send_viewport_cmd(ViewportCommand::Close);
+        }
+        if lock {
+            self.lock();
+            return;
+        }
         if self.pane == Pane::Settings {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| self.settings(ui));
+            egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin::symmetric(28, 22))).show(ctx, |ui| {
+                ui.label(RichText::new(t!("Ayarlar", "Settings")).size(22.0).strong());
+                ui.add_space(10.0);
+                let w = ui.available_width().min(620.0);
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.set_max_width(w);
+                    self.settings(ui);
+                });
             });
             return;
         }
-        egui::SidePanel::left("list").resizable(true).default_width(280.0).show(ctx, |ui| {
-            ui.add(egui::TextEdit::singleline(&mut self.search).hint_text(t!("Ara", "Search")).desired_width(f32::INFINITY));
-            egui::ComboBox::from_id_salt("filter").selected_text(self.filter.map(|c| c.title()).unwrap_or(t!("Tümü", "All"))).show_ui(ui, |ui| {
-                ui.selectable_value(&mut self.filter, None, t!("Tümü", "All"));
-                for c in Category::ALL {
-                    ui.selectable_value(&mut self.filter, Some(c), c.title());
-                }
+
+        // Liste sütunu: başlık, arama, kayıtlar.
+        let mut open = None;
+        let mut add = None;
+        egui::SidePanel::left("list").default_width(330.0).width_range(260.0..=460.0).frame(egui::Frame::new().fill(LIST).inner_margin(egui::Margin::symmetric(14, 18))).show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(self.filter.map(|c| c.title()).unwrap_or(t!("Tüm kayıtlar", "All items"))).size(22.0).strong());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    egui::containers::menu::MenuButton::from_button(primary(t!("+ Yeni", "+ New"))).ui(ui, |ui| {
+                        for cat in Category::ALL {
+                            let clicked = ui.horizontal(|ui| {
+                                chip(ui, cat, 22.0);
+                                ui.add(egui::Button::new(cat.title()).frame(false)).clicked()
+                            }).inner;
+                            if clicked {
+                                add = Some(cat);
+                                ui.close();
+                            }
+                        }
+                    });
+                });
             });
-            ui.separator();
+            ui.add_space(4.0);
+            ui.add(input(&mut self.search, t!("Ara…", "Search…")));
+            ui.add_space(6.0);
             let q = self.search.to_lowercase();
-            let mut open = None;
             egui::ScrollArea::vertical().show(ui, |ui| {
-                let shown: Vec<_> = self.items.iter().filter(|(_, n, c)| self.filter.is_none_or(|f| f == *c) && (q.is_empty() || n.to_lowercase().contains(&q))).collect();
+                ui.spacing_mut().item_spacing.y = 2.0;
+                let shown: Vec<_> = self.items.iter().filter(|(_, n, c, _)| self.filter.is_none_or(|f| f == *c) && (q.is_empty() || n.to_lowercase().contains(&q))).collect();
                 if shown.is_empty() {
-                    ui.weak(if self.items.is_empty() { t!("Kasa boş. “+ Yeni” ile kayıt ekle ya da Ayarlar'dan yedeği geri yükle.", "The vault is empty. Add an item with “+ New” or restore a backup from Settings.") } else { t!("Eşleşen kayıt yok.", "No matching items.") });
+                    ui.add_space(20.0);
+                    ui.vertical_centered(|ui| {
+                        ui.label(RichText::new(if self.items.is_empty() { t!("Kasa boş", "The vault is empty") } else { t!("Eşleşen kayıt yok", "No matching items") }).strong());
+                        if self.items.is_empty() {
+                            ui.label(RichText::new(t!("“+ Yeni” ile kayıt ekle ya da Ayarlar'dan yedeği geri yükle.", "Add an item with “+ New” or restore a backup from Settings.")).size(13.0).color(DIM));
+                        }
+                    });
                 }
-                for (id, name, cat) in shown {
+                for (id, name, cat, updated) in shown {
                     let sel = self.editor.as_ref().and_then(|e| e.id.as_deref()) == Some(id.as_str());
-                    let label = format!("{name}\n{}", cat.title());
-                    if ui.add_sized([ui.available_width(), 0.0], egui::Button::selectable(sel, label)).clicked() {
+                    if item_row(ui, sel, name, *cat, *updated) {
                         open = Some(id.clone());
                     }
                 }
             });
-            if let Some(id) = open {
-                self.open_item(&id);
-            }
         });
-        egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                if self.editor.is_some() {
+        if let Some(cat) = add {
+            self.new_item(cat);
+        }
+        if let Some(id) = open {
+            self.open_item(&id);
+        }
+
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin::symmetric(28, 22))).show(ctx, |ui| {
+            if self.editor.is_some() {
+                let w = ui.available_width().min(720.0);
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.set_max_width(w);
                     self.editor(ui);
-                } else {
-                    ui.weak(t!("Soldan bir kayıt seç.", "Pick an item on the left."));
-                }
-            });
+                });
+            } else {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(ui.available_height() * 0.3);
+                    ui.label(RichText::new(t!("Bir kayıt seç", "Pick an item")).size(17.0).strong());
+                    ui.label(RichText::new(t!("Soldaki listeden bir kayıt aç ya da yeni bir tane ekle.", "Open an item from the list or add a new one.")).color(DIM));
+                    ui.add_space(8.0);
+                    if ui.add(primary(t!("+ Yeni giriş", "+ New login"))).clicked() {
+                        self.new_item(Category::Password);
+                    }
+                });
+            }
         });
     }
 
@@ -656,90 +1014,119 @@ impl App {
         let mut remove_file = false;
         let mut delete = false;
         let mut close = false;
-        let (gen_len, gen_symbols) = (self.gen_len, self.gen_symbols);
         let unix = now();
+        let gen_len = &mut self.gen_len;
+        let gen_symbols = &mut self.gen_symbols;
         let Some(e) = self.editor.as_mut() else { return };
+
+        // Başlık: rozet, büyük ad, kategori.
         ui.horizontal(|ui| {
-            ui.label(t!("Ad", "Name"));
-            ui.add(egui::TextEdit::singleline(&mut e.name).desired_width(320.0));
-            egui::ComboBox::from_id_salt("cat").selected_text(e.category.title()).show_ui(ui, |ui| {
-                for c in Category::ALL {
-                    ui.selectable_value(&mut e.category, c, c.title());
-                }
+            chip(ui, e.category, 44.0);
+            ui.vertical(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut e.name).hint_text(t!("Kayıt adı", "Item name")).font(egui::FontId::proportional(22.0)).frame(false).desired_width(f32::INFINITY));
+                egui::ComboBox::from_id_salt("cat").selected_text(RichText::new(e.category.title()).color(DIM).size(13.0)).show_ui(ui, |ui| {
+                    for c in Category::ALL {
+                        ui.selectable_value(&mut e.category, c, c.title());
+                    }
+                });
             });
         });
-        ui.separator();
+        ui.add_space(14.0);
+
         let mut remove = None;
-        egui::Grid::new("fields").num_columns(3).spacing([8.0, 6.0]).show(ui, |ui| {
+        egui::Frame::new().fill(CARD).stroke(egui::Stroke::new(1.0_f32, LINE)).corner_radius(12).inner_margin(20).show(ui, |ui| {
+            ui.set_width(ui.available_width());
             for (i, f) in e.body.fields.iter_mut().enumerate() {
-                ui.add(egui::TextEdit::singleline(&mut f.label).desired_width(140.0));
-                let shown = e.reveal.contains(&i);
-                match f.kind {
-                    FieldKind::Multiline => {
-                        ui.add(egui::TextEdit::multiline(&mut f.value).desired_width(360.0).desired_rows(3));
-                    }
-                    _ => {
-                        ui.add(egui::TextEdit::singleline(&mut f.value).password(f.kind.masked() && !shown).desired_width(360.0));
-                    }
+                if i > 0 {
+                    ui.add_space(6.0);
                 }
+                // Alan adı: küçük, soluk, düzenlenebilir.
                 ui.horizontal(|ui| {
-                    if f.kind.masked() && ui.small_button(if shown { t!("Gizle", "Hide") } else { t!("Göster", "Show") }).clicked() {
+                    ui.add(egui::TextEdit::singleline(&mut f.label).font(egui::FontId::proportional(12.0)).text_color(DIM).frame(false).desired_width(220.0));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(egui::Button::new(RichText::new("×").color(DIM)).frame(false)).on_hover_text(t!("Alanı sil", "Remove field")).clicked() {
+                            remove = Some(i);
+                        }
+                    });
+                });
+                let shown = e.reveal.contains(&i);
+                // Giriş solda, düğmeler sağda. Genişlik önceden ayrılır ki "Kopyala"
+                // belirince kutu kaymasın; sabit kimlik de yazarken odağı korur.
+                let masked = f.kind.masked();
+                let can_gen = f.kind == FieldKind::Secret && f.fmt.is_free();
+                let copyable = f.kind != FieldKind::Totp;
+                let btn = egui::vec2(84.0, 38.0);
+                let n = masked as usize + can_gen as usize + copyable as usize;
+                ui.horizontal_wrapped(|ui| {
+                    // desired_width kenar boşluğunu (2×10) içermez; dar pencerede
+                    // giriş tüm satırı alır, düğmeler alt satıra iner.
+                    let full = ui.available_width() - 20.0;
+                    let beside = full - n as f32 * (btn.x + ui.spacing().item_spacing.x);
+                    let w = if beside >= 160.0 { beside } else { full };
+                    if f.kind == FieldKind::Multiline {
+                        ui.add(egui::TextEdit::multiline(&mut f.value).id_salt(("field", i)).desired_width(w).desired_rows(4).margin(egui::Margin::symmetric(10, 8)));
+                    } else {
+                        let mut te = input(&mut f.value, "").id_salt(("field", i)).desired_width(w).password(masked && !shown);
+                        if f.kind == FieldKind::Totp || masked {
+                            te = te.font(egui::TextStyle::Monospace);
+                        }
+                        ui.add(te);
+                    }
+                    if masked && ui.add(ghost(if shown { t!("Gizle", "Hide") } else { t!("Göster", "Show") }).min_size(btn)).clicked() {
                         if shown {
                             e.reveal.remove(&i);
                         } else {
                             e.reveal.insert(i);
                         }
                     }
-                    if f.kind != FieldKind::Totp && !f.value.is_empty() && ui.small_button(t!("Kopyala", "Copy")).clicked() {
+                    if can_gen {
+                        egui::containers::menu::MenuButton::from_button(ghost(t!("Üret", "Generate")).min_size(btn)).ui(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(t!("Uzunluk", "Length"));
+                                ui.add(egui::DragValue::new(gen_len).range(gen::MIN_LEN..=gen::MAX_LEN));
+                            });
+                            ui.checkbox(gen_symbols, t!("Simgeler", "Symbols"));
+                            if ui.add(primary(t!("Parola üret", "Generate password"))).clicked() {
+                                f.value = gen::generate(gen::Options { len: *gen_len, symbols: *gen_symbols }).to_string();
+                                e.reveal.insert(i);
+                                ui.close();
+                            }
+                        });
+                    }
+                    if copyable && ui.add_enabled(!f.value.is_empty(), ghost(t!("Kopyala", "Copy")).min_size(btn)).clicked() {
                         copy = Some(Zeroizing::new(card::store(f.fmt, &f.value)));
                     }
-                    if f.kind == FieldKind::Secret && f.fmt.is_free() {
-                        if ui.small_button("🎲").on_hover_text(t!("Parola üret", "Generate password")).clicked() {
-                            f.value = gen::generate(gen::Options { len: gen_len, symbols: gen_symbols }).to_string();
-                            e.reveal.insert(i);
-                        }
-                        if !f.value.is_empty() {
-                            let (txt, col) = match gen::strength(&f.value) {
-                                gen::Strength::Weak => (t!("zayıf", "weak"), Color32::LIGHT_RED),
-                                gen::Strength::Fair => (t!("orta", "fair"), Color32::YELLOW),
-                                gen::Strength::Strong => (t!("güçlü", "strong"), Color32::LIGHT_GREEN),
-                            };
-                            ui.colored_label(col, txt);
-                        }
-                    }
-                    if ui.small_button("✕").on_hover_text(t!("Alanı sil", "Remove field")).clicked() {
-                        remove = Some(i);
-                    }
                 });
-                ui.end_row();
+                if f.kind == FieldKind::Secret && f.fmt.is_free() && !f.value.is_empty() {
+                    strength_bar(ui, &f.value);
+                }
                 if f.kind == FieldKind::Totp && !f.value.trim().is_empty() {
-                    ui.label("");
                     match totp::Totp::parse(&f.value) {
                         Ok(tp) => {
                             let code = tp.code(unix);
+                            let left = tp.remaining(unix);
                             ui.horizontal(|ui| {
-                                ui.label(RichText::new(totp::grouped(&code)).monospace().size(20.0));
-                                ui.weak(format!("{} sn", tp.remaining(unix)));
-                                if ui.small_button(t!("Kodu kopyala", "Copy code")).clicked() {
+                                ui.label(RichText::new(totp::grouped(&code)).monospace().size(26.0).color(ACCENT));
+                                ui.vertical(|ui| {
+                                    ui.add_space(6.0);
+                                    let (r, _) = ui.allocate_exact_size(egui::vec2(90.0, 4.0), egui::Sense::hover());
+                                    ui.painter().rect_filled(r, 2, LINE);
+                                    let frac = left as f32 / tp.period.max(1) as f32;
+                                    let col = if left <= 5 { RED } else { ACCENT };
+                                    ui.painter().rect_filled(egui::Rect::from_min_size(r.min, egui::vec2(r.width() * frac, 4.0)), 2, col);
+                                    small_label(ui, &format!("{left} sn"));
+                                });
+                                if ui.add(ghost(t!("Kodu kopyala", "Copy code"))).clicked() {
                                     copy = Some(Zeroizing::new(code.to_string()));
                                 }
                             });
                         }
-                        Err(_) => {
-                            ui.colored_label(Color32::LIGHT_RED, t!("Geçersiz 2FA anahtarı.", "Invalid 2FA key."));
-                        }
+                        Err(_) => error_text(ui, t!("Geçersiz 2FA anahtarı.", "Invalid 2FA key.")),
                     }
-                    ui.label("");
-                    ui.end_row();
                 }
             }
-        });
-        if let Some(i) = remove {
-            e.body.fields.remove(i);
-            e.reveal.clear();
-        }
-        ui.horizontal(|ui| {
-            ui.menu_button(t!("+ Alan", "+ Field"), |ui| {
+            ui.add_space(10.0);
+            egui::containers::menu::MenuButton::from_button(ghost(t!("+ Alan ekle", "+ Add field"))).ui(ui, |ui| {
                 for (k, n) in [(FieldKind::Text, t!("Metin", "Text")), (FieldKind::Secret, t!("Gizli", "Secret")), (FieldKind::Url, t!("Adres", "Website")), (FieldKind::Multiline, t!("Not", "Note")), (FieldKind::Totp, "2FA")] {
                     if ui.button(n).clicked() {
                         e.body.fields.push(Field::new(n, k));
@@ -748,75 +1135,86 @@ impl App {
                 }
             });
         });
-        ui.horizontal(|ui| {
-            ui.weak(t!("Üretici:", "Generator:"));
-            ui.add(egui::DragValue::new(&mut self.gen_len).range(gen::MIN_LEN..=gen::MAX_LEN).suffix(t!(" karakter", " chars")));
-            ui.checkbox(&mut self.gen_symbols, t!("Simgeler", "Symbols"));
-        });
-        let Some(e) = self.editor.as_mut() else { return };
+        if let Some(i) = remove {
+            e.body.fields.remove(i);
+            e.reveal.clear();
+        }
+        ui.add_space(12.0);
 
-        ui.separator();
-        ui.label(RichText::new(t!("Ek dosya", "Attachment")).strong());
-        match &e.body.file {
+        section(ui, t!("Ek dosya", "Attachment"), |ui| match &e.body.file {
             Some(f) => {
                 ui.horizontal(|ui| {
-                    ui.label(format!("{} ({} KB)", f.name, f.size.div_ceil(1024)));
-                    if ui.button(t!("Dışa kaydet…", "Save as…")).clicked() {
-                        export_file = true;
-                    }
-                    if ui.button(t!("Kaldır", "Remove")).clicked() {
-                        remove_file = true;
-                    }
+                    chip(ui, Category::File, 30.0);
+                    ui.vertical(|ui| {
+                        ui.label(&f.name);
+                        small_label(ui, &format!("{} KB", f.size.div_ceil(1024)));
+                    });
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add(ghost(t!("Kaldır", "Remove"))).clicked() {
+                            remove_file = true;
+                        }
+                        if ui.add(ghost(t!("Dışa kaydet…", "Save as…"))).clicked() {
+                            export_file = true;
+                        }
+                    });
                 });
             }
             None => {
-                if ui.button(t!("Dosya ekle…", "Attach file…")).clicked() {
+                small_label(ui, t!("Bu kayda bir dosya ekleyebilirsin (en çok 25 MB).", "You can attach one file to this item (up to 25 MB)."));
+                if ui.add(ghost(t!("Dosya ekle…", "Attach file…"))).clicked() {
                     attach = true;
                 }
             }
-        }
+        });
 
+        let mut drop_pk = None;
         if !e.body.passkeys.is_empty() {
-            ui.separator();
-            ui.label(RichText::new("Passkey").strong());
-            let mut drop_pk = None;
-            for (i, k) in e.body.passkeys.iter().enumerate() {
-                ui.horizontal(|ui| {
-                    ui.label(format!("{} · {}", k.rp_id, k.user_name));
-                    if ui.small_button(t!("Sil", "Delete")).clicked() {
-                        drop_pk = Some(i);
-                    }
-                });
-            }
-            if let Some(i) = drop_pk {
-                e.body.passkeys.remove(i);
-                self.toast(t!("Passkey kaldırıldı; kaydetmeyi unutma.", "Passkey removed; don't forget to save."));
-            }
+            section(ui, "Passkey", |ui| {
+                for (i, k) in e.body.passkeys.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.label(&k.rp_id);
+                            small_label(ui, &k.user_name);
+                        });
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.add(egui::Button::new(RichText::new(t!("Sil", "Delete")).color(RED)).fill(Color32::TRANSPARENT).stroke(egui::Stroke::new(1.0_f32, LINE))).clicked() {
+                                drop_pk = Some(i);
+                            }
+                        });
+                    });
+                }
+            });
+        }
+        if let Some(i) = drop_pk {
+            e.body.passkeys.remove(i);
         }
 
-        let Some(e) = self.editor.as_mut() else { return };
-        ui.separator();
         ui.horizontal(|ui| {
-            if ui.button(RichText::new(t!("Kaydet", "Save")).strong()).clicked() {
+            if ui.add(primary(t!("Kaydet", "Save")).min_size(egui::vec2(96.0, 36.0))).clicked() {
                 save = true;
             }
-            if ui.button(t!("Kapat", "Close")).clicked() {
+            if ui.add(ghost(t!("Kapat", "Close")).min_size(egui::vec2(80.0, 36.0))).clicked() {
                 close = true;
             }
             if e.id.is_some() {
-                if e.confirm_delete {
-                    ui.colored_label(Color32::LIGHT_RED, t!("Silinsin mi? Geri alınamaz.", "Delete? This can't be undone."));
-                    if ui.button(t!("Evet, sil", "Yes, delete")).clicked() {
-                        delete = true;
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if e.confirm_delete {
+                        if ui.add(ghost(t!("Vazgeç", "Cancel"))).clicked() {
+                            e.confirm_delete = false;
+                        }
+                        if ui.add(egui::Button::new(RichText::new(t!("Evet, sil", "Yes, delete")).strong().color(Color32::WHITE)).fill(RED)).clicked() {
+                            delete = true;
+                        }
+                        ui.label(RichText::new(t!("Geri alınamaz.", "This can't be undone.")).size(13.0).color(RED));
+                    } else if ui.add(egui::Button::new(RichText::new(t!("Sil", "Delete")).color(RED)).frame(false)).clicked() {
+                        e.confirm_delete = true;
                     }
-                    if ui.button(t!("Vazgeç", "Cancel")).clicked() {
-                        e.confirm_delete = false;
-                    }
-                } else if ui.button(t!("Sil", "Delete")).clicked() {
-                    e.confirm_delete = true;
-                }
+                });
             }
         });
+        if drop_pk.is_some() {
+            self.toast(t!("Passkey kaldırıldı; kaydetmeyi unutma.", "Passkey removed; don't forget to save."));
+        }
 
         if close {
             self.editor = None;
@@ -932,29 +1330,42 @@ impl App {
 impl App {
     fn settings(&mut self, ui: &mut egui::Ui) {
         let mut s = self.shared.core().settings.clone();
-        ui.heading(t!("Ayarlar", "Settings"));
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
-            ui.label(t!("Otomatik kilit (dakika, 0: kapalı)", "Auto-lock (minutes, 0: off)"));
-            ui.add(egui::DragValue::new(&mut s.auto_lock).range(0..=720));
-        });
-        ui.horizontal(|ui| {
-            ui.label(t!("Panoyu temizle (saniye, 0: kapalı)", "Clear clipboard (seconds, 0: off)"));
-            ui.add(egui::DragValue::new(&mut s.clipboard).range(0..=600));
-        });
-        ui.checkbox(&mut s.browser_fill, t!("Tarayıcı eklentisiyle doldurma, kaydetme ve passkey", "Browser extension filling, saving and passkeys"));
-        ui.checkbox(&mut s.keep_running, t!("Pencere kapatılınca arka planda çalışmaya devam et", "Keep running in the background when the window is closed"));
-        ui.horizontal(|ui| {
-            ui.label(t!("Dil", "Language"));
-            egui::ComboBox::from_id_salt("lang").selected_text(match s.lang.as_str() {
-                "tr" => "Türkçe",
-                "en" => "English",
-                _ => t!("Sistem", "System"),
-            }).show_ui(ui, |ui| {
-                ui.selectable_value(&mut s.lang, "auto".to_string(), t!("Sistem", "System"));
-                ui.selectable_value(&mut s.lang, "tr".to_string(), "Türkçe");
-                ui.selectable_value(&mut s.lang, "en".to_string(), "English");
+        let row = |ui: &mut egui::Ui, title: &str, sub: &str, add: &mut dyn FnMut(&mut egui::Ui)| {
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.label(title);
+                    if !sub.is_empty() {
+                        small_label(ui, sub);
+                    }
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| add(ui));
             });
+            ui.add_space(4.0);
+        };
+        section(ui, t!("Güvenlik", "Security"), |ui| {
+            row(ui, t!("Otomatik kilit", "Auto-lock"), t!("Dakika; 0 kapalı", "Minutes; 0 is off"), &mut |ui| {
+                ui.add(egui::DragValue::new(&mut s.auto_lock).range(0..=720).suffix(t!(" dk", " min")));
+            });
+            row(ui, t!("Panoyu temizle", "Clear clipboard"), t!("Saniye; 0 kapalı", "Seconds; 0 is off"), &mut |ui| {
+                ui.add(egui::DragValue::new(&mut s.clipboard).range(0..=600).suffix(t!(" sn", " s")));
+            });
+        });
+        section(ui, t!("Genel", "General"), |ui| {
+            ui.checkbox(&mut s.browser_fill, t!("Tarayıcı eklentisiyle doldurma, kaydetme ve passkey", "Browser extension filling, saving and passkeys"));
+            ui.checkbox(&mut s.keep_running, t!("Pencere kapatılınca arka planda çalışmaya devam et", "Keep running in the background when the window is closed"));
+            ui.add_space(4.0);
+            row(ui, t!("Dil", "Language"), "", &mut |ui| {
+                egui::ComboBox::from_id_salt("lang").selected_text(match s.lang.as_str() {
+                    "tr" => "Türkçe",
+                    "en" => "English",
+                    _ => t!("Sistem", "System"),
+                }).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut s.lang, "auto".to_string(), t!("Sistem", "System"));
+                    ui.selectable_value(&mut s.lang, "tr".to_string(), "Türkçe");
+                    ui.selectable_value(&mut s.lang, "en".to_string(), "English");
+                });
+            });
+            small_label(ui, &t!(format!("Köprü: 127.0.0.1:{}", crate::bridge::port()), format!("Bridge: 127.0.0.1:{}", crate::bridge::port())));
         });
         {
             let mut c = self.shared.core();
@@ -966,14 +1377,18 @@ impl App {
                 c.settings = s;
             }
         }
-        ui.weak(t!(format!("Köprü: 127.0.0.1:{}", crate::bridge::port()), format!("Bridge: 127.0.0.1:{}", crate::bridge::port())));
 
-        ui.separator();
-        ui.label(RichText::new(t!("Ana parolayı değiştir", "Change master password")).strong());
-        password_edit(ui, &mut self.old_pw, t!("Şu anki parola", "Current password"));
-        password_edit(ui, &mut self.new_pw, t!("Yeni parola", "New password"));
-        password_edit(ui, &mut self.new_pw2, t!("Yeni parola (tekrar)", "New password (again)"));
-        if ui.button(t!("Parolayı değiştir", "Change password")).clicked() {
+        let mut change = false;
+        section(ui, t!("Ana parola", "Master password"), |ui| {
+            password_edit(ui, &mut self.old_pw, t!("Şu anki parola", "Current password"));
+            password_edit(ui, &mut self.new_pw, t!("Yeni parola", "New password"));
+            if !self.new_pw.is_empty() {
+                strength_bar(ui, &self.new_pw);
+            }
+            password_edit(ui, &mut self.new_pw2, t!("Yeni parola (tekrar)", "New password (again)"));
+            change = ui.add(primary(t!("Parolayı değiştir", "Change password"))).clicked();
+        });
+        if change {
             let ok = self.shared.core().vault.as_ref().is_some_and(|v| v.verify_password(&self.old_pw));
             self.settings_msg = if !ok {
                 t!("Şu anki parola yanlış.", "The current password is wrong.").into()
@@ -985,47 +1400,59 @@ impl App {
             };
         }
 
-        ui.separator();
-        ui.label(RichText::new(t!("Kurtarma anahtarı", "Recovery key")).strong());
         let has = self.shared.core().vault.as_ref().is_some_and(|v| v.has_recovery());
-        ui.weak(if has { t!("Kurtarma anahtarı var.", "A recovery key is set.") } else { t!("Kurtarma anahtarı yok.", "No recovery key is set.") });
-        ui.horizontal(|ui| {
-            if ui.button(t!("Yeni anahtar oluştur", "Create a new key")).clicked() {
-                let r = self.shared.core().vault.as_mut().ok_or_default().and_then(|v| v.new_recovery().map_err(|e| e.to_string()));
-                match r {
-                    Ok(k) => self.recovery = Some(k),
-                    Err(m) => self.settings_msg = m,
-                }
-            }
-            if has && ui.button(t!("Anahtarı kaldır", "Remove the key")).clicked() {
-                let r = self.shared.core().vault.as_mut().ok_or_default().and_then(|v| v.remove_recovery().map_err(|e| e.to_string()));
-                self.settings_msg = match r {
-                    Ok(()) => t!("Kurtarma anahtarı kaldırıldı.", "Recovery key removed.").into(),
-                    Err(m) => m,
-                };
-            }
-        });
-
-        ui.separator();
-        ui.label(RichText::new(t!("Yedek", "Backup")).strong());
-        ui.weak(t!("Şifreli .carlvault yedeği (Windows'taki Carl Vault'un dışa aktarımı) geri yüklenebilir; yedek almak ana parolayla şifrelenir.", "An encrypted .carlvault backup (exported from Carl Vault on Windows) can be restored; new backups are encrypted with the master password."));
-        ui.horizontal(|ui| {
-            if ui.button(t!("Yedekten geri yükle…", "Restore a backup…")).clicked() {
-                self.pick_backup();
-            }
-            if ui.button(t!("Yedek al…", "Back up…")).clicked() {
-                self.backup();
-            }
-        });
-        let mut run = false;
-        let mut cancel = false;
-        if let Some(r) = self.restore.as_mut() {
-            ui.label(&r.path);
-            let enter = ui.add(egui::TextEdit::singleline(&mut *r.password).password(true).hint_text(t!("Yedeğin parolası", "Backup password"))).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        let (mut new_key, mut drop_key) = (false, false);
+        section(ui, t!("Kurtarma anahtarı", "Recovery key"), |ui| {
             ui.horizontal(|ui| {
-                run = ui.button(t!("Geri yükle", "Restore")).clicked() || enter;
-                cancel = ui.button(t!("Vazgeç", "Cancel")).clicked();
+                let (col, txt) = if has { (GREEN, t!("Kurtarma anahtarı var.", "A recovery key is set.")) } else { (ORANGE, t!("Kurtarma anahtarı yok.", "No recovery key is set.")) };
+                let (r, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+                ui.painter().circle_filled(r.center(), 4.0, col);
+                ui.label(RichText::new(txt).size(13.0).color(DIM));
             });
+            ui.horizontal(|ui| {
+                new_key = ui.add(primary(t!("Yeni anahtar oluştur", "Create a new key"))).clicked();
+                if has {
+                    drop_key = ui.add(ghost(t!("Anahtarı kaldır", "Remove the key"))).clicked();
+                }
+            });
+        });
+        if new_key {
+            let r = self.shared.core().vault.as_mut().ok_or_default().and_then(|v| v.new_recovery().map_err(|e| e.to_string()));
+            match r {
+                Ok(k) => self.recovery = Some(k),
+                Err(m) => self.settings_msg = m,
+            }
+        }
+        if drop_key {
+            let r = self.shared.core().vault.as_mut().ok_or_default().and_then(|v| v.remove_recovery().map_err(|e| e.to_string()));
+            self.settings_msg = match r {
+                Ok(()) => t!("Kurtarma anahtarı kaldırıldı.", "Recovery key removed.").into(),
+                Err(m) => m,
+            };
+        }
+
+        let (mut pick, mut backup, mut run, mut cancel) = (false, false, false, false);
+        section(ui, t!("Yedek", "Backup"), |ui| {
+            small_label(ui, t!("Windows'taki Carl Vault'tan alınan şifreli .carlvault yedeği geri yüklenebilir. Yeni yedek ana parolayla şifrelenir.", "An encrypted .carlvault backup exported from Carl Vault on Windows can be restored. New backups are encrypted with the master password."));
+            ui.horizontal(|ui| {
+                pick = ui.add(ghost(t!("Yedekten geri yükle…", "Restore a backup…"))).clicked();
+                backup = ui.add(ghost(t!("Yedek al…", "Back up…"))).clicked();
+            });
+            if let Some(r) = self.restore.as_mut() {
+                ui.add_space(4.0);
+                small_label(ui, &r.path);
+                let enter = ui.add(input(&mut *r.password, t!("Yedeğin parolası", "Backup password")).password(true)).lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                ui.horizontal(|ui| {
+                    run = ui.add(primary(t!("Geri yükle", "Restore"))).clicked() || enter;
+                    cancel = ui.add(ghost(t!("Vazgeç", "Cancel"))).clicked();
+                });
+            }
+        });
+        if pick {
+            self.pick_backup();
+        }
+        if backup {
+            self.backup();
         }
         if cancel {
             self.restore = None;
@@ -1034,8 +1461,7 @@ impl App {
             self.settings_msg = self.run_restore();
         }
         if !self.settings_msg.is_empty() {
-            ui.add_space(8.0);
-            ui.label(&self.settings_msg);
+            ui.label(RichText::new(&self.settings_msg).size(13.0).color(ACCENT));
         }
     }
 
