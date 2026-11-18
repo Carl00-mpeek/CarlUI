@@ -102,6 +102,9 @@ impl Dock {
     pub fn set_tray_open(&self, open: bool) {
         if let Some(e) = self.entries.iter().find(|e| e.kind == Kind::Tray && e.leaving.is_none()) {
             let _ = self.motion.animate(&e.slot, h!("RotationAngleInDegrees"), self.tray_angle(open), 0.85, 70, 0);
+            if let Some(p) = &e.plate {
+                let _ = self.motion.fade(p, h!("Opacity"), if open { 1.0 } else { 0.0 }, 160, 0);
+            }
         }
     }
 

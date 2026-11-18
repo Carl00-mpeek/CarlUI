@@ -110,6 +110,8 @@ pub struct Entry {
     pub windows: Vec<HWND>,
     slot: ContainerVisual,
     icon: SpriteVisual,
+    /// Yalnızca tray düğmesinde: panel açıkken beliren zemin.
+    plate: Option<SpriteVisual>,
     hl: ShapeVisual,
     dots: ContainerVisual,
     dots_sig: (usize, bool),
@@ -478,7 +480,7 @@ impl Dock {
         Ok(match (kind, src) {
             (Kind::Start, _) => gfx.surface(px, px, |dc| icons::draw_start(dc, px))?,
             (Kind::Search, _) => gfx.surface(px, px, |dc| icons::draw_search(dc, px, &gfx.round_stroke))?,
-            (Kind::Tray, _) => gfx.surface(px, px, |dc| icons::draw_chevron(dc, px, &gfx.round_stroke))?,
+            (Kind::Tray, _) => gfx.surface(px, px, |dc| icons::draw_chevron_mark(dc, px, &gfx.round_stroke))?,
             (Kind::App | Kind::Folder | Kind::Trash, IconSrc::Sources(paths, window)) => {
                 let loaded = paths
                     .iter()
@@ -544,6 +546,20 @@ impl Dock {
         };
         icon.SetCenterPoint(Vector3 { X: cp.0, Y: cp.1, Z: 0.0 })?;
         kids.InsertAtTop(&icon)?;
+        // Tray okunun zemini yalnızca panel açıkken görünür (kapalıyken iz kalmasın).
+        let plate = if kind == Kind::Tray {
+            let s = gfx.surface(px, px, |dc| icons::draw_chevron_plate(dc, px))?;
+            let b = comp.CreateSurfaceBrushWithSurface(&s)?;
+            b.SetStretch(CompositionStretch::Fill)?;
+            let p = comp.CreateSpriteVisual()?;
+            p.SetSize(v2(px, px))?;
+            p.SetBrush(&b)?;
+            p.SetOpacity(0.0)?;
+            icon.Children()?.InsertAtBottom(&p)?;
+            Some(p)
+        } else {
+            None
+        };
 
         let dots = comp.CreateContainerVisual()?;
         kids.InsertAtTop(&dots)?;
@@ -560,6 +576,7 @@ impl Dock {
             windows: Vec::new(),
             slot,
             icon,
+            plate,
             hl,
             dots,
             // İlk güncellemede kapalı uygulamanın çizgisi de çizilsin.

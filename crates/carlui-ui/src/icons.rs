@@ -388,6 +388,12 @@ pub fn draw_search(dc: &ID2D1DeviceContext, px: f32, stroke: &ID2D1StrokeStyle) 
 
 /// Tray paneli düğmesi: koyu cam kare üzerinde yukarı ok.
 pub fn draw_chevron(dc: &ID2D1DeviceContext, px: f32, stroke: &ID2D1StrokeStyle) -> Result<()> {
+    draw_chevron_plate(dc, px)?;
+    draw_chevron_mark(dc, px, stroke)
+}
+
+/// Okun arkasındaki hafif yuvarlak zemin (dock bunu yalnızca panel açıkken gösterir).
+pub fn draw_chevron_plate(dc: &ID2D1DeviceContext, px: f32) -> Result<()> {
     unsafe {
         let bg = dc.CreateSolidColorBrush(&color(255, 255, 255, 0.07), None)?;
         let rr = D2D1_ROUNDED_RECT {
@@ -396,6 +402,13 @@ pub fn draw_chevron(dc: &ID2D1DeviceContext, px: f32, stroke: &ID2D1StrokeStyle)
             radiusY: px * 0.3,
         };
         dc.FillRoundedRectangle(&rr, &bg);
+    }
+    Ok(())
+}
+
+/// Zeminsiz ok.
+pub fn draw_chevron_mark(dc: &ID2D1DeviceContext, px: f32, stroke: &ID2D1StrokeStyle) -> Result<()> {
+    unsafe {
         let fg = dc.CreateSolidColorBrush(&color(255, 255, 255, 0.85), None)?;
         let w = px * 0.065;
         let (l, m, r) = (px * 0.36, px * 0.5, px * 0.64);
