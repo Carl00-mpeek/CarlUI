@@ -257,10 +257,14 @@ compare the SHA-256 of your download with the one on the Releases page.
 
 ### Optional parts
 
-- **CPU temperature:** Intel CPUs need the [PawnIO](https://pawnio.eu) driver.
-  If it's installed, the installer turns on "CPU temperature"; it asks for
-  admin rights once. If you install PawnIO later, set it up from
-  **Settings → Island → System stats**.
+- **CPU temperature:** The most accurate reading on Intel CPUs comes from the
+  optional [PawnIO](https://pawnio.eu) driver. If it's installed, the installer
+  turns on "CPU temperature"; it asks for admin rights once. If you install
+  PawnIO later, set it up from **Settings → Island → System stats**. Without
+  a driver, CarlUI reads the temperature from [HWiNFO](https://www.hwinfo.com)
+  when it's running with "Shared Memory Support" on (Intel and AMD), or else
+  from Windows' ACPI thermal zone (approximate, mostly useful on laptops;
+  ignored if the board reports a fixed value). If none is available it shows "—".
 - **Browser extension:** Moves downloads started in the browser to the island
   and fills login pages from Carl Vault.
   It ships in `%LOCALAPPDATA%\Programs\CarlUI\extension\carlui-downloads`; turn
@@ -291,21 +295,6 @@ the Recycle Bin. You choose whether to keep your settings.
 & "$env:LOCALAPPDATA\Programs\CarlUI\carlui.exe" --restore-taskbar
 ```
 
-### Carl Vault on Linux
-
-Carl Vault also runs on its own on Linux (x86_64, glibc 2.28+; tested on
-CachyOS with KDE Plasma on Wayland). Download
-`Carl-Vault-<version>-linux-x86_64.tar.gz` from
-[Releases](https://github.com/Carl00-mpeek/CarlUI/releases/latest), then:
-
-```bash
-tar -xzf Carl-Vault-*-linux-x86_64.tar.gz && cd Carl-Vault-*-linux-x86_64 && sh install.sh --autostart
-```
-
-The vault format is the same as on Windows, so a `.carlvault` backup moves
-across. Browser extension setup and notes (in Turkish):
-[docs/LINUX-VAULT.md](docs/LINUX-VAULT.md).
-
 ## Settings and data
 
 | What | Where |
@@ -332,13 +321,6 @@ To build the single-file installer:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\build-setup.ps1   # → dist\CarlUI-Setup.exe
-```
-
-To build the Linux Carl Vault package on Windows (needs `cargo-zigbuild` and
-`zig`; see the top of the script):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\build-linux.ps1   # → dist\Carl-Vault-<version>-linux-x86_64.tar.gz
 ```
 
 Architecture: every module (dock, tray, island, Win menu…) is its own

@@ -826,16 +826,21 @@ fn dock_proc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
                         // Görev çubuğu görünümünde sağ uçtaki durum alanı.
                         // Her simge kendi panelini açar: ağ → ağ listesi, ses → ses ve uygulama sesleri.
                         match a.dock.status_hit(x, y) {
-                            Some(p @ (dock::Part::Net | dock::Part::Volume)) if screens::child().is_none() => {
+                            Some(p @ (dock::Part::Net | dock::Part::Volume | dock::Part::Bluetooth)) if screens::child().is_none() => {
                                 a.popup.hide();
                                 let (r, top) = a.dock.status_rect(p);
-                                let mode = if p == dock::Part::Net { "net" } else { "sound" };
+                                let mode = match p {
+                                    dock::Part::Net => "net",
+                                    dock::Part::Bluetooth => "bt",
+                                    _ => "sound",
+                                };
                                 a.send_bus(&Event::Custom {
                                     name: "tray-toggle".into(),
                                     data: serde_json::json!({ "l": r.left, "t": r.top, "r": r.right, "b": r.bottom, "dock_top": top, "side": a.dock.side() as u8, "mode": mode }),
                                 });
                             }
                             Some(dock::Part::Battery) => dock::open_uri("ms-settings:batterysaver"),
+                            Some(dock::Part::Bluetooth) => dock::open_uri("ms-settings:bluetooth"),
                             Some(dock::Part::Net | dock::Part::Volume) => dock::open_uri("ms-actioncenter:controlcenter/&showFooter=true"),
                             Some(dock::Part::Clock) => dock::open_uri("ms-actioncenter:"),
                             None => {}
@@ -889,10 +894,15 @@ fn dock_proc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
                 let (x, y) = xy(lp);
                 with_app(|a| {
                     let idx = a.dock.hit(x, y);
-                    // Ağ simgesine sağ tık: kablo bağlıysa Ethernet, değilse Wi-Fi ayarları.
-                    if idx.is_none() && a.dock.status_hit(x, y) == Some(dock::Part::Net) {
+                    // Durum simgesine sağ tık: ağ → Ağ ve internet ayarları, Bluetooth → Bluetooth ayarları.
+                    let page = match a.dock.status_hit(x, y) {
+                        Some(dock::Part::Net) => Some("ms-settings:network"),
+                        Some(dock::Part::Bluetooth) => Some("ms-settings:bluetooth"),
+                        _ => None,
+                    };
+                    if let (None, Some(page)) = (idx, page) {
                         a.popup.hide();
-                        dock::open_uri(if carlui_core::wired::wired_up() { "ms-settings:network-ethernet" } else { "ms-settings:network-wifi" });
+                        dock::open_uri(page);
                         return;
                     }
                     a.context_menu(idx);

@@ -11,6 +11,7 @@
 extern crate carlui_core;
 
 mod audio;
+mod bt;
 mod host;
 mod panel;
 mod quick;
@@ -332,7 +333,7 @@ extern "system" fn panel_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
             }
             panel::WM_APP_NETS => {
                 with_app(|a| {
-                    if a.panel.mode == panel::Mode::Net {
+                    if matches!(a.panel.mode, panel::Mode::Net | panel::Mode::Bt) {
                         let App { gfx, host, panel, .. } = a;
                         panel.refresh(gfx, host);
                     }
@@ -340,7 +341,18 @@ extern "system" fn panel_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
                 LRESULT(0)
             }
             panel::WM_APP_RADIOS => {
-                with_app(|a| a.panel.set_radios(quick::decode(wp.0)));
+                with_app(|a| {
+                    let before = a.panel.radios().bluetooth;
+                    a.panel.set_radios(quick::decode(wp.0));
+                    // Bluetooth panelinde açık/kapalı satırı ve cihaz listesi yenilenir.
+                    if a.panel.mode == panel::Mode::Bt && a.panel.radios().bluetooth != before {
+                        if a.panel.radios().bluetooth == Some(true) {
+                            a.panel.rescan_bt();
+                        }
+                        let App { gfx, host, panel, .. } = a;
+                        panel.refresh(gfx, host);
+                    }
+                });
                 LRESULT(0)
             }
             panel::WM_APP_BRIGHT => {

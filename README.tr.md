@@ -254,10 +254,14 @@ SHA-256 değerini Releases sayfasındakiyle karşılaştırabilirsin.
 
 ### İsteğe bağlı parçalar
 
-- **CPU sıcaklığı:** Intel işlemcilerde sıcaklık için
-  [PawnIO](https://pawnio.eu) sürücüsü gerekir. Kuruluysa kurucu "CPU
+- **CPU sıcaklığı:** Intel işlemcilerde en doğru değer isteğe bağlı
+  [PawnIO](https://pawnio.eu) sürücüsüyle okunur. Kuruluysa kurucu "CPU
   sıcaklığı" seçeneğini açar; bir kez yönetici izni ister. PawnIO'yu sonradan
-  kurarsan **Ayarlar → Ada → Sistem göstergesi** bölümünden kur.
+  kurarsan **Ayarlar → Ada → Sistem göstergesi** bölümünden kur. Sürücü
+  yoksa CarlUI sıcaklığı, "Shared Memory Support" açıkken çalışan
+  [HWiNFO](https://www.hwinfo.com)'dan (Intel ve AMD), o da yoksa Windows'un
+  ACPI ısı bölgesinden okur (yaklaşık, daha çok dizüstülerde işe yarar;
+  anakart sabit bir değer yazıyorsa yok sayılır). Hiçbiri yoksa "—" görünür.
 - **Tarayıcı eklentisi:** Tarayıcıda başlayan indirmeleri adaya taşır
   ve giriş sayfalarını Carl Vault kasasından doldurur.
   `%LOCALAPPDATA%\Programs\CarlUI\extension\carlui-downloads` klasöründe gelir;
@@ -288,21 +292,6 @@ Kutusu'na taşınır. Ayarların kalmasını ya da silinmesini sen seçersin.
 & "$env:LOCALAPPDATA\Programs\CarlUI\carlui.exe" --restore-taskbar
 ```
 
-### Linux'ta Carl Vault
-
-Carl Vault Linux'ta tek başına da çalışır (x86_64, glibc 2.28 ve üstü;
-CachyOS + KDE Plasma + Wayland'da denendi).
-[Releases](https://github.com/Carl00-mpeek/CarlUI/releases/latest) sayfasından
-`Carl-Vault-<sürüm>-linux-x86_64.tar.gz` dosyasını indir, sonra:
-
-```bash
-tar -xzf Carl-Vault-*-linux-x86_64.tar.gz && cd Carl-Vault-*-linux-x86_64 && sh install.sh --autostart
-```
-
-Kasa biçimi Windows'takiyle aynıdır; `.carlvault` yedeği iki sistem arasında
-taşınır. Tarayıcı eklentisi kurulumu ve notlar:
-[docs/LINUX-VAULT.md](docs/LINUX-VAULT.md).
-
 ## Ayarlar ve veriler
 
 | Ne | Nerede |
@@ -329,13 +318,6 @@ Tek dosyalık kurucuyu üretmek için:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\build-setup.ps1   # → dist\CarlUI-Setup.exe
-```
-
-Linux için Carl Vault paketini Windows'ta üretmek için (`cargo-zigbuild` ve
-`zig` gerekir; ayrıntı betiğin başında):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\build-linux.ps1   # → dist\Carl-Vault-<sürüm>-linux-x86_64.tar.gz
 ```
 
 Mimari: her modül (dock, tepsi, ada, Win menüsü…) ayrı bir süreçtir; biri

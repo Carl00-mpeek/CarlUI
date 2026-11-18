@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Carl Vault
-Comment=Oturum açılınca simge durumunda başlar; tarayıcı eklentisi köprüsü hazır olur.
-Exec=carl-vault --minimized
-Icon=dialog-password
-Terminal=false
-X-KDE-autostart-after=panel

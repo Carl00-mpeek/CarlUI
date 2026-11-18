@@ -100,26 +100,12 @@ fn write_atomic(path: &Path, data: &[u8], backup: bool) -> Result<()> {
     std::fs::rename(&tmp, path).map_err(io)
 }
 
-/// `%APPDATA%\CarlUI\vault` (Linux'ta `~/.local/share/CarlUI/vault`);
-/// `CARLUI_VAULT_DIR` (deneme için) önüne geçer.
+/// `%APPDATA%\CarlUI\vault`; `CARLUI_VAULT_DIR` (deneme için) önüne geçer.
 pub fn default_dir() -> PathBuf {
     if let Some(d) = std::env::var_os("CARLUI_VAULT_DIR").filter(|d| !d.is_empty()) {
         return PathBuf::from(d);
     }
-    data_root().join("CarlUI").join("vault")
-}
-
-/// Uygulama verisinin kökü: Windows'ta `%APPDATA%`, başka sistemlerde
-/// `$XDG_DATA_HOME` ya da `~/.local/share`.
-pub fn data_root() -> PathBuf {
-    #[cfg(windows)]
-    let base = std::env::var_os("APPDATA").map(PathBuf::from);
-    #[cfg(not(windows))]
-    let base = std::env::var_os("XDG_DATA_HOME")
-        .filter(|d| !d.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local").join("share")));
-    base.unwrap_or_else(std::env::temp_dir)
+    std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir).join("CarlUI").join("vault")
 }
 
 impl Vault {
@@ -359,7 +345,7 @@ impl Vault {
     /// Ek dosyayı kaydın anahtarıyla mühürleyip yazar; gövdeye konacak bilgiyi döner.
     pub fn attach(&self, id: &str, name: &str, data: &[u8]) -> Result<Attachment> {
         if data.len() as u64 > MAX_FILE {
-            return Err(Error::Io(crate::t!("Dosya 25 MB'tan büyük.", "File is larger than 25 MB.").into()));
+            return Err(Error::Io(carlui_core::t!("Dosya 25 MB'tan büyük.", "File is larger than 25 MB.").into()));
         }
         let dek = self.dek(id)?;
         let s = crypto::seal(&dek, &aad("file", id), data)?;

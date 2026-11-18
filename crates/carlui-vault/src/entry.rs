@@ -25,14 +25,14 @@ impl Category {
 
     pub fn title(self) -> &'static str {
         match self {
-            Category::Password => crate::t!("Parolalar", "Passwords"),
-            Category::Email => crate::t!("E-posta", "Email"),
-            Category::Card => crate::t!("Banka kartı", "Bank card"),
-            Category::Identity => crate::t!("Kimlik", "Identity"),
-            Category::Note => crate::t!("Güvenli not", "Secure note"),
-            Category::License => crate::t!("Lisans", "License"),
+            Category::Password => carlui_core::t!("Parolalar", "Passwords"),
+            Category::Email => carlui_core::t!("E-posta", "Email"),
+            Category::Card => carlui_core::t!("Banka kartı", "Bank card"),
+            Category::Identity => carlui_core::t!("Kimlik", "Identity"),
+            Category::Note => carlui_core::t!("Güvenli not", "Secure note"),
+            Category::License => carlui_core::t!("Lisans", "License"),
             Category::TwoFactor => "2FA",
-            Category::File => crate::t!("Dosya", "File"),
+            Category::File => carlui_core::t!("Dosya", "File"),
         }
     }
 
@@ -51,7 +51,7 @@ impl Category {
 
     /// Yeni kaydın boş alanları.
     pub fn template(self) -> Vec<Field> {
-        use crate::t;
+        use carlui_core::t;
         use FieldKind::*;
         let f = |l: &str, k| Field::new(l, k);
         match self {

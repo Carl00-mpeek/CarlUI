@@ -170,7 +170,7 @@ pub fn classify<'a>(items: impl IntoIterator<Item = (&'a str, &'a Body)>, url: &
 pub fn set_password(body: &mut Body, password: &str) {
     match body.fields.iter_mut().find(|f| f.kind == FieldKind::Secret) {
         Some(f) => f.value = password.into(),
-        None => body.fields.push(crate::entry::Field { label: crate::t!("Parola", "Password").into(), value: password.into(), kind: FieldKind::Secret, fmt: Default::default() }),
+        None => body.fields.push(crate::entry::Field { label: carlui_core::t!("Parola", "Password").into(), value: password.into(), kind: FieldKind::Secret, fmt: Default::default() }),
     }
 }
 

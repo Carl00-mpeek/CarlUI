@@ -38,11 +38,11 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::WrongKey => f.write_str(crate::t!("Parola yanlış.", "Wrong password.")),
-            Error::Corrupt => f.write_str(crate::t!("Kasa verisi bozulmuş ya da değiştirilmiş.", "Vault data is damaged or was modified.")),
-            Error::Random => f.write_str(crate::t!("Rastgele sayı üretilemedi.", "Couldn't generate random bytes.")),
-            Error::Io(e) => write!(f, "{}: {e}", crate::t!("Dosya hatası", "File error")),
-            Error::Format(e) => write!(f, "{}: {e}", crate::t!("Biçim hatası", "Format error")),
+            Error::WrongKey => f.write_str(carlui_core::t!("Parola yanlış.", "Wrong password.")),
+            Error::Corrupt => f.write_str(carlui_core::t!("Kasa verisi bozulmuş ya da değiştirilmiş.", "Vault data is damaged or was modified.")),
+            Error::Random => f.write_str(carlui_core::t!("Rastgele sayı üretilemedi.", "Couldn't generate random bytes.")),
+            Error::Io(e) => write!(f, "{}: {e}", carlui_core::t!("Dosya hatası", "File error")),
+            Error::Format(e) => write!(f, "{}: {e}", carlui_core::t!("Biçim hatası", "Format error")),
         }
     }
 }

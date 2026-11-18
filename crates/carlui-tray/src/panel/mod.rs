@@ -82,6 +82,8 @@ pub enum Mode {
     Sound,
     /// Bağlanılabilir ağlar (ağ simgesi).
     Net,
+    /// Bluetooth açma/kapama ve cihazlar (Bluetooth simgesi).
+    Bt,
 }
 
 impl Mode {
@@ -90,6 +92,7 @@ impl Mode {
             Some("tray") => Self::Tray,
             Some("sound") => Self::Sound,
             Some("net") => Self::Net,
+            Some("bt") => Self::Bt,
             _ => Self::Full,
         }
     }
@@ -233,6 +236,7 @@ pub struct Panel {
     pub mode: Mode,
     nets: Vec<crate::wifi::Network>,
     net_rows: Vec<(RECT, net::NetRow)>,
+    bt_devs: Vec<crate::bt::Device>,
 }
 
 impl Panel {
@@ -299,6 +303,7 @@ impl Panel {
             mode: Mode::Full,
             nets: Vec::new(),
             net_rows: Vec::new(),
+            bt_devs: Vec::new(),
         })
     }
 
@@ -344,6 +349,15 @@ impl Panel {
             self.icon_cache.insert(key, surf);
         }
         self.icon_cache.get(&key).cloned()
+    }
+
+    pub fn radios(&self) -> Radios {
+        self.radios
+    }
+
+    /// Bluetooth cihaz listesini yeniden tarar (radyo açıldığında).
+    pub fn rescan_bt(&self) {
+        self.bt_later(None);
     }
 
     pub fn set_radios(&mut self, r: Radios) {

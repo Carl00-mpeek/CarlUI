@@ -19,6 +19,8 @@ pub const TIMER_STATUS: usize = 14;
 /// Tıklanan bölüm.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Part {
+    /// Bluetooth simgesi (yalnızca Bluetooth radyosu varsa).
+    Bluetooth,
     /// Ağ simgesi.
     Net,
     /// Ses simgesi.
@@ -32,6 +34,8 @@ pub enum Part {
 #[derive(Clone, PartialEq, Default)]
 struct Sig {
     wired: bool,
+    /// Bluetooth radyosu: yoksa None, varsa açık mı.
+    bt: Option<bool>,
     vol: Option<(u8, bool)>,
     battery: Option<(u8, bool)>,
     time: String,
@@ -65,6 +69,34 @@ fn battery() -> Option<(u8, bool)> {
         return None;
     }
     Some((s.BatteryLifePercent, s.ACLineStatus == 1))
+}
+
+/// Bluetooth radyosunun son bilinen durumu (0: yok/bilinmiyor, 1: kapalı, 2: açık).
+/// Radyo sorgusu WinRT'de beklediği için arka planda en çok 5 sn'de bir yapılır.
+static BT: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+static BT_AT: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+
+fn bt_state() -> Option<bool> {
+    use std::sync::atomic::Ordering::Relaxed;
+    if let Ok(mut at) = BT_AT.lock() {
+        if at.map_or(true, |t| t.elapsed() >= Duration::from_secs(5)) {
+            *at = Some(Instant::now());
+            std::thread::spawn(|| {
+                let _ = unsafe { windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED) };
+                let v = match carlui_core::quick::radio_states().1 {
+                    None => 0,
+                    Some(false) => 1,
+                    Some(true) => 2,
+                };
+                BT.store(v, Relaxed);
+            });
+        }
+    }
+    match BT.load(Relaxed) {
+        1 => Some(false),
+        2 => Some(true),
+        _ => None,
+    }
 }
 
 fn now(hour: carlui_core::config::HourFormat) -> (String, String) {
@@ -102,7 +134,7 @@ impl Status {
             ((l * 100.0).round() as u8, m)
         });
         let (time, date) = now(self.hour);
-        Sig { wired, vol, battery: battery(), time, date }
+        Sig { wired, bt: bt_state(), vol, battery: battery(), time, date }
     }
 
     /// Değişiklik varsa yeniden çizer; genişlik değiştiyse true döner.
@@ -117,20 +149,44 @@ impl Status {
         Ok((self.width - old).abs() > 0.5)
     }
 
-    fn glyphs(&self) -> Vec<char> {
+    /// Sırayla gösterilen simge hücreleri.
+    fn parts(&self) -> Vec<Part> {
+        let mut v = Vec::with_capacity(4);
+        if self.sig.bt.is_some() {
+            v.push(Part::Bluetooth);
+        }
+        v.extend([Part::Net, Part::Volume]);
+        if self.sig.battery.is_some() {
+            v.push(Part::Battery);
+        }
+        v
+    }
+
+    /// Hücrenin sırası (yoksa ağınki).
+    fn index_of(&self, part: Part) -> usize {
+        let parts = self.parts();
+        parts.iter().position(|p| *p == part).or_else(|| parts.iter().position(|p| *p == Part::Net)).unwrap_or(0)
+    }
+
+    /// Simgeler ve saydamlık çarpanları (kapalı Bluetooth soluk çizilir).
+    fn glyphs(&self) -> Vec<(char, f32)> {
         let g = &self.sig;
-        let mut v = vec![if g.wired { '\u{E839}' } else { '\u{E701}' }];
-        v.push(match g.vol {
+        let mut v = Vec::with_capacity(4);
+        if let Some(on) = g.bt {
+            v.push(('\u{E702}', if on { 1.0 } else { 0.4 }));
+        }
+        v.push((if g.wired { '\u{E839}' } else { '\u{E701}' }, 1.0));
+        v.push((match g.vol {
             None => '\u{E767}',
             Some((_, true)) | Some((0, _)) => '\u{E74F}',
             Some((l, _)) if l < 34 => '\u{E993}',
             Some((l, _)) if l < 67 => '\u{E994}',
             Some(_) => '\u{E995}',
-        });
+        }, 1.0));
         if let Some((p, charging)) = g.battery {
             let step = (p as u32 / 10).min(10);
             // Battery0..10: E850..E85A, BatteryCharging0..10: EBAB..EBB5.
-            v.push(char::from_u32(if charging { 0xEBAB + step } else { 0xE850 + step }).unwrap_or('\u{E83F}'));
+            v.push((char::from_u32(if charging { 0xEBAB + step } else { 0xE850 + step }).unwrap_or('\u{E83F}'), 1.0));
         }
         v
     }
@@ -170,12 +226,14 @@ impl Status {
             dc.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
             let (r, g, b) = carlui_ui::tone::unit(1.0, 1.0, 1.0);
             let brush = dc.CreateSolidColorBrush(&D2D1_COLOR_F { r, g, b, a: carlui_ui::tone::ink_alpha(0.92) }, None)?;
-            for (k, c) in glyphs.iter().enumerate() {
+            for (k, (c, alpha)) in glyphs.iter().enumerate() {
                 let t: Vec<u16> = carlui_core::os::glyph(*c).to_string().encode_utf16().collect();
                 let x = k as f32 * cell;
                 let rect = D2D_RECT_F { left: x, top: 0.0, right: x + cell, bottom: h };
+                brush.SetOpacity(*alpha);
                 dc.DrawText(&t, &icon_f, &rect, &brush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
             }
+            brush.SetOpacity(1.0);
             let mid = h / 2.0;
             for (txt, top) in [(&time, mid - line - 1.0 * s), (&date, mid + 1.0 * s)] {
                 let t: Vec<u16> = txt.encode_utf16().collect();
@@ -260,20 +318,16 @@ impl Dock {
             return Some(Part::Clock);
         }
         // Simgeler arasındaki boşluk son simgeye sayılır.
-        let k = (la / st.cell.max(1.0)) as usize;
-        Some(match k {
-            0 => Part::Net,
-            1 => Part::Volume,
-            _ if st.sig.battery.is_some() => Part::Battery,
-            _ => Part::Volume,
-        })
+        let parts = st.parts();
+        let k = ((la / st.cell.max(1.0)) as usize).min(parts.len() - 1);
+        Some(parts[k])
     }
 
     /// Simge hücresinin ekran dikdörtgeni ve dock'un üst kenarı (tray paneli
     /// balonu bu simgeden çıkar).
     pub fn status_rect(&self, part: Part) -> (RECT, i32) {
         let (cell, k) = match &self.status {
-            Some(st) => (st.cell, if part == Part::Volume { 1.0 } else { 0.0 }),
+            Some(st) => (st.cell, st.index_of(part) as f32),
             None => (0.0, 0.0),
         };
         let l = (self.len / 2.0 + self.status_left() + cell * k) as i32 + self.wpos.0;

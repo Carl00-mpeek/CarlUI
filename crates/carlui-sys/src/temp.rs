@@ -6,7 +6,15 @@
 //!
 //! Okumayı yönetici olarak çalışan `carlui-sensors.exe` yapar ve sonucu
 //! paylaşılan belleğe yazar; ada ve görev yöneticisi yetkisiz olarak oradan
-//! okur (`read`). Sürücü ya da yardımcı yoksa `None` döner, arayüz "—" gösterir.
+//! okur (`read`).
+//!
+//! PawnIO isteğe bağlıdır. O yoksa `read` sürücü gerektirmeyen yollara düşer,
+//! sırasıyla:
+//! 1. `hwinfo`: HWiNFO çalışıyorsa onun paylaşılan belleği (doğru, AMD'de de).
+//! 2. `acpi`: Windows'un ACPI ısı bölgesi sayacı (yaklaşık; sabit değer
+//!    yazan anakartlarda kendiliğinden devre dışı kalır).
+//!
+//! Hiçbiri yoksa `None` döner, arayüz "—" gösterir.
 
 use std::mem::size_of;
 use windows::{
@@ -23,15 +31,31 @@ use windows::{
     },
 };
 
+mod acpi;
+mod hwinfo;
+
 pub const SHARED_NAME: PCWSTR = w!("Local\\CarlUI.Temps");
 const MAGIC: u32 = 0x4341_5254;
 const MAX: usize = 64;
 
+/// Sıcaklığın nereden geldiği; arayüz doğruluğunu buna göre anlatır.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Source {
+    /// CarlUI Sensors + PawnIO: çekirdeğin kendi kaydı (en doğru).
+    #[default]
+    Msr,
+    /// HWiNFO'nun paylaşılan belleği (doğru; HWiNFO açık olmalı).
+    Hwinfo,
+    /// ACPI ısı bölgesi (yaklaşık; çekirdek değil, anakart/dizüstü algılayıcısı).
+    Acpi,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Temps {
     pub package: f32,
-    /// Fiziksel çekirdek başına (çekirdek numarası sırasıyla).
+    /// Fiziksel çekirdek başına (çekirdek numarası sırasıyla). ACPI'de boş.
     pub cores: Vec<f32>,
+    pub source: Source,
 }
 
 #[repr(C)]
@@ -58,8 +82,18 @@ pub fn intel() -> bool {
     (id.ebx, id.edx, id.ecx) == (0x756E_6547, 0x4965_6E69, 0x6C65_746E) // "GenuineIntel"
 }
 
-/// Paylaşılan bellekten son ölçüm (5 sn'den eskiyse yok sayılır).
+/// En iyi kaynaktan son ölçüm: CarlUI Sensors → HWiNFO → ACPI ısı bölgesi.
 pub fn read() -> Option<Temps> {
+    reader().or_else(hwinfo::read).or_else(acpi::read)
+}
+
+/// Yalnızca CarlUI Sensors'ın (PawnIO) ölçümü var mı: okuyucu çalışıyor mu?
+pub fn reader_live() -> bool {
+    reader().is_some()
+}
+
+/// Paylaşılan bellekten son ölçüm (5 sn'den eskiyse yok sayılır).
+fn reader() -> Option<Temps> {
     unsafe {
         let h = OpenFileMappingW(FILE_MAP_READ.0, false, SHARED_NAME).ok()?;
         let v = MapViewOfFile(h, FILE_MAP_READ, 0, 0, size_of::<Shared>());
@@ -69,7 +103,7 @@ pub fn read() -> Option<Temps> {
             let s = *(v.Value as *const Shared);
             let _ = UnmapViewOfFile(v);
             (s.magic == MAGIC && GetTickCount64().saturating_sub(s.tick) < 5000 && s.package > 0.0)
-                .then(|| Temps { package: s.package, cores: s.cores[..(s.count as usize).min(MAX)].to_vec() })
+                .then(|| Temps { package: s.package, cores: s.cores[..(s.count as usize).min(MAX)].to_vec(), source: Source::Msr })
         };
         let _ = CloseHandle(h);
         out
@@ -190,7 +224,7 @@ impl Msr {
     pub fn read(&self) -> Option<Temps> {
         let cores: Vec<f32> = self.probes.iter().map(|&c| self.on_cpu(c, IA32_THERM_STATUS).and_then(|v| self.decode(v)).unwrap_or(0.0)).collect();
         let package = self.on_cpu(0, IA32_PACKAGE_THERM_STATUS).and_then(|v| self.decode(v)).unwrap_or_else(|| cores.iter().copied().fold(0.0, f32::max));
-        (package > 0.0).then_some(Temps { package, cores })
+        (package > 0.0).then_some(Temps { package, cores, source: Source::Msr })
     }
 }
 

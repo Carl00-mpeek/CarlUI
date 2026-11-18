@@ -64,9 +64,9 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Error::Random => crate::t!("Rastgele sayı üretilemedi.", "Couldn't generate random bytes."),
-            Error::BadKey => crate::t!("Passkey anahtarı bozuk.", "The passkey key is damaged."),
-            Error::BadInput => crate::t!("Sitenin passkey isteği geçersiz.", "The site's passkey request is invalid."),
+            Error::Random => carlui_core::t!("Rastgele sayı üretilemedi.", "Couldn't generate random bytes."),
+            Error::BadKey => carlui_core::t!("Passkey anahtarı bozuk.", "The passkey key is damaged."),
+            Error::BadInput => carlui_core::t!("Sitenin passkey isteği geçersiz.", "The site's passkey request is invalid."),
         })
     }
 }

@@ -191,7 +191,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     let a = &cfg.alerts;
     let deg = |v: f32| format!("{v:.0} °C");
     // Gereksinim (CarlUI Sensors) kartta görünür kalır.
-    f.toggle_sub(p, t!("CPU ısınınca", "When the CPU gets hot"), "", t!("CPU sıcaklığı için CarlUI Sensors gerekir.", "CPU temperature needs CarlUI Sensors."), None, a.cpu, |c| c.alerts.cpu ^= true);
+    f.toggle_sub(p, t!("CPU ısınınca", "When the CPU gets hot"), "", t!("CPU sıcaklığı CarlUI Sensors, HWiNFO ya da ACPI ısı bölgesinden okunur; okunamazsa uyarı gelmez.", "CPU temperature comes from CarlUI Sensors, HWiNFO or the ACPI thermal zone; no alert if none is available."), None, a.cpu, |c| c.alerts.cpu ^= true);
     if a.cpu {
         f.slider(p, t!("CPU sınırı", "CPU limit"), "", a.cpu_temp as f32, 60.0, 105.0, 1.0, deg, |c, v| c.alerts.cpu_temp = v as u32);
     }

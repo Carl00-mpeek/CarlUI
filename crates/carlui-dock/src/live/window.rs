@@ -36,10 +36,16 @@ extern "system" fn perch_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
 
 unsafe fn create_window() -> Result<HWND> {
     static CLASS: Once = Once::new();
-    let instance = GetModuleHandleW(None)?;
     // Kum havuzu ayrı sınıf adı kullanır (gerçek dock'un tüneğiyle karışmasın).
     let class = if crate::sandbox::on() { w!("CarlUI.DockSandboxPet") } else { w!("CarlUI.DockPet") };
-    CLASS.call_once(|| {
+    overlay_window(class, &CLASS)
+}
+
+/// Tıklamayı geçiren, odak almayan, saydam katman penceresi (gizli başlar).
+/// Sınıf ilk çağrıda bir kez kaydedilir.
+pub(super) unsafe fn overlay_window(class: PCWSTR, once: &'static Once) -> Result<HWND> {
+    let instance = GetModuleHandleW(None)?;
+    once.call_once(|| {
         RegisterClassW(&WNDCLASSW { lpfnWndProc: Some(perch_proc), hInstance: instance.into(), lpszClassName: class, ..Default::default() });
     });
     let hwnd = CreateWindowExW(

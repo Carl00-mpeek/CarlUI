@@ -59,27 +59,9 @@ pub mod entry;
 pub mod export;
 pub(crate) mod hex;
 pub mod import;
-pub mod lang;
 pub mod passkey;
 pub mod recovery;
 pub mod throttle;
 pub mod token;
 pub mod totp;
 pub mod vault;
-
-/// İki dilli metin: `t!("Ayarlar", "Settings")`. Windows'ta CarlUI'nin ortak
-/// dil ayarı kullanılır; başka sistemlerde `lang` modülü.
-#[cfg(windows)]
-pub use carlui_core::t;
-
-#[cfg(not(windows))]
-#[macro_export]
-macro_rules! t {
-    ($tr:expr, $en:expr $(,)?) => {
-        if $crate::lang::is_tr() {
-            $tr
-        } else {
-            $en
-        }
-    };
-}

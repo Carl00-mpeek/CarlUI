@@ -16,6 +16,8 @@ mod droplets;
 mod droplets_view;
 mod fade;
 mod gpu;
+mod ledge;
+mod ledge_view;
 mod load;
 mod mix;
 mod pack;
@@ -123,6 +125,10 @@ pub struct Live {
     music: bool,
     windows: usize,
     stats: Option<Stats>,
+    /// Kar birikintisi / yağmur ıslaklığı (yalnız kar ya da yağmur varken, eriyene dek).
+    ledge: Option<ledge_view::LedgeView>,
+    /// Dock altta: pill'in üstü de kar tutar.
+    bottom: bool,
 }
 
 impl Live {
@@ -163,6 +169,8 @@ impl Live {
             music: false,
             windows,
             stats: std::env::var_os("CARLUI_LIVE_DEBUG").map(|_| Stats { since: now, frames: 0, total: Duration::ZERO, max: Duration::ZERO }),
+            ledge: None,
+            bottom: pet_allowed,
         };
         if cfg.has_pet() && !pet_allowed {
             info!("canlı dock: evcil hayvan yalnızca alttaki dock'ta");
@@ -199,6 +207,7 @@ impl Live {
         let old = self.scene.take();
         let Some(resolved) = resolved else {
             self.begin_fade(old);
+            self.sync_ledge(gfx, dock);
             return;
         };
         let view = dock.live_view();
@@ -209,6 +218,35 @@ impl Live {
         self.begin_fade(old);
         self.scene_last = Instant::now();
         self.scene_due = self.scene_last;
+        self.sync_ledge(gfx, dock);
+    }
+
+    /// Sahne kar ya da yağmursa kenar birikintisini kurar; değilse eritmeye bırakır.
+    fn sync_ledge(&mut self, gfx: &Gfx, dock: &Dock) {
+        let mode = self.scene.as_ref().and_then(|s| {
+            let m = match s.resolved.kind {
+                particles::Kind::Snow => ledge_view::Mode::Snow,
+                particles::Kind::Rain => ledge_view::Mode::Rain,
+                _ => return None,
+            };
+            Some((m, (s.resolved.mix.level.unwrap_or(60) as f32 / 100.0).clamp(0.15, 1.0)))
+        });
+        if self.ledge.is_none() {
+            if mode.is_none() {
+                return;
+            }
+            match ledge_view::LedgeView::new(gfx, &dock.live_view(), self.cfg.intensity) {
+                Ok(l) => self.ledge = Some(l),
+                Err(e) => {
+                    warn!("canlı dock: kar katmanı kurulamadı: {e}");
+                    return;
+                }
+            }
+        }
+        if let Some(l) = self.ledge.as_mut() {
+            l.set_mode(mode);
+            l.show(self.state.visible());
+        }
     }
 
     fn signals(&self) -> Signals {
@@ -238,6 +276,9 @@ impl Live {
         if let Some(p) = self.perch.as_mut() {
             p.show(st.visible());
             p.set_live(st == State::Running);
+        }
+        if let Some(l) = self.ledge.as_mut() {
+            l.show(st.visible());
         }
         match st {
             State::Running => {
@@ -285,6 +326,13 @@ impl Live {
         if let Some(p) = self.perch.as_mut() {
             p.render(dock.live_pill());
         }
+        let pill = self.bottom.then(|| dock.live_pill());
+        if let Some(l) = self.ledge.as_mut() {
+            if let Err(e) = l.settle(gfx, pill) {
+                warn!("canlı dock: kar katmanı çizilemedi: {e}");
+                self.ledge = None;
+            }
+        }
     }
 
     /// Saat kipinde dakika değiştiyse bölümü yeniden çözer.
@@ -325,6 +373,17 @@ impl Live {
         }
         // Sahne geçişi sürüyorsa kareler sıklaşır (sahne aralığı seyrek olsa da).
         self.step_fades(now);
+        let lpill = self.bottom.then_some(pill);
+        if let Some(l) = self.ledge.as_mut() {
+            match l.step(gfx, now, lpill) {
+                Ok(()) if l.finished() => self.ledge = None,
+                Ok(()) => {}
+                Err(e) => {
+                    warn!("canlı dock: kar katmanı çizilemedi: {e}");
+                    self.ledge = None;
+                }
+            }
+        }
         if let Some(p) = self.perch.as_mut() {
             if now >= self.pet_due {
                 let dt = (now - self.pet_last).as_secs_f32();
@@ -347,6 +406,10 @@ impl Live {
         }
         if self.perch.is_some() {
             let d = self.pet_due.saturating_duration_since(now);
+            want = Some(want.map_or(d, |w| w.min(d)));
+        }
+        if let Some(l) = self.ledge.as_ref() {
+            let d = l.due().saturating_duration_since(now);
             want = Some(want.map_or(d, |w| w.min(d)));
         }
         let ms = want.map(|d| d.as_millis().min(u32::MAX as u128) as u32);

@@ -13,6 +13,9 @@ impl Panel {
             // Önce bilinen liste görünür; tarama bitince liste yenilenir.
             self.scan_later(3500, true);
         }
+        if self.mode == Mode::Bt {
+            self.bt_later(None);
+        }
         self.open_with(gfx, host, button, dock_top, true)
     }
 
@@ -123,6 +126,7 @@ impl Panel {
         let glyph = match self.mode {
             Mode::Sound => Some('\u{E767}'),
             Mode::Net => Some(if carlui_core::wired::wired_up() { '\u{E839}' } else { '\u{E701}' }),
+            Mode::Bt => Some('\u{E702}'),
             _ => None,
         };
         let (chevron, cw, ch) = match glyph {

@@ -64,7 +64,7 @@ impl Kind {
 
     pub fn title(self) -> &'static str {
         match self {
-            Kind::Encrypted => crate::t!("Şifreli (.carlvault)", "Encrypted (.carlvault)"),
+            Kind::Encrypted => carlui_core::t!("Şifreli (.carlvault)", "Encrypted (.carlvault)"),
             Kind::Csv => "CSV",
             Kind::Json => "JSON",
         }
@@ -222,7 +222,7 @@ pub fn open(data: &[u8], password: &str) -> Result<Restored> {
         items.push(Imported { meta: it.meta.clone(), body });
         files.push(file);
     }
-    let batch = Batch { source: crate::t!("Carl Vault yedeği", "Carl Vault backup").to_string(), items, skipped };
+    let batch = Batch { source: carlui_core::t!("Carl Vault yedeği", "Carl Vault backup").to_string(), items, skipped };
     Ok(Restored { batch, files })
 }
 

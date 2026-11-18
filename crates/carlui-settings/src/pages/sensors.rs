@@ -40,14 +40,27 @@ fn state(live: bool, intel: bool, driver: bool) -> State {
 }
 
 pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
-    let st = state(temp::read().is_some(), temp::intel(), temp::driver_installed());
+    let live = temp::reader_live();
+    let st = state(live, temp::intel(), temp::driver_installed());
     let label = t!("CPU sıcaklığı okuyucusu", "CPU temperature reader");
-    let text = match st {
+    let base = match st {
         State::Live => t!("Çalışıyor.", "Running."),
-        State::NotIntel => t!("Şimdilik yalnızca Intel işlemcilerde çalışır.", "Only works on Intel CPUs for now."),
-        State::NoDriver => t!("PawnIO sürücüsü gerekir; kurduktan sonra buradan aç.", "Needs the PawnIO driver; turn this on here after installing it."),
+        State::NotIntel => t!("PawnIO okuyucusu şimdilik yalnızca Intel işlemcilerde çalışır.", "The PawnIO reader only works on Intel CPUs for now."),
+        State::NoDriver => t!("İsteğe bağlı: PawnIO sürücüsüyle çekirdeğin kendi sıcaklığı okunur.", "Optional: with the PawnIO driver the core's own temperature is read."),
         State::Ready => t!("PawnIO kurulu, okuyucu çalışmıyor. Bir kez yönetici izni ister.", "PawnIO is installed but the reader isn't running. Asks for admin rights once."),
     };
+    // Okuyucu yokken sürücüsüz kaynaklardan biri (HWiNFO, ACPI) iş görüyor olabilir.
+    let fallback = if live {
+        ""
+    } else {
+        match temp::read().map(|t| t.source) {
+            Some(temp::Source::Hwinfo) => t!(" Şu an sürücüsüz olarak HWiNFO'dan okunuyor.", " Currently read from HWiNFO, no driver needed."),
+            Some(temp::Source::Acpi) => t!(" Şu an sürücüsüz olarak ACPI ısı bölgesinden okunuyor (yaklaşık).", " Currently read from the ACPI thermal zone, no driver needed (approximate)."),
+            _ => t!(" Sürücüsüz bir kaynak bulunamadı (HWiNFO açık değil, ısı bölgesi yok ya da sabit); sıcaklık \"—\" görünür.", " No driver-free source found (HWiNFO not running, thermal zone missing or fixed); temperature shows \"—\"."),
+        }
+    };
+    let text = format!("{base}{fallback}");
+    let text = text.as_str();
     // Canlıysa eski bir hata iletisi kalmasın.
     let desc = app.sensor_note.as_deref().filter(|_| st != State::Live).unwrap_or(text);
     let button = match st {
@@ -87,7 +100,7 @@ pub fn setup(owner: HWND) -> Option<String> {
     // Görev başlayıp ilk ölçümü yazana kadar kısa bir süre tanı.
     let end = Instant::now() + Duration::from_secs(4);
     while Instant::now() < end {
-        if temp::read().is_some() {
+        if temp::reader_live() {
             return None;
         }
         std::thread::sleep(Duration::from_millis(200));

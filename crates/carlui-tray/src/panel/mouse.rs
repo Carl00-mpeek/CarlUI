@@ -173,11 +173,29 @@ impl Panel {
         None
     }
 
-    pub fn right_click(&self, x: i32, y: i32) -> Option<usize> {
-        match self.hit(x, y) {
-            Hit::Cell(i) => self.cells.get(i).map(|c| c.icon),
-            _ => None,
+    /// Sağ tık. Dönüş: menüsü açılacak tepsi ikonunun indeksi. Ağ satırları ve
+    /// hızlı kutucuklar burada kendi işini yapar (None döner).
+    pub fn right_click(&mut self, x: i32, y: i32) -> Option<usize> {
+        let close = match self.hit(x, y) {
+            Hit::Cell(i) => return self.cells.get(i).map(|c| c.icon),
+            Hit::Net(i) => self.net_right_click(i),
+            Hit::Wifi => {
+                net::open_uri("ms-settings:network");
+                true
+            }
+            Hit::Bluetooth => {
+                net::open_uri("ms-settings:bluetooth");
+                true
+            }
+            _ => false,
+        };
+        // Açılan Windows penceresi panelin altında kalmasın: panel kapanır.
+        if close {
+            unsafe {
+                let _ = PostMessageW(self.hwnd, WM_APP_OUTSIDE, WPARAM(0), LPARAM(0));
+            }
         }
+        None
     }
 
     /// Panel açıkken ikon listesi ya da parlaklık desteği değişti: paneli

@@ -106,9 +106,11 @@ pub unsafe fn draw(dc: &ID2D1DeviceContext, sp: Sprite, p: &Palette) -> Result<(
             dc.FillRoundedRectangle(&rr, &b);
         }
         Sprite::Flake => {
-            // Dolu çekirdek + yumuşak hale: küçük boyda bile seçilir.
-            glow(dc, cx, cy, 7.5, 7.5, p.flake, 0.9, 0.0)?;
-            ellipse(dc, cx, cy, 4.6, 4.6, p.flake, 1.0)?;
+            // Geniş yumuşak hale + yuvarlak çekirdek + parlak merkez: küçük boyda
+            // bile seçilir, büyükte pamuk gibi durur.
+            glow(dc, cx, cy, 7.8, 7.8, p.flake, 0.55, 0.0)?;
+            glow(dc, cx, cy, 4.6, 4.6, p.flake, 1.0, 0.75)?;
+            ellipse(dc, cx, cy, 2.0, 2.0, (255, 255, 255), 1.0)?;
         }
         Sprite::Star => {
             glow(dc, cx, cy, 7.5, 7.5, p.star, 0.7, 0.0)?;

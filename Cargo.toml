@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/carlui-core", "crates/carlui-ui", "crates/carlui", "crates/carlui-dock", "crates/carlui-tray", "crates/carlui-island", "crates/carlui-launcher", "crates/carlui-clip", "crates/carlui-sys", "crates/carlui-sensors", "crates/carlui-taskmgr", "crates/carlui-convert", "crates/carlui-settings", "crates/carlui-start", "crates/carlui-setup", "crates/carlui-vault",
-    "crates/carlui-remover", "crates/carlui-office", "crates/carlui-tools", "crates/carlui-expand", "crates/carlui-replay", "crates/carlui-ai", "crates/carlui-vault-linux"]
+    "crates/carlui-remover", "crates/carlui-office", "crates/carlui-tools", "crates/carlui-expand", "crates/carlui-replay", "crates/carlui-ai"]
 
 [workspace.package]
 version = "1.1.10"
@@ -77,6 +77,8 @@ features = [
     "Win32_NetworkManagement_WiFi",
     "Devices",
     "Devices_Radios",
+    "Devices_Bluetooth",
+    "Devices_Enumeration",
     "ApplicationModel",
     "Media",
     "Media_Control",

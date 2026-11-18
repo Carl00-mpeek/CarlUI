@@ -35,7 +35,7 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
     let sw = R::new(area.right() - 240.0, area.y + 2.0, 240.0, 30.0);
     p.segments(sw, &[(t!("Basit", "Simple"), Act::CpuDetail(false)), (t!("Ayrıntılı", "Detailed"), Act::CpuDetail(true))], app.cpu_detail as usize);
 
-    let temp = sm.temps.as_ref().map(|t| t.package).filter(|t| *t > 0.0);
+    let temp = sm.temps.as_ref().filter(|t| t.package > 0.0).map(|t| (t.package, source_label(t.source)));
     if !app.cpu_detail {
         let g = R::new(area.x, area.y + 50.0, area.w, (area.h - 50.0 - 190.0).max(150.0));
         p.text(&format!("{} {}", t!("Kullanım", "Usage"), carlui_core::lang::pct(sm.now.usage)), R::new(g.x, g.y - 2.0, 200.0, 22.0), 12.0, false, TEXT, 0.6, Align::Left);
@@ -46,8 +46,8 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
         stat(p, cards[0], t!("Kullanım", "Usage"), &carlui_core::lang::pct(sm.now.usage), "", None);
         stat(p, cards[1], t!("Hız", "Speed"), &format!("{:.2} GHz", sm.now.mhz / 1000.0), "", None);
         match temp {
-            Some(t) => stat(p, cards[2], t!("Sıcaklık", "Temperature"), &format!("{t:.0} °C"), t!("paket", "package"), Some(temp_color(t))),
-            None => stat(p, cards[2], t!("Sıcaklık", "Temperature"), "—", t!("sensör sürücüsü kurulu değil", "sensor driver not installed"), None),
+            Some((t, src)) => stat(p, cards[2], t!("Sıcaklık", "Temperature"), &format!("{t:.0} °C"), src, Some(temp_color(t))),
+            None => stat(p, cards[2], t!("Sıcaklık", "Temperature"), "—", t!("okunamıyor", "not available"), None),
         }
         let cards = stat_row(area, g.bottom() + 106.0, 3, 82.0);
         let cores = if e_cores.is_empty() { format!("{}", p_cores.len()) } else { format!("{}P + {}E", p_cores.len(), e_cores.len()) };
@@ -87,4 +87,14 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
         }
     }
     0.0
+}
+
+/// Sıcaklık kartının alt satırı: değerin nereden geldiği ve ne kadar doğru olduğu.
+fn source_label(s: carlui_sys::temp::Source) -> &'static str {
+    use carlui_sys::temp::Source;
+    match s {
+        Source::Msr => t!("paket", "package"),
+        Source::Hwinfo => t!("paket · HWiNFO", "package · HWiNFO"),
+        Source::Acpi => t!("ACPI ısı bölgesi · yaklaşık", "ACPI thermal zone · approx."),
+    }
 }

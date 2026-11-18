@@ -99,7 +99,7 @@ pub fn title(hwnd: HWND) -> String {
     String::from_utf16_lossy(&buf[..n.max(0) as usize])
 }
 
-fn is_cloaked(hwnd: HWND) -> bool {
+pub(crate) fn is_cloaked(hwnd: HWND) -> bool {
     let mut v = 0u32;
     unsafe {
         DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &mut v as *mut _ as *mut _, 4).is_ok() && v != 0
@@ -107,7 +107,7 @@ fn is_cloaked(hwnd: HWND) -> bool {
 }
 
 /// Alt+Tab'da görünecek türden bir uygulama penceresi mi?
-fn is_app_window(hwnd: HWND, own_pid: u32) -> bool {
+pub(crate) fn is_app_window(hwnd: HWND, own_pid: u32) -> bool {
     unsafe {
         if !IsWindowVisible(hwnd).as_bool() || GetWindowTextLengthW(hwnd) == 0 {
             return false;
@@ -305,8 +305,14 @@ pub fn activate(hwnd: HWND) {
             // pencereye (çoğu oyun istemcisi) ShowWindow ulaşmayabiliyor; eskiden
             // pencere öne geçip simge durumunda kalıyordu. Ağır yük altındaki
             // oyun geri yüklemeyi geç işlese de istek kuyrukta bekler.
+            //
+            // Küçültülmeden önce ekranı kaplıyorsa ekranı kaplayarak açılmalı:
+            // SwitchToThisWindow pencereyi zaten ekranı kaplar hâle getirmiş
+            // olabilir; o durumda SW_RESTORE "geri yükle" boyutuna küçültürdü.
+            let mut wp = WINDOWPLACEMENT { length: std::mem::size_of::<WINDOWPLACEMENT>() as u32, ..Default::default() };
+            let maximized = GetWindowPlacement(hwnd, &mut wp).is_ok() && (wp.flags & WPF_RESTORETOMAXIMIZED) == WPF_RESTORETOMAXIMIZED;
             SwitchToThisWindow(hwnd, true);
-            let _ = ShowWindowAsync(hwnd, SW_RESTORE);
+            let _ = ShowWindowAsync(hwnd, if maximized { SW_SHOWMAXIMIZED } else { SW_RESTORE });
         }
         // Pencerenin açık bir iletişim kutusu varsa o öne gelsin (giriş ekranı vb.).
         let popup = GetLastActivePopup(hwnd);

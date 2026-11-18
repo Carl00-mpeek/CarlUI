@@ -24,6 +24,7 @@ impl Panel {
         let mut y = pad;
         match self.mode {
             Mode::Net => return Ok(self.build_net(gfx, content)?.round()),
+            Mode::Bt => return Ok(self.build_bt(gfx, content)?.round()),
             Mode::Sound => {
                 // Yalnızca ses: ana kaydırıcı, çıkış aygıtları ve uygulama sesleri.
                 y = self.volume_row(gfx, content, y, false)?;

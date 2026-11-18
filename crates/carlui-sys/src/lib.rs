@@ -8,7 +8,7 @@
 //! - `disk`: disk başına etkinlik, okuma/yazma hızı, NVMe sağlık kaydı ve sıcaklık.
 //! - `net`: fiziksel ağ bağdaştırıcılarından alınan toplam bayt.
 //! - `process`: süreç listesi, durdur/sürdür/sonlandır.
-//! - `temp`: CPU paket ve çekirdek sıcaklıkları (PawnIO sürücüsü kuruluysa).
+//! - `temp`: CPU sıcaklığı: PawnIO okuyucusu, yoksa HWiNFO ya da ACPI ısı bölgesi.
 
 #[macro_use]
 extern crate carlui_core;

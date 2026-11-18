@@ -64,11 +64,13 @@ pub struct P {
     goal: f32,
     phase: f32,
     sliding: bool,
+    /// Derinlik 0 (uzak) .. 1 (yakın): kar tanesinin boyu, hızı ve parlaklığı buna bağlı.
+    z: f32,
 }
 
 impl P {
     fn new(sprite: Sprite) -> Self {
-        Self { sprite, x: 0.0, y: 0.0, r: 1.0, len: 1.0, a: 0.0, vx: 0.0, vy: 0.0, goal: 0.0, phase: 0.0, sliding: false }
+        Self { sprite, x: 0.0, y: 0.0, r: 1.0, len: 1.0, a: 0.0, vx: 0.0, vy: 0.0, goal: 0.0, phase: 0.0, sliding: false, z: 0.0 }
     }
 }
 
@@ -85,6 +87,12 @@ pub struct Sim {
 
 /// Bir adımda en çok bu kadar saniye ilerlenir (duraklatmadan dönüşte sıçrama olmasın).
 const MAX_DT: f32 = 0.25;
+/// Kar tanesinin saydamlığı: uzak taneler soluk, yakınlar parlak ve hafifçe
+/// parıldar (`wave` -1..1 salınım).
+fn flake_alpha(z: f32, wave: f32) -> f32 {
+    let base = 0.35 + z * 0.6;
+    base * (1.0 - 0.15 * z + 0.15 * z * wave)
+}
 /// Ayın en büyük yarıçapı (ölçek 1'de piksel).
 const MOON_R: f32 = 14.0;
 
@@ -191,12 +199,16 @@ impl Sim {
             }
             Sprite::Flake => {
                 p.x = r.range(0.0, w);
-                p.r = r.range(1.6, 3.2) * s;
+                // Çoğu tane uzakta (küçük, yavaş, soluk); azı yakında (iri, hızlı, parlak).
+                let z = r.f() * r.f().sqrt();
+                p.z = z;
+                p.r = (1.0 + z * 2.6) * s;
                 p.y = if first { r.range(0.0, h) } else { -p.r - r.range(0.0, h * 0.5) };
-                p.vy = (8.0 + p.r / s * 6.0) * s;
-                p.goal = r.range(4.0, 10.0) * s;
+                p.vy = (6.0 + z * 16.0) * s * r.range(0.85, 1.15);
+                p.goal = (3.0 + z * 8.0) * s;
+                p.vx = r.range(0.8, 1.8);
                 p.phase = r.range(0.0, 6.28);
-                p.a = r.range(0.7, 1.0);
+                p.a = flake_alpha(z, 0.0);
             }
             Sprite::Moon => {
                 // Solda (sağ uçta saat yazısı var, okunurluğu bozmasın); hiç hareket etmez.
@@ -274,8 +286,11 @@ impl Sim {
                     p.y - p.r * p.len > h || p.x - p.r > w
                 }
                 Sprite::Flake => {
+                    // Ortak, yavaşça dönen rüzgâr; yakın taneler onu daha çok hisseder (paralaks).
+                    let wind = (t * 0.23).sin() * 0.6 + (t * 0.71 + 1.3).sin() * 0.4;
                     p.y += p.vy * dt;
-                    p.x += (t * 1.3 + p.phase).sin() * p.goal * dt;
+                    p.x += (wind * (8.0 + p.z * 14.0) * s + (t * p.vx + p.phase).sin() * p.goal) * dt;
+                    p.a = flake_alpha(p.z, (t * 3.0 + p.phase).sin());
                     if p.x < -p.r {
                         p.x += w + 2.0 * p.r;
                     } else if p.x > w + p.r {
