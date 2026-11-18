@@ -52,7 +52,7 @@ pub enum ImportError {
 
 impl std::fmt::Display for ImportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use carlui_core::t;
+        use crate::t;
         match self {
             ImportError::Empty => f.write_str(t!("Dosyada içe aktarılacak kayıt bulunamadı.", "No items to import were found in the file.")),
             ImportError::TooBig => f.write_str(t!("Dosya çok büyük (en çok 20 MB).", "The file is too large (20 MB at most).")),
@@ -126,7 +126,7 @@ fn uri_lines(t: &str) -> Batch {
 }
 
 fn t_(tr: &str, en: &str) -> String {
-    carlui_core::t!(tr, en).to_string()
+    crate::t!(tr, en).to_string()
 }
 
 /// Adresin makinesi ("https://www.github.com/login" → "github.com").
@@ -172,7 +172,7 @@ pub struct Login<'a> {
 }
 
 pub fn login(l: Login) -> Imported {
-    use carlui_core::t;
+    use crate::t;
     // Gmail, Outlook gibi sağlayıcıların girişi e-posta hesabıdır.
     let mail = crate::autofill::is_mail_site(l.url);
     let user_label = if mail { t!("E-posta adresi", "Email address") } else { t!("Kullanıcı adı", "Username") };
@@ -191,13 +191,13 @@ pub fn login(l: Login) -> Imported {
 
 /// Güvenli not.
 pub fn note(name: &str, text: &str) -> Imported {
-    let fields = vec![field(carlui_core::t!("Not", "Note"), text.trim(), FieldKind::Multiline)];
+    let fields = vec![field(crate::t!("Not", "Note"), text.trim(), FieldKind::Multiline)];
     Imported { meta: meta(name_or(name, "", ""), Category::Note), body: Body { fields, file: None, passkeys: Vec::new() } }
 }
 
 /// 2FA kaydı: anahtar alanına otpauth adresinin tamamı (hane/süre/algoritma korunur).
 pub fn two_factor(issuer: &str, account: &str, uri: &str) -> Imported {
-    use carlui_core::t;
+    use crate::t;
     let name = if issuer.trim().is_empty() { name_or(account, "", "") } else { issuer.trim().to_string() };
     let fields = vec![
         field(t!("Hesap", "Account"), account.trim(), FieldKind::Text),
@@ -334,7 +334,7 @@ login.live.com,https://login.live.com/,carl@outlook.com,p3,
         let b = parse(csv.as_bytes()).unwrap();
         let cats: Vec<_> = b.items.iter().map(|i| i.meta.category).collect();
         assert_eq!(cats, [Category::Email, Category::Password, Category::Email]);
-        assert_eq!(b.items[0].body.fields[0].label, carlui_core::t!("E-posta adresi", "Email address"));
+        assert_eq!(b.items[0].body.fields[0].label, crate::t!("E-posta adresi", "Email address"));
     }
 
     #[test]

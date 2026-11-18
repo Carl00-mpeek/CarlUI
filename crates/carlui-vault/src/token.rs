@@ -8,7 +8,11 @@
 use crate::{crypto, hex};
 use zeroize::Zeroizing;
 
+#[cfg(windows)]
 pub use carlui_core::vaultlink::TTL_MS;
+/// Belirtecin varsayılan ömrü (Windows'ta `vaultlink` ile aynı değer).
+#[cfg(not(windows))]
+pub const TTL_MS: i64 = 60_000;
 
 /// Aynı anda en çok bu kadar belirteç; fazlası en eskiden silinir.
 const MAX: usize = 16;

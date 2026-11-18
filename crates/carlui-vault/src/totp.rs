@@ -32,7 +32,7 @@ pub enum TotpError {
 
 impl std::fmt::Display for TotpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use carlui_core::t;
+        use crate::t;
         f.write_str(match self {
             TotpError::Empty => t!("Gizli anahtar boş.", "The secret key is empty."),
             TotpError::BadSecret => t!("Gizli anahtar geçersiz (base32 olmalı).", "The secret key isn't valid (must be base32)."),

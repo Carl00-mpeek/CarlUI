@@ -13,8 +13,6 @@ name = "carlui-vault"
 path = "src/main.rs"
 
 [dependencies]
-carlui-core.workspace = true
-carlui-ui.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 argon2 = { version = "0.5", default-features = false, features = ["alloc", "zeroize"] }
@@ -26,6 +24,12 @@ sha1 = { version = "0.10", default-features = false }
 sha2 = { version = "0.10", default-features = false }
 p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
 
-[dependencies.windows]
+# Pencere (`main.rs`), ortak dil ve yerel boru yalnızca Windows'ta; kütüphane
+# Linux'ta da derlenir (bkz. `carlui-vault-linux`).
+[target.'cfg(windows)'.dependencies]
+carlui-core.workspace = true
+carlui-ui.workspace = true
+
+[target.'cfg(windows)'.dependencies.windows]
 workspace = true
 features = ["Win32_System_RemoteDesktop"]

@@ -245,7 +245,7 @@ impl Part {
     pub const ALL: [Part; 9] = [Part::Number, Part::NumberSpaced, Part::Holder, Part::Month, Part::Year2, Part::Year4, Part::MmYy, Part::MmYyyy, Part::Cvv];
 
     pub fn title(self) -> &'static str {
-        use carlui_core::t;
+        use crate::t;
         match self {
             Part::Number => t!("Numara", "Number"),
             Part::NumberSpaced => t!("Numara (boşluklu)", "Number (spaced)"),
