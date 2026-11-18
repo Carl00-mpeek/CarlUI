@@ -1,5 +1,20 @@
 # Sürüm notları
 
+## v1.1.8 — Windows 10 desteği ve Carl Vault yedeği (2026-11-18)
+
+**CarlUI 1.1.8: Windows 10 desteği ve Carl Vault yedeği.**
+
+**Yeni.** CarlUI artık Windows 10'da da çalışır. Carl Vault'a yedek ve dışa aktarma
+eklendi (Ayarlar → Güvenlik): ana parola sorulduktan sonra kasa, ana parolayla ya da
+bir kez gösterilen 24 karakterlik güçlü bir parolayla şifrelenmiş `.carlvault` dosyasına
+yedeklenir. İstenirse CSV ya da JSON seçilebilir; bunların şifresiz olduğu açıkça
+belirtilir. `.carlvault` yedeği İçe aktar'dan, ek dosyalarıyla birlikte geri yüklenir.
+
+**Düzeltmeler.** Windows 10'da cam efektinin, ethernet ve ses düğmelerinin ve ayarlardaki
+birçok simgenin görünmemesi düzeltildi: Windows 11 yazı tipleri yoksa simgeler Segoe MDL2
+Assets, metinler Segoe UI ile gösterilir; cam bulanıklığı yerine düz, hafif saydam bir
+katman kullanılır.
+
 ## v1.1.7 — Adada sahne efekti iyileştirmeleri (2026-11-12)
 
 **CarlUI 1.1.7: adada sahne efekti iyileştirmeleri.**

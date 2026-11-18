@@ -6,14 +6,14 @@
 <h1 align="center">CarlUI</h1>
 
 <p align="center">
-  A lightweight, fast desktop shell for Windows 11, written in Rust.<br>
+  A lightweight, fast desktop shell for Windows 10 and 11, written in Rust.<br>
   Floating dock, a top island for the clock, notifications and media, search, clipboard history, a control center,<br>
   the Carl Vault password manager and on-device AI.
 </p>
 
 <p align="center">
   <a href="https://github.com/Carl00-mpeek/CarlUI/releases/latest"><img src="https://img.shields.io/github/v/release/Carl00-mpeek/CarlUI?style=flat-square&color=3E8BFF" alt="Release"></a>
-  <img src="https://img.shields.io/badge/Windows-11-3E8BFF?style=flat-square" alt="Windows 11">
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-3E8BFF?style=flat-square" alt="Windows 10 | 11">
   <img src="https://img.shields.io/badge/Rust-orange?style=flat-square" alt="Rust">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT"></a>
 </p>
@@ -110,6 +110,11 @@
   - Import from Bitwarden, Chrome, Edge, Brave, Firefox, 1Password, LastPass,
     KeePass, Proton Pass, Dashlane, NordPass; for 2FA from Aegis, 2FAS,
     andOTP, otpauth lists and the Google Authenticator export QR.
+  - Backup and export (Settings → Security, asks for the master password):
+    an encrypted `.carlvault` file sealed with your master password or a
+    generated strong password that's shown once. CSV and JSON are available
+    too, with a warning that they aren't encrypted. Restore a `.carlvault`
+    from Import.
   - Locks itself after a period of inactivity, on sleep and when Windows
     locks.
 - **Area recording:** Select an area in the screenshot tool and press the
@@ -224,6 +229,12 @@ license: personal use is fine, but it can't be used for paid work (ads, paid
 voice-over). You're asked about this before it downloads.
 
 ## Install
+
+**Requirements:** Windows 10 or Windows 11, 64-bit.
+On Windows 10 everything works; only the look differs a little: the glass
+blur becomes a solid, slightly transparent layer, window corners stay square,
+and icons use Segoe MDL2 Assets and text uses Segoe UI when the Windows 11
+fonts aren't installed.
 
 1. Download `CarlUI-Setup.exe` from [Releases](https://github.com/Carl00-mpeek/CarlUI/releases/latest).
 2. Run it and click **Install**. No admin rights needed: CarlUI installs to

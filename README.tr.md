@@ -6,14 +6,14 @@
 <h1 align="center">CarlUI</h1>
 
 <p align="center">
-  Windows 11 için Rust ile yazılmış, hafif ve hızlı bir masaüstü kabuğu.<br>
+  Windows 10 ve 11 için Rust ile yazılmış, hafif ve hızlı bir masaüstü kabuğu.<br>
   Yüzen dock, üstte saat/bildirim/medya adası, arama, pano geçmişi, kontrol merkezi,<br>
   Carl Vault parola kasası ve yerel yapay zekâ.
 </p>
 
 <p align="center">
   <a href="https://github.com/Carl00-mpeek/CarlUI/releases/latest"><img src="https://img.shields.io/github/v/release/Carl00-mpeek/CarlUI?style=flat-square&label=s%C3%BCr%C3%BCm&color=3E8BFF" alt="Sürüm"></a>
-  <img src="https://img.shields.io/badge/Windows-11-3E8BFF?style=flat-square" alt="Windows 11">
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-3E8BFF?style=flat-square" alt="Windows 10 | 11">
   <img src="https://img.shields.io/badge/Rust-orange?style=flat-square" alt="Rust">
   <a href="LICENSE"><img src="https://img.shields.io/badge/lisans-MIT-green?style=flat-square" alt="MIT"></a>
 </p>
@@ -109,6 +109,10 @@
   - İçe aktarma: Bitwarden, Chrome, Edge, Brave, Firefox, 1Password, LastPass,
     KeePass, Proton Pass, Dashlane, NordPass; 2FA için Aegis, 2FAS, andOTP,
     otpauth listeleri ve Google Authenticator aktarım QR'ı.
+  - Yedek ve dışa aktarma (Ayarlar → Güvenlik, ana parola sorulur): ana
+    parolayla ya da bir kez gösterilen güçlü bir parolayla şifrelenmiş
+    `.carlvault` dosyası. İstenirse CSV ve JSON da seçilebilir; bunların
+    şifresiz olduğu belirtilir. `.carlvault` yedeği İçe aktar'dan geri yüklenir.
   - Bir süre kullanılmayınca, uykuda ve Windows kilitlenince kendiliğinden
     kilitlenir.
 - **Alan kaydı:** Ekran görüntüsü aracında alan seçip kayıt düğmesine bas
@@ -221,6 +225,12 @@ işlerde (reklam, ücretli seslendirme) kullanılamaz; indirmeden önce bu açı
 sorulur.
 
 ## Kurulum
+
+**Gereksinim:** Windows 10 veya Windows 11, 64 bit. Windows
+10'da her şey çalışır; yalnızca görünüm biraz farklıdır: cam bulanıklığı yerine
+düz, hafif saydam bir katman kullanılır, pencere köşeleri yuvarlanmaz, Windows
+11 yazı tipleri yoksa simgeler Segoe MDL2 Assets, metinler Segoe UI ile
+gösterilir.
 
 1. [Releases](https://github.com/Carl00-mpeek/CarlUI/releases/latest) sayfasından `CarlUI-Setup.exe` dosyasını indir.
 2. Çalıştır, **Kur**'a bas. Yönetici izni gerekmez; CarlUI

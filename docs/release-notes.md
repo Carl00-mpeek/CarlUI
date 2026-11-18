@@ -1,17 +1,29 @@
 ## Türkçe
 
-**CarlUI 1.1.7: adada sahne efekti iyileştirmeleri.**
+**CarlUI 1.1.8: Windows 10 desteği ve Carl Vault yedeği.**
 
-**İyileştirmeler**
-- "Adada sahne efekti" ayarı Ayarlar → Ada'nın üst bölümüne taşındı; artık kolayca bulunuyor.
-- Efektin yoğunluğu adanın hâline göre değişir: küçük adada (saat, tarih) hafif, şarkı çalarken biraz daha yoğun, bildirimde yoğun.
+**Yeni**
+- CarlUI artık Windows 10'da da çalışır.
+- Carl Vault yedeği (Ayarlar → Güvenlik): ana parola sorulduktan sonra kasa şifreli `.carlvault` dosyasına yedeklenir. Yedek ana parolayla ya da bir kez gösterilen 24 karakterlik güçlü bir parolayla şifrelenir.
+- İstenirse CSV ya da JSON olarak dışa aktarma; bu dosyaların şifresiz olduğu açıkça belirtilir.
+- `.carlvault` yedeği İçe aktar'dan, ek dosyalarıyla birlikte geri yüklenir.
+
+**Düzeltmeler**
+- Windows 10'da ethernet ve ses düğmelerinin ve ayarlardaki birçok simgenin görünmemesi düzeltildi: Windows 11 yazı tipleri yoksa Segoe MDL2 Assets ve Segoe UI kullanılır.
+- Windows 10'da cam efekti yerine düz, hafif saydam bir katman kullanılır.
 
 ---
 
 ## English
 
-**CarlUI 1.1.7: island scene effect improvements.**
+**CarlUI 1.1.8: Windows 10 support and Carl Vault backup.**
 
-**Improvements**
-- The "Scene effect on the island" setting moved to the top section of Settings → Island, so it is easy to find.
-- The effect's density follows the island's state: light on the small island (clock, date), a bit denser while music plays, dense on notifications.
+**New**
+- CarlUI now runs on Windows 10 too.
+- Carl Vault backup (Settings → Security): after asking for the master password, the vault is backed up to an encrypted `.carlvault` file, sealed with your master password or a generated 24-character password that's shown once.
+- Optional CSV or JSON export, with a clear warning that these files aren't encrypted.
+- Restore a `.carlvault` backup from Import, attachments included.
+
+**Fixes**
+- On Windows 10, the Ethernet and volume buttons and many icons in Settings were missing; CarlUI now falls back to Segoe MDL2 Assets and Segoe UI when the Windows 11 fonts aren't installed.
+- On Windows 10 the glass effect is replaced by a solid, slightly transparent layer.
