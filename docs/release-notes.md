@@ -1,19 +1,15 @@
 ## Türkçe
 
-**CarlUI 1.1.9: Windows 10 düzeltmeleri.**
+**CarlUI 1.1.10: Windows 10'da Store uygulaması simgeleri.**
 
 **Düzeltmeler**
-- Windows 10'da CarlUI pencerelerini sürüklerken yaşanan takılma giderildi: Windows 10'da işe yaramayan cam çerçevesi artık uygulanmıyor.
-- Ayarlar ve diğer CarlUI pencereleri kapatılırken çıkan "bilinmeyen yazılım özel durumu (0x0000087a)" hatası düzeltildi.
-- Carl Office ve Carl Vault pencereleri artık dock'ta görünür; simge durumuna küçültülünce dock'tan geri açılabilir ya da kapatılabilir.
+- Windows 10'da Microsoft Store'dan kurulan uygulamaların (ör. Claude) simgeleri dock'ta ve Başlat menüsünde vurgu rengindeki bir karenin içinde küçücük görünüyordu. Artık uygulamanın kendi logosu, arka plan karesi olmadan tam boyutta gösterilir.
 
 ---
 
 ## English
 
-**CarlUI 1.1.9: Windows 10 fixes.**
+**CarlUI 1.1.10: Store app icons on Windows 10.**
 
 **Fixes**
-- Dragging CarlUI windows on Windows 10 no longer stutters: the glass frame, which does nothing on Windows 10, is no longer applied there.
-- Fixed the "unknown software exception (0x0000087a)" error when closing Settings and other CarlUI windows.
-- Carl Office and Carl Vault windows now show up in the dock, so they can be restored or closed from there after being minimized.
+- On Windows 10, icons of apps installed from the Microsoft Store (e.g. Claude) showed up tiny inside an accent-coloured square in the dock and Start menu. The app's own logo is now shown at full size, without the background square.

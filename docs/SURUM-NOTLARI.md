@@ -1,5 +1,13 @@
 # Sürüm notları
 
+## v1.1.10 — Windows 10'da Store uygulaması simgeleri (2026-11-18)
+
+**CarlUI 1.1.10: Windows 10'da Store uygulaması simgeleri.**
+
+**Düzeltmeler.** Windows 10'da Microsoft Store'dan kurulan uygulamaların (ör. Claude)
+simgeleri dock'ta ve Başlat menüsünde vurgu rengindeki bir karenin içinde küçücük
+görünüyordu. Artık uygulamanın kendi logosu, arka plan karesi olmadan tam boyutta gösterilir.
+
 ## v1.1.9 — Windows 10 düzeltmeleri (2026-11-18)
 
 **CarlUI 1.1.9: Windows 10 düzeltmeleri.**
@@ -8,6 +16,9 @@
 Windows 10'da işe yaramayan cam çerçevesi artık uygulanmıyor. Ayarlar ve diğer CarlUI
 pencereleri kapatılırken çıkan "bilinmeyen yazılım özel durumu (0x0000087a)" hatası
 düzeltildi. Carl Office ve Carl Vault pencereleri artık dock'ta görünür.
+
+**SHA-256 (CarlUI-Setup.exe):**
+`d9677df2347605e1f69830b46f43ed0aaf78ca5afce15e58e41a927b68d709e0`
 
 ## v1.1.8 — Windows 10 desteği ve Carl Vault yedeği (2026-11-18)
 

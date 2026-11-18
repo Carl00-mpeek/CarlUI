@@ -30,6 +30,16 @@ fn pt(x: f32, y: f32) -> D2D_POINT_2F {
 /// hem de kesiksiz sonuç veriyor.
 pub fn shell_icon(wic: &IWICImagingFactory, path: &str, px: i32) -> Result<IWICFormatConverter> {
     let req = (px * 2).max(64);
+    // Windows 10 shell'i Store uygulamalarının logosunu vurgu rengindeki bir
+    // plakanın üstüne küçücük çiziyor (Windows 11 plakasız sürümü seçer).
+    // Paketin plakasız logosu varsa doğrudan o yüklenir.
+    if !carlui_core::os::is_win11() {
+        if let Some(png) = unplated_for_path(path, req) {
+            if let Ok(c) = png_file(wic, &png) {
+                return Ok(c);
+            }
+        }
+    }
     unsafe {
         let factory: IShellItemImageFactory = SHCreateItemFromParsingName(&HSTRING::from(path), None)?;
         let hbmp = factory.GetImage(SIZE { cx: req, cy: req }, SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK)?;
@@ -45,6 +55,93 @@ pub fn shell_icon(wic: &IWICImagingFactory, path: &str, px: i32) -> Result<IWICF
             0.0,
             WICBitmapPaletteTypeMedianCut,
         )?;
+        Ok(conv)
+    }
+}
+
+/// Paket ailesinin (AUMID'nin `!` öncesi) kurulu klasörü.
+fn package_dir(family: &str) -> Option<std::path::PathBuf> {
+    use windows::Win32::Storage::Packaging::Appx::{GetPackagePathByFullName, GetPackagesByPackageFamily};
+    unsafe {
+        let fam = HSTRING::from(family);
+        let (mut count, mut len) = (0u32, 0u32);
+        let _ = GetPackagesByPackageFamily(&fam, &mut count, None, &mut len, PWSTR::null());
+        if count == 0 || len == 0 {
+            return None;
+        }
+        let mut names = vec![PWSTR::null(); count as usize];
+        let mut buf = vec![0u16; len as usize];
+        if GetPackagesByPackageFamily(&fam, &mut count, Some(names.as_mut_ptr()), &mut len, PWSTR(buf.as_mut_ptr())) != ERROR_SUCCESS {
+            return None;
+        }
+        let full = names.first()?;
+        let mut plen = 0u32;
+        let _ = GetPackagePathByFullName(PCWSTR(full.0), &mut plen, PWSTR::null());
+        let mut p = vec![0u16; plen.max(1) as usize];
+        if GetPackagePathByFullName(PCWSTR(full.0), &mut plen, PWSTR(p.as_mut_ptr())) != ERROR_SUCCESS {
+            return None;
+        }
+        Some(String::from_utf16_lossy(&p[..plen.saturating_sub(1) as usize]).into())
+    }
+}
+
+/// `shell:AppsFolder\Aile!Id` ya da `...\WindowsApps\<paket>\...\x.exe` yolu için
+/// paketin plakasız logosu.
+fn unplated_for_path(path: &str, req: i32) -> Option<std::path::PathBuf> {
+    if let Some(aumid) = path.strip_prefix("shell:AppsFolder\\") {
+        let (family, app) = aumid.split_once('!')?;
+        return unplated_logo(&package_dir(family)?, &format!("Id=\"{app}\""), req);
+    }
+    // Electron gibi kendi AUMID'sini koyan paketli uygulamalarda dock exe yolunu verir.
+    let lower = path.to_lowercase();
+    let i = lower.find("\\windowsapps\\")? + "\\windowsapps\\".len();
+    let (pkg, exe) = path[i..].split_once('\\')?;
+    let dir = std::path::PathBuf::from(&path[..i]).join(pkg);
+    unplated_logo(&dir, &format!("Executable=\"{exe}\""), req)
+}
+
+/// Paket klasöründeki manifestte `key` ile seçilen uygulamanın plakasız
+/// (`altform-unplated`) Square44x44 logosu: `req` pikselden büyük en küçük boyut,
+/// yoksa en büyüğü.
+fn unplated_logo(dir: &std::path::Path, key: &str, req: i32) -> Option<std::path::PathBuf> {
+    let manifest = std::fs::read_to_string(dir.join("AppxManifest.xml")).ok()?;
+    // Uygulamanın kendi <Application ...> bölümündeki Square44x44Logo.
+    let key_at = manifest.to_lowercase().find(&key.to_lowercase())?;
+    let start = manifest[..key_at].rfind("<Application ")?;
+    let rest = &manifest[start..];
+    let rest = &rest[..rest.find("</Application>").unwrap_or(rest.len())];
+    let attr = "Square44x44Logo=\"";
+    let a = rest.find(attr)? + attr.len();
+    let logo = dir.join(rest[a..].split('"').next()?.replace('\\', "/"));
+    let stem = logo.file_stem()?.to_string_lossy().to_lowercase();
+    let mut best: Option<(i32, std::path::PathBuf)> = None;
+    for e in std::fs::read_dir(logo.parent()?).ok()?.flatten() {
+        let name = e.file_name().to_string_lossy().to_lowercase();
+        let Some(size) = name
+            .strip_prefix(&format!("{stem}.targetsize-"))
+            .and_then(|s| s.strip_suffix("_altform-unplated.png"))
+            .and_then(|s| s.parse::<i32>().ok())
+        else {
+            continue;
+        };
+        let better = match &best {
+            None => true,
+            Some((b, _)) => (size >= req && (*b < req || size < *b)) || (*b < req && size > *b),
+        };
+        if better {
+            best = Some((size, e.path()));
+        }
+    }
+    best.map(|(_, p)| p)
+}
+
+/// PNG dosyasını PBGRA olarak yükler.
+fn png_file(wic: &IWICImagingFactory, path: &std::path::Path) -> Result<IWICFormatConverter> {
+    unsafe {
+        let dec = wic.CreateDecoderFromFilename(&HSTRING::from(path.as_os_str()), None, GENERIC_READ, WICDecodeMetadataCacheOnDemand)?;
+        let frame = dec.GetFrame(0)?;
+        let conv = wic.CreateFormatConverter()?;
+        conv.Initialize(&frame, &GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeMedianCut)?;
         Ok(conv)
     }
 }
