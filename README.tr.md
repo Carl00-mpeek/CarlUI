@@ -288,6 +288,21 @@ Kutusu'na taşınır. Ayarların kalmasını ya da silinmesini sen seçersin.
 & "$env:LOCALAPPDATA\Programs\CarlUI\carlui.exe" --restore-taskbar
 ```
 
+### Linux'ta Carl Vault
+
+Carl Vault Linux'ta tek başına da çalışır (x86_64, glibc 2.28 ve üstü;
+CachyOS + KDE Plasma + Wayland'da denendi).
+[Releases](https://github.com/Carl00-mpeek/CarlUI/releases/latest) sayfasından
+`Carl-Vault-<sürüm>-linux-x86_64.tar.gz` dosyasını indir, sonra:
+
+```bash
+tar -xzf Carl-Vault-*-linux-x86_64.tar.gz && cd Carl-Vault-*-linux-x86_64 && sh install.sh --autostart
+```
+
+Kasa biçimi Windows'takiyle aynıdır; `.carlvault` yedeği iki sistem arasında
+taşınır. Tarayıcı eklentisi kurulumu ve notlar:
+[docs/LINUX-VAULT.md](docs/LINUX-VAULT.md).
+
 ## Ayarlar ve veriler
 
 | Ne | Nerede |
@@ -314,6 +329,13 @@ Tek dosyalık kurucuyu üretmek için:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\build-setup.ps1   # → dist\CarlUI-Setup.exe
+```
+
+Linux için Carl Vault paketini Windows'ta üretmek için (`cargo-zigbuild` ve
+`zig` gerekir; ayrıntı betiğin başında):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\build-linux.ps1   # → dist\Carl-Vault-<sürüm>-linux-x86_64.tar.gz
 ```
 
 Mimari: her modül (dock, tepsi, ada, Win menüsü…) ayrı bir süreçtir; biri

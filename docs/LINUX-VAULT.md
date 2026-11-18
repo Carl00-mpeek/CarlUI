@@ -13,6 +13,22 @@ Kod: `crates/carlui-vault-linux` (çalıştırılabilir dosyanın adı `carl-vau
 - Tarayıcı: eklentiyle doldurma, yeni parolayı kaydetme ve passkey oluşturma ya da kullanma. İstekler kasa penceresinde onay kartı olarak görünür.
 - İndirme yakalama Linux'ta yoktur; indirmeler tarayıcıda kalır.
 
+## Hazır paket ile kurulum
+
+[Releases](https://github.com/Carl00-mpeek/CarlUI/releases/latest) sayfasından `Carl-Vault-<sürüm>-linux-x86_64.tar.gz` dosyasını indir. Dosya x86_64 içindir ve glibc 2.28 ya da daha yenisini ister (CachyOS, Arch, Fedora, Ubuntu 20.04 ve sonrası).
+
+```bash
+tar -xzf Carl-Vault-*-linux-x86_64.tar.gz
+```
+
+```bash
+cd Carl-Vault-*-linux-x86_64 && sh install.sh --autostart
+```
+
+`--autostart` uygulamanın oturum açılınca simge durumunda başlamasını sağlar; böylece eklenti köprüsü hep hazır olur. İstemiyorsan `sh install.sh` yeter. Güncellemek için yeni paketle aynı komutu çalıştır. Kaldırmak için `sh install.sh --uninstall` kullan; kasa silinmez.
+
+Paket Windows'ta şu komutla üretilir: `powershell -ExecutionPolicy Bypass -File tools\build-linux.ps1` (gerekenler betiğin başında yazar).
+
 ## Derleme
 
 ```bash
