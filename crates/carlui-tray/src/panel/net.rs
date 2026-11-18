@@ -18,6 +18,8 @@ pub(super) enum NetRow {
     /// Bluetooth cihazı (`bt_devs` sırası).
     BtDevice(usize),
     BtSettings,
+    /// Ok panelindeki Bluetooth satırı: Bluetooth paneline geçer.
+    BtOpen,
 }
 
 /// Bluetooth taraması sürüyor mu (üst üste başlatılmasın).
@@ -50,7 +52,7 @@ impl Panel {
         });
     }
 
-    fn net_row(&mut self, gfx: &Gfx, kids: &VisualCollection, y: f32, glyph: char, name: &str, note: &str, lit: bool, what: NetRow) -> Result<f32> {
+    pub(super) fn net_row(&mut self, gfx: &Gfx, kids: &VisualCollection, y: f32, glyph: char, name: &str, note: &str, lit: bool, what: NetRow) -> Result<f32> {
         let s = self.s;
         let pad = (16.0 * s).round();
         let rs = self.theme.radius_scale;
@@ -239,6 +241,13 @@ impl Panel {
                 self.bt_later(Some(d.id.clone()));
                 false
             }
+            NetRow::BtOpen => {
+                self.mode = Mode::Bt;
+                self.bt_later(None);
+                self.grow_from = Some(self.height);
+                self.rebuild = true;
+                false
+            }
             NetRow::BtSettings => {
                 open_uri("ms-settings:bluetooth");
                 true
@@ -309,7 +318,7 @@ impl Panel {
                 open_uri("ms-settings:network");
                 true
             }
-            NetRow::BtToggle | NetRow::BtDevice(_) | NetRow::BtSettings => {
+            NetRow::BtToggle | NetRow::BtDevice(_) | NetRow::BtSettings | NetRow::BtOpen => {
                 open_uri("ms-settings:bluetooth");
                 true
             }

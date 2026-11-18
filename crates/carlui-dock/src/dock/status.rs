@@ -59,6 +59,8 @@ pub struct Status {
     pub at: f32,
     /// Saat biçimi (ayarlardaki 12/24 saat); her yoklamada ayardan alınır.
     pub hour: carlui_core::config::HourFormat,
+    /// Bluetooth simgesi burada mı (ayar `dock.bluetooth_in_dock`); değilse tepside.
+    pub bt_shown: bool,
 }
 
 fn battery() -> Option<(u8, bool)> {
@@ -118,6 +120,7 @@ impl Status {
             full,
             at: 0.0,
             hour: Default::default(),
+            bt_shown: false,
         })
     }
 
@@ -134,7 +137,8 @@ impl Status {
             ((l * 100.0).round() as u8, m)
         });
         let (time, date) = now(self.hour);
-        Sig { wired, bt: bt_state(), vol, battery: battery(), time, date }
+        let bt = if self.bt_shown { bt_state() } else { None };
+        Sig { wired, bt, vol, battery: battery(), time, date }
     }
 
     /// Değişiklik varsa yeniden çizer; genişlik değiştiyse true döner.
@@ -284,6 +288,7 @@ impl Dock {
         let Some(st) = self.status.as_mut() else { return };
         // Saat ayarı değişince dock baştan kurulmaz; bir sonraki yoklamada yeni biçimle çizilir.
         st.hour = self.cfg.clock.hour;
+        st.bt_shown = self.cfg.dock.bluetooth_in_dock;
         match st.refresh(gfx, h, s, false) {
             Ok(true) => {
                 let _ = self.relayout(true);

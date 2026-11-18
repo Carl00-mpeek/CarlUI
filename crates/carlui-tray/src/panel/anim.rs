@@ -288,6 +288,8 @@ impl Panel {
     pub fn finish_close(&mut self) {
         unsafe {
             let _ = KillTimer(self.hwnd, TIMER_HIDE);
+            let _ = KillTimer(self.hwnd, TIMER_MENU);
+            set_menu_pid(0);
             let _ = ShowWindow(self.hwnd, SW_HIDE);
         }
         if let Ok(k) = self.root.Children() {

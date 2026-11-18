@@ -32,9 +32,22 @@ impl Panel {
                 return Ok((y + pad - (4.0 * s).round()).round());
             }
             Mode::Tray => {
-                // Yalnızca parlaklık ve açık uygulamalar.
+                // Parlaklık, açık uygulamalar ve (dock'ta gösterilmiyorsa) Bluetooth:
+                // Bluetooth satırına tıklayınca panel Bluetooth paneline geçer.
+                let mut top = false;
+                if !bt_in_dock() {
+                    if let Some(on) = self.radios.bluetooth {
+                        let note = if on { t!("Açık", "On") } else { t!("Kapalı", "Off") };
+                        let kids = content.Children()?;
+                        y += self.net_row(gfx, &kids, y, '\u{E702}', "Bluetooth", note, on, net::NetRow::BtOpen)?;
+                        top = true;
+                    }
+                }
                 if self.brightness.is_some() {
                     y = self.bright_row(gfx, content, y)?;
+                    top = true;
+                }
+                if top {
                     y = self.separator(content, y + (6.0 * s).round())?;
                 }
             }

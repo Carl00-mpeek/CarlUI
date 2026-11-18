@@ -36,7 +36,7 @@ use carlui_ui::{
 };
 use std::{
     collections::HashMap,
-    sync::atomic::{AtomicI32, AtomicIsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, AtomicU32, Ordering},
 };
 use windows::{
     core::*,
@@ -61,6 +61,8 @@ pub const WM_APP_NETS: u32 = WM_APP + 33;
 pub const TIMER_HIDE: usize = 41;
 pub const TIMER_BRIGHT: usize = 42;
 pub const TIMER_REGION: usize = 43;
+/// Sağ tıkla açılan uygulama menüsü izlenir (seçilen komut pencere açarsa panel çekilir).
+pub const TIMER_MENU: usize = 44;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum State {
@@ -157,11 +159,72 @@ unsafe extern "system" fn outside_proc(code: i32, wp: WPARAM, lp: LPARAM) -> LRE
             && pt.x < OUT_R.load(Ordering::Relaxed)
             && pt.y >= OUT_T.load(Ordering::Relaxed)
             && pt.y < OUT_B.load(Ordering::Relaxed);
-        if !inside {
+        if !inside && !on_app_menu(pt) {
             let _ = PostMessageW(HWND(PANEL_HWND.load(Ordering::Relaxed) as _), WM_APP_OUTSIDE, WPARAM(0), LPARAM(0));
         }
     }
     CallNextHookEx(None, code, wp, lp)
+}
+
+/// Bluetooth simgesi dock'ta mı (ayar `dock.bluetooth_in_dock`). Değilse ok
+/// panelinin başında bir Bluetooth satırı olur; tıklayınca Bluetooth paneline geçer.
+static BT_IN_DOCK: AtomicBool = AtomicBool::new(false);
+
+pub fn set_bt_in_dock(v: bool) {
+    BT_IN_DOCK.store(v, Ordering::SeqCst);
+}
+
+pub(super) fn bt_in_dock() -> bool {
+    BT_IN_DOCK.load(Ordering::SeqCst)
+}
+
+/// Sağ tıklanan tepsi ikonunun süreci (0: yok). Menüsüne tıklamak paneli kapatmaz.
+static MENU_PID: AtomicU32 = AtomicU32::new(0);
+
+pub fn set_menu_pid(pid: u32) {
+    MENU_PID.store(pid, Ordering::SeqCst);
+}
+
+/// Tıklanan nokta bir açılır menüde mi (Win32 menüsü ya da sağ tıklanan
+/// uygulamanın kendi çizdiği, başlıksız açılır menü penceresi)?
+unsafe fn on_app_menu(pt: POINT) -> bool {
+    let w = WindowFromPoint(pt);
+    if w.is_invalid() {
+        return false;
+    }
+    let root = GetAncestor(w, GA_ROOT);
+    let root = if root.is_invalid() { w } else { root };
+    if carlui_core::win::class_name(root) == "#32768" {
+        return true;
+    }
+    let want = MENU_PID.load(Ordering::Relaxed);
+    if want == 0 {
+        return false;
+    }
+    let mut pid = 0;
+    GetWindowThreadProcessId(root, Some(&mut pid));
+    let style = GetWindowLongW(root, GWL_STYLE) as u32;
+    pid == want && style & WS_POPUP.0 != 0 && style & WS_CAPTION.0 != WS_CAPTION.0
+}
+
+/// Menüden seçilen komut uygulamanın penceresini öne getirdi mi? (Üstte
+/// duran panel onu örtmesin diye o zaman kapanır.)
+pub fn app_window_in_front() -> bool {
+    let want = MENU_PID.load(Ordering::Relaxed);
+    if want == 0 {
+        return false;
+    }
+    unsafe {
+        let fg = GetForegroundWindow();
+        if fg.is_invalid() || !IsWindowVisible(fg).as_bool() {
+            return false;
+        }
+        let mut pid = 0;
+        GetWindowThreadProcessId(fg, Some(&mut pid));
+        let style = GetWindowLongW(fg, GWL_STYLE) as u32;
+        let ex = GetWindowLongW(fg, GWL_EXSTYLE) as u32;
+        pid == want && style & WS_CAPTION.0 == WS_CAPTION.0 && ex & WS_EX_TOOLWINDOW.0 == 0
+    }
 }
 
 pub fn query_brightness_at_start(panel: HWND) {
@@ -234,6 +297,8 @@ pub struct Panel {
     /// Dock hangi kenarda: 0 alt, 1 sol, 2 sağ (panel dock'un iç yanında açılır).
     pub side: u8,
     pub mode: Mode,
+    /// Dock'tan hangi kiple açıldı (oktan açılıp Bluetooth'a geçilince ok yine kapatır).
+    pub entry: Mode,
     nets: Vec<crate::wifi::Network>,
     net_rows: Vec<(RECT, net::NetRow)>,
     bt_devs: Vec<crate::bt::Device>,
@@ -301,6 +366,7 @@ impl Panel {
             grow_from: None,
             side: 0,
             mode: Mode::Full,
+            entry: Mode::Full,
             nets: Vec::new(),
             net_rows: Vec::new(),
             bt_devs: Vec::new(),

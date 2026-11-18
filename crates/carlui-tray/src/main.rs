@@ -104,7 +104,7 @@ impl App {
         // Görev çubuğu görünümünde her durum simgesi kendi panelini açar ("mode").
         let mode = panel::Mode::parse(data.get("mode").and_then(|v| v.as_str()));
         let open = self.panel.state == State::Open;
-        if open && self.panel.mode == mode {
+        if open && (self.panel.mode == mode || self.panel.entry == mode) {
             self.panel.close(true);
         } else {
             // Başka simgeye tıklandı: açık panel yerini yenisine bırakır.
@@ -112,6 +112,7 @@ impl App {
                 self.panel.close(false);
             }
             self.panel.mode = mode;
+            self.panel.entry = mode;
             let g = |k: &str| data.get(k).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             let button = RECT { left: g("l"), top: g("t"), right: g("r"), bottom: g("b") };
             self.panel.side = g("side").clamp(0, 2) as u8;
@@ -305,12 +306,15 @@ extern "system" fn panel_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
                 let (x, y) = xy(lp);
                 with_app(|a| {
                     if let Some(i) = a.panel.right_click(x, y) {
-                        // Uygulamanın menüsü (Discord'unki gibi Chromium menüleri) üstte
-                        // duran panelin altında kalmasın ve menüye tıklayınca panelin
-                        // "dışarı tıklandı" kapanışı menüyü odaksız bırakıp iptal etmesin:
-                        // panel önce anında kapanır, menü sonra açılır.
-                        a.close(false);
+                        // Panel açık kalır, uygulamanın menüsü onun üstünde açılır;
+                        // menüye tıklamak "dışarı tıklandı" sayılmaz (panel::on_app_menu).
+                        // Önce ön plana biz geçeriz: Chromium/Electron menüleri (Discord)
+                        // kendi gizli penceresini öne alamazsa menüyü hiç açmaz; ön
+                        // plandaki süreç olarak izni ona kesin devredebiliriz.
+                        let _ = SetForegroundWindow(hwnd);
+                        panel::set_menu_pid(a.host.icons.get(i).map(|c| c.pid).unwrap_or(0));
                         a.host.click(i, true, cursor());
+                        SetTimer(hwnd, panel::TIMER_MENU, 200, None);
                     }
                 });
                 LRESULT(0)
@@ -322,6 +326,16 @@ extern "system" fn panel_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
                     panel::TIMER_REGION => {
                         let App { gfx, host, panel, .. } = a;
                         panel.opening_done(gfx, host);
+                    }
+                    // Menüden seçilen komut uygulamanın penceresini açtıysa panel
+                    // onun önünde kalmasın.
+                    panel::TIMER_MENU => {
+                        if a.panel.state != State::Open {
+                            let _ = KillTimer(hwnd, panel::TIMER_MENU);
+                            panel::set_menu_pid(0);
+                        } else if panel::app_window_in_front() {
+                            a.close(true);
+                        }
                     }
                     _ => {}
                 });
@@ -345,7 +359,8 @@ extern "system" fn panel_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
                     let before = a.panel.radios().bluetooth;
                     a.panel.set_radios(quick::decode(wp.0));
                     // Bluetooth panelinde açık/kapalı satırı ve cihaz listesi yenilenir.
-                    if a.panel.mode == panel::Mode::Bt && a.panel.radios().bluetooth != before {
+                    let tray_row = a.panel.mode == panel::Mode::Tray && a.panel.radios().bluetooth != before;
+                    if tray_row || (a.panel.mode == panel::Mode::Bt && a.panel.radios().bluetooth != before) {
                         if a.panel.radios().bluetooth == Some(true) {
                             a.panel.rescan_bt();
                         }
@@ -452,6 +467,7 @@ fn main() -> Result<()> {
         SetTimer(hwnd, TIMER_TOPMOST, 3000, None);
 
         let cfg = config::load();
+        panel::set_bt_in_dock(cfg.dock.bluetooth_in_dock);
         // Ayar değişince yeniden okunur; bu, seçilen arayüz dilini de uygular
         // (panel her açılışta metinlerini yeni dille kurar).
         carlui_ui::tone::follow(&cfg.theme);
@@ -464,6 +480,7 @@ fn main() -> Result<()> {
         let panel_raw = panel_hwnd.0 as isize;
         config::watch(move |c| {
             carlui_ui::tone::restart_on_change(&c.theme);
+            panel::set_bt_in_dock(c.dock.bluetooth_in_dock);
             if let Ok(mut g) = slot.lock() {
                 *g = Some(c.theme.clone());
             }

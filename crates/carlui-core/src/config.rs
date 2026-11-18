@@ -670,6 +670,9 @@ pub struct DockConfig {
     pub taskbar: bool,
     /// Görev çubuğu görünümünün boyutu: minimal, compact, full.
     pub taskbar_size: TaskbarSize,
+    /// Görev çubuğu görünümünde Bluetooth simgesi dock'un durum alanında mı
+    /// gösterilsin (varsayılan: tepsiye, ok panelinin içine gizlenir).
+    pub bluetooth_in_dock: bool,
     /// Diğer ekranlarda da kendi pencerelerini gösteren ayrı bir dock.
     pub other_screens: bool,
     /// Çark dock: kısayolla (`shortcuts.radial`) imlecin çevresinde açılır.
@@ -725,6 +728,7 @@ impl Default for DockConfig {
             line_indicator: true,
             taskbar: false,
             taskbar_size: TaskbarSize::Full,
+            bluetooth_in_dock: false,
             other_screens: false,
             radial: false,
             stacks: Vec::new(),

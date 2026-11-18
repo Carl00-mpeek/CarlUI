@@ -83,6 +83,14 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.toggle(p, t!("İndirilenler yığını", "Downloads stack"), t!("Tıklayınca son indirilen dosyalar açılır.", "Click to see your latest downloads."), c.downloads_stack, |c| c.dock.downloads_stack ^= true);
     f.toggle(p, t!("Geri Dönüşüm Kutusu", "Recycle Bin"), t!("Sağ tıkla boşaltılabilir; Windows onay sorar.", "Right-click to empty it; Windows asks to confirm."), c.recycle_bin, |c| c.dock.recycle_bin ^= true);
 
+    f.toggle(
+        p,
+        t!("Bluetooth dock'ta", "Bluetooth on the dock"),
+        t!("Compact/Full görünümde Bluetooth simgesi sağdaki durum alanında görünür. Kapalıyken ok panelinin içinde durur.", "In Compact/Full style the Bluetooth icon shows in the status area on the right. When off, it lives inside the arrow panel."),
+        c.bluetooth_in_dock,
+        |c| c.dock.bluetooth_in_dock ^= true,
+    );
+
     f.toggle(p, t!("Bölme çizgileri", "Separators"), t!("Win logosu, uygulamalar ve klasörler arasındaki ince çizgiler.", "Thin lines between the Win logo, apps and folders."), c.separators, |c| c.dock.separators ^= true);
 
     f.toggle(
