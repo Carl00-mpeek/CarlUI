@@ -75,6 +75,60 @@ pub fn show_recovery(_app: &App, p: &mut P, w: f32, h: f32, key: &str) -> f32 {
     0.0
 }
 
+/// Şifreli yedek için üretilen parola; bir kez gösterilir.
+pub fn show_backup_password(_app: &App, p: &mut P, w: f32, h: f32, password: &str) -> f32 {
+    let (x, mut y, cw) = card(p, w, h, 340.0, '\u{E72E}', t!("Yedek parolası", "Backup password"));
+    y += para(
+        p,
+        t!(
+            "Yedek bu parolayla şifrelendi. Yazıp güvenli bir yerde sakla; bir daha gösterilmez.",
+            "The backup was encrypted with this password. Write it down and keep it safe; it won't be shown again."
+        ),
+        x,
+        y,
+        cw,
+        13.0,
+        TEXT,
+        0.7,
+    ) + 12.0;
+    let box_ = R::new(x, y, cw, 50.0);
+    p.round(box_, 8.0, 0x000000, 0.30);
+    p.outline(box_, 8.0, p.accent, 0.5);
+    p.text(password, R::new(x, y + 10.0, cw, 30.0), 15.0, true, TEXT, 0.95, Align::Center);
+    y += 64.0;
+    y += para(p, t!("Bu parolayı kaybedersen yedek açılamaz.", "If you lose this password, the backup can't be opened."), x, y, cw, 13.0, ORANGE, 0.9) + 14.0;
+    p.button(R::new(x, y, (cw - 10.0) / 2.0, 40.0), Some('\u{E8C8}'), t!("Kopyala", "Copy"), Act::CopyBackupPassword, true, false);
+    primary(p, R::new(x + (cw + 10.0) / 2.0, y, (cw - 10.0) / 2.0, 40.0), t!("Sakladım, devam et", "Saved it, continue"), Act::BackupPasswordDone, true);
+    0.0
+}
+
+/// İçe aktarmada seçilen `.carlvault` yedeğinin parolası sorulur.
+pub fn restore(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
+    let (x, mut y, cw) = card(p, w, h, 330.0, '\u{E8B5}', t!("Yedeği aç", "Open backup"));
+    y += para(
+        p,
+        t!(
+            "Yedeği oluştururken kullanılan parolayı yaz: o zamanki ana parola ya da yedek için üretilen parola.",
+            "Enter the password used when the backup was made: the master password at that time, or the password generated for the backup."
+        ),
+        x,
+        y,
+        cw,
+        13.0,
+        TEXT,
+        0.7,
+    ) + 12.0;
+    input(p, app, R::new(x, y, cw, 38.0), Focus::Form(3), true, t!("Yedek parolası", "Backup password"));
+    y += 50.0;
+    if let Some(e) = &app.error {
+        y += para(p, e, x, y, cw, 12.5, ORANGE, 0.95) + 6.0;
+    }
+    primary(p, R::new(x, y, cw, 40.0), t!("Aç ve önizle", "Open and preview"), Act::Restore, true);
+    y += 52.0;
+    link(p, R::new(x, y, cw, 24.0), t!("Vazgeç", "Cancel"), Act::Cancel);
+    0.0
+}
+
 pub fn locked(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
     let Some(v) = app.vault.as_ref() else {
         // Dosya okunamadı: üzerine yazmamak için hiçbir işlem önerilmez.

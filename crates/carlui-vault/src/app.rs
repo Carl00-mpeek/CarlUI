@@ -34,6 +34,7 @@ use windows::Win32::{
 use zeroize::Zeroizing;
 
 mod capture;
+mod exporting;
 pub mod importing;
 pub mod passkeys;
 
@@ -43,7 +44,8 @@ const MIN_PASSWORD: usize = 8;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Focus {
-    /// Form kutuları: 0 parola, 1 tekrar, 2 mevcut parola.
+    /// Form kutuları: 0 parola, 1 tekrar, 2 mevcut parola, 3 dışa aktarma
+    /// için ana parola ya da yedek parolası.
     Form(usize),
     Search,
     Name,
@@ -98,6 +100,18 @@ pub enum Act {
     /// Başka bir uygulamanın dışa aktarım dosyasını seç ve önizle.
     Import,
     ImportConfirm,
+    /// Dışa aktarma biçimi (şifreli yedek, CSV, JSON).
+    ExportKind(carlui_vault::export::Kind),
+    /// Şifreli yedekte ana parola yerine üretilen güçlü parola.
+    ToggleExportGenerated,
+    /// Ana parolayı doğrula ve dışa aktar.
+    Export,
+    /// Yedek parolasıyla `.carlvault` dosyasını aç.
+    Restore,
+    /// Yedek için üretilen parolayı kopyala.
+    CopyBackupPassword,
+    /// Üretilen parola saklandı: Güvenlik'e dön.
+    BackupPasswordDone,
     /// Kaydırılabilir alan (tekerlek hedefi, tıklanmaz).
     Scroll,
 }
@@ -219,6 +233,12 @@ pub enum View {
     Security,
     /// İçe aktarma önizlemesi (bkz. `importing`).
     Import(Box<importing::Preview>),
+    /// İçe aktarmada `.carlvault` seçildi: yedek parolası sorulur.
+    Restore,
+    /// Yedek için üretilen parola bir kez gösterilir.
+    ShowBackupPassword {
+        password: Zeroizing<String>,
+    },
 }
 
 pub struct App {
@@ -227,7 +247,7 @@ pub struct App {
     pub dir: PathBuf,
     pub vault: Option<Vault>,
     pub view: View,
-    pub form: [TextBox; 3],
+    pub form: [TextBox; 4],
     pub want_recovery: bool,
     pub focus: Option<Focus>,
     pub search: TextBox,
@@ -250,6 +270,12 @@ pub struct App {
     batch: Option<(Box<carlui_vault::import::Batch>, Instant)>,
     /// Son içe aktarma denemesinin hatası (güvenlik sayfasında, düğmenin altında).
     pub import_error: Option<String>,
+    /// Dışa aktarma seçimi ve son denemenin hatası (Güvenlik sayfasında).
+    pub export_kind: carlui_vault::export::Kind,
+    pub export_generated: bool,
+    pub export_error: Option<String>,
+    /// Parolası sorulan yedek dosyası (içerik, dosya adı).
+    restore: Option<(Zeroizing<Vec<u8>>, String)>,
     /// Sayfa içi düğmeyle açılış: kilit açılınca odak bu tarayıcı penceresine döner.
     back: Option<(isize, Instant)>,
     /// Listede gösterilen 2FA kodları: kayıt kimliği → (alan sırası, anahtar).
@@ -303,7 +329,7 @@ impl App {
             dir,
             vault,
             view,
-            form: [TextBox::new("", false), TextBox::new("", false), TextBox::new("", false)],
+            form: [TextBox::new("", false), TextBox::new("", false), TextBox::new("", false), TextBox::new("", false)],
             want_recovery: true,
             focus: Some(Focus::Form(0)),
             search: TextBox::new("", false),
@@ -320,6 +346,10 @@ impl App {
             import: None,
             batch: None,
             import_error: None,
+            export_kind: Default::default(),
+            export_generated: false,
+            export_error: None,
+            restore: None,
             codes: HashMap::new(),
             with_passkey: Default::default(),
             passkey: None,
@@ -352,16 +382,22 @@ impl App {
         if matches!(self.view, View::List) {
             self.refresh_codes();
         }
+        // Parolası sorulan yedek yalnızca o sayfadayken bellekte tutulur.
+        if !matches!(self.view, View::Restore) {
+            self.restore = None;
+        }
         if to_list {
             self.passkey_unlocked();
         }
         self.scroll = 0.0;
         self.error = None;
         self.import_error = None;
+        self.export_error = None;
         self.confirm_remove_recovery = false;
         self.focus = match self.view {
             View::Setup | View::Locked | View::Recover | View::NewPassword => Some(Focus::Form(0)),
             View::Security => Some(Focus::Form(2)),
+            View::Restore => Some(Focus::Form(3)),
             View::Edit(ref e) if e.id.is_none() => Some(Focus::Name),
             _ => None,
         };
@@ -386,6 +422,7 @@ impl App {
         self.with_passkey.clear();
         self.passkey_drop();
         self.import = None;
+        self.restore = None;
         self.back = None;
         self.clear_clipboard();
         self.go(View::Locked);
@@ -535,7 +572,7 @@ impl App {
                 self.go(View::List);
                 t!("Carl Vault'ta yeni 2FA kaydı açıldı; Kaydet'e bas.", "A new 2FA item is open in Carl Vault; press Save.")
             }
-            View::Edit(_) | View::Security | View::Import(_) => {
+            View::Edit(_) | View::Security | View::Import(_) | View::Restore | View::ShowBackupPassword { .. } => {
                 self.toast(t!("Açık sayfayı kapatınca 2FA kaydı açılacak.", "The 2FA item opens when you close this page."));
                 t!("Carl Vault'ta açık sayfa kapanınca 2FA kaydı açılacak.", "The 2FA item opens in Carl Vault once the open page is closed.")
             }
@@ -907,6 +944,23 @@ impl App {
                 self.pick_import();
             }
             Act::ImportConfirm => self.confirm_import(),
+            Act::ExportKind(k) => {
+                self.export_kind = k;
+                self.export_error = None;
+            }
+            Act::ToggleExportGenerated => self.export_generated ^= true,
+            Act::Export => self.export(),
+            Act::Restore => self.restore(),
+            Act::CopyBackupPassword => {
+                if let View::ShowBackupPassword { password } = &self.view {
+                    let pw = password.clone();
+                    self.copy(&pw, t!("Yedek parolası", "Backup password"));
+                }
+            }
+            Act::BackupPasswordDone => {
+                self.clear_clipboard();
+                self.go(View::Security);
+            }
             Act::PickFile => self.pick_file(),
             Act::ExportFile => self.export_file(),
             Act::RemoveFile => {
@@ -916,6 +970,10 @@ impl App {
                 }
             }
             Act::Save => self.save(),
+            Act::Cancel if matches!(self.view, View::Restore) => {
+                self.restore = None;
+                self.go(View::Security);
+            }
             Act::Cancel => self.go(View::List),
             Act::Delete => {
                 let View::Edit(e) = &mut self.view else { return };
@@ -1073,10 +1131,11 @@ impl App {
         match &self.view {
             View::Setup | View::NewPassword => vec![Focus::Form(0), Focus::Form(1)],
             View::Locked | View::Recover => vec![Focus::Form(0)],
-            View::Security => vec![Focus::Form(2), Focus::Form(0), Focus::Form(1)],
+            View::Security => vec![Focus::Form(2), Focus::Form(0), Focus::Form(1), Focus::Form(3)],
+            View::Restore => vec![Focus::Form(3)],
             View::List => vec![Focus::Search],
             View::Edit(e) => std::iter::once(Focus::Name).chain((0..e.fields.len()).map(Focus::Value)).collect(),
-            View::ShowRecovery { .. } | View::Import(_) => vec![],
+            View::ShowRecovery { .. } | View::ShowBackupPassword { .. } | View::Import(_) => vec![],
         }
     }
 
@@ -1128,12 +1187,15 @@ impl App {
                 View::Recover => self.act(Act::Recover),
                 View::NewPassword => self.act(Act::SetPassword),
                 View::Security if matches!(f, Focus::Form(1)) => self.act(Act::ChangePassword),
+                View::Security if matches!(f, Focus::Form(3)) => self.act(Act::Export),
+                View::Restore => self.act(Act::Restore),
                 View::Edit(_) if crate::ui::ctrl_down() => self.act(Act::Save),
                 _ => self.next_focus(),
             },
             TKey::Cancel => match &self.view {
                 View::Edit(_) => self.act(Act::Cancel),
                 View::Recover => self.act(Act::BackToLock),
+                View::Restore => self.act(Act::Cancel),
                 View::List if f == Focus::Search => {
                     self.search.clear();
                     self.focus = None;

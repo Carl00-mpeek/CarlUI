@@ -36,6 +36,10 @@
 //! şifresiz dışa aktarımları (CSV / JSON / otpauth listesi) ve Google
 //! Authenticator aktarım QR'ı önizlenip tek seferde kasaya yazılır.
 //!
+//! Dışa aktarma (`export`): şifreli `.carlvault` yedeği (ek dosyalar dahil,
+//! ana parola ya da üretilmiş parolayla; içe aktarmadan geri yüklenir) ya da
+//! şifresiz Bitwarden CSV / JSON.
+//!
 //! Parola üretici (`gen`): işletim sistemi rastgeleliğiyle, her türden en az
 //! bir karakter; düzenleyicide zar düğmesi ve güç göstergesi.
 //!
@@ -52,7 +56,8 @@ pub mod card;
 pub mod gen;
 pub mod crypto;
 pub mod entry;
-mod hex;
+pub mod export;
+pub(crate) mod hex;
 pub mod import;
 pub mod passkey;
 pub mod recovery;

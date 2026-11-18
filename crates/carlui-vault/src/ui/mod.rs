@@ -159,6 +159,8 @@ pub fn paint(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
             list::sidebar(app, p, h);
             security::paint(app, p, w, h)
         }
+        View::Restore => lock::restore(app, p, w, h),
+        View::ShowBackupPassword { password } => lock::show_backup_password(app, p, w, h, password),
         View::Import(pv) => {
             list::sidebar(app, p, h);
             import::paint(app, pv, p, w, h)

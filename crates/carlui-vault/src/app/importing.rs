@@ -22,6 +22,10 @@ pub struct Preview {
     pub dups: usize,
     /// Seçilen dosyanın adı (QR'dan geldiyse boş).
     pub file: String,
+    /// Kayıtların ek dosyaları (yalnızca Carl Vault yedeğinde; sıra `batch` ile aynı).
+    pub files: Vec<Option<Zeroizing<Vec<u8>>>>,
+    /// Şifreli Carl Vault yedeğinden mi geldi.
+    pub backup: bool,
 }
 
 impl Preview {
@@ -56,14 +60,14 @@ impl App {
             fresh.push(have.insert(digest(&import::key(it.meta.category, &it.meta.name, &it.body))));
         }
         let dups = fresh.iter().filter(|f| !**f).count();
-        Preview { batch, fresh, dups, file }
+        Preview { batch, fresh, dups, file, files: Vec::new(), backup: false }
     }
 
     /// "Dosyadan içe aktar…": dosyayı seç, oku, önizle.
     pub(super) fn pick_import(&mut self) {
         let Some(path) = dialog::open(self.hwnd) else { return };
         let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-        if size as usize > import::MAX_FILE {
+        if Self::too_big(size, true) {
             self.import_error = Some(ImportError::TooBig.to_string());
             return;
         }
@@ -74,9 +78,16 @@ impl App {
                 return;
             }
         };
+        let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        if carlui_vault::export::is_backup(&data) {
+            return self.ask_restore(data, file);
+        }
+        if Self::too_big(size, false) {
+            self.import_error = Some(ImportError::TooBig.to_string());
+            return;
+        }
         match import::parse(&data) {
             Ok(batch) => {
-                let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 info!("içe aktarma önizlemesi: {} ({} kayıt, {} atlandı)", batch.source, batch.items.len(), batch.skipped);
                 let p = self.preview(batch, file);
                 self.go(View::Import(Box::new(p)));
@@ -91,26 +102,58 @@ impl App {
     /// Önizlemedeki yeni kayıtları kasaya yazar.
     pub(super) fn confirm_import(&mut self) {
         let View::Import(p) = std::mem::replace(&mut self.view, View::List) else { return };
-        let p = *p;
-        let items: Vec<(Meta, Body)> = p
+        let mut p = *p;
+        let mut files = std::mem::take(&mut p.files);
+        files.resize_with(p.batch.items.len(), || None);
+        let (items, files): (Vec<(Meta, Body)>, Vec<_>) = p
             .batch
             .items
             .into_iter()
             .zip(p.fresh)
-            .filter(|(_, f)| *f)
-            .map(|(i, _)| {
+            .zip(files)
+            .filter(|((_, f), _)| *f)
+            .map(|((i, _), file)| {
                 let mut body = i.body.clone();
                 carlui_vault::card::upgrade(i.meta.category, &mut body);
-                (i.meta.clone(), body)
+                if file.is_none() {
+                    body.file = None;
+                }
+                ((i.meta.clone(), body), file)
             })
-            .collect();
+            .unzip();
+        let metas: Vec<Meta> = items.iter().map(|(m, _)| m.clone()).collect();
         let Some(v) = self.vault.as_mut() else { return };
         match v.add_many(items) {
-            Ok(n) => {
+            Ok(ids) => {
+                let n = ids.len();
+                // Yedekteki ek dosyalar: kayıt eklendikten sonra kendi anahtarıyla
+                // mühürlenir. Yazılamayan dosya kayıttan düşülür.
+                let mut lost = 0;
+                for ((id, meta), file) in ids.iter().zip(metas).zip(files) {
+                    let Some(data) = file else { continue };
+                    let Ok(mut body) = v.decrypt(id) else {
+                        continue;
+                    };
+                    let name = body.file.as_ref().map(|f| f.name.clone()).unwrap_or_default();
+                    if let Err(e) = v.attach(id, &name, &data) {
+                        warn!("içe aktarma: ek dosya yazılamadı: {e}");
+                        lost += 1;
+                        body.file = None;
+                        let _ = v.update(id, meta, &body);
+                    }
+                }
                 info!("içe aktarıldı: {n} kayıt ({})", p.batch.source);
                 self.go(View::List);
-                let tip = if p.file.is_empty() { String::new() } else { t!(" Şifresiz dışa aktarım dosyasını silmeyi unutma.", " Don't forget to delete the unencrypted export file.").to_string() };
-                self.toast(t!(format!("{n} kayıt içe aktarıldı.{tip}"), format!("{n} items imported.{tip}")));
+                let tip = if p.backup || p.file.is_empty() {
+                    String::new()
+                } else {
+                    t!(" Şifresiz dışa aktarım dosyasını silmeyi unutma.", " Don't forget to delete the unencrypted export file.").to_string()
+                };
+                let lost = match lost {
+                    0 => String::new(),
+                    m => t!(format!(" {m} ek dosya yazılamadı."), format!(" {m} attachments couldn't be written.")),
+                };
+                self.toast(t!(format!("{n} kayıt içe aktarıldı.{lost}{tip}"), format!("{n} items imported.{lost}{tip}")));
             }
             Err(e) => {
                 self.go(View::Security);

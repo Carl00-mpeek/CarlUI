@@ -308,8 +308,8 @@ impl Vault {
     }
 
     /// Çok kaydı tek seferde ekler (içe aktarma): hepsi mühürlenir, dosya bir kez
-    /// yazılır. Eklenen kayıt sayısını döner.
-    pub fn add_many(&mut self, items: Vec<(Meta, Body)>) -> Result<usize> {
+    /// yazılır. Eklenen kayıtların kimliklerini (verilen sırayla) döner.
+    pub fn add_many(&mut self, items: Vec<(Meta, Body)>) -> Result<Vec<String>> {
         let mut recs = Vec::with_capacity(items.len());
         let mut metas = Vec::with_capacity(items.len());
         for (meta, body) in &items {
@@ -325,10 +325,10 @@ impl Vault {
             return Err(e);
         }
         if let Some(o) = self.open.as_mut() {
-            o.items.extend(metas.into_iter().map(|(id, meta)| Item { id, meta }));
+            o.items.extend(metas.iter().map(|(id, meta)| Item { id: id.clone(), meta: meta.clone() }));
             o.items.sort_by_cached_key(|i| i.meta.name.to_lowercase());
         }
-        Ok(n)
+        Ok(metas.into_iter().map(|(id, _)| id).collect())
     }
 
     pub fn delete(&mut self, id: &str) -> Result<()> {
@@ -547,7 +547,7 @@ mod tests {
         let d = tmp();
         let mut v = Vault::create(&d, "pw", KdfParams::fast()).unwrap();
         let items: Vec<_> = (0..50).map(|i| sample(&format!("K{i:02}"), "x")).collect();
-        assert_eq!(v.add_many(items).unwrap(), 50);
+        assert_eq!(v.add_many(items).unwrap().len(), 50);
         assert_eq!(v.items().len(), 50);
         let mut v2 = Vault::load(&d).unwrap();
         v2.unlock("pw").unwrap();
