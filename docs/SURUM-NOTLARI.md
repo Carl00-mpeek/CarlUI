@@ -1,5 +1,21 @@
 # Sürüm notları
 
+## v1.1.11 — Bluetooth paneli, ağ geçişi ve kar birikintisi (2026-11-19)
+
+**CarlUI 1.1.11: Bluetooth paneli, ağ geçişi ve kar birikintisi.**
+
+**Yenilikler.** Dock'un durum alanına (Compact ve Full) Bluetooth simgesi eklendi; bağlı ve
+eşleştirilebilir cihazlar CarlUI'nin kendi panelinde listelenir. Ağ panelinde Ethernet ile
+Wi-Fi arasında sağ tıkla geçilir; Minimal ve Full görünümde sağ tık ağ ve Bluetooth
+ayarlarını açar. Kar yağarken pencerelerin, dock'un ve adanın üst kenarında kar birikir;
+yağmurda ıslak parıltı görünür. CPU sıcaklığı PawnIO olmadan da HWiNFO'dan ya da ACPI ısı
+bölgesinden okunur.
+
+**Düzeltmeler.** Ekranı kaplayan pencere dock'tan açılınca küçülmüyor. Tray okunun zemini
+yalnızca panel açıkken görünür.
+
+**Diğer.** Carl Vault'un Linux sürümü kaldırıldı.
+
 ## v1.1.10 — Windows 10'da Store uygulaması simgeleri (2026-11-18)
 
 **CarlUI 1.1.10: Windows 10'da Store uygulaması simgeleri.**
