@@ -42,9 +42,21 @@ impl Motion {
         Ok(a)
     }
 
+    /// Hareket azaltılmışken (hız 0) spring yerine anında biten geçiş: 1 ms'lik
+    /// periyotlu spring compositor'da kararsızlaşıp görseli bozabiliyor.
+    fn motion(&self, target: f32, damping: f32, period_ms: i64, delay_ms: i64) -> Result<CompositionAnimation> {
+        if self.speed <= 0.0 {
+            let a = self.comp.CreateScalarKeyFrameAnimation()?;
+            a.InsertKeyFrame(1.0, target)?;
+            a.SetDuration(ts(1))?;
+            return a.cast();
+        }
+        self.spring(target, damping, period_ms, delay_ms)?.cast()
+    }
+
     pub fn scale(&self, v: &impl Interface, scale: f32, damping: f32, period_ms: i64, delay_ms: i64) -> Result<()> {
         let obj: CompositionObject = v.cast()?;
-        let a = self.spring(scale, damping, period_ms, delay_ms)?;
+        let a = self.motion(scale, damping, period_ms, delay_ms)?;
         obj.StartAnimation(h!("Scale.X"), &a)?;
         obj.StartAnimation(h!("Scale.Y"), &a)?;
         Ok(())
@@ -52,7 +64,7 @@ impl Motion {
 
     pub fn animate(&self, v: &impl Interface, prop: &HSTRING, target: f32, damping: f32, period_ms: i64, delay_ms: i64) -> Result<()> {
         let obj: CompositionObject = v.cast()?;
-        obj.StartAnimation(prop, &self.spring(target, damping, period_ms, delay_ms)?)
+        obj.StartAnimation(prop, &self.motion(target, damping, period_ms, delay_ms)?)
     }
 
     /// Doğrusal-yumuşak geçiş (opaklık gibi spring'in fazla olduğu yerler için).

@@ -146,6 +146,8 @@ pub struct Live {
     /// Adanın bildirdiği son müzik durumu (hayvan sonradan yüklenirse de uygulanır).
     music: bool,
     windows: usize,
+    /// Hareketi azaltta son durağan karenin çizildiği pill (dock boyu değişince yeniden çizilir).
+    static_pill: Option<windows::Win32::Foundation::RECT>,
     stats: Option<Stats>,
     /// Kar birikintisi / yağmur ıslaklığı (yalnız kar ya da yağmur varken, eriyene dek).
     ledge: Option<ledge_view::LedgeView>,
@@ -198,6 +200,7 @@ impl Live {
             loading: None,
             music: false,
             windows,
+            static_pill: None,
             stats: std::env::var_os("CARLUI_LIVE_DEBUG").map(|_| Stats::new()),
             ledge: None,
             shimmer: None,
@@ -415,6 +418,7 @@ impl Live {
 
     /// Hareketi azalt: tek, durağan kare (zamanlayıcı yok).
     fn draw_static(&mut self, gfx: &Gfx, dock: &Dock) {
+        self.static_pill = Some(dock.live_pill());
         self.check_clock(gfx, dock);
         self.check_weather(gfx, dock, false);
         // Hareketi azalt: geçiş yok, tek durağan kare.
@@ -641,6 +645,10 @@ impl Live {
         self.windows = windows;
         if changed {
             self.refresh(gfx, dock);
+        } else if self.state == State::Static && self.static_pill != Some(dock.live_pill()) {
+            // Durağan karede zamanlayıcı yok: dock büyüyüp küçülünce kar ve hayvan
+            // eski boyda kalmasın.
+            self.draw_static(gfx, dock);
         }
         self.sync_snow_hook();
     }
