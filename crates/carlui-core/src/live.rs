@@ -50,11 +50,18 @@ pub struct LiveConfig {
     /// Hayvan bilgisayardaki olaylara tepki versin (müzik, bildirim, boşta
     /// kalma, okşama). Eski dosyalarda alan yoksa açık gelir (`serde(default)`).
     pub reactions: bool,
+    /// Kar sahnesinde yalnızca dock ve ada içinde yağan basit kar (pencerelerde
+    /// birikme, kartopu, küreme yok; en hafif seçenek).
+    pub snow_simple: bool,
+    /// Kar yağarken dock simgelerinin üstünde de kar birikir.
+    pub snow_icons: bool,
+    /// Kar yağarken fare bir süre durursa ekran kenarlarında hafif buzlanma.
+    pub frost: bool,
 }
 
 impl Default for LiveConfig {
     fn default() -> Self {
-        Self { pet: String::new(), scene: LiveScene::None, intensity: LiveIntensity::Subtle, pause_on_battery: true, weather: Default::default(), reactions: true }
+        Self { pet: String::new(), scene: LiveScene::None, intensity: LiveIntensity::Subtle, pause_on_battery: true, weather: Default::default(), reactions: true, snow_simple: false, snow_icons: false, frost: false }
     }
 }
 
@@ -207,7 +214,7 @@ mod tests {
     #[test]
     fn gidip_gelir() {
         let mut c = Config::default();
-        c.dock.live = LiveConfig { pet: "dolphin".into(), scene: LiveScene::Aquarium, intensity: LiveIntensity::Normal, pause_on_battery: false, weather: crate::live_weather::LiveWeather { enabled: true, place: "Ankara".into(), lat: 39.93, lon: 32.86, day_night: true }, reactions: false };
+        c.dock.live = LiveConfig { pet: "dolphin".into(), scene: LiveScene::Aquarium, intensity: LiveIntensity::Normal, pause_on_battery: false, weather: crate::live_weather::LiveWeather { enabled: true, place: "Ankara".into(), lat: 39.93, lon: 32.86, day_night: true }, reactions: false, snow_simple: true, snow_icons: true, frost: true };
         let s = toml::to_string(&c).unwrap();
         let back: Config = toml::from_str(&s).unwrap();
         assert_eq!(back.dock.live, c.dock.live);

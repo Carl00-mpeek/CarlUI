@@ -208,6 +208,36 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         intensity,
         90.0,
     );
+    // Kar ayarları: sahne kar ya da gerçek hava kar getirebilir.
+    if c.scene == LiveScene::Snow || c.weather.active() {
+        f.toggle(
+            p,
+            t!("Basit kar", "Simple snow"),
+            t!(
+                "Kar yalnızca dock ve adanın içinde yağar: pencerelerde birikme, kartopu ve kardan adam yok. En az kaynak harcayan seçenek.",
+                "Snow falls only inside the dock and the island: no piling on windows, no snowballs or snowmen. Uses the fewest resources."
+            ),
+            c.snow_simple,
+            |c| c.dock.live.snow_simple ^= true,
+        );
+        f.toggle(
+            p,
+            t!("Simgelere kar", "Snow on icons"),
+            t!("Kar yağarken uygulama simgelerinin üstünde de yavaşça kar birikir.", "While it snows, snow slowly piles up on the app icons too."),
+            c.snow_icons,
+            |c| c.dock.live.snow_icons ^= true,
+        );
+        f.toggle(
+            p,
+            t!("Buzlanma", "Frost"),
+            t!(
+                "Kar yağarken fare ve klavye 20 saniye kullanılmazsa ekranın kenarlarında hafif bir buz belirir; dokununca erir.",
+                "While it snows, a light frost creeps in from the screen edges after 20 seconds without mouse or keyboard; it melts as soon as you move."
+            ),
+            c.frost,
+            |c| c.dock.live.frost ^= true,
+        );
+    }
     f.toggle(
         p,
         t!("Pilde duraklat", "Pause on battery"),

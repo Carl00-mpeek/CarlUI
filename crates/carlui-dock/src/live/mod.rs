@@ -15,7 +15,9 @@ mod dolphin;
 mod droplets;
 mod droplets_view;
 mod fade;
+mod frost;
 mod gpu;
+mod icon_snow;
 mod ledge;
 mod ledge_view;
 mod load;
@@ -149,6 +151,8 @@ pub struct Live {
     ledge: Option<ledge_view::LedgeView>,
     /// Yağmurda simgelerin üstünden kayan parlaklık.
     shimmer: Option<shimmer::Shimmer>,
+    icon_snow: Option<icon_snow::IconSnow>,
+    frost: Option<frost::Frost>,
     /// Dock altta: pill'in üstü de kar tutar.
     bottom: bool,
     /// Fare kancası kar olaylarını gönderiyor.
@@ -197,6 +201,8 @@ impl Live {
             stats: std::env::var_os("CARLUI_LIVE_DEBUG").map(|_| Stats::new()),
             ledge: None,
             shimmer: None,
+            icon_snow: None,
+            frost: None,
             bottom: pet_allowed,
             snow_hook: false,
             pacer: None,
@@ -274,12 +280,33 @@ impl Live {
             Some(l) => self.shimmer.get_or_insert_with(|| shimmer::Shimmer::new(l)).sync(gfx, dock, now, l),
             None => self.shimmer = None,
         }
+        let snow = self.scene.as_ref().is_some_and(|s| s.resolved.kind == particles::Kind::Snow);
+        if snow && self.cfg.snow_icons {
+            self.icon_snow.get_or_insert_with(icon_snow::IconSnow::new).sync(gfx, dock, now);
+        } else {
+            self.icon_snow = None;
+        }
+        if snow && self.cfg.frost {
+            if self.frost.is_none() {
+                match frost::Frost::new(gfx, dock.live_view().mon) {
+                    Ok(f) => self.frost = Some(f),
+                    Err(e) => warn!("canlı dock: buzlanma kurulamadı: {e}"),
+                }
+            }
+            if let Some(f) = self.frost.as_mut() {
+                f.step(gfx, now);
+            }
+        } else {
+            self.frost = None;
+        }
     }
 
     /// Sahne kar ya da yağmursa kenar birikintisini kurar; değilse eritmeye bırakır.
     fn sync_ledge(&mut self, gfx: &Gfx, dock: &Dock) {
         let mode = self.scene.as_ref().and_then(|s| {
             let m = match s.resolved.kind {
+                // Basit kar: yalnızca dock ve ada içinde yağar, birikme katmanı yok.
+                particles::Kind::Snow if self.cfg.snow_simple => return None,
                 particles::Kind::Snow => ledge_view::Mode::Snow,
                 particles::Kind::Rain => ledge_view::Mode::Rain,
                 _ => return None,
@@ -338,6 +365,7 @@ impl Live {
         if st != State::Running {
             // Duraklayınca/gizlenince parlaklık da durur (animasyon boşa dönmesin).
             self.shimmer = None;
+            self.frost = None;
         }
         match st {
             State::Running => {
@@ -390,6 +418,7 @@ impl Live {
         }
         let pill = self.bottom.then(|| dock.live_pill());
         self.shimmer = None;
+        self.frost = None;
         if let Some(l) = self.ledge.as_mut() {
             if let Err(e) = l.settle(gfx, pill) {
                 warn!("canlı dock: kar katmanı çizilemedi: {e}");
