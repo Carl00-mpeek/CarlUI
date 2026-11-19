@@ -22,7 +22,7 @@ use std::{
         mpsc::{self, Sender},
         Arc, Mutex,
     },
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use windows::{
     core::*,
@@ -81,7 +81,7 @@ pub struct BatteryTab {
     /// Gösterilen durum (aynıysa yeniden çizilmez).
     shown: Vec<(Kind, Option<u8>, bool)>,
     /// Son bilinen değerler: uyuyan fare "bilinmiyor" görünmesin.
-    last: HashMap<String, (u8, bool, Instant)>,
+    last: HashMap<String, (u8, bool, SystemTime)>,
 }
 
 fn glyph_of(k: Kind) -> char {
@@ -151,30 +151,38 @@ impl BatteryTab {
             shared,
             ask,
             shown: Vec::new(),
-            last: HashMap::new(),
+            last: load_last(),
         })
     }
 
     /// Okunan değerleri son bilinenlerle birleştirir.
     fn merged(&mut self) -> Vec<(Kind, Option<u8>, bool)> {
         let readings = self.shared.lock().map(|s| s.readings.clone()).unwrap_or_default();
-        let now = Instant::now();
-        readings
+        let now = SystemTime::now();
+        let mut changed = false;
+        let out = readings
             .into_iter()
             .take(4)
             .map(|r| match r.percent {
                 Some(p) => {
-                    self.last.insert(r.name.clone(), (p, r.charging, now));
+                    let prev = self.last.insert(r.name.clone(), (p, r.charging, now));
+                    changed |= prev.map_or(true, |l| (l.0, l.1) != (p, r.charging));
                     (r.kind, Some(p), r.charging)
                 }
                 // Kulaklık "kapalı" diyebiliyor; fare ise yalnızca susar (uyuyor).
-                None if r.kind == Kind::Mouse => match self.last.get(&r.name).filter(|l| now - l.2 < KEEP) {
-                    Some(&(p, c, _)) => (r.kind, Some(p), c),
-                    None => (r.kind, None, false),
-                },
+                None if r.kind == Kind::Mouse => {
+                    match self.last.get(&r.name).filter(|l| now.duration_since(l.2).map_or(true, |d| d < KEEP)) {
+                        Some(&(p, c, _)) => (r.kind, Some(p), c),
+                        None => (r.kind, None, false),
+                    }
+                }
                 None => (r.kind, None, false),
             })
-            .collect()
+            .collect();
+        if changed {
+            save_last(&self.last);
+        }
+        out
     }
 
     /// Yeni okuma geldi: panel içeriği yeniden kurulur.
@@ -344,4 +352,37 @@ impl Drop for BatteryTab {
             let _ = DestroyWindow(self.hwnd);
         }
     }
+}
+
+// ---- son bilinen değerler ------------------------------------------------------
+// Dock yeniden başlayınca uyuyan fare "—" görünmesin diye diske yazılır:
+// her satır `ad<TAB>yüzde<TAB>şarjda<TAB>unix_saniye`.
+
+fn last_path() -> std::path::PathBuf {
+    carlui_core::paths::data_dir().join("battery.txt")
+}
+
+fn load_last() -> HashMap<String, (u8, bool, SystemTime)> {
+    let text = std::fs::read_to_string(last_path()).unwrap_or_default();
+    text.lines()
+        .filter_map(|l| {
+            let mut it = l.split('\t');
+            let name = it.next()?.to_string();
+            let pct: u8 = it.next()?.parse().ok()?;
+            let chg = it.next()? == "1";
+            let at = UNIX_EPOCH + Duration::from_secs(it.next()?.parse().ok()?);
+            (pct <= 100).then_some((name, (pct, chg, at)))
+        })
+        .collect()
+}
+
+fn save_last(last: &HashMap<String, (u8, bool, SystemTime)>) {
+    let text: String = last
+        .iter()
+        .map(|(n, (p, c, at))| {
+            let secs = at.duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+            format!("{}\t{p}\t{}\t{secs}\n", n.replace(['\t', '\n'], " "), *c as u8)
+        })
+        .collect();
+    let _ = std::fs::write(last_path(), text);
 }

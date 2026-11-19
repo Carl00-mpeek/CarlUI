@@ -1,12 +1,14 @@
 //! Şarjlı fare ve kulaklığın pil seviyesi.
 //!
-//! Üç kaynak birleştirilir:
+//! Dört kaynak birleştirilir:
 //! - **Bluetooth** cihazlar: Windows'un kendi pil özelliği (`bt::batteries`).
 //! - **ATK alıcılı fareler** (VID 373B, ör. ATK A9 Plus): üreticinin HID
 //!   protokolü. Rapor 0x08, 16 baytlık gövde `[komut, 0, adr_hi, adr_lo, uzunluk,
 //!   veri×10, sağlama]`; 0x04 komutu `[yüzde, şarjda, mV_hi, mV_lo]` döner.
 //! - **HyperX Cloud III S Wireless** alıcısı (VID 03F0): 0x0C raporuyla
 //!   `0C 02 03 01 00 06` sorusu; yanıtın 6. baytı yüzdedir (>100 = kulaklık kapalı).
+//! - **Diğer HID cihazlar**: tanımlayıcısında standart "Battery Strength"
+//!   (sayfa 0x06, kullanım 0x20) alanı olan her alıcı; marka bilgisi gerekmez.
 //!
 //! Protokoller açık kaynak gözlemlere dayanır (libatk-rs, atk-a9-air-plus-battery,
 //! HyperX-Battery-Tray); kod bağımsız yazılmıştır. Okuma birkaç yüz ms sürebilir:
@@ -264,6 +266,101 @@ fn hyperx() -> Option<Reading> {
     Some(reading)
 }
 
+// ---- standart HID pil alanı ----------------------------------------------------
+
+/// HID standardı: Generic Device Controls (0x06) / Battery Strength (0x20).
+const GDC_PAGE: u16 = 0x06;
+const BATTERY_STRENGTH: u16 = 0x20;
+
+/// Üreticiye özel protokolü bilinmeyen cihazlar için: HID tanımlayıcısında
+/// standart "pil gücü" alanı bildiren her arayüzden değer okunur (özellik ya da
+/// giriş raporu). Bunu bildiren 2.4 GHz alıcılar ve oyun kolları kendiliğinden görünür.
+fn generic(skip: &[&str]) -> Vec<Reading> {
+    let mut out: Vec<Reading> = Vec::new();
+    for i in interfaces("") {
+        let lower = i.path.to_lowercase();
+        if skip.iter().any(|v| lower.contains(v)) {
+            continue;
+        }
+        let Some(h) = open(&i.path, 0) else { continue };
+        let found = unsafe { generic_one(h) };
+        unsafe {
+            let _ = CloseHandle(h);
+        }
+        if let Some((pct, name)) = found {
+            if !out.iter().any(|r| r.name == name) {
+                let kind = if (i.page, i.usage) == (1, 2) { Kind::Mouse } else { kind_of(&name) };
+                out.push(Reading { kind, name, percent: Some(pct), charging: false });
+            }
+        }
+    }
+    out
+}
+
+/// Arayüzün pil gücü alanı varsa (yüzde, ürün adı).
+unsafe fn generic_one(h: HANDLE) -> Option<(u8, String)> {
+    let mut pp = PHIDP_PREPARSED_DATA::default();
+    if !HidD_GetPreparsedData(h, &mut pp).as_bool() {
+        return None;
+    }
+    let mut caps = HIDP_CAPS::default();
+    let _ = HidP_GetCaps(pp, &mut caps);
+    let mut result = None;
+    'types: for (t, len) in [(HidP_Feature, caps.FeatureReportByteLength), (HidP_Input, caps.InputReportByteLength)] {
+        if len == 0 {
+            continue;
+        }
+        let mut v = vec![HIDP_VALUE_CAPS::default(); 64];
+        let mut n = v.len() as u16;
+        if HidP_GetValueCaps(t, v.as_mut_ptr(), &mut n, pp).is_err() {
+            continue;
+        }
+        for c in &v[..n as usize] {
+            let hit = c.UsagePage == GDC_PAGE
+                && if c.IsRange.as_bool() {
+                    (c.Anonymous.Range.UsageMin..=c.Anonymous.Range.UsageMax).contains(&BATTERY_STRENGTH)
+                } else {
+                    c.Anonymous.NotRange.Usage == BATTERY_STRENGTH
+                };
+            if !hit {
+                continue;
+            }
+            let mut buf = vec![0u8; len as usize];
+            buf[0] = c.ReportID;
+            let ok = if t == HidP_Feature {
+                HidD_GetFeature(h, buf.as_mut_ptr() as _, len as u32).as_bool()
+            } else {
+                HidD_GetInputReport(h, buf.as_mut_ptr() as _, len as u32).as_bool()
+            };
+            if !ok {
+                continue;
+            }
+            let mut val = 0u32;
+            if HidP_GetUsageValue(t, GDC_PAGE, c.LinkCollection, BATTERY_STRENGTH, &mut val, pp, &buf).is_err() {
+                continue;
+            }
+            result = Some((scale(val, c.LogicalMin, c.LogicalMax), product_name(h)));
+            break 'types;
+        }
+    }
+    let _ = HidD_FreePreparsedData(pp);
+    result
+}
+
+/// Ham değer mantıksal aralığa göre yüzdeye çevrilir (çoğu 0..100, bazısı 0..255).
+fn scale(val: u32, lo: i32, hi: i32) -> u8 {
+    let (lo, hi) = (lo as i64, if hi <= lo { 100 } else { hi as i64 });
+    ((val as i64 - lo).clamp(0, hi - lo) * 100 / (hi - lo)) as u8
+}
+
+fn product_name(h: HANDLE) -> String {
+    let mut b = [0u16; 128];
+    let ok = unsafe { HidD_GetProductString(h, b.as_mut_ptr() as _, 256).as_bool() };
+    let n = b.iter().position(|&x| x == 0).unwrap_or(b.len());
+    let s = String::from_utf16_lossy(&b[..n]).trim().to_string();
+    if ok && !s.is_empty() { s } else { "HID".into() }
+}
+
 // ---- birleşik ----------------------------------------------------------------
 
 fn kind_of(name: &str) -> Kind {
@@ -283,6 +380,8 @@ pub fn read_all() -> Vec<Reading> {
     let mut out: Vec<Reading> = Vec::new();
     out.extend(atk());
     out.extend(hyperx());
+    // Bluetooth cihazlar aşağıda Windows'tan gelir; HID tarafında ikinci kez sayılmasın.
+    out.extend(generic(&[ATK_VID, HYPERX_VID, "00001124-0000-1000-8000-00805f9b34fb", "00001812-0000-1000-8000-00805f9b34fb"]));
     for (name, pct) in crate::bt::batteries() {
         out.push(Reading { kind: kind_of(&name), name, percent: Some(pct), charging: false });
     }
@@ -322,6 +421,13 @@ mod tests {
         assert_eq!(hyperx_parse(&[0x0C, 2, 3, 1, 0, 6, 71, 0x0F]), Some(Some(71)));
         assert_eq!(hyperx_parse(&[0x0C, 2, 3, 1, 0, 6, 0xFF]), Some(None));
         assert_eq!(hyperx_parse(&[0x0C, 2, 3, 1, 0, 7, 50]), None);
+    }
+
+    #[test]
+    fn olcek() {
+        assert_eq!(scale(50, 0, 100), 50);
+        assert_eq!(scale(255, 0, 255), 100);
+        assert_eq!(scale(7, 0, 0), 7);
     }
 
     #[test]
