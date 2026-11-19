@@ -387,6 +387,11 @@ impl Dock {
 
     // ---- eksen yardımcıları: a = boyuna (öğelerin dizildiği), c = enine ----
 
+    /// Altta ve görünürken hapın ekrandaki dikdörtgeni (pil sekmesi buna yapışır).
+    pub fn pill_on_screen(&self) -> Option<RECT> {
+        (self.side == DockPosition::Bottom && !self.slid_away && !self.suppressed).then(|| self.pill_rect(self.width))
+    }
+
     pub fn side(&self) -> DockPosition {
         self.side
     }

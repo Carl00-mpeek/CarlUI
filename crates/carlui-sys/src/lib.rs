@@ -13,6 +13,7 @@
 #[macro_use]
 extern crate carlui_core;
 
+pub mod battery;
 pub mod bt;
 pub mod cpu;
 pub mod disk;

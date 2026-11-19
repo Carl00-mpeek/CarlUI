@@ -91,6 +91,14 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         |c| c.dock.bluetooth_in_dock ^= true,
     );
 
+    f.toggle(
+        p,
+        t!("Pil sekmesi", "Battery tab"),
+        t!("Dock'un üstünde küçük bir çıkıntı: üstüne gelince şarjlı fare ve kulaklığın pil yüzdesi yukarı kayarak görünür.", "A small tab above the dock: hover it to slide up the battery level of your wireless mouse and headset."),
+        c.battery_tab,
+        |c| c.dock.battery_tab ^= true,
+    );
+
     f.toggle(p, t!("Bölme çizgileri", "Separators"), t!("Win logosu, uygulamalar ve klasörler arasındaki ince çizgiler.", "Thin lines between the Win logo, apps and folders."), c.separators, |c| c.dock.separators ^= true);
 
     f.toggle(

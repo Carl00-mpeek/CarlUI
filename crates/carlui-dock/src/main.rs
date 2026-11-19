@@ -11,6 +11,7 @@
 extern crate carlui_core;
 
 mod apps;
+mod battery;
 mod dock;
 mod iconcache;
 mod input;
@@ -99,6 +100,8 @@ struct App {
     display_dirty: bool,
     /// Canlı dock (kapalıyken `None`: hiçbir kaynak yok).
     live: Option<live::Live>,
+    /// Pil sekmesi (ayar açıksa; yalnızca ana dock'ta).
+    battery: Option<battery::BatteryTab>,
 }
 
 thread_local! {
@@ -414,7 +417,7 @@ impl App {
         unsafe {
             let _ = KillTimer(self.hwnd, dock::TIMER_AUTOHIDE);
         }
-        if self.dock.mouse_inside || self.popup.mouse_inside || self.dock.menu_open || self.tray_open || self.start_open {
+        if self.dock.mouse_inside || self.popup.mouse_inside || self.battery.as_ref().is_some_and(|b| b.mouse_inside) || self.dock.menu_open || self.tray_open || self.start_open {
             return;
         }
         if cfg!(debug_assertions) || std::env::var_os("CARLUI_TRACE").is_some() {
@@ -713,11 +716,19 @@ impl App {
             self.dock.cfg = cfg;
             return;
         }
+        // Yalnızca pil sekmesi açılıp kapandıysa dock'u baştan kurma.
+        mine.dock.battery_tab = old.dock.battery_tab;
+        if mine == *old {
+            self.dock.cfg = cfg;
+            self.sync_battery();
+            return;
+        }
         // Yalnızca canlı dock değiştiyse dock'u baştan kurma; yalnızca onu yenile.
         mine.dock.live = old.dock.live.clone();
         if mine == *old {
             self.dock.cfg = cfg;
             self.rebuild_live();
+            self.sync_battery();
             // Kar oyunu fare kancası ister: kanca hiç kurulmamışsa şimdi kurulsun.
             if self.input.is_none() && self.live.is_some() {
                 self.start_input();
@@ -750,6 +761,9 @@ impl App {
                 if let Ok(p) = Popup::new(&self.gfx, self.popup.hwnd, &self.dock.theme, self.dock.scale()) {
                     self.popup = p;
                 }
+                // Tema/ölçek değişmiş olabilir: sekme yeniden kurulur.
+                self.battery = None;
+                self.sync_battery();
                 self.start_input();
                 self.arm_autohide(1500);
                 info!("dock yeni ayarlarla yeniden kuruldu");
@@ -773,6 +787,24 @@ impl App {
         let mut c = self.dock.cfg.clone();
         c.dock.icon_size = config::load().dock.icon_size;
         self.dock.cfg = c;
+    }
+
+    /// Pil sekmesini ayara göre kurar ya da kaldırır (ek ekran / kum havuzu dock'unda yok).
+    fn sync_battery(&mut self) {
+        let want = self.dock.cfg.dock.battery_tab && screens::child().is_none() && !sandbox::on();
+        if want == self.battery.is_some() {
+            return;
+        }
+        self.battery = None;
+        if !want {
+            return;
+        }
+        let tab = create_window(w!("CarlUI.DockBattery"), Some(battery_proc), w!("CarlUI Battery"))
+            .and_then(|h| battery::BatteryTab::new(&self.gfx, h, &self.dock.theme, self.dock.scale()));
+        match tab {
+            Ok(t) => self.battery = Some(t),
+            Err(e) => carlui_core::warn!("pil sekmesi kurulamadı: {e}"),
+        }
     }
 
     /// Canlı dock'u ayara göre (yeniden) kurar; kapalıysa tüm kaynaklarını bırakır.
@@ -1131,6 +1163,57 @@ extern "system" fn popup_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> L
     }
 }
 
+extern "system" fn battery_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    unsafe {
+        match msg {
+            WM_MOUSEACTIVATE => LRESULT(MA_NOACTIVATE as isize),
+            WM_MOUSEMOVE => {
+                track_leave(hwnd);
+                with_app(|a| {
+                    if let Some(b) = a.battery.as_mut() {
+                        b.enter();
+                    }
+                    let _ = KillTimer(a.hwnd, dock::TIMER_AUTOHIDE);
+                });
+                LRESULT(0)
+            }
+            WM_MOUSELEAVE => {
+                with_app(|a| {
+                    if let Some(b) = a.battery.as_mut() {
+                        b.leave();
+                    }
+                    a.arm_autohide(700);
+                });
+                LRESULT(0)
+            }
+            battery::WM_APP_BATTERY => {
+                with_app(|a| {
+                    let pill = a.dock.pill_on_screen();
+                    if let Some(b) = a.battery.as_mut() {
+                        b.update(&a.gfx);
+                        b.follow(pill);
+                    }
+                });
+                LRESULT(0)
+            }
+            WM_TIMER => {
+                with_app(|a| {
+                    let pill = a.dock.pill_on_screen();
+                    if let Some(b) = a.battery.as_mut() {
+                        match wp.0 {
+                            battery::TIMER_FOLLOW => b.follow(pill),
+                            battery::TIMER_FOLD => b.fold(),
+                            _ => {}
+                        }
+                    }
+                });
+                LRESULT(0)
+            }
+            _ => DefWindowProcW(hwnd, msg, wp, lp),
+        }
+    }
+}
+
 fn create_window(class: PCWSTR, proc: WNDPROC, title: PCWSTR) -> Result<HWND> {
     unsafe {
         let instance = GetModuleHandleW(None)?;
@@ -1284,12 +1367,14 @@ fn main() -> Result<()> {
                 start_open: false,
                 display_dirty: false,
                 live: None,
+                battery: None,
             })
         });
         with_app(|a| {
             a.start_input();
             a.arm_autohide(1500);
             a.rebuild_live();
+            a.sync_battery();
         });
         let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         screens::spawn(cfg.dock.other_screens);
