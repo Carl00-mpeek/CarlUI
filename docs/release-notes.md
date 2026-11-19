@@ -1,25 +1,15 @@
 ## Türkçe
 
-**CarlUI 1.1.13: Akıcı kar oyunu ve sürüklenen pencerelerde kar.**
-
-**Yenilikler**
-- Kartopu oyunu ve kar küreme aracı artık ekran yenileme hızında çalışır; yüksek yenileme hızlı ekranlarda takılma olmadan akar.
-- Pencere sürüklenince üstündeki kar pencereyle gider; yalnızca bir kısmı dökülür ve dökülen kar aşağı süzülür. Ekranın kenarından taşan pencerelerde de kar korunur.
-- Kar efekti açıkken dock'a sağ tıklayınca "Kar küreme aracını çağır" ile araç hemen gelir.
+**CarlUI 1.1.14: Zeminde belirgin kar.**
 
 **Düzeltmeler**
-- Dock'taki kardan yapılıp fırlatılmadan bırakılan kartopu artık dock'un içinden düşmüyor, üstünde kalıyor.
+- Ekranın alt kenarında, dock'un iki yanında biriken kar artık kalın ve belirgin; hafif karda bile görünür. Eskiden ince bir çizgi olarak kalıyordu.
 
 ---
 
 ## English
 
-**CarlUI 1.1.13: Smooth snow play and snow on dragged windows.**
-
-**New**
-- The snowball game and the snowplow now run at your screen's refresh rate, so they move smoothly on high-refresh displays.
-- When you drag a window, the snow on top moves with it; only part of it falls off, drifting down. Windows that hang off the screen edge keep their snow too.
-- With the snow effect on, right-click the dock and choose "Call the snow plow" to bring the plow right away.
+**CarlUI 1.1.14: Visible snow on the ground.**
 
 **Fixes**
-- A snowball made from the snow on the dock and dropped without throwing now stays on the dock instead of falling through it.
+- Snow piling up along the bottom edge of the screen, on both sides of the dock, is now thick and clearly visible, even in light snow. It used to stay a thin line.
