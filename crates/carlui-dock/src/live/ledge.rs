@@ -56,6 +56,10 @@ const KEEP_MIN: f32 = 0.4;
 /// Pencere üstleri için olağan pürüz.
 pub const ROUGH: f32 = 0.16;
 
+/// Pil çıkıntısının yüzeyi: boyu değişince karı sıfırlanmaz (esner), kaybolunca
+/// karı saklanır ve geri gelince yerine konur.
+pub const NUB_KEY: isize = -3;
+
 /// `spans` aralıklarından `cut` aralığını çıkarır.
 pub fn subtract(spans: &mut Vec<(i32, i32)>, cut: (i32, i32)) {
     let (c0, c1) = cut;
@@ -206,6 +210,8 @@ pub struct Ledges {
     s: f32,
     rng: Rng,
     lost: Vec<Lost>,
+    /// Kaybolan çıkıntının saklanan karı.
+    parked: Vec<Ledge>,
 }
 
 /// Görünmez olan (küçültülen, kapanan) bir yüzeyin karı: nereden ve ne kadar (px²).
@@ -224,7 +230,7 @@ pub fn max_height(level: f32, s: f32) -> f32 {
 
 impl Ledges {
     pub fn new(s: f32, rng: Rng) -> Self {
-        Self { list: Vec::new(), s: s.max(0.5), rng, lost: Vec::new() }
+        Self { list: Vec::new(), s: s.max(0.5), rng, lost: Vec::new(), parked: Vec::new() }
     }
 
     /// Toplayıcıdan gelen kenarlarla eşler. Taşınan yüzeyin karı onunla gider,
@@ -234,6 +240,17 @@ impl Ledges {
     pub fn sync(&mut self, mut edges: Vec<Edge>) -> Vec<Shed> {
         edges.truncate(MAX_LEDGES);
         let mut old = std::mem::take(&mut self.list);
+        // Saklanan kar, yüzeyi geri gelince yerine konur.
+        for p in std::mem::take(&mut self.parked) {
+            if old.iter().any(|l| l.edge.key == p.edge.key) {
+                continue;
+            }
+            if edges.iter().any(|e| e.key == p.edge.key) {
+                old.push(p);
+            } else {
+                self.parked.push(p);
+            }
+        }
         let mut shed = Vec::new();
         for e in edges {
             let found = old.iter().position(|l| l.edge.key == e.key);
@@ -276,6 +293,18 @@ impl Ledges {
                     l.dirty = true;
                     l
                 }
+                // Çıkıntı büyüdü/küçüldü: kar sıfırlanmaz, yeni boya yayılır.
+                Some(l) if l.edge.key == NUB_KEY => {
+                    let mut n = Ledge::new(e, self.s, l.seed);
+                    let ow = (l.edge.x1 - l.edge.x0).max(1) as f32;
+                    let nw = (n.edge.x1 - n.edge.x0).max(1) as f32;
+                    for i in 0..n.h.len() {
+                        let u = ((n.col_x(i) - n.edge.x0 as f32) / nw).clamp(0.0, 1.0);
+                        n.h[i] = l.height_at(l.edge.x0 as f32 + u * ow);
+                    }
+                    n.kept = l.kept;
+                    n
+                }
                 // Boyu değişti ya da yeni: kar sıfırdan birikir.
                 _ => {
                     let seed = self.rng.range(0.0, 6.28);
@@ -292,7 +321,23 @@ impl Ledges {
             }
         }
         self.lost.truncate(8);
+        // Kaybolan çıkıntının karı saklanır (panel kapanınca geri gelir).
+        self.parked.extend(old.into_iter().filter(|l| l.edge.key == NUB_KEY && !l.bare()));
         shed
+    }
+
+    /// Yüzey silkelendi: karın `1 - keep` payı düşer, kalanı yerinde kalır.
+    /// Düşen kar (düşen tanelerle gösterilmek üzere) döner.
+    pub fn shake(&mut self, key: isize, keep: f32) -> Option<Shed> {
+        let keep = keep.clamp(0.0, 1.0);
+        let l = self.list.iter_mut().find(|l| l.edge.key == key)?;
+        let top = l.h.iter().copied().fold(0.0f32, f32::max);
+        if top < 0.5 {
+            return None;
+        }
+        l.h.iter_mut().for_each(|h| *h *= keep);
+        l.dirty = true;
+        Some(Shed { x0: l.edge.x0 as f32, x1: l.edge.x1 as f32, y: l.edge.y as f32, h: top, frac: 1.0 - keep, dx: 0.0 })
     }
 
     /// `snow`: kar yağıyorsa şiddet (0..=1); `None` ise erir. `melt_fast`: yağmur.
@@ -443,6 +488,34 @@ mod tests {
 
     fn edge(key: isize, x0: i32, x1: i32, y: i32) -> Edge {
         Edge { key, x0, x1, y, room: 40, taper: 8, spans: vec![(x0, x1)], depth: 1.0, rough: ROUGH, mound: 0.0, left: x0, full: x1 - x0 }
+    }
+
+    #[test]
+    fn cikinti_silkelenir_saklanir_ve_esner() {
+        let mut m = Ledges::new(1.0, Rng::new(3));
+        m.sync(vec![edge(NUB_KEY, 100, 146, 50)]);
+        m.settle(1.0);
+        let vol = |m: &Ledges| m.list.iter().find(|l| l.edge.key == NUB_KEY).map_or(0.0, |l| l.h.iter().sum::<f32>());
+        let full = vol(&m);
+        assert!(full > 1.0);
+        // Silkelenince dörtte biri kalır, düşen pay bildirilir.
+        let d = m.shake(NUB_KEY, 0.25).unwrap();
+        assert!((d.frac - 0.75).abs() < 1e-4 && d.h > 0.5);
+        let kept = vol(&m);
+        assert!((kept - 0.25 * full).abs() < 0.01 * full);
+        // Panel açıkken yüzey yok: kar saklanır, geri gelince (büyümüş olsa da) yerinde.
+        m.sync(vec![]);
+        assert!(m.list.is_empty());
+        m.sync(vec![edge(NUB_KEY, 93, 153, 44)]);
+        let back = vol(&m);
+        assert!(back > 0.5 * kept, "{back} {kept}");
+        // Boyu değişse de kar sıfırlanmaz.
+        m.sync(vec![edge(NUB_KEY, 100, 146, 50)]);
+        assert!(vol(&m) > 0.5 * kept);
+        // Karsız yüzey bir şey dökmez.
+        let mut e = Ledges::new(1.0, Rng::new(4));
+        e.sync(vec![edge(NUB_KEY, 0, 40, 10)]);
+        assert!(e.shake(NUB_KEY, 0.25).is_none());
     }
 
     #[test]

@@ -67,7 +67,9 @@ const GLINT_RUN: f32 = 2.5;
 /// Ekranın alt kenarı boyunca uzanan birikinti.
 const DRIFT_KEY: isize = -2;
 /// Pil çıkıntısının üstü.
-const NUB_KEY: isize = -3;
+use super::ledge::NUB_KEY;
+/// Panel açılınca çıkıntıda kalan kar payı.
+const NUB_KEEP: f32 = 0.25;
 /// Dock'taki kar: daha kalın, bir yerde tepecik yapar.
 const DOCK_DEPTH: f32 = 1.5;
 const DOCK_MOUND: f32 = 0.8;
@@ -148,6 +150,8 @@ pub struct LedgeView {
     shown: bool,
     last: Instant,
     gathered: Option<Instant>,
+    /// Görülen son çıkıntı silkelemesi.
+    nub_shakes: u32,
     due: Instant,
     /// Yağan kar (yalnızca kar modunda, hareket azaltılmamışken).
     /// Yağan karın çizildiği, pencerelerin arkasındaki katman.
@@ -216,6 +220,7 @@ impl LedgeView {
             shown: false,
             last: now,
             gathered: None,
+            nub_shakes: crate::battery::nub_shakes(),
             due: now,
             backdrop: None,
             backdrop_z: now,
@@ -281,13 +286,11 @@ impl LedgeView {
                     left: p.left,
                     full: p.right - p.left,
                 });
-                // Pil çıkıntısı: dock'un üstünde ayrı, küçük bir yüzey. Altındaki
-                // dock karı çıkıntının içinde kalmasın diye o aralık dock'tan düşülür.
+                // Pil çıkıntısı: dock'un üstünde ayrı, küçük bir yüzey. Dock karı
+                // kesilmez, çıkıntının dibini örter; çıkıntının karı (dockla aynı
+                // kalınlıkta) onun üstünde hafif bir tümsek olur, ikisi tek örtü gibi görünür.
                 if let Some((l, t, r, _)) = crate::battery::nub_rect().filter(|n| n.2 - n.0 > 8 && n.0 < p.right && n.2 > p.left) {
-                    if let Some(d) = edges.last_mut() {
-                        super::ledge::subtract(&mut d.spans, (l, r));
-                    }
-                    edges.push(Edge { key: NUB_KEY, x0: l, x1: r, y: t, room: ha, taper: (6.0 * s) as i32, spans: vec![(l, r)], depth: DOCK_DEPTH * 0.7, rough: ROUGH, mound: 0.0, left: l, full: r - l });
+                    edges.push(Edge { key: NUB_KEY, x0: l, x1: r, y: t, room: ha, taper: (6.0 * s) as i32, spans: vec![(l, r)], depth: DOCK_DEPTH, rough: ROUGH, mound: 0.0, left: l, full: r - l });
                 }
             }
         }
@@ -479,6 +482,16 @@ impl LedgeView {
         }
         let dt = (now - self.last).as_secs_f32().min(0.25);
         self.last = now;
+        // Panel açıldı: çıkıntının karı silkelenir, biraz kalır (kapanınca geri gelir).
+        let shakes = crate::battery::nub_shakes();
+        if shakes != self.nub_shakes {
+            self.nub_shakes = shakes;
+            if let Some(d) = self.model.shake(NUB_KEY, NUB_KEEP) {
+                // Dar yüzey az tane verir; silkeleme görünsün diye üç kat.
+                self.spill_shed(gfx, &[d; 3])?;
+                self.gathered = None;
+            }
+        }
         let dragging = self.moving.is_some_and(|t| now - t < DRAG_HOLD);
         if dragging || self.gathered.is_none_or(|t| now - t >= GATHER) {
             self.gathered = Some(now);

@@ -81,6 +81,13 @@ pub fn nub_rect() -> Option<(i32, i32, i32, i32)> {
     NUB.lock().ok().and_then(|n| *n)
 }
 
+/// Panel her açıldığında artar: kar katmanı çıkıntının karını silkeler.
+static NUB_SHAKES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+pub fn nub_shakes() -> u32 {
+    NUB_SHAKES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 struct Shared {
     readings: Vec<Reading>,
     at: Option<Instant>,
@@ -525,6 +532,7 @@ impl BatteryTab {
     }
 
     fn show_panel(&mut self) {
+        NUB_SHAKES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.open = true;
         self.set_region();
         let _ = self.panel.root.SetOpacity(1.0);
