@@ -31,6 +31,21 @@ ana süreç çökeni yeniden başlatır. Modüller birbirleriyle olay yolu (name
 | Loglar | `%LOCALAPPDATA%\CarlUI\logs\` (7 gün saklanır) |
 | Görev çubuğu durumu | `%LOCALAPPDATA%\CarlUI\taskbar-state.json` (yalnızca CarlUI çalışırken var) |
 
+## Sürüm numaraları
+
+Sürüm `X.Y.Z` biçimindedir ve her hane 0 ile 9 arasındadır. İki basamaklı
+hane olmaz (1.1.10 değil). Her yeni sürümde son hane bir artar, 9'u geçince
+sıfırlanır ve soldaki hane bir artar:
+
+- 1.1.1 → 1.1.2 → … → 1.1.9 → **1.2.0**
+- 1.2.9 → 1.3.0
+- 1.9.9 → **2.0.0**
+
+Sürüm `Cargo.toml` içindeki `[workspace.package] version` alanındadır.
+Yayın için: sürümü artır, `cargo update -w` ile `Cargo.lock`'u güncelle,
+`docs/release-notes.md`'yi yaz, commit'le, `vX.Y.Z` etiketini push et.
+GitHub Actions (`release.yml`) kurucuyu derler ve sürümü yayınlar.
+
 ## Derleme ve çalıştırma (adım adım)
 
 **Bir kez yapılır:** Rust kurulu değilse https://rustup.rs adresinden kur
