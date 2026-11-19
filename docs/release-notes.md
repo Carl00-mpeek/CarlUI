@@ -1,31 +1,25 @@
 ## Türkçe
 
-**CarlUI 1.1.12: Kardan adam, tüm ekrana kar ve tepside Bluetooth.**
+**CarlUI 1.1.13: Akıcı kar oyunu ve sürüklenen pencerelerde kar.**
 
 **Yenilikler**
-- Kar yağarken kar artık yalnızca dock'un çevresine değil tüm masaüstüne yağar; dock'un üstünde ve ekranın altında kar birikir.
-- Biriken kara basılı tutunca kartopu yapılır ve imleçle taşınır. Bırakılan top düşer, yuvarlanır; imleçle itilebilir. Üst üste üç top kardan adama dönüşür (havuç burun, atkı, dal kollar). Kar küreme aracı alttaki birikintiyi ve topları temizler.
-- Yağmurda dock simgelerinin üstünde ıslak bir parıltı görünür.
-- Bluetooth artık varsayılan olarak tepside: ok panelinin başındaki Bluetooth satırı Bluetooth panelini açar. Ayarlar → Dock → "Bluetooth dock'ta" ile simge yine durum alanında gösterilebilir.
+- Kartopu oyunu ve kar küreme aracı artık ekran yenileme hızında çalışır; yüksek yenileme hızlı ekranlarda takılma olmadan akar.
+- Pencere sürüklenince üstündeki kar pencereyle gider; yalnızca bir kısmı dökülür ve dökülen kar aşağı süzülür. Ekranın kenarından taşan pencerelerde de kar korunur.
+- Kar efekti açıkken dock'a sağ tıklayınca "Kar küreme aracını çağır" ile araç hemen gelir.
 
 **Düzeltmeler**
-- Tepsi ikonuna sağ tıklayınca uygulamanın menüsü panelin üstünde açılır ve panel kapanmaz; Discord'un sağ tık menüsü (Çıkış) artık her seferinde açılıyor.
-- Ekranı kaplayan pencereler dock'tan açılırken doğru boyutta geri gelir.
-- Tarayıcıdayken dock'un titremesi giderildi.
+- Dock'taki kardan yapılıp fırlatılmadan bırakılan kartopu artık dock'un içinden düşmüyor, üstünde kalıyor.
 
 ---
 
 ## English
 
-**CarlUI 1.1.12: Snowmen, full-screen snow and Bluetooth in the tray.**
+**CarlUI 1.1.13: Smooth snow play and snow on dragged windows.**
 
 **New**
-- Snow now falls across the whole desktop, not just around the dock, and builds up on the dock and along the bottom of the screen.
-- Press and hold on settled snow to make a snowball and drag it with the cursor. Dropped balls fall and roll, and you can push them with the cursor. Stack three balls to build a snowman (carrot nose, scarf, stick arms). The snowplow clears the bottom drift and the balls on it.
-- In rain, dock icons get a wet shimmer.
-- Bluetooth now lives in the tray by default: the Bluetooth row at the top of the arrow panel opens the Bluetooth panel. Settings → Dock → "Bluetooth on the dock" puts the icon back in the status area.
+- The snowball game and the snowplow now run at your screen's refresh rate, so they move smoothly on high-refresh displays.
+- When you drag a window, the snow on top moves with it; only part of it falls off, drifting down. Windows that hang off the screen edge keep their snow too.
+- With the snow effect on, right-click the dock and choose "Call the snow plow" to bring the plow right away.
 
 **Fixes**
-- Right-clicking a tray icon opens the app's menu on top of the panel without closing it; Discord's right-click menu (Quit) now opens every time.
-- Maximized windows come back at the right size when opened from the dock.
-- Fixed the dock flickering while a browser is in front.
+- A snowball made from the snow on the dock and dropped without throwing now stays on the dock instead of falling through it.
