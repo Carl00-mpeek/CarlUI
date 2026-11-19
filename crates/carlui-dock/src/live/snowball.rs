@@ -350,7 +350,11 @@ impl Snow {
                             continue;
                         }
                         let top = surf(f, x);
-                        if vy > 0.0 && py + b.r <= top + 0.5 && y + b.r >= top {
+                        // Dock'un karından yapılıp hemen bırakılan top yüzeyin biraz
+                        // altında doğar: merkezi yüzeye yakınsa yine üstüne oturur
+                        // (yoksa dock'un içinden düşüp gider).
+                        let above = py + b.r <= top + 0.5 || (!f.wall && py <= top + 12.0 * s);
+                        if vy > 0.0 && above && y + b.r >= top {
                             nb.y = top - b.r;
                             if vy > 700.0 * s {
                                 // Sert iniş: hafif sekme.
@@ -576,6 +580,17 @@ mod tests {
         assert_eq!(b.state, State::Resting(DOCK));
         assert!((b.y - (1000.0 - 10.0)).abs() < 0.01, "{b:?}");
         assert!(!snow.busy());
+    }
+
+    #[test]
+    fn dock_karindan_yapilip_birakilan_top_dockta_kalir() {
+        let mut snow = Snow::new(1.0, 1200.0);
+        // Dock karından (yüzeyin hemen altında) yapılıp fırlatmadan bırakıldı.
+        let id = drop_at(&mut snow, 900.0, 1001.0, 10.0);
+        run(&mut snow, 3.0, &floors());
+        let b = snow.get(id).copied().unwrap();
+        assert_eq!(b.state, State::Resting(DOCK), "{b:?}");
+        assert!((b.y - 990.0).abs() < 0.01, "{b:?}");
     }
 
     #[test]
