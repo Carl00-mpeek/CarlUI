@@ -67,6 +67,20 @@ const G_CHECK: char = '\u{E73E}';
 
 const RED: Rgba = Rgba(0xFF, 0x3B, 0x30, 210);
 
+/// Çıkıntının görünen ölçüsü (ölçek 1): dinlenirken ve imleç üstündeyken.
+const NUB_REST: (f32, f32) = (46.0, 6.0);
+const NUB_HOT: (f32, f32) = (60.0, 12.0);
+/// Çıkıntının üst köşe yarıçapı.
+const NUB_RADIUS: f32 = 6.0;
+
+/// Çıkıntının ekrandaki dikdörtgeni (sol, üst, sağ, alt); kar katmanı üstüne
+/// kar biriktirir. Gizliyken ya da panel açıkken `None`.
+static NUB: Mutex<Option<(i32, i32, i32, i32)>> = Mutex::new(None);
+
+pub fn nub_rect() -> Option<(i32, i32, i32, i32)> {
+    NUB.lock().ok().and_then(|n| *n)
+}
+
 struct Shared {
     readings: Vec<Reading>,
     at: Option<Instant>,
@@ -113,6 +127,10 @@ pub struct BatteryTab {
     win: (i32, i32),
     panel_size: (f32, f32),
     nub_size: (f32, f32),
+    /// Çıkıntı camının boyu (dock'un boyu; altı pencerede kesilir).
+    nub_depth: f32,
+    /// İmleç çıkıntının üstünde: büyümüş durur.
+    hot: bool,
     /// Pencerenin ekrandaki sol-üst köşesi; `None` = gizli.
     pos: Option<(i32, i32)>,
     pub open: bool,
@@ -178,8 +196,8 @@ impl BatteryTab {
         let target = unsafe { comp.cast::<ICompositorDesktopInterop>()?.CreateDesktopWindowTarget(hwnd, true)? };
         let root = comp.CreateContainerVisual()?;
         target.SetRoot(&root)?;
-        let nub_size = ((44.0 * s).round(), (9.0 * s).round());
-        let nub = Glass::new(&comp, theme, nub_size.1 / 2.0)?;
+        let nub_size = ((NUB_REST.0 * s).round(), (NUB_REST.1 * s).round());
+        let nub = Glass::new(&comp, theme, (NUB_RADIUS * s).round())?;
         let panel = Glass::new(&comp, theme, (14.0 * s * theme.radius_scale).round())?;
         root.Children()?.InsertAtTop(&panel.root)?;
         root.Children()?.InsertAtTop(&nub.root)?;
@@ -225,6 +243,8 @@ impl BatteryTab {
             win: (0, 0),
             panel_size: (0.0, 0.0),
             nub_size,
+            nub_depth: (48.0 * s).round(),
+            hot: false,
             pos: None,
             open: false,
             mouse_inside: false,
@@ -377,15 +397,56 @@ impl BatteryTab {
         self.panel_size = (w, h);
         self.panel.root.SetSize(v2(w, h))?;
         // Pencere: panel + üstte biraz boşluk (yaylanma taşmasın).
-        let ww = w.max(self.nub_size.0).ceil() as i32;
+        let ww = w.max(self.nub_dims(true).0).ceil() as i32;
         let wh = (h + 6.0 * s).ceil() as i32;
         self.win = (ww, wh);
-        self.nub.root.SetSize(v2(self.nub_size.0, self.nub_size.1))?;
-        self.nub.root.SetOffset(v3(((ww as f32 - self.nub_size.0) / 2.0).round(), wh as f32 - self.nub_size.1))?;
+        self.place_nub(false)?;
         let px = ((ww as f32 - w) / 2.0).round();
         let y = if self.open { self.open_y() } else { wh as f32 };
         self.panel.root.SetOffset(v3(px, y))?;
         Ok(())
+    }
+
+    /// Çıkıntının görünen ölçüsü: dinlenirken alçak tümsek, imleç üstündeyken büyür.
+    fn nub_dims(&self, hot: bool) -> (f32, f32) {
+        let s = self.s;
+        if hot {
+            ((NUB_HOT.0 * s).round(), (NUB_HOT.1 * s).round())
+        } else {
+            self.nub_size
+        }
+    }
+
+    /// Çıkıntıyı yerleştirir. Cam dock kadar uzundur ve pencerenin alt
+    /// kenarında kesilir: yalnızca tepesi görünür, dock'un arkasından
+    /// çıkıyormuş gibi durur (parlaklık geçişi de dock'unkiyle aynı olur).
+    fn place_nub(&self, animate: bool) -> Result<()> {
+        let (w, h) = self.nub_dims(self.hot);
+        let (ww, wh) = (self.win.0 as f32, self.win.1 as f32);
+        let x = ((ww - w) / 2.0).round();
+        let y = wh - h;
+        if animate {
+            self.motion.animate(&self.nub.root, h!("Offset.Y"), y, 0.62, 70, 0)?;
+            self.motion.animate(&self.nub.root, h!("Offset.X"), x, 0.62, 70, 0)?;
+            self.motion.animate(&self.nub.root, h!("Size.X"), w, 0.62, 70, 0)?;
+        } else {
+            self.nub.root.SetOffset(v3(x, y))?;
+            self.nub.root.SetSize(v2(w, self.nub_depth))?;
+        }
+        Ok(())
+    }
+
+    /// Kar katmanı için çıkıntının ekrandaki tepesini paylaşır.
+    fn publish_nub(&self) {
+        let r = self.pos.filter(|_| !self.open).map(|(x, y)| {
+            let (w, h) = self.nub_dims(self.hot);
+            let l = x + ((self.win.0 as f32 - w) / 2.0).round() as i32;
+            let t = y + self.win.1 - h as i32;
+            (l, t, l + w as i32, y + self.win.1)
+        });
+        if let Ok(mut n) = NUB.lock() {
+            *n = r;
+        }
     }
 
     fn open_y(&self) -> f32 {
@@ -400,6 +461,14 @@ impl BatteryTab {
             let cx = at.filter(|x| (r.left..=r.right).contains(x)).unwrap_or((r.left + r.right) / 2);
             (cx - self.win.0 / 2, r.top - self.win.1)
         });
+        // Cam boyu dock'unkiyle aynı (parlaklık geçişi eşleşsin).
+        if let Some(r) = pill {
+            let depth = (r.bottom - r.top).max(self.nub_size.1 as i32 + 1) as f32;
+            if depth != self.nub_depth {
+                self.nub_depth = depth;
+                let _ = self.nub.root.SetSize(v2(self.nub_dims(self.hot).0, depth));
+            }
+        }
         if want != self.pos {
             let was = self.pos;
             self.pos = want;
@@ -416,6 +485,8 @@ impl BatteryTab {
                     None => {
                         self.open = false;
                         self.mouse_inside = false;
+                        self.hot = false;
+                        let _ = self.place_nub(false);
                         let _ = ShowWindow(self.hwnd, SW_HIDE);
                         let _ = self.panel.root.SetOpacity(0.0);
                         let _ = self.panel.root.SetOffset(v3(((self.win.0 as f32 - self.panel_size.0) / 2.0).round(), self.win.1 as f32));
@@ -434,6 +505,7 @@ impl BatteryTab {
                 }
             }
         }
+        self.publish_nub();
     }
 
     /// Kapalıyken yalnızca çıkıntı, açıkken tüm pencere tıklanır.
@@ -443,8 +515,9 @@ impl BatteryTab {
             let rgn = if self.open {
                 CreateRectRgn(0, 0, w, h)
             } else {
-                // Çıkıntının biraz genişi: ince şeride denk getirmek kolay olsun.
-                let (nw, nh) = (self.nub_size.0 as i32 + 8, self.nub_size.1 as i32 + 4);
+                // Büyümüş çıkıntının biraz genişi: alçak tümseğe denk getirmek kolay olsun.
+                let (gw, gh) = self.nub_dims(true);
+                let (nw, nh) = (gw as i32 + 8, gh as i32 + 2);
                 CreateRectRgn((w - nw) / 2, h - nh, (w + nw) / 2, h)
             };
             SetWindowRgn(self.hwnd, rgn, true);
@@ -459,24 +532,43 @@ impl BatteryTab {
         let _ = self.motion.fade(&self.nub.root, h!("Opacity"), 0.0, 90, 0);
     }
 
+    /// İmleç çıkıntıya geldi: çıkıntı büyür (panel açılmaz; uygulama
+    /// açarken yanlışlıkla değince panel fırlamasın).
     pub fn enter(&mut self) {
         self.mouse_inside = true;
         unsafe {
             let _ = KillTimer(self.hwnd, TIMER_FOLD);
-            let _ = KillTimer(self.hwnd, TIMER_PEEK);
         }
-        if self.open {
+        if self.open || self.hot {
             return;
         }
+        self.hot = true;
+        let _ = self.place_nub(true);
+        self.publish_nub();
         let stale = self.shared.lock().map(|s| s.at.is_none_or(|t| t.elapsed() > FRESH)).unwrap_or(true);
         if stale {
             let _ = self.ask.send(());
         }
-        self.show_panel();
+    }
+
+    /// Çıkıntıya basıldı: panel açılır.
+    pub fn press(&mut self) {
+        unsafe {
+            let _ = KillTimer(self.hwnd, TIMER_PEEK);
+        }
+        if !self.open {
+            self.show_panel();
+            self.publish_nub();
+        }
     }
 
     pub fn leave(&mut self) {
         self.mouse_inside = false;
+        if self.hot {
+            self.hot = false;
+            let _ = self.place_nub(true);
+        }
+        self.publish_nub();
         if !self.open {
             return;
         }
@@ -516,6 +608,9 @@ impl Drop for BatteryTab {
             let _ = KillTimer(self.hwnd, TIMER_FOLLOW);
             let _ = KillTimer(self.hwnd, TIMER_PEEK);
             let _ = DestroyWindow(self.hwnd);
+        }
+        if let Ok(mut n) = NUB.lock() {
+            *n = None;
         }
     }
 }

@@ -1192,6 +1192,14 @@ extern "system" fn battery_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) ->
                 });
                 LRESULT(0)
             }
+            WM_LBUTTONDOWN => {
+                with_app(|a| {
+                    if let Some(b) = a.battery.as_mut() {
+                        b.press();
+                    }
+                });
+                LRESULT(0)
+            }
             battery::WM_APP_BATTERY => {
                 with_app(|a| {
                     let pill = a.dock.pill_on_screen();

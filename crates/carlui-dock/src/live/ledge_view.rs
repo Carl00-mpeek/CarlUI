@@ -66,6 +66,8 @@ const SLOW_FRAME: Duration = Duration::from_millis(150);
 const GLINT_RUN: f32 = 2.5;
 /// Ekranın alt kenarı boyunca uzanan birikinti.
 const DRIFT_KEY: isize = -2;
+/// Pil çıkıntısının üstü.
+const NUB_KEY: isize = -3;
 /// Dock'taki kar: daha kalın, bir yerde tepecik yapar.
 const DOCK_DEPTH: f32 = 1.5;
 const DOCK_MOUND: f32 = 0.8;
@@ -279,6 +281,14 @@ impl LedgeView {
                     left: p.left,
                     full: p.right - p.left,
                 });
+                // Pil çıkıntısı: dock'un üstünde ayrı, küçük bir yüzey. Altındaki
+                // dock karı çıkıntının içinde kalmasın diye o aralık dock'tan düşülür.
+                if let Some((l, t, r, _)) = crate::battery::nub_rect().filter(|n| n.2 - n.0 > 8 && n.0 < p.right && n.2 > p.left) {
+                    if let Some(d) = edges.last_mut() {
+                        super::ledge::subtract(&mut d.spans, (l, r));
+                    }
+                    edges.push(Edge { key: NUB_KEY, x0: l, x1: r, y: t, room: ha, taper: (6.0 * s) as i32, spans: vec![(l, r)], depth: DOCK_DEPTH * 0.7, rough: ROUGH, mound: 0.0, left: l, full: r - l });
+                }
             }
         }
         let mut found: Vec<HWND> = Vec::new();
