@@ -321,9 +321,14 @@ impl App {
         self.dock.set_suppressed(true);
     }
 
+    /// Elde kar topu var: dock gizlenmesin.
+    fn snow_held(&self) -> bool {
+        self.live.as_ref().is_some_and(|l| l.snow_held())
+    }
+
     fn intellihide_check(&mut self) {
         // Tray paneli açıkken dock yerinde kalır (panel dock'a bağlı açılır).
-        if self.dock.behavior() != DockBehavior::Intellihide || self.dock.mouse_inside || self.dock.menu_open || self.tray_open || self.start_open {
+        if self.dock.behavior() != DockBehavior::Intellihide || self.dock.mouse_inside || self.dock.menu_open || self.tray_open || self.start_open || self.snow_held() {
             return;
         }
         let covered = self.dock.overlapped(&self.tracker);
@@ -417,7 +422,7 @@ impl App {
         unsafe {
             let _ = KillTimer(self.hwnd, dock::TIMER_AUTOHIDE);
         }
-        if self.dock.mouse_inside || self.popup.mouse_inside || self.battery.as_ref().is_some_and(|b| b.mouse_inside) || self.dock.menu_open || self.tray_open || self.start_open {
+        if self.dock.mouse_inside || self.popup.mouse_inside || self.battery.as_ref().is_some_and(|b| b.mouse_inside) || self.dock.menu_open || self.tray_open || self.start_open || self.snow_held() {
             return;
         }
         if cfg!(debug_assertions) || std::env::var_os("CARLUI_TRACE").is_some() {
@@ -831,6 +836,10 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
     with_app(|a| {
         if let Some(l) = a.live.as_mut() {
             l.on_message(&a.gfx, &a.dock, a.fullscreen, a.tracker.windows.len(), msg, wp, lp);
+        }
+        // Kar topu bırakıldı: tutarken ertelenen gizleme yeniden denensin.
+        if msg == input::WM_APP_SNOW && wp.0 == 1 {
+            a.arm_autohide(700);
         }
     });
     r

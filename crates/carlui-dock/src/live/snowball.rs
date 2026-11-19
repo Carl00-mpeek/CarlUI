@@ -131,13 +131,16 @@ pub struct Snow {
     /// Tutulan topun son konumu ve tahmini hızı (fırlatma için).
     held_from: Option<(f32, f32)>,
     held_v: (f32, f32),
+    /// Tutulan topun merkezinin imlece göre yeri: top tutulduğu yerden
+    /// sıçramadan imleçle gelir.
+    grab: (f32, f32),
     /// Bu y'nin altına düşen top yok olur.
     limit: f32,
 }
 
 impl Snow {
     pub fn new(s: f32, limit: f32) -> Self {
-        Self { balls: Vec::new(), men: Vec::new(), s: s.max(0.5), next_id: 1, held_from: None, held_v: (0.0, 0.0), limit }
+        Self { balls: Vec::new(), men: Vec::new(), s: s.max(0.5), next_id: 1, held_from: None, held_v: (0.0, 0.0), grab: (0.0, 0.0), limit }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -178,14 +181,15 @@ impl Snow {
         let pick = self.balls.iter().rev().find(|b| b.state != State::Held && b.contains(x, y, pad) && !self.carries(b.id)).map(|b| b.id);
         match pick {
             Some(id) => {
+                let mut at = (x, y);
                 if let Some(b) = self.balls.iter_mut().find(|b| b.id == id) {
                     b.state = State::Held;
                     b.vx = 0.0;
                     b.vy = 0.0;
-                    b.x = x;
-                    b.y = y;
+                    at = (b.x, b.y);
                 }
-                self.held_from = Some((x, y));
+                self.grab = (at.0 - x, at.1 - y);
+                self.held_from = Some(at);
                 self.held_v = (0.0, 0.0);
                 Press::Ball(id)
             }
@@ -193,7 +197,15 @@ impl Snow {
         }
     }
 
-    /// Kardan yeni top avuçlar ve tutar.
+    /// Kardan yeni top avuçlar ve tutar: merkezi `(x, y)`'de, imleç
+    /// `(cx, cy)`'de (top karın üstünde doğar, imleç karın içinde kalabilir).
+    pub fn scoop_at(&mut self, x: f32, y: f32, r: f32, cx: f32, cy: f32) -> u32 {
+        let id = self.scoop(x, y, r);
+        self.grab = (x - cx, y - cy);
+        id
+    }
+
+    /// Kardan yeni top avuçlar ve tutar (imleç topun merkezinde).
     pub fn scoop(&mut self, x: f32, y: f32, r: f32) -> u32 {
         self.balls.retain(|b| b.state != State::Held);
         if self.balls.len() >= MAX_BALLS {
@@ -204,16 +216,18 @@ impl Snow {
         }
         let id = self.id();
         self.balls.push(Ball { id, x, y, vx: 0.0, vy: 0.0, r, state: State::Held });
+        self.grab = (0.0, 0.0);
         self.held_from = Some((x, y));
         self.held_v = (0.0, 0.0);
         id
     }
 
-    /// Tutulan top imleçle gelir.
+    /// Tutulan top imleçle gelir (tutulduğu andaki uzaklığı korur).
     pub fn drag(&mut self, x: f32, y: f32) {
+        let (gx, gy) = self.grab;
         if let Some(b) = self.balls.iter_mut().find(|b| b.state == State::Held) {
-            b.x = x;
-            b.y = y;
+            b.x = x + gx;
+            b.y = y + gy;
         }
     }
 
@@ -416,7 +430,9 @@ impl Snow {
                         // Dock'un karından yapılıp hemen bırakılan top yüzeyin biraz
                         // altında doğar: merkezi yüzeye yakınsa yine üstüne oturur
                         // (yoksa dock'un içinden düşüp gider).
-                        let above = py + b.r <= top + 0.5 || (!f.wall && py <= top + 12.0 * s);
+                        // Derin karda yüzeyle dock'un üst kenarı arası geniştir:
+                        // merkezi dock'un üstünde kalan top hep yüzeye çıkar.
+                        let above = py + b.r <= top + 0.5 || (!f.wall && py <= f.y.max(top + 12.0 * s));
                         if vy > 0.0 && above && y + b.r >= top {
                             nb.y = top - b.r;
                             if vy > 700.0 * s {
@@ -980,5 +996,38 @@ mod tests {
         assert!(b.x.is_finite() && b.y.is_finite());
         run(&mut snow, 3.0, &floors());
         assert_eq!(snow.get(id).unwrap().state, State::Resting(DOCK));
+    }
+
+    #[test]
+    fn derin_kardan_yapilan_top_dock_arkasina_dusmez() {
+        let mut snow = Snow::new(1.0, 1200.0);
+        // Dock'ta 20 px kar var; top yüzeyin epey altından (dock kenarına
+        // yakın) avuçlandı.
+        let deep = |f: &Floor, _x: f32| if f.wall { f.y } else { f.y - 20.0 };
+        let id = snow.scoop(900.0, 996.0, 10.0);
+        snow.release();
+        for _ in 0..180 {
+            snow.step(1.0 / 60.0, &floors(), deep);
+        }
+        let b = snow.get(id).copied().unwrap();
+        assert_eq!(b.state, State::Resting(DOCK), "{b:?}");
+    }
+
+    #[test]
+    fn tutulan_top_imlecle_tutuldugu_uzaklikta_gelir() {
+        let mut snow = Snow::new(1.0, 1200.0);
+        let id = snow.scoop_at(900.0, 990.0, 10.0, 900.0, 1004.0);
+        snow.drag(500.0, 604.0);
+        let b = snow.get(id).copied().unwrap();
+        assert!((b.x - 500.0).abs() < 0.01 && (b.y - 590.0).abs() < 0.01, "{b:?}");
+        snow.release();
+        run(&mut snow, 3.0, &floors());
+        // Duran topu kenarından tutunca merkeze sıçramaz.
+        assert!(matches!(snow.press(905.0, 600.0), Press::Nothing));
+        let b = snow.get(id).copied().unwrap();
+        assert!(matches!(snow.press(b.x + 6.0, b.y), Press::Ball(_)));
+        snow.drag(b.x + 6.0, b.y - 100.0);
+        let h = snow.get(id).copied().unwrap();
+        assert!((h.x - b.x).abs() < 0.01 && (h.y - (b.y - 100.0)).abs() < 0.01, "{h:?}");
     }
 }

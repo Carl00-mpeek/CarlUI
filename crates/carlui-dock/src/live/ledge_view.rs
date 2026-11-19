@@ -625,6 +625,19 @@ impl LedgeView {
         matches!(self.mode, Some((Mode::Snow, _)))
     }
 
+    /// Elde top var (dock bu sırada gizlenmesin).
+    pub fn holding(&self) -> bool {
+        self.play.snow.holding()
+    }
+
+    /// Tutulan top, fare olayı gelmese de bırakılır (dock duraklarken).
+    pub fn drop_held(&mut self) {
+        if self.play.snow.holding() {
+            self.play.snow.release();
+            self.due = Instant::now();
+        }
+    }
+
     /// Fare olayı (`input::WM_APP_SNOW`). Bir şey değiştiyse kare hemen gelir.
     pub fn mouse(&mut self, kind: usize, x: i32, y: i32, dock: HWND, pill: Option<RECT>) -> bool {
         if !self.shown || (!self.snowy() && kind == super::snowplay::DOWN) {

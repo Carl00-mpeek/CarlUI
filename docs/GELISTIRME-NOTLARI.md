@@ -191,6 +191,16 @@ toplam ~%0,5). Kare ~1050/dk (66 ms aralık), kare başına iş ort. 0,25 ms
 parçacığında. "Boşta ≈ 0" kuralı canlı dock kapalıyken geçerli; kar yağarken
 bu maliyet beklenen düzeyde.
 
+Kar ve gece sahnesi compositor'a taşındı (1.2.0 sonrası): her tanenin konumu ve
+saydamlığı, `clock` özellik kümesindeki `t` (sonsuz döngülü doğrusal animasyon)
+üzerinden yazılmış ExpressionAnimation; ifadeler simülasyonun hız/rüzgâr
+integralinin kapalı biçimi (`FlakeDrive`, testle Euler adımıyla karşılaştırılır).
+Edilgen sahnede CPU saniyede bir yalnız boyutu denetler; duraklatmada
+StopAnimation. Ölçüm (Full kip, masaüstü karı açık, 60–180 sn): dock tek
+çekirdeğin %0,7–8'i (3 dk ort. ~%5,5), DWM ~%20. Kalan yükün kaynağı büyük
+olasılıkla pencerelerin üstüne yağan masaüstü kar katmanından (ledge, `fast()` iken ekran
+saatiyle kare kare); yağmur ve bulut sahneleri hâlâ CPU'da adımlanıyor.
+
 Notlar:
 - Başlat ve Ara düğmeleri, kendi başlatıcımız (5. adım) gelene kadar Windows'un
   menüsünü açıyor; bunun için Win tuşu gönderiliyor. Pencere öne getirme ve

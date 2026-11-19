@@ -229,6 +229,12 @@ impl Live {
         &self.cfg
     }
 
+    /// Elde kar topu var: dock bu sırada otomatik gizlenmemeli (Full
+    /// görev çubuğu kipinde her pencere dock'la çakışır, top elden kaçardı).
+    pub fn snow_held(&self) -> bool {
+        self.ledge.as_ref().is_some_and(|l| l.holding())
+    }
+
     /// Kar efekti açık ve görünür (dock menüsünde küreme aracı çağrılabilir).
     pub fn snowy(&self) -> bool {
         self.state == State::Running && self.ledge.as_ref().is_some_and(|l| l.snowy())
@@ -259,7 +265,11 @@ impl Live {
         };
         let view = dock.live_view();
         match Scene::new(gfx, &view.content, resolved, view.size, view.scale, self.cfg.intensity, &view.theme, view.light) {
-            Ok(s) => self.scene = Some(s),
+            Ok(mut s) => {
+                // Duraklamışken kurulan sahnenin saati de durur.
+                let _ = s.set_live(self.state == State::Running);
+                self.scene = Some(s);
+            }
             Err(e) => warn!("canlı dock: sahne kurulamadı: {e}"),
         }
         self.begin_fade(old);
@@ -362,6 +372,13 @@ impl Live {
         if let Some(l) = self.ledge.as_mut() {
             l.show(st.visible());
         }
+        // Duraklayınca/hareketi azaltınca compositor'daki taneler de durur.
+        if let Some(s) = self.scene.as_mut() {
+            let _ = s.set_live(st == State::Running);
+        }
+        if let Some((s, _)) = self.fade_out.as_mut() {
+            let _ = s.set_live(st == State::Running);
+        }
         if st != State::Running {
             // Duraklayınca/gizlenince parlaklık da durur (animasyon boşa dönmesin).
             self.shimmer = None;
@@ -460,7 +477,10 @@ impl Live {
                 if let Err(e) = s.step(dt) {
                     warn!("canlı dock: sahne çizilemedi: {e}");
                 }
-                self.scene_due = now + Duration::from_millis(s.kind().interval_ms() as u64);
+                // Edilgen sahne (kar, gece): hareket compositor'da; saniyede bir
+                // yalnız boyut ve saat denetlenir.
+                let ms = if s.passive() { 1000 } else { s.kind().interval_ms() };
+                self.scene_due = now + Duration::from_millis(ms as u64);
             }
         }
         // Sahne geçişi sürüyorsa kareler sıklaşır (sahne aralığı seyrek olsa da).
@@ -645,6 +665,13 @@ impl Live {
     /// Kar topu oyunu: basış, bırakış, hareket.
     fn snow_mouse(&mut self, dock: &Dock, wp: WPARAM, lp: LPARAM) {
         if self.state != State::Running {
+            // Duraklamışken gelen bırakış da işlenir: yoksa top elde asılı
+            // kalır, dock dönünce tutulduğu yerde donmuş görünürdü.
+            if wp.0 == snowplay::UP {
+                if let Some(l) = self.ledge.as_mut() {
+                    l.drop_held();
+                }
+            }
             return;
         }
         let (x, y) = if wp.0 == 2 { crate::input::snow_take_move() } else { crate::input::snow_point(lp) };

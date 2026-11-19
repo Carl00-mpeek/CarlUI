@@ -58,14 +58,14 @@ pub struct P {
     pub r: f32,
     pub len: f32,
     pub a: f32,
-    vx: f32,
-    vy: f32,
+    pub(super) vx: f32,
+    pub(super) vy: f32,
     /// Hedef boyut/saydamlık ya da salınım evresi (türe göre).
-    goal: f32,
-    phase: f32,
+    pub(super) goal: f32,
+    pub(super) phase: f32,
     sliding: bool,
     /// Derinlik 0 (uzak) .. 1 (yakın): kar tanesinin boyu, hızı ve parlaklığı buna bağlı.
-    z: f32,
+    pub(super) z: f32,
 }
 
 impl P {
@@ -89,10 +89,102 @@ pub struct Sim {
 const MAX_DT: f32 = 0.25;
 /// Kar tanesinin saydamlığı: uzak taneler soluk, yakınlar parlak ve hafifçe
 /// parıldar (`wave` -1..1 salınım).
-fn flake_alpha(z: f32, wave: f32) -> f32 {
+pub(super) fn flake_alpha(z: f32, wave: f32) -> f32 {
     let base = 0.35 + z * 0.6;
     base * (1.0 - 0.15 * z + 0.15 * z * wave)
 }
+/// Kar tanesinin rüzgârı (`step` ile aynı): `t` anında -1..1 civarı.
+fn flake_wind(t: f32) -> f32 {
+    (t * 0.23).sin() * 0.6 + (t * 0.71 + 1.3).sin() * 0.4
+}
+
+/// Rüzgârın integrali (sabit hariç): tanenin rüzgârla aldığı yol bununla orantılı.
+#[cfg(test)]
+fn flake_wind_path(t: f32) -> f32 {
+    -(0.6 / 0.23) * (t * 0.23).cos() - (0.4 / 0.71) * (t * 0.71 + 1.3).cos()
+}
+
+/// Compositor'ın kendi başına çizdiği kar tanesi: konum ve saydamlık zamanın
+/// kapalı formülüdür (`step`'teki hızların integrali), kare başına CPU işi yok.
+/// Tane alttan çıkınca tepeden, yandan çıkınca öbür yandan döner
+/// (`Mod`); alan boyu `c.w`/`c.h`'den okunur, dock genişleyince taneler yayılır.
+#[derive(Clone, Copy, Debug)]
+pub struct FlakeDrive {
+    /// Alan içindeki başlangıç kesri (yatay, dikey) 0..1.
+    u: f32,
+    v: f32,
+    r: f32,
+    vy: f32,
+    /// Rüzgâr yolu çarpanı, salınım genliği/frekansı, evre.
+    k: f32,
+    sway: f32,
+    f: f32,
+    ph: f32,
+    z: f32,
+}
+
+/// İfadedeki sayı (eksi işaret ifadeyi bozmasın diye parantezli).
+fn lit(x: f32) -> String {
+    format!("({x:.5})")
+}
+
+impl FlakeDrive {
+    pub fn new(p: &P, s: f32, w: f32, h: f32) -> Self {
+        let f = p.vx.max(0.1);
+        let top = p.r + 0.25 * h;
+        let u = ((p.x + p.r) / (w + 2.0 * p.r)).clamp(0.0, 0.999);
+        let v = ((p.y + top) / (1.25 * h + 2.0 * p.r)).clamp(0.0, 0.999);
+        Self { u, v, r: p.r, vy: p.vy, k: (8.0 + p.z * 14.0) * s, sway: p.goal, f, ph: p.phase, z: p.z }
+    }
+
+    /// Ham (sarmasız) yatay yol: başlangıçtan bağımsız sabit hariç.
+    #[cfg(test)]
+    fn path_x(&self, t: f32) -> f32 {
+        self.k * flake_wind_path(t) - self.sway / self.f * (self.f * t + self.ph).cos()
+    }
+
+    /// Tanenin merkezi `t` anında (`w`×`h` alanında); ifadelerle aynı formül.
+    #[cfg(test)]
+    pub fn at(&self, t: f32, w: f32, h: f32) -> (f32, f32) {
+        let ww = w + 2.0 * self.r;
+        let x = (self.u * ww + self.path_x(t)).rem_euclid(ww) - self.r;
+        let pp = 1.25 * h + 2.0 * self.r;
+        let y = (self.v * pp + self.vy * t).rem_euclid(pp) - self.r - 0.25 * h;
+        (x, y)
+    }
+
+    /// Görselin `Offset` ifadesi (`c`: saat özellik kümesi; `t`, `w`, `h`).
+    /// `half`: görselin yarı boyu (merkezden sol üst köşeye).
+    pub fn offset_expr(&self, half: (f32, f32)) -> String {
+        let (r, k, sf) = (self.r, self.k, self.sway / self.f);
+        let ww = format!("(c.w + {})", lit(2.0 * r));
+        let raw = format!(
+            "{u} * {ww} - {ka} * Cos(0.23 * c.t) - {kb} * Cos(0.71 * c.t + 1.3) - {sf} * Cos({f} * c.t + {ph})",
+            u = lit(self.u),
+            ka = lit(k * 0.6 / 0.23),
+            kb = lit(k * 0.4 / 0.71),
+            sf = lit(sf),
+            f = lit(self.f),
+            ph = lit(self.ph),
+        );
+        let x = format!("Mod(Mod({raw}, {ww}) + {ww}, {ww}) - {}", lit(r + half.0));
+        let pp = format!("(c.h * 1.25 + {})", lit(2.0 * r));
+        let y = format!("Mod({v} * {pp} + {vy} * c.t, {pp}) - c.h * 0.25 - {}", lit(r + half.1), v = lit(self.v), vy = lit(self.vy));
+        format!("Vector3({x}, {y}, 0)")
+    }
+
+    /// Saydamlık ifadesi (`flake_alpha` ile aynı parıltı).
+    pub fn opacity_expr(&self) -> String {
+        let base = 0.35 + self.z * 0.6;
+        format!("{} + {} * Sin(3 * c.t + {})", lit(base * (1.0 - 0.15 * self.z)), lit(base * 0.15 * self.z), lit(self.ph))
+    }
+}
+
+/// Yıldızın pırıltısı (`step` ile aynı) compositor ifadesi olarak.
+pub fn star_opacity_expr(p: &P) -> String {
+    format!("{} + {} * Sin({} * c.t + {})", lit(p.goal * 0.65), lit(p.goal * 0.35), lit(p.vx), lit(p.phase))
+}
+
 /// Ayın en büyük yarıçapı (ölçek 1'de piksel).
 const MOON_R: f32 = 14.0;
 
@@ -125,6 +217,11 @@ impl Sim {
 
     pub fn size(&self) -> (f32, f32) {
         (self.w, self.h)
+    }
+
+    /// DPI ölçeği.
+    pub fn scale(&self) -> f32 {
+        self.s
     }
 
     /// Dock genişliği değişti: parçacıklar yeni alana taşınır (havuz aynı).
@@ -287,7 +384,7 @@ impl Sim {
                 }
                 Sprite::Flake => {
                     // Ortak, yavaşça dönen rüzgâr; yakın taneler onu daha çok hisseder (paralaks).
-                    let wind = (t * 0.23).sin() * 0.6 + (t * 0.71 + 1.3).sin() * 0.4;
+                    let wind = flake_wind(t);
                     p.y += p.vy * dt;
                     p.x += (wind * (8.0 + p.z * 14.0) * s + (t * p.vx + p.phase).sin() * p.goal) * dt;
                     p.a = flake_alpha(p.z, (t * 3.0 + p.phase).sin());
@@ -433,6 +530,45 @@ mod tests {
                 }
                 check(&sim, n);
                 assert_eq!(sim.pool.capacity(), cap, "havuz yeniden ayrılmamalı");
+            }
+        }
+    }
+
+    #[test]
+    fn compositor_tanesi_simulasyonla_ayni_yolu_izler() {
+        let sim = Sim::new(Kind::Snow, 420.0, 52.0, 1.5, true, Rng::new(4));
+        let (w, h) = (100_000.0, 10_000.0);
+        for p0 in sim.pool.iter().take(8) {
+            let p = P { x: w / 2.0, y: 0.0, ..*p0 };
+            let d = FlakeDrive::new(&p, 1.5, w, h);
+            let (x0, y0) = d.at(0.0, w, h);
+            // `step`'teki hızları küçük adımlarla topla.
+            let (mut x, mut y, mut t) = (0.0f32, 0.0f32, 0.0f32);
+            let dt = 0.001;
+            for _ in 0..10_000 {
+                t += dt;
+                y += p.vy * dt;
+                x += (flake_wind(t) * (8.0 + p.z * 14.0) * 1.5 + (t * p.vx + p.phase).sin() * p.goal) * dt;
+            }
+            let (x1, y1) = d.at(t, w, h);
+            assert!(((x1 - x0) - x).abs() < 0.5, "x {} vs {x}", x1 - x0);
+            assert!(((y1 - y0) - y).abs() < 0.5, "y {} vs {y}", y1 - y0);
+        }
+    }
+
+    #[test]
+    fn compositor_tanesi_alanda_kalir_ve_ifade_saglam() {
+        let sim = Sim::new(Kind::Snow, 420.0, 52.0, 1.5, true, Rng::new(8));
+        for p in &sim.pool {
+            let d = FlakeDrive::new(p, 1.5, 420.0, 52.0);
+            for k in 0..2000 {
+                let (x, y) = d.at(k as f32 * 1.7, 420.0, 52.0);
+                assert!(x >= -p.r - 0.01 && x <= 420.0 + p.r + 0.01, "{x}");
+                assert!(y >= -p.r - 13.0 - 0.01 && y <= 52.0 + p.r + 0.01, "{y}");
+            }
+            for e in [d.offset_expr((3.0, 3.0)), d.opacity_expr()] {
+                assert!(!e.contains("NaN") && !e.contains("inf"), "{e}");
+                assert_eq!(e.matches('(').count(), e.matches(')').count(), "{e}");
             }
         }
     }

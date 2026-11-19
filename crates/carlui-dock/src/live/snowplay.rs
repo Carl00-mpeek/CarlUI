@@ -239,8 +239,11 @@ impl SnowPlay {
                         continue;
                     }
                     let r = (4.0 * s + 1.2 * h).clamp(7.0 * s, 12.0 * s);
+                    // Top karın üstünde doğar: karın dibine (dock'un kenarına)
+                    // basılsa da yarısı dock'un arkasında kalmaz, düşüp gitmez.
+                    let by = fy.min(surface(model, s, &f, fx) - r * 0.6);
                     model.clear(f.key, fx - r, fx + r);
-                    self.snow.scoop(fx, fy, r);
+                    self.snow.scoop_at(fx, by, r, fx, fy);
                     return true;
                 }
                 false
