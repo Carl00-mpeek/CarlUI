@@ -55,7 +55,7 @@ pub struct LiveConfig {
     pub snow_simple: bool,
     /// Kar yağarken dock simgelerinin üstünde de kar birikir.
     pub snow_icons: bool,
-    /// Kar yağarken fare bir süre kıpırdamazsa imleç buzlanır.
+    /// Kar yağarken fare bir süre kıpırdamazsa imleç buzla kaplanır (boyutu değişmez).
     pub frost: bool,
 }
 

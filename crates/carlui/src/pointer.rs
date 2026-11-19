@@ -35,6 +35,10 @@ pub fn sync(cfg: &CursorConfig) {
             } else {
                 warn!("imleç uygulanamadı");
             }
+            // Sallayınca büyüme kareleri şimdi hazırlansın, sallama anında beklenmesin.
+            if cfg.shake && GEN.load(Ordering::SeqCst) == gen {
+                cursor::prepare_grow(&cfg);
+            }
         })
         .ok();
 }

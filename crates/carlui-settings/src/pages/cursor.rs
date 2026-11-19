@@ -115,6 +115,7 @@ pub fn paint(cfg: &Config, p: &mut P, f: &mut Flow) {
     let c = &cfg.cursor;
     f.section(p, t!("İmleç", "Cursor"));
     f.toggle(p, t!("CarlUI imleci", "CarlUI cursor"), t!("Ok ve bağlantı eli. Kapatınca Windows'un imleci geri gelir.", "Arrow and link hand. Turn off to bring back the Windows cursor."), c.enabled, |c| c.cursor.enabled = !c.cursor.enabled);
+    f.toggle(p, t!("Sallayınca büyüt", "Shake to find"), t!("Fareyi hızlıca sağa sola sallayınca imleç bir an büyür, nerede olduğunu hemen görürsün.", "Shake the mouse quickly and the pointer briefly grows so you can spot it."), c.shake, |c| c.cursor.shake ^= true);
     if !c.enabled {
         return;
     }

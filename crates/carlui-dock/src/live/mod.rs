@@ -297,15 +297,7 @@ impl Live {
             self.icon_snow = None;
         }
         if snow && self.cfg.frost {
-            if self.frost.is_none() {
-                match frost::Frost::new(gfx) {
-                    Ok(f) => self.frost = Some(f),
-                    Err(e) => warn!("canlı dock: buzlanma kurulamadı: {e}"),
-                }
-            }
-            if let Some(f) = self.frost.as_mut() {
-                f.step(gfx, now);
-            }
+            self.frost.get_or_insert_with(frost::Frost::new).step(now);
         } else {
             self.frost = None;
         }

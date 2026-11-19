@@ -231,8 +231,8 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
             p,
             t!("Buzlanma", "Frost"),
             t!(
-                "Kar yağarken fare 15 saniye kıpırdamazsa imleç buzlanır; fareyi oynatınca erir.",
-                "While it snows, the mouse pointer frosts over after 15 seconds without moving; it melts as soon as you move the mouse."
+                "Kar yağarken fare 15 saniye kıpırdamazsa imleç buzla kaplanır; fareyi oynatınca erir.",
+                "While it snows, the mouse pointer gets an icy coating after 15 seconds without moving; it melts as soon as you move the mouse."
             ),
             c.frost,
             |c| c.dock.live.frost ^= true,

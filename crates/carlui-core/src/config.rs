@@ -215,6 +215,9 @@ pub struct CursorConfig {
     pub edge: String,
     /// Boyut çarpanı; Windows'un imleç boyutuna (erişilebilirlik × ölçek) uygulanır.
     pub scale: f32,
+    /// Fare hızlıca sallanınca imleç bir an büyür (bulmak kolaylaşsın). CarlUI
+    /// imleci kapalıyken de çalışır.
+    pub shake: bool,
 }
 
 impl Default for CursorConfig {
@@ -229,6 +232,7 @@ impl Default for CursorConfig {
             glow: true,
             edge: "auto".into(),
             scale: 0.75,
+            shake: true,
         }
     }
 }

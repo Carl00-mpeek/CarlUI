@@ -19,6 +19,7 @@ mod fullscreen;
 mod hotkey;
 mod layouts;
 mod pointer;
+mod shake;
 mod supervisor;
 mod taskbar;
 mod wallpaper;
@@ -341,6 +342,7 @@ fn check_fullscreen(h: &mut Host) {
             h.fullscreen_at = Some(std::time::Instant::now());
         }
         h.fullscreen = s;
+        shake::listen(h.hwnd, h.cfg.cursor.shake && !h.fullscreen.active);
     }
     follow_foreground(h);
 }
@@ -350,6 +352,7 @@ fn shutdown(h: &mut Host) {
     h.bus.publish(&Event::Shutdown);
     h.sup.shutdown(Duration::from_millis(1500));
     // Durum dosyası olmasa da göster: başka bir örnek dosyayı silmiş olabilir.
+    shake::stop();
     taskbar::restore();
     pointer::restore();
 }
@@ -416,9 +419,18 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                 SetTimer(hwnd, TIMER_WINDOWS_BACK, 3000, None);
                 LRESULT(1)
             }
+            WM_INPUT => {
+                with_host(|h| shake::input(hwnd, &h.cfg.cursor));
+                DefWindowProcW(hwnd, msg, wp, lp)
+            }
+            WM_TIMER if wp.0 == shake::TIMER => {
+                with_host(|h| shake::tick(hwnd, &h.cfg.cursor));
+                LRESULT(0)
+            }
             WM_TIMER if wp.0 == TIMER_CURSOR => {
                 let _ = KillTimer(hwnd, TIMER_CURSOR);
                 with_host(|h| {
+                    shake::stop();
                     if h.cfg.cursor.enabled {
                         pointer::sync(&h.cfg.cursor);
                     }
@@ -453,9 +465,14 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                         (true, false) => taskbar::restore(),
                         _ => {}
                     }
-                    if h.cfg.cursor != new.cursor {
+                    // Yalnızca sallama ayarı değiştiyse imleç setini yeniden üretmeye gerek yok.
+                    let mut same = new.cursor.clone();
+                    same.shake = h.cfg.cursor.shake;
+                    if h.cfg.cursor != same {
+                        shake::stop();
                         pointer::sync(&new.cursor);
                     }
+                    shake::listen(h.hwnd, new.cursor.shake && !h.fullscreen.active);
                     if h.cfg.shortcuts != new.shortcuts || h.cfg.tools.rename_enabled != new.tools.rename_enabled || h.cfg.tools.disk_enabled != new.tools.disk_enabled || h.cfg.tools.unlock_enabled != new.tools.unlock_enabled {
                         hotkey::register(h.hwnd, &new);
                     }
@@ -642,6 +659,7 @@ fn run() -> Result<()> {
         });
         with_host(follow_foreground);
         with_host(|h| hotkey::register(h.hwnd, &h.cfg));
+        with_host(|h| shake::listen(h.hwnd, h.cfg.cursor.shake));
         info!("hazır");
 
         let mut msg = MSG::default();
