@@ -139,11 +139,25 @@ pub fn restore() {
     }
 }
 
-/// Sallayınca büyümenin kareleri: imleç boyutunun katları.
-pub const GROW: [f32; 6] = [1.4, 1.8, 2.2, 2.6, 3.0, 3.4];
+/// Sallayınca büyümenin kademeleri: imleç boyutunun katları. Büyüme
+/// canlandırması her an bunların en yakınını gösterir; 3'ün üstü yalnızca
+/// sallama sürdükçe kat kat büyürken gerekir, o yüzden seyrek.
+pub const GROW: [f32; 14] = [1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0];
+
+/// Windows'un imleç için kabul ettiği en büyük boyut.
+const GROW_MAX_PX: u32 = 256;
+
+/// `base` boyutlu imleçte kullanılabilen kademeler (256 pikseli aşmayanlar).
+fn grow_levels(base: u32) -> usize {
+    GROW.iter().take_while(|&&k| (base as f32 * k).round() as u32 <= GROW_MAX_PX).count().max(1)
+}
+
+fn grow_size(base: u32, k: f32) -> u32 {
+    ((base as f32 * k).round() as u32).min(GROW_MAX_PX)
+}
 
 fn grow_sizes(base: u32) -> Vec<u32> {
-    let mut v: Vec<u32> = GROW.iter().map(|k| ((base as f32 * k).round() as u32).min(256)).collect();
+    let mut v: Vec<u32> = GROW[..grow_levels(base)].iter().map(|&k| grow_size(base, k)).collect();
     v.dedup();
     v
 }
@@ -155,7 +169,8 @@ pub fn prepare_grow(cfg: &CursorConfig) -> Option<PathBuf> {
     let l = look(cfg);
     let base = size(cfg);
     let root = crate::paths::data_dir().join("cursors-grow");
-    let name = key(&l, base);
+    // Kademeler değişince eski önbellek kullanılmasın.
+    let name = format!("{}-g2", key(&l, base));
     let dir = root.join(&name);
     let roles: Vec<Role> = Role::ALL.into_iter().filter(|r| !r.animated()).collect();
     if roles.iter().all(|r| dir.join(r.file()).exists()) {
@@ -227,36 +242,76 @@ fn load(file: &PathBuf, s: u32) -> Option<HCURSOR> {
     unsafe { LoadImageW(None, &name, IMAGE_CURSOR, s as i32, s as i32, LR_LOADFROMFILE).ok().map(|h| HCURSOR(h.0)) }
 }
 
-/// Görünen `cur` imlecinin (`id` rolü) büyüme kareleri, küçükten büyüğe.
-/// Kaynak sırasıyla: CarlUI'nin önceden üretilmiş kareleri, Windows şemasının
-/// yeterince büyük görüntüsü olan dosyası, yoksa imlecin kendisi yumuşak
-/// büyütülerek. Kareleri çağıran `DestroyCursor` ile bırakır.
-pub fn grow_frames(cfg: &CursorConfig, id: u32, cur: HCURSOR) -> Vec<HCURSOR> {
-    let base = if cfg.enabled { size(cfg) } else { system_size() as u32 };
-    let sizes = grow_sizes(base);
-    let top = *sizes.last().unwrap_or(&base);
-    let file = if cfg.enabled {
-        Role::ALL.into_iter().find(|r| r.ocr() == id && !r.animated()).and_then(|r| prepare_grow(cfg).map(|d| d.join(r.file())))
-    } else {
-        scheme_file(id).filter(|f| largest_frame(f).is_some_and(|m| m * 10 >= top * 9))
-    };
-    if let Some(f) = file {
-        let v: Vec<HCURSOR> = sizes.iter().filter_map(|&s| load(&f, s)).collect();
-        if v.len() == sizes.len() {
-            return v;
+/// Görünen bir imlecin (`id` rolü) büyümüş kareleri. Her kademe ilk
+/// istendiğinde hazırlanır ve saklanır. Kaynak: CarlUI imleci için önceden
+/// üretilmiş kareler; Windows şemasında şema dosyasının en büyük görüntüsü
+/// (yoksa görünen imleç) yumuşak ölçeklenerek.
+pub struct Grower {
+    base: u32,
+    file: Option<PathBuf>,
+    /// Ölçeklenecek görsel ve hangi imleç boyutuna karşılık geldiği.
+    src: Option<(swap::Pixels, u32)>,
+    frames: Vec<Option<HCURSOR>>,
+}
+
+impl Grower {
+    pub fn new(cfg: &CursorConfig, id: u32, cur: HCURSOR) -> Option<Grower> {
+        let base = if cfg.enabled { size(cfg) } else { system_size() as u32 };
+        let n = grow_levels(base);
+        let (file, src) = if cfg.enabled {
+            let f = Role::ALL.into_iter().find(|r| r.ocr() == id && !r.animated()).and_then(|r| prepare_grow(cfg).map(|d| d.join(r.file())));
+            (f, None)
+        } else {
+            // Şemanın en büyük görüntüsü imleçten büyükse onu kaynak al: büyütme daha keskin olur.
+            let big = scheme_file(id).and_then(|f| {
+                let m = largest_frame(&f).filter(|&m| m > base)?;
+                let h = load(&f, m)?;
+                let p = swap::pixels(h);
+                unsafe {
+                    let _ = DestroyCursor(h);
+                }
+                Some((p?, m))
+            });
+            (None, big.or_else(|| swap::pixels(cur).map(|p| (p, base))))
+        };
+        if file.is_none() && src.is_none() {
+            return None;
         }
-        for h in v {
+        Some(Grower { base, file, src, frames: vec![None; n] })
+    }
+
+    /// Ulaşılabilen en büyük kat.
+    pub fn max(&self) -> f32 {
+        GROW[self.frames.len() - 1]
+    }
+
+    /// `k` katına en yakın kademe (0'dan başlar).
+    pub fn level(&self, k: f32) -> usize {
+        (0..self.frames.len()).min_by(|&a, &b| (GROW[a] - k).abs().total_cmp(&(GROW[b] - k).abs())).unwrap_or(0)
+    }
+
+    /// Kademenin imleci; sahibi `Grower` kalır.
+    pub fn frame(&mut self, i: usize) -> Option<HCURSOR> {
+        let i = i.min(self.frames.len() - 1);
+        if self.frames[i].is_none() {
+            let s = grow_size(self.base, GROW[i]);
+            let from_file = self.file.as_ref().and_then(|f| load(f, s));
+            self.frames[i] = from_file.or_else(|| {
+                let (p, nominal) = self.src.as_ref()?;
+                let k = s as f32 / *nominal as f32;
+                swap::make(&swap::scale(p, ((p.w as f32 * k).round() as usize).max(1), ((p.h as f32 * k).round() as usize).max(1)))
+            });
+        }
+        self.frames[i]
+    }
+}
+
+impl Drop for Grower {
+    fn drop(&mut self) {
+        for f in self.frames.iter().flatten() {
             unsafe {
-                let _ = DestroyCursor(h);
+                let _ = DestroyCursor(*f);
             }
         }
     }
-    let Some(p) = swap::pixels(cur) else { return Vec::new() };
-    sizes
-        .iter()
-        .filter_map(|&s| {
-            let k = s as f32 / base as f32;
-            swap::make(&swap::scale(&p, (p.w as f32 * k).round() as usize, (p.h as f32 * k).round() as usize))
-        })
-        .collect()
 }
