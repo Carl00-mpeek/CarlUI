@@ -10,9 +10,9 @@
 //! ışığın konumu/saydamlığı gönderilir.
 
 use super::{
-    ledge::{max_height, visible, Edge, Ledge, Ledges, R4, ROUGH},
+    ledge::{max_height, visible, Edge, Ledge, Ledges, Shed, R4, ROUGH},
     rng::Rng,
-    snowfall::{Plow, Snowfall},
+    snowfall::{Plow, Snowfall, Spill},
     snowplay::SnowPlay,
     window::{overlay_window, BackdropWindow},
 };
@@ -52,6 +52,9 @@ pub enum Mode {
 
 /// Kenar listesi bu sıklıkla yeniden okunur (pencere taşınınca kar düşsün).
 const GATHER: Duration = Duration::from_millis(150);
+/// Pencere taşınırken (son taşımadan bu kadar sonrasına dek) yüzeyler her
+/// karede toplanır: kar pencereyi geriden izlemesin.
+const DRAG_HOLD: Duration = Duration::from_millis(400);
 /// Yağmurda ışık akıcı kaysın diye kare aralığı.
 const RAIN_FRAME: Duration = Duration::from_millis(50);
 /// Sürekli harekette (top oyunu, küreme aracı) kareleri ekran saati getirir;
@@ -148,6 +151,12 @@ pub struct LedgeView {
     snowfall: Option<Snowfall>,
     plow: Option<Plow>,
     next_plow: Instant,
+    /// Dock menüsünden çağrıldı: bir sonraki karede gelir.
+    plow_asked: bool,
+    /// Son pencere taşıması.
+    moving: Option<Instant>,
+    /// Taşınan pencereden dökülen kar.
+    spill: Option<Spill>,
     /// Kar topları ve kardan adamlar.
     play: SnowPlay,
 }
@@ -206,6 +215,9 @@ impl LedgeView {
             snowfall: None,
             plow: None,
             next_plow: now + Duration::from_secs(75),
+            plow_asked: false,
+            moving: None,
+            spill: None,
             play: SnowPlay::new(s, mon, DRIFT_KEY),
         })
     }
@@ -258,6 +270,8 @@ impl LedgeView {
                     depth: DOCK_DEPTH,
                     rough: ROUGH,
                     mound: DOCK_MOUND,
+                    left: p.left,
+                    full: p.right - p.left,
                 });
             }
         }
@@ -318,7 +332,7 @@ impl LedgeView {
                     if room > 0 && x1 - x0 > 20 {
                         let taper = if island { ((r.bottom - r.top) / 2).max(4) } else { (8.0 * s) as i32 };
                         let spans = visible(x0, x1, r.top - ha, r.top + hb, &cover);
-                        edges.push(Edge { key: h.0 as isize, x0, x1, y: r.top, room, taper, spans, depth: 1.0, rough: ROUGH, mound: 0.3 });
+                        edges.push(Edge { key: h.0 as isize, x0, x1, y: r.top, room, taper, spans, depth: 1.0, rough: ROUGH, mound: 0.3, left: r.left, full: r.right - r.left });
                     }
                 }
                 cover.push((r.left, r.top, r.right, r.bottom));
@@ -326,7 +340,7 @@ impl LedgeView {
         }
         // Ekranın alt kenarı: en arkada, önündeki pencereler örter; dalgalı.
         let spans = visible(mon.left, mon.right, mon.bottom - ha, mon.bottom, &cover);
-        edges.push(Edge { key: DRIFT_KEY, x0: mon.left, x1: mon.right, y: mon.bottom, room: ha, taper: 0, spans, depth: 1.2, rough: 0.32, mound: 0.0 });
+        edges.push(Edge { key: DRIFT_KEY, x0: mon.left, x1: mon.right, y: mon.bottom, room: ha, taper: 0, spans, depth: 1.2, rough: 0.32, mound: 0.0, left: mon.left, full: mon.right - mon.left });
         edges
     }
 
@@ -449,11 +463,19 @@ impl LedgeView {
         }
         let dt = (now - self.last).as_secs_f32().min(0.25);
         self.last = now;
-        if self.gathered.is_none_or(|t| now - t >= GATHER) {
+        let dragging = self.moving.is_some_and(|t| now - t < DRAG_HOLD);
+        if dragging || self.gathered.is_none_or(|t| now - t >= GATHER) {
             self.gathered = Some(now);
             let edges = self.gather(pill);
-            self.model.sync(edges);
+            let shed = self.model.sync(edges);
+            if !shed.is_empty() {
+                self.moving = Some(now);
+                self.spill_shed(gfx, &shed)?;
+            }
             self.sync_slots(gfx)?;
+        }
+        if let Some(sp) = self.spill.as_mut() {
+            sp.sweep();
         }
         let snow = match self.mode {
             Some((Mode::Snow, l)) => Some(l),
@@ -480,6 +502,7 @@ impl LedgeView {
         let Some(level) = snow else {
             self.snowfall = None;
             self.plow = None;
+            self.plow_asked = false;
             // Toplar/adamlar erirken arka katman kalır.
             if self.play.is_empty() {
                 self.backdrop = None;
@@ -506,8 +529,8 @@ impl LedgeView {
                 b.keep_z();
             }
         }
-        if self.plow.is_none() && now >= self.next_plow {
-            if self.model.fullness(DRIFT_KEY, level) > 0.6 {
+        if self.plow.is_none() && (self.plow_asked || now >= self.next_plow) {
+            if std::mem::take(&mut self.plow_asked) || self.model.fullness(DRIFT_KEY, level) > 0.6 {
                 self.plow = Some(Plow::new(gfx, &self.root, w, h, self.s)?);
                 self.next_plow = now + Duration::from_secs_f32(self.rng.range(90.0, 180.0));
             } else {
@@ -533,6 +556,8 @@ impl LedgeView {
         self.model.sync(edges);
         self.sync_slots(gfx)?;
         self.snowfall = None;
+        self.spill = None;
+        self.moving = None;
         self.play.reset(&self.root, self.backdrop.as_ref().map(|b| &b.root));
         self.backdrop = None;
         self.plow = None;
@@ -567,10 +592,40 @@ impl LedgeView {
         changed
     }
 
-    /// Sürekli hareket var (top/adam oyunu ya da küreme aracı): kareler ekran
-    /// yenilemesiyle gelmeli.
+    /// Sürekli hareket var (top/adam oyunu, küreme aracı, taşınan pencere):
+    /// kareler ekran yenilemesiyle gelmeli.
     pub fn fast(&self) -> bool {
-        self.shown && (self.play.busy() || self.plow.is_some())
+        self.shown
+            && (self.play.busy()
+                || self.plow.is_some()
+                || self.plow_asked
+                || self.spill.as_ref().is_some_and(|s| s.busy())
+                || self.moving.is_some_and(|t| t.elapsed() < DRAG_HOLD))
+    }
+
+    /// Dock menüsünden: küreme aracı hemen gelsin. Kar yağmıyorsa ya da araç
+    /// zaten yoldaysa `false`.
+    pub fn call_plow(&mut self) -> bool {
+        if !self.shown || !self.snowy() || self.plow.is_some() {
+            return false;
+        }
+        self.plow_asked = true;
+        self.due = Instant::now();
+        true
+    }
+
+    /// Taşınan pencerelerden dökülen kar, düşen parçacıklarla görünür
+    /// (yağan kar katmanı yoksa, ör. hareket azaltılmışken, yalnızca azalır).
+    fn spill_shed(&mut self, gfx: &Gfx, shed: &[Shed]) -> Result<()> {
+        if self.snowfall.is_none() {
+            return Ok(());
+        }
+        let (ox, oy) = (self.mon.left as f32, self.mon.top as f32);
+        let sp = self.spill.get_or_insert_with(|| Spill::new(&self.root));
+        for d in shed.iter().filter(|d| d.frac > 0.0 && d.h > 0.5) {
+            sp.burst(gfx, d.x0 - ox, d.x1 - ox, d.y - oy, d.h, d.frac, d.dx, self.s, &mut self.rng)?;
+        }
+        Ok(())
     }
 
     /// Bir sonraki karenin zamanı.

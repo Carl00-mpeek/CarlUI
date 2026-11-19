@@ -41,7 +41,17 @@ pub struct Edge {
     pub rough: f32,
     /// Bir noktada yığılan tepeciğin genliği (0 = yok).
     pub mound: f32,
+    /// Pencerenin ekrana kırpılmamış sol kenarı ve genişliği: ekranın dışına
+    /// taşan pencere taşınırken kırpılmış boyu değişse de aynı yüzey sayılır.
+    pub left: i32,
+    pub full: i32,
 }
+
+/// Pencere taşınırken bu kadar piksellik yol karın tamamını dökerdi (ölçek 1);
+/// [`KEEP_MIN`] yüzünden hiçbir zaman tamamı dökülmez.
+const SHED_PX: f32 = 700.0;
+/// Taşınan pencerede en az kalan kar payı.
+const KEEP_MIN: f32 = 0.4;
 
 /// Pencere üstleri için olağan pürüz.
 pub const ROUGH: f32 = 0.16;
@@ -110,6 +120,9 @@ pub struct Ledge {
     pub dirty: bool,
     /// Sütunlara serpiştirilen sabit pürüz (karın tepesi dümdüz olmasın).
     seed: f32,
+    /// Taşınırken kalan pay (1 = hiç dökülmedi). Kar en çok [`KEEP_MIN`]'e
+    /// dek dökülür; pencere durunca yavaşça 1'e döner.
+    kept: f32,
 }
 
 impl Ledge {
@@ -117,7 +130,7 @@ impl Ledge {
         let w = (edge.x1 - edge.x0).max(1) as f32;
         let col_w = (w / MAX_COLS as f32).max(3.0 * s);
         let n = ((w / col_w).ceil() as usize + 1).min(MAX_COLS + 1);
-        Self { edge, h: vec![0.0; n], col_w, pending: 0.0, dirty: true, seed }
+        Self { edge, h: vec![0.0; n], col_w, pending: 0.0, dirty: true, seed, kept: 1.0 }
     }
 
     /// `i`. sütunun ekran x'i (sütun merkezi).
@@ -173,6 +186,20 @@ impl Ledge {
     }
 }
 
+/// Taşınan yüzeyden dökülen kar (ekran koordinatları, dökülmeden önceki yer).
+#[derive(Clone, Copy, Debug)]
+pub struct Shed {
+    pub x0: f32,
+    pub x1: f32,
+    pub y: f32,
+    /// Dökülmeden önceki en kalın yer.
+    pub h: f32,
+    /// Dökülen pay (0..1).
+    pub frac: f32,
+    /// Pencerenin yatay yer değişimi.
+    pub dx: f32,
+}
+
 /// Tüm yüzeylerin birikintileri.
 pub struct Ledges {
     pub list: Vec<Ledge>,
@@ -190,11 +217,14 @@ impl Ledges {
         Self { list: Vec::new(), s: s.max(0.5), rng }
     }
 
-    /// Toplayıcıdan gelen kenarlarla eşler. Yeri ya da boyu değişen yüzeyin
-    /// karı düşer; artık görünmeyen yüzey bırakılır.
-    pub fn sync(&mut self, mut edges: Vec<Edge>) {
+    /// Toplayıcıdan gelen kenarlarla eşler. Taşınan yüzeyin karı onunla gider,
+    /// yalnızca bir kısmı (yol ve hızla orantılı) dökülür; boyu değişenin karı
+    /// düşer; artık görünmeyen yüzey bırakılır. Taşınan yüzeylerin döktüğü karı döndürür
+    /// (dökülmeyen taşıma `frac == 0` kaydıyla bildirilir).
+    pub fn sync(&mut self, mut edges: Vec<Edge>) -> Vec<Shed> {
         edges.truncate(MAX_LEDGES);
         let mut old = std::mem::take(&mut self.list);
+        let mut shed = Vec::new();
         for e in edges {
             let found = old.iter().position(|l| l.edge.key == e.key);
             let ledge = match found.map(|i| old.swap_remove(i)) {
@@ -205,7 +235,38 @@ impl Ledges {
                     l.edge = e;
                     l
                 }
-                // Taşındı ya da yeni: kar sıfırdan birikir.
+                // Yalnızca taşındı (boyu aynı): kar pencereyle gider, bir kısmı dökülür.
+                Some(mut l) if l.edge.full == e.full => {
+                    let d = (((e.left - l.edge.left).pow(2) + (e.y - l.edge.y).pow(2)) as f32).sqrt();
+                    if (l.edge.x1 - l.edge.x0) != (e.x1 - e.x0) {
+                        // Ekran kenarında kırpılan kısım değişti: kar pencereye göre yeniden dağılır.
+                        let mut n = Ledge::new(e.clone(), self.s, l.seed);
+                        let shift = (e.left - l.edge.left) as f32;
+                        let (a, b) = (l.edge.x0 as f32, l.edge.x1 as f32);
+                        for i in 0..n.h.len() {
+                            let x = n.col_x(i) - shift;
+                            n.h[i] = if x >= a && x <= b { l.height_at(x) } else { 0.0 };
+                        }
+                        n.kept = l.kept;
+                        // Dökülen kar eski yerinden düşer (aşağıda `e` ile değişir).
+                        n.edge = l.edge.clone();
+                        l = n;
+                    }
+                    let target = (l.kept * (1.0 - d / (SHED_PX * self.s))).max(KEEP_MIN);
+                    let top = l.h.iter().copied().fold(0.0f32, f32::max);
+                    let mut frac = 0.0;
+                    if target < l.kept {
+                        let f = target / l.kept;
+                        frac = 1.0 - f;
+                        l.h.iter_mut().for_each(|h| *h *= f);
+                        l.kept = target;
+                    }
+                    shed.push(Shed { x0: l.edge.x0 as f32, x1: l.edge.x1 as f32, y: l.edge.y as f32, h: top, frac, dx: (e.left - l.edge.left) as f32 });
+                    l.edge = e;
+                    l.dirty = true;
+                    l
+                }
+                // Boyu değişti ya da yeni: kar sıfırdan birikir.
                 _ => {
                     let seed = self.rng.range(0.0, 6.28);
                     Ledge::new(e, self.s, seed)
@@ -213,6 +274,7 @@ impl Ledges {
             };
             self.list.push(ledge);
         }
+        shed
     }
 
     /// `snow`: kar yağıyorsa şiddet (0..=1); `None` ise erir. `melt_fast`: yağmur.
@@ -223,6 +285,8 @@ impl Ledges {
         }
         let s = self.s;
         for l in &mut self.list {
+            // Durunca karı yeniden "yapışır": sonraki taşımada yine bir kısmı dökülür.
+            l.kept = (l.kept + 0.6 * dt).min(1.0);
             let mut moved = 0.0f32;
             match snow {
                 Some(level) => {
@@ -310,7 +374,7 @@ mod tests {
     use super::*;
 
     fn edge(key: isize, x0: i32, x1: i32, y: i32) -> Edge {
-        Edge { key, x0, x1, y, room: 40, taper: 8, spans: vec![(x0, x1)], depth: 1.0, rough: ROUGH, mound: 0.0 }
+        Edge { key, x0, x1, y, room: 40, taper: 8, spans: vec![(x0, x1)], depth: 1.0, rough: ROUGH, mound: 0.0, left: x0, full: x1 - x0 }
     }
 
     #[test]
@@ -377,16 +441,43 @@ mod tests {
         m.settle(1.0);
         assert!(!m.list[0].bare() && !m.list[1].bare());
         // 1 numara yerinde (bir piksel oynama), 2 numara taşındı, 3 yeni.
-        m.sync(vec![edge(1, 1, 400, 300), edge(2, 520, 920, 200), edge(3, 0, 50, 50)]);
+        let before = m.list[1].h.iter().sum::<f32>();
+        let shed = m.sync(vec![edge(1, 1, 400, 300), edge(2, 520, 920, 200), edge(3, 0, 50, 50)]);
         assert_eq!(m.list.len(), 3);
         assert!(!m.list[0].bare());
-        assert!(m.list[1].bare());
+        // Taşınan pencerenin karı onunla gider, yalnızca bir kısmı dökülür.
+        assert!(!m.list[1].bare());
+        let after = m.list[1].h.iter().sum::<f32>();
+        assert!(after < before && after > before * 0.9, "{before} {after}");
+        assert_eq!(shed.len(), 1);
+        assert!(shed[0].frac > 0.0 && shed[0].frac < 0.1 && shed[0].dx == 20.0);
+        // Uzun sürükleme bile karın hepsini döktürmez.
+        for k in 1..60 {
+            m.sync(vec![edge(1, 1, 400, 300), edge(2, 520 + k * 30, 920 + k * 30, 200), edge(3, 0, 50, 50)]);
+        }
+        let rest = m.list[1].h.iter().sum::<f32>();
+        assert!(rest > before * (KEEP_MIN - 0.01) && rest < before * 0.5, "{before} {rest}");
         assert!(m.list[2].bare());
         // Kapanan pencere bırakılır; sınırın üstü kesilir.
         m.sync(vec![edge(3, 0, 50, 50)]);
         assert_eq!(m.list.len(), 1);
         m.sync((0..40).map(|k| edge(k, 0, 100, 100)).collect());
         assert_eq!(m.list.len(), MAX_LEDGES);
+    }
+
+    #[test]
+    fn ekran_disina_tasan_pencere_karini_korur() {
+        let mut m = Ledges::new(1.0, Rng::new(9));
+        // 1700..2100 penceresi ekranda 1920'de kırpılmış.
+        let clipped = Edge { left: 1700, full: 400, ..edge(1, 1700, 1920, 300) };
+        m.sync(vec![clipped]);
+        m.settle(1.0);
+        assert!(!m.list[0].bare());
+        // Sola çekildi, artık tamamı ekranda: kar gider, yeni görünen kısım boş.
+        let shed = m.sync(vec![Edge { left: 1600, full: 400, ..edge(1, 1600, 2000, 300) }]);
+        assert_eq!(shed.len(), 1);
+        let l = &m.list[0];
+        assert!(l.height_at(1700.0) > 0.5 && l.height_at(1990.0) < 0.01, "{} {}", l.height_at(1700.0), l.height_at(1990.0));
     }
 
     #[test]

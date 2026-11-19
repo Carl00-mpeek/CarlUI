@@ -468,7 +468,7 @@ impl App {
         self.dock.menu_open = true;
         let pids = idx.map(|i| procs::pids(&self.dock.entries[i])).unwrap_or_default();
         let jump = idx.filter(|&i| self.dock.entries[i].kind == Kind::App).map(|i| jumplist::load(&self.dock.entries[i])).unwrap_or_default().into_iter().filter(|g| g.title.is_empty() || self.dock.cfg.dock.menu_lists).collect::<Vec<_>>();
-        let cmd = menu::show(self.hwnd, &self.dock.cfg.dock, idx.map(|i| &self.dock.entries[i]), procs::suspended(&pids), &jump, at, side);
+        let cmd = menu::show(self.hwnd, &self.dock.cfg.dock, idx.map(|i| &self.dock.entries[i]), procs::suspended(&pids), &jump, self.live.as_ref().is_some_and(|l| l.snowy()), at, side);
         self.dock.menu_open = false;
         if let menu::Cmd::Jump(n) = cmd {
             if let Some(it) = jump.iter().flat_map(|g| &g.items).nth(n) {
@@ -514,6 +514,11 @@ impl App {
                     let _ = self.dock.sync(&self.gfx, &self.tracker, true);
                 } else {
                     carlui_core::warn!("hızlı erişime eklenemedi: {target}");
+                }
+            }
+            (menu::Cmd::Plow, _) => {
+                if let Some(l) = self.live.as_mut() {
+                    l.call_plow();
                 }
             }
             (menu::Cmd::Settings, _) => procs::settings(),

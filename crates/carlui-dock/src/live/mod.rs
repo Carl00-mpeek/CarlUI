@@ -223,6 +223,18 @@ impl Live {
         &self.cfg
     }
 
+    /// Kar efekti açık ve görünür (dock menüsünde küreme aracı çağrılabilir).
+    pub fn snowy(&self) -> bool {
+        self.state == State::Running && self.ledge.as_ref().is_some_and(|l| l.snowy())
+    }
+
+    /// Kar küreme aracını hemen geçirir (dock menüsünden).
+    pub fn call_plow(&mut self) {
+        if self.state == State::Running && self.ledge.as_mut().is_some_and(|l| l.call_plow()) {
+            self.arm();
+        }
+    }
+
     /// Sahneyi (saat kipinde şimdiki bölüme göre) kurar ya da kaldırır.
     fn build_scene(&mut self, gfx: &Gfx, dock: &Dock) {
         let t = unsafe { GetLocalTime() };

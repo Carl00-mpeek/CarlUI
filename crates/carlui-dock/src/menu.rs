@@ -44,9 +44,11 @@ pub enum Cmd {
     Quit,
     /// Hızlı Erişim yığınına ekle.
     AddQuick,
+    /// Kar küreme aracını çağır (yalnızca kar efekti açıkken).
+    Plow,
 }
 
-const IDS: [(usize, Cmd); 12] = [
+const IDS: [(usize, Cmd); 13] = [
     (1, Cmd::NewWindow),
     (2, Cmd::TogglePin),
     (3, Cmd::CloseWindow),
@@ -59,6 +61,7 @@ const IDS: [(usize, Cmd); 12] = [
     (11, Cmd::RestoreTaskbar),
     (12, Cmd::Quit),
     (13, Cmd::AddQuick),
+    (14, Cmd::Plow),
 ];
 
 // Segoe Fluent Icons glifleri.
@@ -76,6 +79,8 @@ const G_PLAY: char = '\u{E768}';
 const G_KILL: char = '\u{E711}';
 /// 🚫 — "Programı durdur" (kırmızı daire, çapraz çizgi).
 const G_BLOCKED: char = '\u{E733}';
+/// Araba (kar küreme aracı).
+const G_PLOW: char = '\u{E804}';
 const RED: u32 = 0xFF6B6B;
 
 /// Uygulamanın menülerini Windows'un koyu temasına geçirir (uxtheme'nin
@@ -130,11 +135,13 @@ fn jump_icon(icon: &(String, i32), target: &str) -> Option<Icon> {
 /// `suspended`: uygulamanın çalışan süreci varsa durdurulmuş mu (yoksa `None`).
 /// `jump`: uygulamanın kendi görevleri (Firefox: gizli pencere vb.).
 /// `cfg`: başlık rengi ayarı (`dock.menu_accent`).
-pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Option<bool>, jump: &[Group], at: (i32, i32), side: i32) -> Cmd {
+/// `plow`: kar efekti açık: "Kar küreme aracını çağır" da gösterilir.
+pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Option<bool>, jump: &[Group], plow: bool, at: (i32, i32), side: i32) -> Cmd {
     let item =|id: usize, text: &str, icon: Icon| Row::Item { id, text: text.to_string(), icon };
     let glyph = |c: char| Icon::Glyph(c, None);
     let mut rows = Vec::new();
     let app = entry.filter(|e| e.kind == Kind::App);
+    let plow_row = || item(14, t!("Kar küreme aracını çağır", "Call the snow plow"), glyph(G_PLOW));
     if app.is_none() {
         // Dock'un boş yeri: yalnızca CarlUI'nin kendi seçenekleri; çıkışlar
         // en üstte (fareden en uzak, yanlışlıkla tıklanmasın).
@@ -143,8 +150,16 @@ pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Opti
         rows.push(Row::Sep);
         rows.push(item(5, t!("Görev yöneticisi", "Task manager"), glyph(G_TASKMGR)));
         rows.push(item(10, t!("Ayarlar", "Settings"), glyph(G_SETTINGS)));
+        if plow {
+            rows.push(Row::Sep);
+            rows.push(plow_row());
+        }
     }
     if let Some(e) = app {
+        if plow {
+            rows.push(plow_row());
+            rows.push(Row::Sep);
+        }
         // Logo bir kez okunur (eskiden simgesiz her görev satırı için yeniden).
         let logo = app_icon(e);
         let mut n = 0;

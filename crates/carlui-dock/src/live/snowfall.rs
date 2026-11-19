@@ -254,3 +254,98 @@ mod tests {
         assert!(flake_count(0.8, 1920.0, 1.0) >= 200);
     }
 }
+
+/// Taşınan pencereden dökülen kar: kısa ömürlü, kompozisyonla düşen parçacıklar.
+pub struct Spill {
+    parent: ContainerVisual,
+    brush: Option<CompositionSurfaceBrush>,
+    bursts: Vec<(ContainerVisual, std::time::Instant)>,
+}
+
+/// Parçacığın en uzun ömrü (ms).
+const SPILL_MS: f32 = 1100.0;
+
+impl Spill {
+    pub fn new(parent: &ContainerVisual) -> Self {
+        Self { parent: parent.clone(), brush: None, bursts: Vec::new() }
+    }
+
+    /// `[x0, x1]` aralığında, `y` kenarından (`h`: kar kalınlığı) `frac` oranında
+    /// kar döker; `dx`: pencerenin gittiği yön (parçalar geride kalır).
+    #[allow(clippy::too_many_arguments)]
+    pub fn burst(&mut self, gfx: &Gfx, x0: f32, x1: f32, y: f32, h: f32, frac: f32, dx: f32, s: f32, rng: &mut Rng) -> Result<()> {
+        let w = (x1 - x0).max(0.0);
+        let n = ((w / (9.0 * s)) * frac.clamp(0.0, 1.0) * 2.2).clamp(3.0, 70.0) as usize;
+        if w < 4.0 || h < 0.5 {
+            return Ok(());
+        }
+        let comp = &gfx.comp;
+        if self.brush.is_none() {
+            let dot = gfx.surface(16.0, 16.0, |dc| unsafe { draw_dot(dc) })?;
+            let b = comp.CreateSurfaceBrushWithSurface(&dot)?;
+            b.SetStretch(CompositionStretch::Fill)?;
+            self.brush = Some(b);
+        }
+        let brush = self.brush.clone().unwrap();
+        let root = comp.CreateContainerVisual()?;
+        let fall = comp.CreateCubicBezierEasingFunction(windows::Foundation::Numerics::Vector2 { X: 0.45, Y: 0.0 }, windows::Foundation::Numerics::Vector2 { X: 0.9, Y: 0.6 })?;
+        let lin = comp.CreateLinearEasingFunction()?;
+        // Pencere hızla giderse parçalar geride kalır (ters yöne savrulur).
+        let back = -(dx.clamp(-80.0, 80.0)) * 0.6;
+        let kids = root.Children()?;
+        for _ in 0..n {
+            let x = rng.range(x0, x1);
+            let y0 = y - rng.range(0.0, h.max(1.0));
+            let d = rng.range(2.2, 5.5) * s;
+            let ms = rng.range(650.0, SPILL_MS);
+            let drop = rng.range(110.0, 260.0) * s;
+            let x_end = x + back * s + rng.range(-14.0, 14.0) * s;
+            let v = comp.CreateSpriteVisual()?;
+            v.SetBrush(&brush)?;
+            v.SetSize(v2(d, d))?;
+            v.SetOffset(v3(x - d / 2.0, y0 - d / 2.0))?;
+            let mv = comp.CreateVector3KeyFrameAnimation()?;
+            mv.InsertKeyFrameWithEasingFunction(1.0, Vector3 { X: x_end - d / 2.0, Y: y0 + drop, Z: 0.0 }, &fall)?;
+            mv.SetDuration(ts(ms))?;
+            v.StartAnimation(h!("Offset"), &mv)?;
+            let op = comp.CreateScalarKeyFrameAnimation()?;
+            op.InsertKeyFrameWithEasingFunction(0.0, 0.95, &lin)?;
+            op.InsertKeyFrameWithEasingFunction(0.6, 0.85, &lin)?;
+            op.InsertKeyFrameWithEasingFunction(1.0, 0.0, &lin)?;
+            op.SetDuration(ts(ms))?;
+            v.StartAnimation(h!("Opacity"), &op)?;
+            kids.InsertAtTop(&v)?;
+        }
+        self.parent.Children()?.InsertAtTop(&root)?;
+        self.bursts.push((root, std::time::Instant::now()));
+        Ok(())
+    }
+
+    /// Ömrü dolan parçacıkları kaldırır.
+    pub fn sweep(&mut self) {
+        let parent = &self.parent;
+        self.bursts.retain(|(r, t)| {
+            let alive = t.elapsed().as_secs_f32() * 1000.0 < SPILL_MS + 100.0;
+            if !alive {
+                if let Ok(k) = parent.Children() {
+                    let _ = k.Remove(r);
+                }
+            }
+            alive
+        });
+    }
+
+    pub fn busy(&self) -> bool {
+        !self.bursts.is_empty()
+    }
+}
+
+impl Drop for Spill {
+    fn drop(&mut self) {
+        if let Ok(k) = self.parent.Children() {
+            for (r, _) in &self.bursts {
+                let _ = k.Remove(r);
+            }
+        }
+    }
+}
