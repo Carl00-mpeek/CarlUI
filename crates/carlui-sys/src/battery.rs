@@ -1,18 +1,27 @@
 //! Şarjlı fare ve kulaklığın pil seviyesi.
 //!
-//! Dört kaynak birleştirilir:
+//! Şu kaynaklar birleştirilir:
 //! - **Bluetooth** cihazlar: Windows'un kendi pil özelliği (`bt::batteries`).
 //! - **ATK alıcılı fareler** (VID 373B, ör. ATK A9 Plus): üreticinin HID
 //!   protokolü. Rapor 0x08, 16 baytlık gövde `[komut, 0, adr_hi, adr_lo, uzunluk,
 //!   veri×10, sağlama]`; 0x04 komutu `[yüzde, şarjda, mV_hi, mV_lo]` döner.
 //! - **HyperX Cloud III S Wireless** alıcısı (VID 03F0): 0x0C raporuyla
 //!   `0C 02 03 01 00 06` sorusu; yanıtın 6. baytı yüzdedir (>100 = kulaklık kapalı).
+//! - **SteelSeries Arctis / Nova, HyperX Cloud II / Alpha** alıcıları: model tablosu
+//!   (`headsets`).
+//! - **Logitech** HID++ 2.0 cihazları (Unifying / Bolt / Lightspeed / kablolu): model
+//!   tablosu gerekmez (`logitech`).
+//! - **Razer** kablosuz cihazları: 90 baytlık özellik raporu (`razer`).
 //! - **Diğer HID cihazlar**: tanımlayıcısında standart "Battery Strength"
 //!   (sayfa 0x06, kullanım 0x20) alanı olan her alıcı; marka bilgisi gerekmez.
 //!
 //! Protokoller açık kaynak gözlemlere dayanır (libatk-rs, atk-a9-air-plus-battery,
-//! HyperX-Battery-Tray); kod bağımsız yazılmıştır. Okuma birkaç yüz ms sürebilir:
+//! HyperX-Battery-Tray, HeadsetControl, openrazer, Logitech HID++ belgeleri); kod bağımsız yazılmıştır. Okuma birkaç yüz ms sürebilir:
 //! arayüz iş parçacığından çağrılmamalı.
+
+mod headsets;
+mod logitech;
+mod razer;
 
 use std::time::{Duration, Instant};
 use windows::{
@@ -49,6 +58,7 @@ struct Iface {
     usage: u16,
     in_len: usize,
     out_len: usize,
+    feat_len: usize,
 }
 
 /// Verilen üreticinin HID arayüzleri (sayfa/kullanım ve rapor uzunluklarıyla).
@@ -94,6 +104,7 @@ fn interfaces(vid: &str) -> Vec<Iface> {
                 usage: caps.Usage,
                 in_len: caps.InputReportByteLength as usize,
                 out_len: caps.OutputReportByteLength as usize,
+                feat_len: caps.FeatureReportByteLength as usize,
             });
         }
         let _ = SetupDiDestroyDeviceInfoList(set);
@@ -361,6 +372,13 @@ fn product_name(h: HANDLE) -> String {
     if ok && !s.is_empty() { s } else { "HID".into() }
 }
 
+/// İstek, çıkış raporu uzunluğuna sıfırla tamamlanır (Windows kısa yazımı reddeder).
+fn padded(req: &[u8], out_len: usize) -> Vec<u8> {
+    let mut v = req.to_vec();
+    v.resize(out_len.max(req.len()), 0);
+    v
+}
+
 // ---- birleşik ----------------------------------------------------------------
 
 fn kind_of(name: &str) -> Kind {
@@ -380,8 +398,18 @@ pub fn read_all() -> Vec<Reading> {
     let mut out: Vec<Reading> = Vec::new();
     out.extend(atk());
     out.extend(hyperx());
+    let mut seen: Vec<String> = Vec::new();
+    out.extend(headsets::read(&mut seen));
+    out.extend(razer::read(&mut seen));
+    let logi = logitech::read();
+    if !logi.is_empty() {
+        seen.push("vid_046d".into());
+    }
+    out.extend(logi);
     // Bluetooth cihazlar aşağıda Windows'tan gelir; HID tarafında ikinci kez sayılmasın.
-    out.extend(generic(&[ATK_VID, HYPERX_VID, "00001124-0000-1000-8000-00805f9b34fb", "00001812-0000-1000-8000-00805f9b34fb"]));
+    let mut skip: Vec<&str> = vec![ATK_VID, HYPERX_VID, "00001124-0000-1000-8000-00805f9b34fb", "00001812-0000-1000-8000-00805f9b34fb"];
+    skip.extend(seen.iter().map(String::as_str));
+    out.extend(generic(&skip));
     for (name, pct) in crate::bt::batteries() {
         out.push(Reading { kind: kind_of(&name), name, percent: Some(pct), charging: false });
     }
