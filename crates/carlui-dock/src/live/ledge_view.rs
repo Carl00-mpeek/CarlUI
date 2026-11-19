@@ -741,7 +741,10 @@ unsafe fn paint(dc: &ID2D1DeviceContext, l: &Ledge, ha: f32, hb: f32, s: f32, sh
     }
     // Kar: sütun tepelerinden geçen dolu şekil, beyazdan buz mavisine.
     let f = dc.GetFactory()?;
-    let fill = linear(dc, ha - max, ha, col((255, 255, 255), 0.97), col((214, 224, 240), 0.95))?;
+    let fill = linear(dc, ha - max, ha, col((247, 250, 254), 0.97), col((216, 226, 241), 0.95))?;
+    // Tanecikler: buz mavisi gölgeli ve beyaz noktalar, karı pürüzlü gösterir.
+    let grain_dark = dc.CreateSolidColorBrush(&col((190, 205, 228), 0.55), None)?;
+    let grain_lite = dc.CreateSolidColorBrush(&col((255, 255, 255), 0.9), None)?;
     let shade = linear(dc, ha, ha + 3.0 * s, col((20, 30, 50), 0.2), col((20, 30, 50), 0.0))?;
     let glitter = dc.CreateSolidColorBrush(&col((255, 255, 255), 1.0), None)?;
     for &(a, b) in &l.edge.spans {
@@ -757,7 +760,9 @@ unsafe fn paint(dc: &ID2D1DeviceContext, l: &Ledge, ha: f32, hb: f32, s: f32, sh
             let h = l.height_at(x);
             sum += h;
             n += 1.0;
-            sink.AddLine(pt(x - x0, ha + 0.5 * s - h));
+            // Tepede küçük topaklar: kar düz değil, pütürlü.
+            let bump = if h > 0.3 * s { ((hash(seed ^ 0x9e37, (x / (2.0 * s)) as u32) % 100) as f32 / 100.0 - 0.4) * 1.3 * s * (h / (3.0 * s)).min(1.0) } else { 0.0 };
+            sink.AddLine(pt(x - x0, ha + 0.5 * s - (h + bump).max(0.0)));
             if x >= sb {
                 break;
             }
@@ -773,10 +778,21 @@ unsafe fn paint(dc: &ID2D1DeviceContext, l: &Ledge, ha: f32, hb: f32, s: f32, sh
         shade.SetOpacity((avg / (3.0 * s)).min(1.0));
         dc.FillRectangle(&D2D_RECT_F { left: sa - x0, top: ha + 0.5 * s, right: sb - x0, bottom: ha + 3.5 * s }, &shade);
         dc.FillGeometry(&g, &fill, None);
-        // Seyrek ışıltılar.
+        // Tanecikler ve seyrek ışıltılar.
         for i in 0..l.h.len() {
             let cx = l.col_x(i);
-            if cx < sa + 2.0 * s || cx > sb - 2.0 * s || l.h[i] < 2.0 * s || hash(seed, i as u32) % 17 != 0 {
+            let hi = l.h[i];
+            if cx >= sa && cx <= sb && hi > 1.2 * s {
+                for k in 0..3u32 {
+                    let r = hash(seed.wrapping_add(k * 7919), i as u32);
+                    let gx = cx - x0 + ((r % 100) as f32 / 100.0 - 0.5) * l.col_w;
+                    let gy = ha + 0.5 * s - hi * ((r >> 8) % 100) as f32 / 100.0;
+                    let gr = (0.35 + ((r >> 16) % 46) as f32 / 100.0) * s;
+                    let b = if (r >> 24) % 3 == 0 { &grain_dark } else { &grain_lite };
+                    dc.FillEllipse(&D2D1_ELLIPSE { point: pt(gx, gy.max(ha + 0.5 * s - hi + gr)), radiusX: gr, radiusY: gr }, b);
+                }
+            }
+            if cx < sa + 2.0 * s || cx > sb - 2.0 * s || hi < 2.0 * s || hash(seed, i as u32) % 9 != 0 {
                 continue;
             }
             let y = ha + 0.5 * s - l.h[i] + 1.2 * s;

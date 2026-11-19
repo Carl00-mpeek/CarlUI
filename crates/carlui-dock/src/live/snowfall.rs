@@ -50,6 +50,63 @@ unsafe fn draw_dot(dc: &ID2D1DeviceContext) -> Result<()> {
     Ok(())
 }
 
+/// Birkaç küçük kristalin yapıştığı topak (yakındaki iri, gerçek kar tanesi).
+unsafe fn draw_clump(dc: &ID2D1DeviceContext) -> Result<()> {
+    let rt: &ID2D1RenderTarget = dc;
+    let stops = [
+        D2D1_GRADIENT_STOP { position: 0.0, color: col(255, 255, 255, 1.0) },
+        D2D1_GRADIENT_STOP { position: 0.7, color: col(246, 250, 255, 0.9) },
+        D2D1_GRADIENT_STOP { position: 1.0, color: col(230, 238, 250, 0.0) },
+    ];
+    let coll = rt.CreateGradientStopCollection(&stops, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP)?;
+    for (x, y, r) in [(8.0, 8.5, 5.2), (5.0, 6.5, 3.6), (11.2, 6.2, 3.4), (10.0, 11.4, 3.2), (5.6, 11.0, 2.8)] {
+        let props = D2D1_RADIAL_GRADIENT_BRUSH_PROPERTIES { center: pt(x, y), gradientOriginOffset: pt(-0.6, -0.8), radiusX: r, radiusY: r };
+        let b = dc.CreateRadialGradientBrush(&props, None, &coll)?;
+        dc.FillEllipse(&D2D1_ELLIPSE { point: pt(x, y), radiusX: r, radiusY: r }, &b);
+    }
+    Ok(())
+}
+
+/// Altı kollu kar kristali (24×24).
+unsafe fn draw_crystal(dc: &ID2D1DeviceContext) -> Result<()> {
+    let line = dc.CreateSolidColorBrush(&col(255, 255, 255, 0.95), None)?;
+    let glow = dc.CreateSolidColorBrush(&col(235, 244, 255, 0.35), None)?;
+    let (cx, cy) = (12.0f32, 12.0f32);
+    dc.FillEllipse(&D2D1_ELLIPSE { point: pt(cx, cy), radiusX: 6.0, radiusY: 6.0 }, &glow);
+    for k in 0..6 {
+        let a = k as f32 * std::f32::consts::PI / 3.0;
+        let (dx, dy) = (a.cos(), a.sin());
+        dc.DrawLine(pt(cx, cy), pt(cx + dx * 10.5, cy + dy * 10.5), &line, 1.5, None);
+        // Kolun ortasında iki küçük dal.
+        for side in [-1.0f32, 1.0] {
+            let b = a + side * 0.75;
+            let (bx, by) = (cx + dx * 6.0, cy + dy * 6.0);
+            dc.DrawLine(pt(bx, by), pt(bx + b.cos() * 3.4, by + b.sin() * 3.4), &line, 1.1, None);
+        }
+    }
+    dc.FillEllipse(&D2D1_ELLIPSE { point: pt(cx, cy), radiusX: 1.8, radiusY: 1.8 }, &line);
+    Ok(())
+}
+
+/// Bir rüzgâr katmanı: içindeki taneler birlikte yavaşça yana savrulur,
+/// ara sıra esinti gelir. `amp` piksel.
+fn wind(comp: &Compositor, parent: &VisualCollection, amp: f32, ms: f32, rng: &mut Rng) -> Result<ContainerVisual> {
+    let c = comp.CreateContainerVisual()?;
+    let ease = comp.CreateCubicBezierEasingFunction(windows::Foundation::Numerics::Vector2 { X: 0.45, Y: 0.0 }, windows::Foundation::Numerics::Vector2 { X: 0.55, Y: 1.0 })?;
+    let a = comp.CreateScalarKeyFrameAnimation()?;
+    a.InsertKeyFrameWithEasingFunction(0.0, 0.0, &ease)?;
+    a.InsertKeyFrameWithEasingFunction(0.18, amp * rng.range(0.2, 0.4), &ease)?;
+    a.InsertKeyFrameWithEasingFunction(0.32, amp, &ease)?; // esinti
+    a.InsertKeyFrameWithEasingFunction(0.55, amp * rng.range(0.1, 0.3), &ease)?;
+    a.InsertKeyFrameWithEasingFunction(0.78, -amp * 0.35, &ease)?;
+    a.InsertKeyFrameWithEasingFunction(1.0, 0.0, &ease)?;
+    a.SetDuration(ts(ms))?;
+    a.SetIterationBehavior(AnimationIterationBehavior::Forever)?;
+    c.StartAnimation(h!("Offset.X"), &a)?;
+    parent.InsertAtTop(&c)?;
+    Ok(c)
+}
+
 /// Yağan kar katmanı.
 pub struct Snowfall {
     parent: ContainerVisual,
@@ -59,24 +116,47 @@ pub struct Snowfall {
 
 impl Snowfall {
     /// `w`×`h` alanına `level` şiddetinde kar yağdırır; katman `parent`'ın en altına girer.
+    /// Uzaktaki küçük taneler yavaş ve soluk, yakındaki iri topak ve
+    /// kristaller hızlı, parlak ve dönerek düşer; katmanlar ara sıra esintiyle savrulur.
     pub fn new(gfx: &Gfx, parent: &ContainerVisual, w: f32, h: f32, s: f32, level: f32, rng: &mut Rng) -> Result<Self> {
         let comp = &gfx.comp;
         let root = comp.CreateContainerVisual()?;
-        let dot = gfx.surface(16.0, 16.0, |dc| unsafe { draw_dot(dc) })?;
-        let brush = comp.CreateSurfaceBrushWithSurface(&dot)?;
-        brush.SetStretch(CompositionStretch::Fill)?;
+        let brush = |size: f32, f: unsafe fn(&ID2D1DeviceContext) -> Result<()>| -> Result<CompositionSurfaceBrush> {
+            let surf = gfx.surface(size, size, |dc| unsafe { f(dc) })?;
+            let b = comp.CreateSurfaceBrushWithSurface(&surf)?;
+            b.SetStretch(CompositionStretch::Fill)?;
+            Ok(b)
+        };
+        let dot = brush(16.0, draw_dot)?;
+        let clump = brush(16.0, draw_clump)?;
+        let crystal = brush(24.0, draw_crystal)?;
         let lin = comp.CreateLinearEasingFunction()?;
         let kids = root.Children()?;
-        let top = -12.0 * s;
-        let len = h + 24.0 * s;
+        let gust = 26.0 + 40.0 * level.clamp(0.0, 1.0);
+        let far = wind(comp, &kids, gust * 0.5 * s, rng.range(16000.0, 22000.0), rng)?;
+        let near = wind(comp, &kids, gust * s, rng.range(11000.0, 15000.0), rng)?;
+        let (far_kids, near_kids) = (far.Children()?, near.Children()?);
+        let top = -14.0 * s;
+        let len = h + 28.0 * s;
         for _ in 0..flake_count(level, w, s) {
             // Küçük taneler ağır ve soluk düşer; büyükler daha hızlı ve parlak.
             let big = rng.f();
-            let d = (2.6 + 5.0 * big * big) * s;
-            let speed = (28.0 + 46.0 * big + rng.range(-6.0, 6.0)) * s;
+            let kind = if big > 0.82 && rng.f() < 0.45 {
+                2
+            } else if big > 0.4 {
+                1
+            } else {
+                0
+            };
+            let d = match kind {
+                2 => (6.5 + 4.0 * big) * s,
+                1 => (3.2 + 4.6 * big * big) * s,
+                _ => (1.8 + 2.2 * big) * s,
+            };
+            let speed = (24.0 + 52.0 * big + rng.range(-6.0, 6.0)) * s;
             let dur = len / speed * 1000.0;
-            let dx = rng.range(-0.06, 0.16) * len;
-            let x0 = rng.range(-0.12 * w, 1.06 * w);
+            let dx = rng.range(-0.04, 0.12) * len;
+            let x0 = rng.range(-0.15 * w, 1.08 * w);
             let p0 = rng.f().clamp(0.002, 0.998);
             let at = |p: f32| Vector3 { X: x0 + dx * p, Y: top + len * p, Z: 0.0 };
 
@@ -93,21 +173,43 @@ impl Snowfall {
             outer.StartAnimation(h!("Offset"), &fall)?;
 
             let flake = comp.CreateSpriteVisual()?;
-            flake.SetBrush(&brush)?;
+            flake.SetBrush(match kind {
+                2 => &crystal,
+                1 => &clump,
+                _ => &dot,
+            })?;
             flake.SetSize(v2(d, d))?;
-            flake.SetOpacity((0.6 + 0.4 * big + rng.range(0.0, 0.1)).min(1.0))?;
-            // Sağa sola salınım.
-            let amp = rng.range(3.0, 9.0) * s;
+            let alpha = if kind == 0 { 0.45 + 0.3 * big } else { 0.75 + 0.25 * big };
+            flake.SetOpacity((alpha + rng.range(0.0, 0.1)).min(1.0))?;
+            // Sağa sola salınım: iri taneler daha geniş ve yavaş salınır.
+            let amp = rng.range(3.0, 7.0) * s * (1.0 + big);
             let sway = comp.CreateScalarKeyFrameAnimation()?;
+            let ease = comp.CreateCubicBezierEasingFunction(windows::Foundation::Numerics::Vector2 { X: 0.37, Y: 0.0 }, windows::Foundation::Numerics::Vector2 { X: 0.63, Y: 1.0 })?;
             sway.InsertKeyFrame(0.0, -amp)?;
-            sway.InsertKeyFrame(1.0, amp)?;
-            sway.SetDuration(ts(rng.range(1800.0, 4200.0)))?;
+            sway.InsertKeyFrameWithEasingFunction(1.0, amp, &ease)?;
+            sway.SetDuration(ts(rng.range(1600.0, 3800.0) * (0.8 + 0.6 * big)))?;
             sway.SetDelayTime(ts(rng.range(0.0, 2000.0)))?;
             sway.SetDirection(AnimationDirection::Alternate)?;
             sway.SetIterationBehavior(AnimationIterationBehavior::Forever)?;
             flake.StartAnimation(h!("Offset.X"), &sway)?;
+            if kind > 0 {
+                // Dönerek düşer.
+                flake.SetCenterPoint(Vector3 { X: d / 2.0, Y: d / 2.0, Z: 0.0 })?;
+                let spin = comp.CreateScalarKeyFrameAnimation()?;
+                let start = rng.range(0.0, 360.0);
+                let dir = if rng.f() < 0.5 { -1.0 } else { 1.0 };
+                spin.InsertKeyFrame(0.0, start)?;
+                spin.InsertKeyFrameWithEasingFunction(1.0, start + dir * 360.0, &lin)?;
+                spin.SetDuration(ts(rng.range(3500.0, 9000.0)))?;
+                spin.SetIterationBehavior(AnimationIterationBehavior::Forever)?;
+                flake.StartAnimation(h!("RotationAngleInDegrees"), &spin)?;
+            }
             outer.Children()?.InsertAtTop(&flake)?;
-            kids.InsertAtTop(&outer)?;
+            if big < 0.45 {
+                far_kids.InsertAtTop(&outer)?;
+            } else {
+                near_kids.InsertAtTop(&outer)?;
+            }
         }
         // Yavaşça belirsin.
         let fade = comp.CreateScalarKeyFrameAnimation()?;
