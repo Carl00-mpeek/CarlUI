@@ -231,8 +231,8 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
             p,
             t!("Buzlanma", "Frost"),
             t!(
-                "Kar yağarken fare ve klavye 20 saniye kullanılmazsa ekranın kenarlarında hafif bir buz belirir; dokununca erir.",
-                "While it snows, a light frost creeps in from the screen edges after 20 seconds without mouse or keyboard; it melts as soon as you move."
+                "Kar yağarken fare 15 saniye kıpırdamazsa imleç buzlanır; fareyi oynatınca erir.",
+                "While it snows, the mouse pointer frosts over after 15 seconds without moving; it melts as soon as you move the mouse."
             ),
             c.frost,
             |c| c.dock.live.frost ^= true,

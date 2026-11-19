@@ -298,7 +298,7 @@ impl Live {
         }
         if snow && self.cfg.frost {
             if self.frost.is_none() {
-                match frost::Frost::new(gfx, dock.live_view().mon) {
+                match frost::Frost::new(gfx) {
                     Ok(f) => self.frost = Some(f),
                     Err(e) => warn!("canlı dock: buzlanma kurulamadı: {e}"),
                 }
