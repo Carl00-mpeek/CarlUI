@@ -54,8 +54,9 @@ pub enum Mode {
 const GATHER: Duration = Duration::from_millis(150);
 /// Yağmurda ışık akıcı kaysın diye kare aralığı.
 const RAIN_FRAME: Duration = Duration::from_millis(50);
-/// Kar topu hareket ederken kare aralığı (akıcı uçuş).
-const PLAY_FRAME: Duration = Duration::from_millis(16);
+/// Sürekli harekette (top oyunu, küreme aracı) kareleri ekran saati getirir;
+/// bu yalnızca iki ekran karesi arasındaki fazladan tikleri eler.
+const PLAY_FRAME: Duration = Duration::from_millis(4);
 /// Karda/erirken kare aralığı (birikme yavaş).
 const SLOW_FRAME: Duration = Duration::from_millis(150);
 /// Işığın kenarı geçme süresi (sn).
@@ -468,9 +469,9 @@ impl LedgeView {
         self.sheen = if self.sheen < target { (self.sheen + k).min(target) } else { (self.sheen - k).max(target) };
         self.redraw(false)?;
         self.glints(dt, true)?;
-        self.due = now + if self.play.busy() {
+        self.due = now + if self.fast() {
             PLAY_FRAME
-        } else if rain || self.sheen > 0.0 || self.plow.is_some() { RAIN_FRAME } else { SLOW_FRAME };
+        } else if rain || self.sheen > 0.0 { RAIN_FRAME } else { SLOW_FRAME };
         Ok(())
     }
 
@@ -564,6 +565,12 @@ impl LedgeView {
             self.due = Instant::now();
         }
         changed
+    }
+
+    /// Sürekli hareket var (top/adam oyunu ya da küreme aracı): kareler ekran
+    /// yenilemesiyle gelmeli.
+    pub fn fast(&self) -> bool {
+        self.shown && (self.play.busy() || self.plow.is_some())
     }
 
     /// Bir sonraki karenin zamanı.

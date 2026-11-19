@@ -296,7 +296,10 @@ impl Snow {
             let (x, y) = (self.balls[i].x, self.balls[i].y);
             if let (Some((px, py)), true) = (self.held_from, dt > 0.0) {
                 let (vx, vy) = ((x - px) / dt, (y - py) / dt);
-                self.held_v = (self.held_v.0 * 0.4 + vx * 0.6, self.held_v.1 * 0.4 + vy * 0.6);
+                // Kare hızından bağımsız yumuşatma (~25 ms): yüksek yenilemeli
+                // ekranda fare olayı gelmeyen karelerde hız birden sıfırlanmasın.
+                let a = 1.0 - (-dt / 0.025).exp();
+                self.held_v = (self.held_v.0 + (vx - self.held_v.0) * a, self.held_v.1 + (vy - self.held_v.1) * a);
             }
             self.held_from = Some((x, y));
         }

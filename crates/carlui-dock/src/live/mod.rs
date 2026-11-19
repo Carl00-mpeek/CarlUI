@@ -22,6 +22,7 @@ mod load;
 mod mix;
 mod pack;
 mod particles;
+mod pacer;
 mod pause;
 mod perch;
 mod perch_react;
@@ -82,17 +83,32 @@ struct Stats {
     frames: u32,
     total: Duration,
     max: Duration,
+    /// Sık karelerde (ekran saati) iki tik arası: en uzunu ve kaçan kare sayısı.
+    last: Option<Instant>,
+    gap_max: Duration,
+    missed: u32,
 }
 
 impl Stats {
-    fn add(&mut self, d: Duration) {
+    fn new() -> Self {
+        Stats { since: Instant::now(), frames: 0, total: Duration::ZERO, max: Duration::ZERO, last: None, gap_max: Duration::ZERO, missed: 0 }
+    }
+
+    fn add(&mut self, start: Instant, d: Duration) {
+        if let Some(p) = self.last.replace(start) {
+            let g = start - p;
+            if g < Duration::from_millis(100) {
+                self.gap_max = self.gap_max.max(g);
+                self.missed += (g > Duration::from_millis(25)) as u32;
+            }
+        }
         self.frames += 1;
         self.total += d;
         self.max = self.max.max(d);
         if self.since.elapsed() >= Duration::from_secs(60) {
             let avg = self.total.as_secs_f64() * 1000.0 / self.frames.max(1) as f64;
-            info!("canlı dock: {} kare/dk, ort {:.3} ms, en çok {:.3} ms", self.frames, avg, self.max.as_secs_f64() * 1000.0);
-            *self = Stats { since: Instant::now(), frames: 0, total: Duration::ZERO, max: Duration::ZERO };
+            info!("canlı dock: {} kare/dk, ort {:.3} ms, en çok {:.3} ms, en uzun ara {:.1} ms, kaçan {}", self.frames, avg, self.max.as_secs_f64() * 1000.0, self.gap_max.as_secs_f64() * 1000.0, self.missed);
+            *self = Stats::new();
         }
     }
 }
@@ -137,6 +153,8 @@ pub struct Live {
     bottom: bool,
     /// Fare kancası kar olaylarını gönderiyor.
     snow_hook: bool,
+    /// Ekran yenilemesine bağlı kare saati (ilk sürekli harekette kurulur).
+    pacer: Option<pacer::Pacer>,
 }
 
 impl Live {
@@ -176,11 +194,12 @@ impl Live {
             loading: None,
             music: false,
             windows,
-            stats: std::env::var_os("CARLUI_LIVE_DEBUG").map(|_| Stats { since: now, frames: 0, total: Duration::ZERO, max: Duration::ZERO }),
+            stats: std::env::var_os("CARLUI_LIVE_DEBUG").map(|_| Stats::new()),
             ledge: None,
             shimmer: None,
             bottom: pet_allowed,
             snow_hook: false,
+            pacer: None,
         };
         if cfg.has_pet() && !pet_allowed {
             info!("canlı dock: evcil hayvan yalnızca alttaki dock'ta");
@@ -329,6 +348,9 @@ impl Live {
     /// Kare zamanlayıcısını durdurur. Kayma beklemesi sürüyorsa zamanlayıcı
     /// yalnızca onun bitişine kurulur (tek zamanlayıcı ikisine de yeter).
     fn kill(&self) {
+        if let Some(p) = self.pacer.as_ref() {
+            p.set(false);
+        }
         unsafe {
             match self.settle {
                 Some(t) => {
@@ -423,12 +445,12 @@ impl Live {
             }
         }
         if let Some(st) = self.stats.as_mut() {
-            st.add(start.elapsed());
+            st.add(start, start.elapsed());
         }
         self.arm();
     }
 
-    fn arm(&self) {
+    fn arm(&mut self) {
         let now = Instant::now();
         let mut want: Option<Duration> = None;
         if self.scene.is_some() || self.fade_out.is_some() {
@@ -443,6 +465,22 @@ impl Live {
             want = Some(want.map_or(d, |w| w.min(d)));
         }
         let ms = want.map(|d| d.as_millis().min(u32::MAX as u128) as u32);
+        // Sürekli harekette kareleri ekran saati getirir (her ekran karesinde
+        // bir tik); zamanlayıcının kaba, titrek adımları hareketi takıltır.
+        let fast = self.state == State::Running && self.ledge.as_ref().is_some_and(|l| l.fast());
+        if fast {
+            let hwnd = self.hwnd;
+            self.pacer.get_or_insert_with(|| pacer::Pacer::new(hwnd)).set(true);
+            if self.settle.is_none() {
+                unsafe {
+                    let _ = KillTimer(self.hwnd, TIMER);
+                }
+            }
+            return;
+        }
+        if let Some(p) = self.pacer.as_ref() {
+            p.set(false);
+        }
         match self.state.timer(ms) {
             Some(ms) => unsafe {
                 SetTimer(self.hwnd, TIMER, ms, None);
@@ -517,6 +555,14 @@ impl Live {
                     self.tick(gfx, dock);
                 } else if self.settle.is_none() {
                     self.kill();
+                }
+            }
+            pacer::WM_APP_FRAME => {
+                if let Some(p) = self.pacer.as_ref() {
+                    p.consumed();
+                    if p.running() && self.state == State::Running {
+                        self.tick(gfx, dock);
+                    }
                 }
             }
             WM_APP_PET_CLICK => self.pet_click(),
