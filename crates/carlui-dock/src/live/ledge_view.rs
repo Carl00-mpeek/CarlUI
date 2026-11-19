@@ -71,6 +71,9 @@ const DOCK_DEPTH: f32 = 1.5;
 const DOCK_MOUND: f32 = 0.8;
 /// Kenarın üstünde ayrılan en yüksek kar (kalınlık × tepecik).
 const PEAK: f32 = DOCK_DEPTH * (1.0 + DOCK_MOUND);
+/// Ekranın alt kenarındaki birikinti: zeminde kar kalın görünsün (dock'unkine yakın).
+const DRIFT_DEPTH: f32 = 2.6;
+const _: () = assert!(DRIFT_DEPTH <= PEAK, "alt birikinti ayrılan yüksekliğe sığmalı");
 
 type C = (u8, u8, u8);
 
@@ -340,7 +343,7 @@ impl LedgeView {
         }
         // Ekranın alt kenarı: en arkada, önündeki pencereler örter; dalgalı.
         let spans = visible(mon.left, mon.right, mon.bottom - ha, mon.bottom, &cover);
-        edges.push(Edge { key: DRIFT_KEY, x0: mon.left, x1: mon.right, y: mon.bottom, room: ha, taper: 0, spans, depth: 1.2, rough: 0.32, mound: 0.0, left: mon.left, full: mon.right - mon.left });
+        edges.push(Edge { key: DRIFT_KEY, x0: mon.left, x1: mon.right, y: mon.bottom, room: ha, taper: 0, spans, depth: DRIFT_DEPTH, rough: 0.32, mound: 0.0, left: mon.left, full: mon.right - mon.left });
         edges
     }
 
