@@ -1,5 +1,18 @@
 # Sürüm notları
 
+## v1.2.2 — Kademeli büyüyen imleç ve kar düzeltmeleri (2026-11-19)
+
+**CarlUI 1.2.2: Kademeli büyüyen imleç ve kar düzeltmeleri.**
+
+**Yenilikler.** Fare aynı yerde yaklaşık bir saniye sallanınca imleç önce 3 kat büyür,
+sallamaya devam ettikçe adım adım 6 kata kadar büyür; bırakınca 2 saniye sonra eski boyuna
+döner. Dock menüsünde "Kar küreme aracını çağır" artık "CarlUI'den çık"ın hemen altında.
+
+**Düzeltmeler.** Masaüstünde Windows'un enerji tasarrufu canlı dock'u donduruyordu (kar
+dock'tan taşıyor, alttaki kar takılıyor, küreme aracı çağrılamıyordu); pil yoksa artık
+durdurmuyor. Hareketi azaltta ya da duraklamada kar dock'un yeni boyuna oturur. Hareketi
+azaltta dock'un görünmez olması düzeltildi.
+
 ## v1.2.1 — Sallayınca büyüyen imleç ve buzlanan imleç (2026-11-19)
 
 **CarlUI 1.2.1: Sallayınca büyüyen imleç ve buzlanan imleç.**

@@ -1,37 +1,27 @@
 ## Türkçe
 
-**CarlUI 1.2.1: Sallayınca büyüyen imleç ve buzlanan imleç.**
+**CarlUI 1.2.2: Kademeli büyüyen imleç ve kar düzeltmeleri.**
 
 **Yenilikler**
-- **Sallayınca büyüt:** Fareyi hızlıca ileri geri sallayınca imleç büyür, bırakınca eski boyutuna döner. İmleci ekranda kaybettiğinizde kolayca bulursunuz. Ayarlar > İmleç > Sallayınca büyüt ile kapatılabilir (varsayılan açık). Tam ekran oyunlarda devre dışıdır.
-- **Buzlanan imleç:** Kar yağarken fare 15 saniye kıpırdamazsa imlecin üstünü buz kaplar, boyutu değişmez. Fare oynayınca ya da tıklanınca buz erir. Ekran kenarlarının buzlanmasının yerini aldı. Yalnızca kar sahnesi açıkken çalışır. Önceden hazırlanmış görseller kullanıldığı için işlemciye ek yük getirmez.
-- **Pil sekmesi varsayılan açık:** Şarjlı cihaz yoksa görünmez.
-
-**İyileştirmeler**
-- Dock'taki kar taneleri ve yıldızlar artık Windows'un kendi animasyon katmanında hareket ediyor; kar yağarken işlemci kullanımı düştü.
-- Pil çıkıntısı silkelenince taneler iki yana savrulur.
+- **Sallayınca kademeli büyüme:** Fareyi aynı yerde yaklaşık bir saniye sallayınca imleç önce 3 kat büyür, sallamaya devam ettikçe adım adım 6 kata kadar büyür. Bırakınca 2 saniye sonra yumuşakça eski boyuna döner. Ayarlar > İmleç > Sallayınca büyüt ile kapatılabilir.
+- **Kar küreme aracı menüde:** Dock'un boş yerine sağ tıklayınca "Kar küreme aracını çağır" artık "CarlUI'den çık"ın hemen altında. Kar yağarken araç gelip alttaki karı küreyerek geçer.
 
 **Düzeltmeler**
-- Kartopu tutulduğu noktadan sürüklenir, imleçle arası açılmaz.
-- Derin kardan yapılan top dock'un arkasına düşmez.
-- Top tutulurken dock gizlenmez.
+- Masaüstü bilgisayarda Windows'un enerji tasarrufu açıkken canlı dock donuyordu: kar dock'tan taşıyor, alttaki kar takılı kalıyor, küreme aracı çağrılamıyordu. Pili olmayan bilgisayarda enerji tasarrufu artık canlı dock'u durdurmuyor.
+- Hareketi azalt açıkken ya da dock duraklamışken dock büyüyüp küçülünce kar yeni boya oturur, kenarlardan taşmaz.
+- Hareketi azalt açıkken dock'un camı ve simgeleri görünmez olabiliyordu; düzeltildi.
 
 ---
 
 ## English
 
-**CarlUI 1.2.1: Shake to find your cursor, and a frosty cursor.**
+**CarlUI 1.2.2: A cursor that keeps growing, and snow fixes.**
 
 **New**
-- **Shake to find:** Shake the mouse quickly back and forth and the cursor grows, then shrinks back when you stop. It makes a lost cursor easy to spot. Turn it off in Settings > Cursor > Shake to find (on by default). It is disabled while a fullscreen game is running.
-- **Frosty cursor:** While it snows, if the mouse stays still for 15 seconds, the cursor gets an icy coating without changing size. Moving the mouse or clicking melts it. This replaces the frosted screen edges. It only works while the snow scene is on. It uses pre-made images, so it adds no CPU load.
-- **Battery tab on by default:** It stays hidden when no wireless device is found.
-
-**Improvements**
-- Snowflakes and stars in the dock now move on Windows' own animation layer, so snow uses less CPU.
-- Shaking snow off the battery bump scatters the flakes to both sides.
+- **Shake to grow, step by step:** Shake the mouse in place for about a second and the cursor grows to 3x, then keeps growing step by step up to 6x as you keep shaking. Two seconds after you stop it eases back to its normal size. Turn it off in Settings > Cursor > Shake to find.
+- **Snow plow in the menu:** Right-click an empty spot on the dock and "Call the snow plow" now sits right under "Quit CarlUI". While it snows, the plow drives by and clears the snow at the bottom of the screen.
 
 **Fixes**
-- A snowball stays under the exact spot where you grabbed it while you drag it.
-- A ball made from deep snow no longer falls behind the dock.
-- The dock no longer hides while you hold a ball.
+- On desktop PCs, Windows' energy saver froze the live dock: snow hung over the dock edges, the snow at the bottom got stuck and the snow plow could not be called. On PCs without a battery, energy saver no longer pauses the live dock.
+- With reduce motion on, or while the live dock is paused, snow now fits the dock when it grows or shrinks.
+- With reduce motion on, the dock glass and icons could turn invisible; fixed.
