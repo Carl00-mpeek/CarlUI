@@ -113,6 +113,10 @@ unsafe fn draw_ball(dc: &ID2D1DeviceContext) -> Result<()> {
     sphere(dc, pt(32.0, 32.0), 30.5, 2.0)
 }
 
+/// Kardan adamın kara gömüldüğü pay ve tabandaki yığının yüksekliği (alt topun yarıçapı cinsinden).
+const SINK: f32 = 0.22;
+const MOUND: f32 = 0.42;
+
 /// Kardan adam: kömür gözler ve düğmeler, havuç burun, kırmızı atkı, dal kollar.
 /// `(bx, by)`: bitmap'te adamın taban ortası.
 unsafe fn draw_man(dc: &ID2D1DeviceContext, m: &Man, bx: f32, by: f32, s: f32) -> Result<()> {
@@ -133,6 +137,13 @@ unsafe fn draw_man(dc: &ID2D1DeviceContext, m: &Man, bx: f32, by: f32, s: f32) -
     sphere(dc, cs[0], a, s)?;
     sphere(dc, mid, b, s)?;
     sphere(dc, head, c, s)?;
+    // Tabandaki kar yığını: adam karın içine oturmuş görünsün (havada değil).
+    let mound = D2D1_ELLIPSE { point: pt(bx, by), radiusX: 1.3 * a, radiusY: MOUND * a };
+    let stops = [D2D1_GRADIENT_STOP { position: 0.0, color: col(247, 250, 254, 0.98) }, D2D1_GRADIENT_STOP { position: 1.0, color: col(216, 226, 241, 0.96) }];
+    let rt: &ID2D1RenderTarget = dc;
+    let coll = rt.CreateGradientStopCollection(&stops, D2D1_GAMMA_2_2, D2D1_EXTEND_MODE_CLAMP)?;
+    let fill = dc.CreateLinearGradientBrush(&D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES { startPoint: pt(0.0, by - MOUND * a), endPoint: pt(0.0, by) }, None, &coll)?;
+    dc.FillEllipse(&mound, &fill);
     let coal = dc.CreateSolidColorBrush(&col(34, 34, 40, 1.0), None)?;
     let dot = |p: D2D_POINT_2F, r: f32| D2D1_ELLIPSE { point: p, radiusX: r, radiusY: r };
     // Düğmeler.
@@ -347,7 +358,7 @@ impl SnowPlay {
             let k = self.men.iter().position(|v| v.id == m.id);
             let stale = k.is_none_or(|k| self.men[k].rs.iter().zip(m.rs).any(|(a, b)| (a - b).abs() > 1.0));
             if stale {
-                let w = (2.0 * m.rs[0]).max(2.0 * 2.4 * m.rs[1]) + 4.0 * s;
+                let w = (2.7 * m.rs[0]).max(2.0 * 2.4 * m.rs[1]) + 4.0 * s;
                 let h = m.height() + 3.0 * s;
                 let (bx, by) = (w / 2.0, h - 1.0 * s);
                 let surf = gfx.surface(w.ceil(), h.ceil(), |dc| unsafe { draw_man(dc, &m, bx, by, s) })?;
@@ -377,7 +388,9 @@ impl SnowPlay {
                 v.back = want_back;
             }
             v.vis.SetSize(v2(v.size.0, v.size.1))?;
-            v.vis.SetOffset(v3(m.x - v.size.0 / 2.0 - ml, m.y - (v.size.1 - 1.0 * s) - mt))?;
+            // Biraz kara gömülür; tabandaki yığın gömülen kısmı örter.
+            let sink = SINK * m.rs[0];
+            v.vis.SetOffset(v3(m.x - v.size.0 / 2.0 - ml, m.y + sink - (v.size.1 - 1.0 * s) - mt))?;
         }
         Ok(())
     }

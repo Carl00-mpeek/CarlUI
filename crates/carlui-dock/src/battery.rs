@@ -1,4 +1,4 @@
-//! Pil sekmesi: dock'un üst kenarının ortasında küçük bir çıkıntı. İmleç
+//! Pil sekmesi: dock'un üst kenarında, saatin üstünde küçük bir çıkıntı. İmleç
 //! üstüne gelince dock'un arkasından yukarı doğru bir cam panel kayar; şarjlı
 //! fare ve kulaklığın simgeleri, üstlerinde pil yüzdeleriyle görünür.
 //!
@@ -393,8 +393,13 @@ impl BatteryTab {
     }
 
     /// Dock'un hap dikdörtgenine (ekran koordinatı) yapışır; `None` ise gizlenir.
-    pub fn follow(&mut self, pill: Option<RECT>) {
-        let want = pill.filter(|_| !self.shown.is_empty() && self.win.0 > 0).map(|r| ((r.left + r.right) / 2 - self.win.0 / 2, r.top - self.win.1));
+    /// `at`: sekmenin yatay ortası (saatin üstü). Ortada durunca uygulama
+    /// simgelerine giderken imleç değip panel istemeden açılıyordu.
+    pub fn follow(&mut self, pill: Option<RECT>, at: Option<i32>) {
+        let want = pill.filter(|_| !self.shown.is_empty() && self.win.0 > 0).map(|r| {
+            let cx = at.filter(|x| (r.left..=r.right).contains(x)).unwrap_or((r.left + r.right) / 2);
+            (cx - self.win.0 / 2, r.top - self.win.1)
+        });
         if want != self.pos {
             let was = self.pos;
             self.pos = want;

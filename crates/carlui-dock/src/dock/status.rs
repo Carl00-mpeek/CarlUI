@@ -339,4 +339,11 @@ impl Dock {
         let t = self.c0() as i32 + self.wpos.1;
         (RECT { left: l, top: t, right: l + cell as i32, bottom: t + self.m.h as i32 }, t)
     }
+
+    /// Saatin ekrandaki yatay ortası; pil sekmesi bunun üstüne oturur.
+    pub fn clock_center_x(&self) -> Option<i32> {
+        let st = self.status.as_ref()?;
+        let l = self.len / 2.0 + self.status_left() + st.quick_w;
+        Some((l + (st.width - st.quick_w) / 2.0) as i32 + self.wpos.0)
+    }
 }

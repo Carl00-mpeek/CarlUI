@@ -1195,9 +1195,10 @@ extern "system" fn battery_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) ->
             battery::WM_APP_BATTERY => {
                 with_app(|a| {
                     let pill = a.dock.pill_on_screen();
+                    let at = a.dock.clock_center_x();
                     if let Some(b) = a.battery.as_mut() {
                         b.update(&a.gfx);
-                        b.follow(pill);
+                        b.follow(pill, at);
                     }
                 });
                 LRESULT(0)
@@ -1205,9 +1206,10 @@ extern "system" fn battery_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) ->
             WM_TIMER => {
                 with_app(|a| {
                     let pill = a.dock.pill_on_screen();
+                    let at = a.dock.clock_center_x();
                     if let Some(b) = a.battery.as_mut() {
                         match wp.0 {
-                            battery::TIMER_FOLLOW => b.follow(pill),
+                            battery::TIMER_FOLLOW => b.follow(pill, at),
                             battery::TIMER_FOLD => b.fold(),
                             battery::TIMER_PEEK => b.end_peek(),
                             _ => {}
