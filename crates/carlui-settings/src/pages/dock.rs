@@ -98,6 +98,23 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         c.battery_tab,
         |c| c.dock.battery_tab ^= true,
     );
+    if c.battery_tab {
+        // Dock'un gördüğü cihazlar (son bilinen değerler dosyasından).
+        let text = std::fs::read_to_string(carlui_core::paths::data_dir().join("battery.txt")).unwrap_or_default();
+        let mut names: Vec<String> = text.lines().filter_map(|l| l.split('\t').next()).filter(|n| !n.is_empty()).map(String::from).collect();
+        names.sort();
+        names.dedup();
+        for name in names {
+            let on = !c.battery_hidden.contains(&name);
+            f.toggle(p, &format!("    {name}"), t!("Pil panelinde göster.", "Show in the battery panel."), on, move |c| {
+                if let Some(i) = c.dock.battery_hidden.iter().position(|n| *n == name) {
+                    c.dock.battery_hidden.remove(i);
+                } else {
+                    c.dock.battery_hidden.push(name.clone());
+                }
+            });
+        }
+    }
 
     f.toggle(p, t!("Bölme çizgileri", "Separators"), t!("Win logosu, uygulamalar ve klasörler arasındaki ince çizgiler.", "Thin lines between the Win logo, apps and folders."), c.separators, |c| c.dock.separators ^= true);
 

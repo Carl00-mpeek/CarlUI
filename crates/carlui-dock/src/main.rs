@@ -718,6 +718,7 @@ impl App {
         }
         // Yalnızca pil sekmesi açılıp kapandıysa dock'u baştan kurma.
         mine.dock.battery_tab = old.dock.battery_tab;
+        mine.dock.battery_hidden = old.dock.battery_hidden.clone();
         if mine == *old {
             self.dock.cfg = cfg;
             self.sync_battery();
@@ -792,13 +793,18 @@ impl App {
     /// Pil sekmesini ayara göre kurar ya da kaldırır (ek ekran / kum havuzu dock'unda yok).
     fn sync_battery(&mut self) {
         let want = self.dock.cfg.dock.battery_tab && screens::child().is_none() && !sandbox::on();
-        if want == self.battery.is_some() {
-            return;
+        if want != self.battery.is_some() {
+            self.battery = None;
+            if want {
+                self.make_battery();
+            }
         }
-        self.battery = None;
-        if !want {
-            return;
+        if let Some(b) = self.battery.as_mut() {
+            b.set_hidden(self.dock.cfg.dock.battery_hidden.clone());
         }
+    }
+
+    fn make_battery(&mut self) {
         let tab = create_window(w!("CarlUI.DockBattery"), Some(battery_proc), w!("CarlUI Battery"))
             .and_then(|h| battery::BatteryTab::new(&self.gfx, h, &self.dock.theme, self.dock.scale()));
         match tab {
@@ -1203,6 +1209,7 @@ extern "system" fn battery_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) ->
                         match wp.0 {
                             battery::TIMER_FOLLOW => b.follow(pill),
                             battery::TIMER_FOLD => b.fold(),
+                            battery::TIMER_PEEK => b.end_peek(),
                             _ => {}
                         }
                     }

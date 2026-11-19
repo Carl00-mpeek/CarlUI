@@ -676,6 +676,8 @@ pub struct DockConfig {
     /// Dock'un üstünde pil sekmesi: üstüne gelince şarjlı fare/kulaklığın
     /// pil yüzdeleri görünür (varsayılan kapalı).
     pub battery_tab: bool,
+    /// Pil panelinde gösterilmeyecek cihaz adları.
+    pub battery_hidden: Vec<String>,
     /// Diğer ekranlarda da kendi pencerelerini gösteren ayrı bir dock.
     pub other_screens: bool,
     /// Çark dock: kısayolla (`shortcuts.radial`) imlecin çevresinde açılır.
@@ -733,6 +735,7 @@ impl Default for DockConfig {
             taskbar_size: TaskbarSize::Full,
             bluetooth_in_dock: false,
             battery_tab: false,
+            battery_hidden: Vec::new(),
             other_screens: false,
             radial: false,
             stacks: Vec::new(),
