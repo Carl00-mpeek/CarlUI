@@ -30,8 +30,15 @@ pub struct Watch {
     hwnd: HWND,
     notes: Vec<HPOWERNOTIFY>,
     session: bool,
+    /// Sistemde pil var. Masaüstünde Windows 11'in "enerji tasarrufu" de pil
+    /// tasarrufu bayrağını açar; pil yoksa bu canlı dock'u duraklatmaz (yoksa
+    /// kar donar, dock boyuna uymaz, küreme aracı çağrılamaz).
+    battery: bool,
     pub now: Power,
 }
+
+/// `SYSTEM_POWER_STATUS.BatteryFlag`: sistemde pil yok.
+const NO_BATTERY: u8 = 128;
 
 impl Watch {
     pub fn new(hwnd: HWND) -> Self {
@@ -45,7 +52,7 @@ impl Watch {
             }
         }
         let session = unsafe { WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION).is_ok() };
-        let mut w = Self { hwnd, notes, session, now: Power::default() };
+        let mut w = Self { hwnd, notes, session, battery: true, now: Power::default() };
         w.read_status();
         w
     }
@@ -54,8 +61,9 @@ impl Watch {
     fn read_status(&mut self) {
         let mut st = SYSTEM_POWER_STATUS::default();
         if unsafe { GetSystemPowerStatus(&mut st) }.is_ok() {
+            self.battery = st.BatteryFlag & NO_BATTERY == 0;
             self.now.on_battery = st.ACLineStatus == 0;
-            self.now.saver = st.SystemStatusFlag == 1;
+            self.now.saver = self.battery && st.SystemStatusFlag == 1;
         }
     }
 
@@ -77,7 +85,7 @@ impl Watch {
                         if s.PowerSetting == GUID_CONSOLE_DISPLAY_STATE {
                             self.now.display_off = v == 0;
                         } else if s.PowerSetting == GUID_POWER_SAVING_STATUS {
-                            self.now.saver = v == 1;
+                            self.now.saver = self.battery && v == 1;
                         }
                     }
                 }

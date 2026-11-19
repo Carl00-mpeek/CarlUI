@@ -147,13 +147,13 @@ pub fn show(hwnd: HWND, cfg: &DockConfig, entry: Option<&Entry>, suspended: Opti
         // en üstte (fareden en uzak, yanlışlıkla tıklanmasın).
         rows.push(item(11, t!("Görev çubuğunu geri getir ve çık", "Restore taskbar and quit"), glyph(G_BACK)));
         rows.push(item(12, t!("CarlUI'den çık", "Quit CarlUI"), glyph(G_POWER)));
-        rows.push(Row::Sep);
-        rows.push(item(5, t!("Görev yöneticisi", "Task manager"), glyph(G_TASKMGR)));
-        rows.push(item(10, t!("Ayarlar", "Settings"), glyph(G_SETTINGS)));
         if plow {
             rows.push(Row::Sep);
             rows.push(plow_row());
         }
+        rows.push(Row::Sep);
+        rows.push(item(5, t!("Görev yöneticisi", "Task manager"), glyph(G_TASKMGR)));
+        rows.push(item(10, t!("Ayarlar", "Settings"), glyph(G_SETTINGS)));
     }
     if let Some(e) = app {
         if plow {

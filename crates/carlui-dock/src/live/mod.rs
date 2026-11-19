@@ -146,8 +146,9 @@ pub struct Live {
     /// Adanın bildirdiği son müzik durumu (hayvan sonradan yüklenirse de uygulanır).
     music: bool,
     windows: usize,
-    /// Hareketi azaltta son durağan karenin çizildiği pill (dock boyu değişince yeniden çizilir).
-    static_pill: Option<windows::Win32::Foundation::RECT>,
+    /// Zamanlayıcısız durumlarda (hareketi azalt, görünür duraklama) son karenin
+    /// çizildiği pill: dock boyu değişince kar ve hayvan yeniden yerleşir.
+    still_pill: Option<windows::Win32::Foundation::RECT>,
     stats: Option<Stats>,
     /// Kar birikintisi / yağmur ıslaklığı (yalnız kar ya da yağmur varken, eriyene dek).
     ledge: Option<ledge_view::LedgeView>,
@@ -200,7 +201,7 @@ impl Live {
             loading: None,
             music: false,
             windows,
-            static_pill: None,
+            still_pill: None,
             stats: std::env::var_os("CARLUI_LIVE_DEBUG").map(|_| Stats::new()),
             ledge: None,
             shimmer: None,
@@ -393,7 +394,11 @@ impl Live {
                 self.kill();
                 self.draw_static(gfx, dock);
             }
-            _ => self.kill(),
+            _ => {
+                self.kill();
+                // Donuk kare son toplamadan kalma olabilir: ilk mesajda yeniden oturur.
+                self.still_pill = None;
+            }
         }
     }
 
@@ -418,7 +423,7 @@ impl Live {
 
     /// Hareketi azalt: tek, durağan kare (zamanlayıcı yok).
     fn draw_static(&mut self, gfx: &Gfx, dock: &Dock) {
-        self.static_pill = Some(dock.live_pill());
+        self.still_pill = Some(dock.live_pill());
         self.check_clock(gfx, dock);
         self.check_weather(gfx, dock, false);
         // Hareketi azalt: geçiş yok, tek durağan kare.
@@ -434,6 +439,22 @@ impl Live {
         self.frost = None;
         if let Some(l) = self.ledge.as_mut() {
             if let Err(e) = l.settle(gfx, pill) {
+                warn!("canlı dock: kar katmanı çizilemedi: {e}");
+                self.ledge = None;
+            }
+        }
+    }
+
+    /// Görünür duraklamada dock boyu değişti: donuk kar ve hayvan yeni boya oturur.
+    fn refit_paused(&mut self, gfx: &Gfx, dock: &Dock) {
+        let rect = dock.live_pill();
+        self.still_pill = Some(rect);
+        if let Some(p) = self.perch.as_mut() {
+            p.render(rect);
+        }
+        let pill = self.bottom.then_some(rect);
+        if let Some(l) = self.ledge.as_mut() {
+            if let Err(e) = l.refit(gfx, pill) {
                 warn!("canlı dock: kar katmanı çizilemedi: {e}");
                 self.ledge = None;
             }
@@ -645,10 +666,13 @@ impl Live {
         self.windows = windows;
         if changed {
             self.refresh(gfx, dock);
-        } else if self.state == State::Static && self.static_pill != Some(dock.live_pill()) {
-            // Durağan karede zamanlayıcı yok: dock büyüyüp küçülünce kar ve hayvan
-            // eski boyda kalmasın.
-            self.draw_static(gfx, dock);
+        } else if self.state != State::Running && self.state.visible() && self.still_pill != Some(dock.live_pill()) {
+            // Zamanlayıcı yok: dock büyüyüp küçülünce kar ve hayvan eski boyda kalmasın.
+            if self.state == State::Static {
+                self.draw_static(gfx, dock);
+            } else {
+                self.refit_paused(gfx, dock);
+            }
         }
         self.sync_snow_hook();
     }

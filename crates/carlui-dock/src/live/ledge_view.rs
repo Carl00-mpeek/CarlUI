@@ -595,6 +595,16 @@ impl LedgeView {
         Ok(())
     }
 
+    /// Duraklatılmışken yüzeyler değişti (dock büyüdü/küçüldü): kar yeni
+    /// yerlerine oturur ama büyümez, dökülme de oynatılmaz.
+    pub fn refit(&mut self, gfx: &Gfx, pill: Option<RECT>) -> Result<()> {
+        let edges = self.gather(pill);
+        self.model.sync(edges);
+        let _ = self.model.take_lost();
+        self.sync_slots(gfx)?;
+        self.redraw(true)
+    }
+
     /// Hareketi azalt: kar beklemeden oturur, ıslaklık tam; ışık yok.
     pub fn settle(&mut self, gfx: &Gfx, pill: Option<RECT>) -> Result<()> {
         let edges = self.gather(pill);
