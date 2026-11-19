@@ -536,8 +536,8 @@ impl BatteryTab {
         self.open = true;
         self.set_region();
         let _ = self.panel.root.SetOpacity(1.0);
-        let _ = self.motion.animate(&self.panel.root, h!("Offset.Y"), self.open_y(), 0.75, 60, 0);
-        let _ = self.motion.fade(&self.nub.root, h!("Opacity"), 0.0, 90, 0);
+        let _ = self.motion.animate(&self.panel.root, h!("Offset.Y"), self.open_y(), 0.75, 60, 120);
+        let _ = self.motion.fade(&self.nub.root, h!("Opacity"), 0.0, 90, 120);
     }
 
     /// İmleç çıkıntıya geldi: çıkıntı büyür (panel açılmaz; uygulama

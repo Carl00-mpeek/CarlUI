@@ -674,7 +674,7 @@ pub struct DockConfig {
     /// gösterilsin (varsayılan: tepsiye, ok panelinin içine gizlenir).
     pub bluetooth_in_dock: bool,
     /// Dock'un üstünde pil sekmesi: üstüne gelince şarjlı fare/kulaklığın
-    /// pil yüzdeleri görünür (varsayılan kapalı).
+    /// pil yüzdeleri görünür (varsayılan açık).
     pub battery_tab: bool,
     /// Pil panelinde gösterilmeyecek cihaz adları.
     pub battery_hidden: Vec<String>,
@@ -734,7 +734,7 @@ impl Default for DockConfig {
             taskbar: false,
             taskbar_size: TaskbarSize::Full,
             bluetooth_in_dock: false,
-            battery_tab: false,
+            battery_tab: true,
             battery_hidden: Vec::new(),
             other_screens: false,
             radial: false,

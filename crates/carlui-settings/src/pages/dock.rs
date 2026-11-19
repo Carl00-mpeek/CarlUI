@@ -94,7 +94,7 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     f.toggle(
         p,
         t!("Pil sekmesi", "Battery tab"),
-        t!("Dock'un üstünde küçük bir çıkıntı: üstüne gelince şarjlı fare ve kulaklığın pil yüzdesi yukarı kayarak görünür.", "A small tab above the dock: hover it to slide up the battery level of your wireless mouse and headset."),
+        t!("Saatin üstünde, dock'un arkasından çıkan küçük bir çıkıntı: tıklayınca şarjlı fare ve kulaklığın pil yüzdesi görünür. Cihaz yoksa görünmez.", "A small bump behind the dock, above the clock: click it to see the battery level of your wireless mouse and headset. Hidden when no device is found."),
         c.battery_tab,
         |c| c.dock.battery_tab ^= true,
     );

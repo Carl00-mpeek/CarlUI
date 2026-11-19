@@ -42,8 +42,16 @@ sıfırlanır ve soldaki hane bir artar:
 - 1.9.9 → **2.0.0**
 
 Sürüm `Cargo.toml` içindeki `[workspace.package] version` alanındadır.
-Yayın için: sürümü artır, `cargo update -w` ile `Cargo.lock`'u güncelle,
-`docs/release-notes.md`'yi yaz, commit'le, `vX.Y.Z` etiketini push et.
+Yayın için önce `docs/release-notes.md`'yi yeni sürümle yaz ("CarlUI X.Y.Z"
+geçmeli), sonra:
+
+```
+powershell -ExecutionPolicy Bypass -File tools\release.ps1
+```
+
+Betik sonraki sürümü bu kurala göre hesaplar (`-Version 2.0.0` ile elle de
+verilir, `-DryRun` yalnızca gösterir), `Cargo.toml` ve `Cargo.lock`'u
+günceller, testleri çalıştırır, commit'ler ve `vX.Y.Z` etiketini push eder.
 GitHub Actions (`release.yml`) kurucuyu derler ve sürümü yayınlar.
 
 ## Derleme ve çalıştırma (adım adım)
@@ -174,6 +182,14 @@ Hepsi bu oturumda gerçek masaüstünde otomatik test edildi ve geçti. Ek olara
 
 Ölçüm (release, boşta 15 sn, fare hareketsiz): dock 68 MB, 0,016 sn CPU (diğer
 uygulamaların pencere başlığı değişiklikleri dock'u kısa süreliğine uyandırıyor).
+
+Ölçüm (1.2.0 sonrası, release, canlı dock kar sahnesi, birikmiş kar, 4 açık
+pencere, 30 sn): dock 67 MB; tek çekirdeğin %3–13'ü (ort. ~%7,5, 16 çekirdekte
+toplam ~%0,5). Kare ~1050/dk (66 ms aralık), kare başına iş ort. 0,25 ms
+(`CARLUI_LIVE_DEBUG=1` ile günlüğe yazılır). Sürenin ~2/3'ü çekirdek kipinde
+(ekran kartına çizim çağrıları); kısa ömürlü iş parçacığı yok, tümü UI iş
+parçacığında. "Boşta ≈ 0" kuralı canlı dock kapalıyken geçerli; kar yağarken
+bu maliyet beklenen düzeyde.
 
 Notlar:
 - Başlat ve Ara düğmeleri, kendi başlatıcımız (5. adım) gelene kadar Windows'un

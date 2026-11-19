@@ -487,8 +487,12 @@ impl LedgeView {
         if shakes != self.nub_shakes {
             self.nub_shakes = shakes;
             if let Some(d) = self.model.shake(NUB_KEY, NUB_KEEP) {
-                // Dar yüzey az tane verir; silkeleme görünsün diye üç kat.
-                self.spill_shed(gfx, &[d; 3])?;
+                // Dar yüzey az tane verir ve panel çıkıntının üstünü örter:
+                // taneler iki yana savrulur ki panelin dışında görünsün.
+                let mid = (d.x0 + d.x1) * 0.5;
+                let l = Shed { x1: mid, dx: 80.0, ..d };
+                let r = Shed { x0: mid, dx: -80.0, ..d };
+                self.spill_shed(gfx, &[l, r, l, r, l, r])?;
                 self.gathered = None;
             }
         }

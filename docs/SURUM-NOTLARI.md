@@ -1,5 +1,55 @@
 # Sürüm notları
 
+## v1.2.0 — Dock'ta pil sekmesi ve daha canlı kar (2026-11-19)
+
+**CarlUI 1.2.0: Dock'ta pil sekmesi ve daha canlı kar.**
+
+**Yenilikler.** Dock'un arkasından, saatin üstünde küçük bir pil çıkıntısı çıkar. Üstüne
+gelince büyür, tıklayınca cam panel açılır ve şarjlı fare ile kulaklıkların pil yüzdesi
+görünür (şarjdayken şimşek). Bluetooth, standart HID pil bilgisi veren her marka,
+SteelSeries Arctis / Nova, HyperX Cloud, Logitech (HID++), Razer ve ATK alıcılı fareler
+desteklenir. Pil %15'in altına düşünce çıkıntı kırmızılaşır ve panel bir kez kendiliğinden
+açılır. Uyuyan cihazın son yüzdesi ve kalan süre tahmini görünür, cihazlar tek tek
+gizlenebilir. Karda kristal ve topak taneler, rüzgâr esintisi ve taneli yığınlar var.
+Kardan adam topları birbirine çekilir, kardan adam karın içine oturur, karda yuvarlanan top
+büyür. Küçültülen pencerenin karı dock'un üstüne dökülür. Yeni ayarlar: basit kar modu,
+simgelerde kar, boşta ekran kenarlarında buzlanma. Çıkıntının karı dock karıyla birleşir,
+panel açılınca silkelenir.
+
+## v1.1.14 — Zeminde belirgin kar (2026-11-19)
+
+**CarlUI 1.1.14: Zeminde belirgin kar.**
+
+**Düzeltmeler.** Ekranın alt kenarında, dock'un iki yanında biriken kar artık kalın ve
+belirgin; hafif karda bile görünür. Eskiden ince bir çizgi olarak kalıyordu.
+
+## v1.1.13 — Akıcı kar oyunu ve sürüklenen pencerelerde kar (2026-11-19)
+
+**CarlUI 1.1.13: Akıcı kar oyunu ve sürüklenen pencerelerde kar.**
+
+**Yenilikler.** Kartopu oyunu ve kar küreme aracı ekran yenileme hızında çalışır. Pencere
+sürüklenince üstündeki kar pencereyle gider; yalnızca bir kısmı dökülür ve aşağı süzülür.
+Ekranın kenarından taşan pencerelerde de kar korunur. Kar efekti açıkken dock'a sağ
+tıklayınca "Kar küreme aracını çağır" ile araç hemen gelir.
+
+**Düzeltmeler.** Dock'taki kardan yapılıp fırlatılmadan bırakılan kartopu artık dock'un
+içinden düşmüyor, üstünde kalıyor.
+
+## v1.1.12 — Kardan adam, tüm ekrana kar ve tepside Bluetooth (2026-11-18)
+
+**CarlUI 1.1.12: Kardan adam, tüm ekrana kar ve tepside Bluetooth.**
+
+**Yenilikler.** Kar artık tüm masaüstüne yağar; dock'un üstünde ve ekranın altında birikir.
+Biriken kara basılı tutunca kartopu yapılır ve imleçle taşınır; bırakılan top düşer,
+yuvarlanır, itilebilir. Üst üste üç top kardan adama dönüşür. Kar küreme aracı alttaki
+birikintiyi ve topları temizler. Yağmurda dock simgelerinde ıslak parıltı görünür.
+Bluetooth varsayılan olarak tepside; Ayarlar → Dock → "Bluetooth dock'ta" ile durum alanına
+alınabilir.
+
+**Düzeltmeler.** Tepsi ikonuna sağ tıklayınca uygulamanın menüsü panelin üstünde açılır ve
+panel kapanmaz. Ekranı kaplayan pencereler dock'tan açılırken doğru boyutta gelir.
+Tarayıcıdayken dock'un titremesi giderildi.
+
 ## v1.1.11 — Bluetooth paneli, ağ geçişi ve kar birikintisi (2026-11-19)
 
 **CarlUI 1.1.11: Bluetooth paneli, ağ geçişi ve kar birikintisi.**
