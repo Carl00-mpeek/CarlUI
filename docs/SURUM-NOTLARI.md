@@ -1,5 +1,21 @@
 # Sürüm notları
 
+## v1.2.1 — Sallayınca büyüyen imleç ve buzlanan imleç (2026-11-19)
+
+**CarlUI 1.2.1: Sallayınca büyüyen imleç ve buzlanan imleç.**
+
+**Yenilikler.** Fare hızlıca ileri geri sallanınca imleç büyür, bırakınca küçülür (Ayarlar >
+İmleç > Sallayınca büyüt, varsayılan açık; tam ekran oyunda kapalı). Kar yağarken fare 15
+saniye kıpırdamazsa imlecin üstünü buz kaplar, boyutu değişmez; fare oynayınca erir. Bu,
+ekran kenarlarındaki buzlanmanın yerini aldı ve yalnızca kar sahnesi açıkken çalışır. Pil
+sekmesi varsayılan açık.
+
+**İyileştirmeler.** Dock karı ve yıldızlar Windows animasyon katmanında hareket eder, kar
+daha az işlemci kullanır. Pil çıkıntısı silkelenince taneler iki yana savrulur.
+
+**Düzeltmeler.** Kartopu tutulduğu noktadan sürüklenir. Derin kardan yapılan top dock'un
+arkasına düşmez. Top tutulurken dock gizlenmez.
+
 ## v1.2.0 — Dock'ta pil sekmesi ve daha canlı kar (2026-11-19)
 
 **CarlUI 1.2.0: Dock'ta pil sekmesi ve daha canlı kar.**

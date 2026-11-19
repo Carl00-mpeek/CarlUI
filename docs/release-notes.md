@@ -1,45 +1,37 @@
 ## Türkçe
 
-**CarlUI 1.2.0: Dock'ta pil sekmesi ve daha canlı kar.**
+**CarlUI 1.2.1: Sallayınca büyüyen imleç ve buzlanan imleç.**
 
 **Yenilikler**
-- **Pil sekmesi:** Dock'un arkasından, saatin üstünde küçük bir çıkıntı çıkar. Üstüne gelince büyür, tıklayınca cam panel açılır. Şarjlı fare ve kulaklıkların pil yüzdesi görünür, şarj olurken şimşek işareti çıkar. Ayarlar > Dock > Pil sekmesi bölümünden açılır (varsayılan kapalı).
-- **Desteklenen cihazlar:** Bluetooth cihazlar, standart HID pil bilgisi veren cihazlar (her marka), SteelSeries Arctis / Nova, HyperX Cloud, Logitech (HID++, alıcı arkasındakiler dahil), Razer ve ATK alıcılı fareler.
-- **Pil paneli:**
-  - Pil %15'in altına düşünce çıkıntı kırmızılaşır ve panel bir kez kendiliğinden açılır.
-  - Uyuyan ya da kapalı cihazın son bilinen yüzdesi gösterilir.
-  - Kalan süre tahmini (~40 dk, ~6 sa gibi) görünür.
-  - Cihazlar tek tek gizlenebilir.
-- **Kardan adam:** Bir top başka bir topun yakınına bırakılınca onun üstüne çekilir. Kardan adam karın içine oturur, havada durmaz.
-- **Kartopu:** Karda yuvarlanan top büyür, geçtiği yerdeki kar azalır.
-- **Yağan kar:** Kristal ve topak taneler, rüzgâr esintisi, daha beyaz ve taneli kar yığınları.
-- **Küçültülen pencere:** Pencere küçültülünce ya da kapanınca üstündeki kar dock'un üstüne dökülür.
-- **Yeni kar ayarları:**
-  - Basit kar modu: yalnızca dock ve adada yağar.
-  - Simgelerin üstünde kar birikir.
-  - Boşta kalınca ekran kenarları buzlanır, dokununca erir.
-- **Pil çıkıntısında kar:** Çıkıntının üstündeki kar dock karıyla tek örtü gibi birleşir. Panel açılınca karın çoğu dökülür, biraz kalır.
+- **Sallayınca büyüt:** Fareyi hızlıca ileri geri sallayınca imleç büyür, bırakınca eski boyutuna döner. İmleci ekranda kaybettiğinizde kolayca bulursunuz. Ayarlar > İmleç > Sallayınca büyüt ile kapatılabilir (varsayılan açık). Tam ekran oyunlarda devre dışıdır.
+- **Buzlanan imleç:** Kar yağarken fare 15 saniye kıpırdamazsa imlecin üstünü buz kaplar, boyutu değişmez. Fare oynayınca ya da tıklanınca buz erir. Ekran kenarlarının buzlanmasının yerini aldı. Yalnızca kar sahnesi açıkken çalışır. Önceden hazırlanmış görseller kullanıldığı için işlemciye ek yük getirmez.
+- **Pil sekmesi varsayılan açık:** Şarjlı cihaz yoksa görünmez.
+
+**İyileştirmeler**
+- Dock'taki kar taneleri ve yıldızlar artık Windows'un kendi animasyon katmanında hareket ediyor; kar yağarken işlemci kullanımı düştü.
+- Pil çıkıntısı silkelenince taneler iki yana savrulur.
+
+**Düzeltmeler**
+- Kartopu tutulduğu noktadan sürüklenir, imleçle arası açılmaz.
+- Derin kardan yapılan top dock'un arkasına düşmez.
+- Top tutulurken dock gizlenmez.
 
 ---
 
 ## English
 
-**CarlUI 1.2.0: Battery tab on the dock and livelier snow.**
+**CarlUI 1.2.1: Shake to find your cursor, and a frosty cursor.**
 
 **New**
-- **Battery tab:** A small bump rises from behind the dock, above the clock. It grows when you hover over it and opens a glass panel when you click it. The panel shows the battery level of wireless mice and headsets, with a bolt icon while they charge. Turn it on in Settings > Dock > Battery tab (off by default).
-- **Supported devices:** Bluetooth devices, devices that report standard HID battery data (any brand), SteelSeries Arctis / Nova, HyperX Cloud, Logitech (HID++, including devices behind a receiver), Razer, and mice with ATK receivers.
-- **Battery panel:**
-  - Below 15%, the bump turns red and the panel opens on its own once.
-  - Asleep or off devices show their last known level.
-  - Shows an estimate of the time left (e.g. ~40 min, ~6 h).
-  - Devices can be hidden one by one.
-- **Snowman:** A ball dropped near another ball snaps onto it. The snowman sits down in the snow instead of floating above it.
-- **Snowballs:** Balls rolled through snow grow and leave a path with less snow behind them.
-- **Falling snow:** Crystal and clumpy flakes, gusts of wind, whiter and grainier snow piles.
-- **Minimized windows:** When a window is minimized or closed, its snow pours down onto the dock.
-- **New snow settings:**
-  - Simple snow mode: snow falls only inside the dock and the island.
-  - Snow builds up on top of icons.
-  - Screen edges frost over when the PC is idle and melt on touch.
-- **Snow on the battery bump:** Its snow blends with the dock's snow into one blanket. Opening the panel shakes most of it off and leaves a little.
+- **Shake to find:** Shake the mouse quickly back and forth and the cursor grows, then shrinks back when you stop. It makes a lost cursor easy to spot. Turn it off in Settings > Cursor > Shake to find (on by default). It is disabled while a fullscreen game is running.
+- **Frosty cursor:** While it snows, if the mouse stays still for 15 seconds, the cursor gets an icy coating without changing size. Moving the mouse or clicking melts it. This replaces the frosted screen edges. It only works while the snow scene is on. It uses pre-made images, so it adds no CPU load.
+- **Battery tab on by default:** It stays hidden when no wireless device is found.
+
+**Improvements**
+- Snowflakes and stars in the dock now move on Windows' own animation layer, so snow uses less CPU.
+- Shaking snow off the battery bump scatters the flakes to both sides.
+
+**Fixes**
+- A snowball stays under the exact spot where you grabbed it while you drag it.
+- A ball made from deep snow no longer falls behind the dock.
+- The dock no longer hides while you hold a ball.
