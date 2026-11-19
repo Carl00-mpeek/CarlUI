@@ -205,6 +205,16 @@ pub struct Ledges {
     pub list: Vec<Ledge>,
     s: f32,
     rng: Rng,
+    lost: Vec<Lost>,
+}
+
+/// Görünmez olan (küçültülen, kapanan) bir yüzeyin karı: nereden ve ne kadar (px²).
+#[derive(Clone, Copy, Debug)]
+pub struct Lost {
+    pub x0: f32,
+    pub x1: f32,
+    pub y: f32,
+    pub vol: f32,
 }
 
 /// Şiddet (0..=1) için en yüksek kar kalınlığı (ölçek 1'de piksel).
@@ -214,7 +224,7 @@ pub fn max_height(level: f32, s: f32) -> f32 {
 
 impl Ledges {
     pub fn new(s: f32, rng: Rng) -> Self {
-        Self { list: Vec::new(), s: s.max(0.5), rng }
+        Self { list: Vec::new(), s: s.max(0.5), rng, lost: Vec::new() }
     }
 
     /// Toplayıcıdan gelen kenarlarla eşler. Taşınan yüzeyin karı onunla gider,
@@ -274,6 +284,14 @@ impl Ledges {
             };
             self.list.push(ledge);
         }
+        // Artık görünmeyen pencere yüzeylerinin karı (dock ve alt birikinti hariç).
+        for l in old.iter().filter(|l| l.edge.key >= 0) {
+            let vol: f32 = l.h.iter().sum::<f32>() * l.col_w;
+            if vol > 20.0 * self.s * self.s {
+                self.lost.push(Lost { x0: l.edge.x0 as f32, x1: l.edge.x1 as f32, y: l.edge.y as f32, vol });
+            }
+        }
+        self.lost.truncate(8);
         shed
     }
 
@@ -344,6 +362,56 @@ impl Ledges {
         if any {
             l.dirty = true;
         }
+    }
+
+    /// Kartopu karı yedi: `[a, b]` aralığındaki sütunlar en çok `dh` kadar incelir.
+    pub fn take(&mut self, key: isize, a: f32, b: f32, dh: f32) {
+        let Some(l) = self.list.iter_mut().find(|l| l.edge.key == key) else { return };
+        let mut any = false;
+        for i in 0..l.h.len() {
+            let x = l.col_x(i);
+            if x >= a && x <= b && l.h[i] > 0.0 {
+                l.h[i] = (l.h[i] - dh).max(0.0);
+                any = true;
+            }
+        }
+        if any {
+            l.dirty = true;
+        }
+    }
+
+    /// Kaybolan yüzeylerin (küçültülen/kapanan pencere) karı; bir kez okunur.
+    pub fn take_lost(&mut self) -> Vec<Lost> {
+        std::mem::take(&mut self.lost)
+    }
+
+    /// Dökülen kar `key` yüzeyine, `cx` çevresine yayılarak eklenir; sınırı
+    /// aşabilir (fazlası yavaşça çöker), ama kule olmasın diye tavanı vardır.
+    /// Eklenen hacmi döndürür.
+    pub fn deposit(&mut self, key: isize, cx: f32, spread: f32, vol: f32) -> f32 {
+        let s = self.s;
+        let Some(l) = self.list.iter_mut().find(|l| l.edge.key == key) else { return 0.0 };
+        let (x0, x1) = (l.edge.x0 as f32, l.edge.x1 as f32);
+        if x1 - x0 < 4.0 || !(vol > 0.0) {
+            return 0.0;
+        }
+        let cx = cx.clamp(x0, x1);
+        let sig = spread.clamp(24.0 * s, (x1 - x0) * 0.5);
+        let w: Vec<f32> = (0..l.h.len()).map(|i| (-((l.col_x(i) - cx) / sig).powi(2)).exp()).collect();
+        let total: f32 = w.iter().sum::<f32>() * l.col_w;
+        if total <= 0.0 {
+            return 0.0;
+        }
+        let cap = 3.0 * max_height(1.0, s);
+        let mut added = 0.0;
+        for i in 0..l.h.len() {
+            let old = l.h[i];
+            l.h[i] = (old + vol * w[i] / total).min(cap.max(old));
+            added += (l.h[i] - old) * l.col_w;
+        }
+        l.smooth(0.5);
+        l.dirty = true;
+        added
     }
 
     /// `key` yüzeyinin dolu oranı (ortalama yükseklik / sınır), yoksa 0.
@@ -489,6 +557,30 @@ mod tests {
         assert!(!m.list[0].dirty);
         m.sync(vec![Edge { spans: vec![(0, 200)], ..edge(1, 0, 400, 300) }]);
         assert!(m.list[0].dirty);
+    }
+
+    #[test]
+    fn kaybolan_pencerenin_kari_doker() {
+        let mut m = Ledges::new(1.0, Rng::new(5));
+        let win = edge(7, 100, 600, 300);
+        let drift = edge(-2, 0, 1920, 1080);
+        m.sync(vec![win.clone(), drift.clone()]);
+        m.settle(1.0);
+        assert!(m.take_lost().is_empty());
+        // Pencere küçültüldü: kar kayıp listesine düşer, alt birikintiye eklenir.
+        m.sync(vec![drift]);
+        let lost = m.take_lost();
+        assert_eq!(lost.len(), 1);
+        assert!(lost[0].vol > 100.0 && lost[0].x0 == 100.0);
+        let before = m.list[0].height_at(350.0);
+        let added = m.deposit(-2, 350.0, 150.0, lost[0].vol);
+        assert!(added > 0.0 && m.list[0].height_at(350.0) > before);
+        assert!(m.list[0].h.iter().all(|h| *h <= 3.0 * max_height(1.0, 1.0) + 0.01));
+        // Kartopu karı yer.
+        let h0 = m.list[0].height_at(350.0);
+        m.take(-2, 340.0, 360.0, 2.0);
+        assert!(m.list[0].height_at(350.0) < h0);
+        assert_eq!(m.deposit(99, 0.0, 10.0, 100.0), 0.0);
     }
 
     #[test]

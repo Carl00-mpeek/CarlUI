@@ -263,7 +263,7 @@ impl SnowPlay {
 
     /// Fizik ve görseller. `snowing`: kar yağmıyorsa toplar erir.
     /// `front`: dock'un altındaki katman; `back`: pencerelerin arkasındaki katman.
-    pub fn step(&mut self, gfx: &Gfx, dt: f32, snowing: bool, pill: Option<RECT>, model: &Ledges, front: &ContainerVisual, back: Option<&ContainerVisual>) -> Result<()> {
+    pub fn step(&mut self, gfx: &Gfx, dt: f32, snowing: bool, pill: Option<RECT>, model: &mut Ledges, front: &ContainerVisual, back: Option<&ContainerVisual>) -> Result<()> {
         if self.snow.is_empty() && self.balls.is_empty() && self.men.is_empty() {
             return Ok(());
         }
@@ -273,6 +273,11 @@ impl SnowPlay {
             self.snow.melt(dt);
         }
         self.snow.step(dt, &floors, |f, x| surface(model, s, f, x));
+        // Karda sürülen top büyür, geçtiği yerin karı azalır.
+        let eaten = self.snow.roll(dt, &floors, |f, x| surface(model, s, f, x));
+        for (key, a, b, dh) in eaten {
+            model.take(key, a, b, dh);
+        }
         self.snow.follow_floors(&floors, |f, x| surface(model, s, f, x));
         self.draw(gfx, front, back)
     }

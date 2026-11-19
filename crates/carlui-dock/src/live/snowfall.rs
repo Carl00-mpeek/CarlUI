@@ -264,6 +264,8 @@ pub struct Spill {
 
 /// Parçacığın en uzun ömrü (ms).
 const SPILL_MS: f32 = 1100.0;
+/// Dökülmenin (aşağı akış) en uzun ömrü (ms).
+const POUR_MS: f32 = 1500.0;
 
 impl Spill {
     pub fn new(parent: &ContainerVisual) -> Self {
@@ -317,7 +319,70 @@ impl Spill {
             kids.InsertAtTop(&v)?;
         }
         self.parent.Children()?.InsertAtTop(&root)?;
-        self.bursts.push((root, std::time::Instant::now()));
+        self.bursts.push((root, std::time::Instant::now() + std::time::Duration::from_millis(SPILL_MS as u64)));
+        Ok(())
+    }
+
+    /// Küçültülen/kapanan pencerenin karı aşağıya, hedef yüzeye (`tx0..tx1`,
+    /// üstü `ty`) dökülür: yerçekimiyle hızlanan, hafif savrulan taneler.
+    #[allow(clippy::too_many_arguments)]
+    pub fn pour(&mut self, gfx: &Gfx, x0: f32, x1: f32, y: f32, tx0: f32, tx1: f32, ty: f32, amount: f32, s: f32, rng: &mut Rng) -> Result<()> {
+        let w = (x1 - x0).max(0.0);
+        if w < 4.0 || tx1 - tx0 < 4.0 {
+            return Ok(());
+        }
+        let n = (amount.sqrt() * 0.9).clamp(12.0, 90.0) as usize;
+        let comp = &gfx.comp;
+        if self.brush.is_none() {
+            let dot = gfx.surface(16.0, 16.0, |dc| unsafe { draw_dot(dc) })?;
+            let b = comp.CreateSurfaceBrushWithSurface(&dot)?;
+            b.SetStretch(CompositionStretch::Fill)?;
+            self.brush = Some(b);
+        }
+        let brush = self.brush.clone().unwrap();
+        let root = comp.CreateContainerVisual()?;
+        let fall = comp.CreateCubicBezierEasingFunction(windows::Foundation::Numerics::Vector2 { X: 0.5, Y: 0.0 }, windows::Foundation::Numerics::Vector2 { X: 0.95, Y: 0.7 })?;
+        let lin = comp.CreateLinearEasingFunction()?;
+        let kids = root.Children()?;
+        // Hedefte, pencerenin altına en yakın bölgeye toplanır.
+        let mid = ((x0 + x1) * 0.5).clamp(tx0, tx1);
+        let half = (w * 0.35).min((tx1 - tx0) * 0.5);
+        let mut longest = 0.0f32;
+        for _ in 0..n {
+            let x = rng.range(x0, x1);
+            let y0 = y - rng.range(0.0, 6.0 * s);
+            let d = rng.range(2.0, 6.0) * s;
+            let x_end = (mid + rng.range(-half, half) + rng.range(-10.0, 10.0) * s).clamp(tx0, tx1);
+            let y_end = ty - rng.range(0.0, 5.0 * s);
+            let dist = (y_end - y0).abs();
+            let ms = (380.0 + dist * 0.55 + rng.range(0.0, 350.0)).min(POUR_MS);
+            let delay = rng.range(0.0, 260.0);
+            longest = longest.max(ms + delay);
+            let v = comp.CreateSpriteVisual()?;
+            v.SetBrush(&brush)?;
+            v.SetSize(v2(d, d))?;
+            v.SetOffset(v3(x - d / 2.0, y0 - d / 2.0))?;
+            v.SetOpacity(0.0)?;
+            let mv = comp.CreateVector3KeyFrameAnimation()?;
+            // Önce biraz yana savrulur, sonra hedefe düşer.
+            let sway = rng.range(-18.0, 18.0) * s;
+            mv.InsertKeyFrameWithEasingFunction(0.35, Vector3 { X: x + sway - d / 2.0, Y: y0 + dist * 0.18, Z: 0.0 }, &lin)?;
+            mv.InsertKeyFrameWithEasingFunction(1.0, Vector3 { X: x_end - d / 2.0, Y: y_end - d / 2.0, Z: 0.0 }, &fall)?;
+            mv.SetDuration(ts(ms))?;
+            mv.SetDelayTime(ts(delay))?;
+            mv.SetDelayBehavior(AnimationDelayBehavior::SetInitialValueBeforeDelay)?;
+            v.StartAnimation(h!("Offset"), &mv)?;
+            let op = comp.CreateScalarKeyFrameAnimation()?;
+            op.InsertKeyFrameWithEasingFunction(0.0, 0.95, &lin)?;
+            op.InsertKeyFrameWithEasingFunction(0.85, 0.9, &lin)?;
+            op.InsertKeyFrameWithEasingFunction(1.0, 0.0, &lin)?;
+            op.SetDuration(ts(ms))?;
+            op.SetDelayTime(ts(delay))?;
+            v.StartAnimation(h!("Opacity"), &op)?;
+            kids.InsertAtTop(&v)?;
+        }
+        self.parent.Children()?.InsertAtTop(&root)?;
+        self.bursts.push((root, std::time::Instant::now() + std::time::Duration::from_millis(longest as u64)));
         Ok(())
     }
 
@@ -325,7 +390,7 @@ impl Spill {
     pub fn sweep(&mut self) {
         let parent = &self.parent;
         self.bursts.retain(|(r, t)| {
-            let alive = t.elapsed().as_secs_f32() * 1000.0 < SPILL_MS + 100.0;
+            let alive = std::time::Instant::now() < *t + std::time::Duration::from_millis(100);
             if !alive {
                 if let Ok(k) = parent.Children() {
                     let _ = k.Remove(r);

@@ -118,6 +118,10 @@ pub const MAX_BALLS: usize = 12;
 pub const MAX_MEN: usize = 4;
 /// Kardan adam için üst üste top sayısı.
 const STACK: usize = 3;
+/// Yığına çekilme mesafesi (iki yarıçap toplamına oranla).
+const MAGNET: f32 = 0.7;
+/// Topun büyüyebileceği en büyük yarıçap (s ile çarpılır).
+pub const GROW_MAX: f32 = 26.0;
 
 pub struct Snow {
     pub balls: Vec<Ball>,
@@ -288,6 +292,52 @@ impl Snow {
 
     /// Fiziği `dt` saniye ilerletir. `floors`: şu an var olan zeminler;
     /// `surf(zemin, x)`: o x'te karın yüzeyi (y).
+    /// Kartopu büyütme: kar üstünde tutulan ya da karda yuvarlanan top kar
+    /// toplayıp büyür (tutulan top durunca da yavaşça, sürüklenince hızla).
+    /// Dönen: yenen kar `(zemin, x0, x1, kalınlık)`; çağıran o karı azaltır.
+    pub fn roll(&mut self, dt: f32, floors: &[Floor], surf: impl Fn(&Floor, f32) -> f32) -> Vec<(isize, f32, f32, f32)> {
+        let dt = if dt.is_finite() { dt.clamp(0.0, 0.05) } else { 0.0 };
+        let s = self.s;
+        let max_r = GROW_MAX * s;
+        let speed = (self.held_v.0 * self.held_v.0 + self.held_v.1 * self.held_v.1).sqrt();
+        let mut eaten = Vec::new();
+        for b in self.balls.iter_mut() {
+            if b.r >= max_r || dt == 0.0 {
+                continue;
+            }
+            let rate = match b.state {
+                State::Held => 3.0 * s + speed.min(1500.0 * s) * 0.012,
+                State::Rolling(_) => b.vx.abs() * 0.03,
+                _ => continue,
+            };
+            let on = floors.iter().find(|f| {
+                if b.x < f.x0 || b.x > f.x1 {
+                    return false;
+                }
+                let top = surf(f, b.x);
+                let depth = f.y - top;
+                match b.state {
+                    State::Rolling(k) => k == f.key && depth > 1.0 * s,
+                    // Tutulan top karın içinde ya da hemen üstünde olmalı.
+                    _ => depth > 1.0 * s && b.y + b.r >= top - 4.0 * s && b.y <= f.y + b.r,
+                }
+            });
+            let Some(f) = on else { continue };
+            let dr = (rate * dt).min(max_r - b.r);
+            if dr <= 0.0 {
+                continue;
+            }
+            if let State::Rolling(_) = b.state {
+                // Büyüyen top zeminden kalkmaz: merkez yukarı kayar.
+                b.y -= dr;
+            }
+            b.r += dr;
+            let w = b.r * 0.7;
+            eaten.push((f.key, b.x - w, b.x + w, dr * 0.9));
+        }
+        eaten
+    }
+
     pub fn step(&mut self, dt: f32, floors: &[Floor], surf: impl Fn(&Floor, f32) -> f32) {
         let dt = dt.clamp(0.0, 0.05);
         let s = self.s;
@@ -328,12 +378,25 @@ impl Snow {
                     let mut nb = Ball { x, y, vx, vy, ..b };
                     // Bir yığının üstüne mi düştü?
                     if vy > 0.0 {
-                        let top = self.balls.iter().filter(|t| t.id != b.id && matches!(t.state, State::Resting(_) | State::Stacked(_)) && !self.carries(t.id)).find(|t| {
+                        let top = self.balls.iter().filter(|t| t.id != b.id && matches!(t.state, State::Resting(_) | State::Rolling(_) | State::Stacked(_)) && !self.carries(t.id)).find(|t| {
                             // Üstüne oturunca alt kenarının olacağı çizgi.
                             let line = t.y - (t.r + b.r) * OVERLAP + b.r;
-                            (x - t.x).abs() <= t.r * 0.8 && py + b.r <= line + 0.5 && y + b.r >= line
+                            // Mıknatıs: merkezi hedefin üst yarısındaysa ve yatayda
+                            // yeterince yakınsa tam üstüne çekilir (bırakış tam isabet istemez).
+                            // Yandan hızla gelen (itilen, fırlatılan) top çekilmez.
+                            let reach = if vx.abs() < 120.0 * s { (t.r + b.r) * MAGNET } else { t.r * 0.5 };
+                            (x - t.x).abs() <= reach && y < t.y - t.r * 0.3 && y + b.r >= line
                         });
                         if let Some(t) = top {
+                            let tid = t.id;
+                            if let Some(t) = self.balls.iter_mut().find(|o| o.id == tid) {
+                                // Yuvarlanan taban durur: üstüne top oturdu.
+                                if let State::Rolling(k) = t.state {
+                                    t.state = State::Resting(k);
+                                    t.vx = 0.0;
+                                }
+                            }
+                            let t = *self.balls.iter().find(|o| o.id == tid).unwrap();
                             nb.state = State::Stacked(t.id);
                             nb.x = t.x;
                             nb.y = t.y - (t.r + b.r) * OVERLAP;
@@ -722,6 +785,56 @@ mod tests {
         drop_at(&mut snow, 520.0, 900.0, 12.0);
         run(&mut snow, 3.0, &floors());
         assert!(snow.balls.iter().all(|b| matches!(b.state, State::Resting(DRIFT))), "{:?}", snow.balls);
+    }
+
+    #[test]
+    fn biraz_kenara_birakilan_top_da_yigina_cekilir() {
+        let mut snow = Snow::new(1.0, 1200.0);
+        drop_at(&mut snow, 500.0, 900.0, 14.0);
+        run(&mut snow, 2.0, &floors());
+        // 12 px yanda, tabana değecek kadar alçaktan bırakılır.
+        drop_at(&mut snow, 512.0, 1040.0, 12.0);
+        run(&mut snow, 2.0, &floors());
+        assert!(snow.balls.iter().any(|b| matches!(b.state, State::Stacked(_))), "{:?}", snow.balls);
+        drop_at(&mut snow, 490.0, 1000.0, 10.0);
+        run(&mut snow, 2.0, &floors());
+        assert_eq!(snow.men.len(), 1, "{:?}", snow.balls);
+    }
+
+    #[test]
+    fn yuvarlanan_topun_ustune_de_oturulur() {
+        let mut snow = Snow::new(1.0, 1200.0);
+        snow.balls.push(Ball { id: 50, x: 500.0, y: 1066.0, vx: 30.0, vy: 0.0, r: 14.0, state: State::Rolling(DRIFT) });
+        drop_at(&mut snow, 502.0, 1010.0, 12.0);
+        run(&mut snow, 1.0, &floors());
+        assert!(snow.balls.iter().any(|b| matches!(b.state, State::Stacked(50))), "{:?}", snow.balls);
+    }
+
+    fn deep(f: &Floor, _x: f32) -> f32 {
+        f.y - 10.0
+    }
+
+    #[test]
+    fn karda_surulen_top_buyur_ve_kar_yer() {
+        let mut snow = Snow::new(1.0, 1200.0);
+        snow.scoop(300.0, 1068.0, 8.0);
+        let fl = floors();
+        let mut eaten = 0.0;
+        for i in 0..120 {
+            snow.drag(300.0 + i as f32 * 5.0, 1068.0);
+            snow.step(1.0 / 60.0, &fl, deep);
+            eaten += snow.roll(1.0 / 60.0, &fl, deep).iter().map(|e| e.3).sum::<f32>();
+        }
+        let r = snow.balls[0].r;
+        assert!(r > 14.0 && r <= GROW_MAX, "{r}");
+        assert!(eaten > 0.0);
+        // Karın uzağında (havada) büyümez.
+        snow.drag(300.0, 600.0);
+        snow.step(1.0 / 60.0, &fl, deep);
+        assert!(snow.roll(1.0, &fl, deep).is_empty());
+        // Kar yoksa büyümez.
+        snow.drag(300.0, 1068.0);
+        assert!(snow.roll(1.0 / 60.0, &fl, flat).is_empty());
     }
 
     #[test]

@@ -160,6 +160,8 @@ pub struct LedgeView {
     moving: Option<Instant>,
     /// Taşınan pencereden dökülen kar.
     spill: Option<Spill>,
+    /// Aşağı dökülen karın hedefe varınca ekleneceği yer: (zaman, yüzey, x, yayılma, hacim).
+    pours: Vec<(Instant, isize, f32, f32, f32)>,
     /// Kar topları ve kardan adamlar.
     play: SnowPlay,
 }
@@ -221,6 +223,7 @@ impl LedgeView {
             plow_asked: false,
             moving: None,
             spill: None,
+            pours: Vec::new(),
             play: SnowPlay::new(s, mon, DRIFT_KEY),
         })
     }
@@ -475,7 +478,19 @@ impl LedgeView {
                 self.moving = Some(now);
                 self.spill_shed(gfx, &shed)?;
             }
+            let lost = self.model.take_lost();
+            if !lost.is_empty() {
+                self.pour(gfx, now, &lost)?;
+            }
             self.sync_slots(gfx)?;
+        }
+        // Dökülen kar yere varınca birikintiye eklenir.
+        if !self.pours.is_empty() {
+            let due: Vec<_> = self.pours.iter().filter(|p| p.0 <= now).copied().collect();
+            self.pours.retain(|p| p.0 > now);
+            for (_, key, cx, spread, vol) in due {
+                self.model.deposit(key, cx, spread, vol);
+            }
         }
         if let Some(sp) = self.spill.as_mut() {
             sp.sweep();
@@ -488,7 +503,7 @@ impl LedgeView {
         self.model.grow(dt, snow, rain);
         self.weather(gfx, now, dt, snow)?;
         let back = self.backdrop.as_ref().map(|b| b.root.clone());
-        self.play.step(gfx, dt, snow.is_some(), pill, &self.model, &self.root, back.as_ref())?;
+        self.play.step(gfx, dt, snow.is_some(), pill, &mut self.model, &self.root, back.as_ref())?;
         let target = self.sheen_target();
         let k = 0.5 * dt;
         self.sheen = if self.sheen < target { (self.sheen + k).min(target) } else { (self.sheen - k).max(target) };
@@ -602,6 +617,7 @@ impl LedgeView {
             && (self.play.busy()
                 || self.plow.is_some()
                 || self.plow_asked
+                || !self.pours.is_empty()
                 || self.spill.as_ref().is_some_and(|s| s.busy())
                 || self.moving.is_some_and(|t| t.elapsed() < DRAG_HOLD))
     }
@@ -628,6 +644,28 @@ impl LedgeView {
         for d in shed.iter().filter(|d| d.frac > 0.0 && d.h > 0.5) {
             sp.burst(gfx, d.x0 - ox, d.x1 - ox, d.y - oy, d.h, d.frac, d.dx, self.s, &mut self.rng)?;
         }
+        Ok(())
+    }
+
+    /// Görünmez olan pencerenin karı aşağı akar: dock görünürse onun üstüne,
+    /// değilse ekranın altındaki birikintiye; oradaki kar artar.
+    fn pour(&mut self, gfx: &Gfx, now: Instant, lost: &[super::ledge::Lost]) -> Result<()> {
+        let target = [-1, DRIFT_KEY].into_iter().find_map(|k| self.model.list.iter().find(|l| l.edge.key == k).map(|l| (k, l.edge.x0 as f32, l.edge.x1 as f32, l.edge.y as f32)));
+        let Some((key, tx0, tx1, ty)) = target else { return Ok(()) };
+        let (ox, oy) = (self.mon.left as f32, self.mon.top as f32);
+        for d in lost {
+            let cx = (d.x0 + d.x1) * 0.5;
+            let spread = (d.x1 - d.x0) * 0.3;
+            let top = ty - self.model.list.iter().find(|l| l.edge.key == key).map_or(0.0, |l| l.height_at(cx.clamp(tx0, tx1)));
+            if !self.snowfall.is_none() {
+                let sp = self.spill.get_or_insert_with(|| Spill::new(&self.root));
+                sp.pour(gfx, d.x0 - ox, d.x1 - ox, d.y - oy, tx0 - ox, tx1 - ox, top - oy, d.vol / self.s, self.s, &mut self.rng)?;
+            }
+            // Taneler ~1 sn'de varır; kar o zaman birikir.
+            let wait = if self.snowfall.is_none() { Duration::ZERO } else { Duration::from_millis(700) };
+            self.pours.push((now + wait, key, cx, spread, d.vol * 0.85));
+        }
+        self.pours.truncate(16);
         Ok(())
     }
 
