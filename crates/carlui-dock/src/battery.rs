@@ -58,6 +58,8 @@ const FRESH: Duration = Duration::from_secs(8);
 const KEEP: Duration = Duration::from_secs(3 * 3600);
 /// Şarj tahmini için iki okuma arasındaki en uzun süre.
 const CHARGE_GAP: Duration = Duration::from_secs(15 * 60);
+/// Bu yüzdeye uzun bir aradan sonra çıkan cihaz da şarjda sayılır.
+const FULL_GUESS: u8 = 99;
 /// Bu yüzde ve altı "düşük".
 const LOW: u8 = 15;
 
@@ -190,10 +192,13 @@ fn fmt_left(d: Duration) -> String {
 /// Yeni (taze) okuma: son değeri ve boşalma dönemini günceller.
 /// Şarj durumunu bildirmeyen cihaz (ör. HyperX, Bluetooth): yakın zamandaki
 /// okumaya göre yüzde arttıysa şarjda sayılır; düşene kadar öyle kalır.
+/// Kapalıyken şarj olan kulaklık uzun bir aradan sonra dolu (99) açılabilir:
+/// tepeye çıkış aradan bağımsız sayılır.
 fn seems_charging(prev: Option<Last>, pct: u8, now: SystemTime) -> bool {
     prev.is_some_and(|l| {
         let recent = now.duration_since(l.at).is_ok_and(|d| d < CHARGE_GAP);
-        recent && (pct > l.pct || (l.charging && pct >= l.pct))
+        let rose = pct > l.pct || (l.charging && pct >= l.pct);
+        rose && (recent || pct >= FULL_GUESS)
     })
 }
 
@@ -775,6 +780,10 @@ mod tests {
         assert!(!seems_charging(l(100, true, 0), 99, at(1)));
         // Eski okuma: tahmin yok.
         assert!(!seems_charging(l(50, false, 0), 60, at(60)));
+        // Kapalıyken dolan kulaklık uzun aradan sonra 99'la açılır: dolu sayılır.
+        assert!(seems_charging(l(73, false, 0), 99, at(120)));
+        assert!(seems_charging(l(99, true, 0), 99, at(120)));
+        assert!(!seems_charging(l(99, false, 0), 99, at(120)));
     }
 
     #[test]
