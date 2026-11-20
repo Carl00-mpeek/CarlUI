@@ -1,5 +1,17 @@
 # Sürüm notları
 
+## v1.2.3 — Klavye pili, yeni pil görünümü ve kartopu düzeltmesi (2026-11-20)
+
+**CarlUI 1.2.3: Klavye pili, yeni pil görünümü ve kartopu düzeltmesi.**
+
+**Yenilikler.** Kablosuz klavyeler pil sekmesinde kendi simgesiyle görünür. Her cihazda
+simge, yüzde ve dolum çubuğu var; şarjda yüzdenin yanında nefes alan şimşek çıkar ve çubuk
+yeşil olur, pil azalınca kırmızıya döner. ATK A9 gen2 gibi NK Nano alıcılı farelerin pili
+okunur. Şarjı bildirmeyen cihazlar (HyperX, Bluetooth) yüzde yükselince şarjda sayılır.
+
+**Düzeltmeler.** Kardan yapılan top bazen olduğu yerde kalıp sürüklenemiyordu; artık
+her zaman imleci izler.
+
 ## v1.2.2 — Kademeli büyüyen imleç ve kar düzeltmeleri (2026-11-19)
 
 **CarlUI 1.2.2: Kademeli büyüyen imleç ve kar düzeltmeleri.**

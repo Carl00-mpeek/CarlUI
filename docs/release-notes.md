@@ -1,27 +1,27 @@
 ## Türkçe
 
-**CarlUI 1.2.2: Kademeli büyüyen imleç ve kar düzeltmeleri.**
+**CarlUI 1.2.3: Klavye pili, yeni pil görünümü ve kartopu düzeltmesi.**
 
 **Yenilikler**
-- **Sallayınca kademeli büyüme:** Fareyi aynı yerde yaklaşık bir saniye sallayınca imleç önce 3 kat büyür, sallamaya devam ettikçe adım adım 6 kata kadar büyür. Bırakınca 2 saniye sonra yumuşakça eski boyuna döner. Ayarlar > İmleç > Sallayınca büyüt ile kapatılabilir.
-- **Kar küreme aracı menüde:** Dock'un boş yerine sağ tıklayınca "Kar küreme aracını çağır" artık "CarlUI'den çık"ın hemen altında. Kar yağarken araç gelip alttaki karı küreyerek geçer.
+- **Klavye pili:** Kablosuz klavyeler (Logitech, Bluetooth ve diğerleri) pil sekmesinde kendi klavye simgesiyle görünür.
+- **Yeni pil görünümü:** Her cihazın üstünde simgesi, altında yüzdesi ve bir dolum çubuğu var. Şarj olurken yüzdenin yanında nefes alan bir şimşek çıkar ve çubuk yeşil olur. Pil azalınca çubuk kırmızıya döner.
+- **Yeni ATK fareler:** ATK A9 gen2 gibi yeni "NK Nano" alıcılı farelerin pili de okunur.
+- **Şarj tahmini:** Şarj olduğunu bildirmeyen cihazlarda (HyperX kulaklıklar, Bluetooth cihazlar) yüzde yükselince cihaz şarjda sayılır.
 
 **Düzeltmeler**
-- Masaüstü bilgisayarda Windows'un enerji tasarrufu açıkken canlı dock donuyordu: kar dock'tan taşıyor, alttaki kar takılı kalıyor, küreme aracı çağrılamıyordu. Pili olmayan bilgisayarda enerji tasarrufu artık canlı dock'u durdurmuyor.
-- Hareketi azalt açıkken ya da dock duraklamışken dock büyüyüp küçülünce kar yeni boya oturur, kenarlardan taşmaz.
-- Hareketi azalt açıkken dock'un camı ve simgeleri görünmez olabiliyordu; düzeltildi.
+- Kardan top yapınca top bazen olduğu yerde kalıyor, tutup sürüklenemiyordu. Artık top her zaman imleci izler, bırakınca fırlar.
 
 ---
 
 ## English
 
-**CarlUI 1.2.2: A cursor that keeps growing, and snow fixes.**
+**CarlUI 1.2.3: Keyboard battery, a new battery look and a snowball fix.**
 
 **New**
-- **Shake to grow, step by step:** Shake the mouse in place for about a second and the cursor grows to 3x, then keeps growing step by step up to 6x as you keep shaking. Two seconds after you stop it eases back to its normal size. Turn it off in Settings > Cursor > Shake to find.
-- **Snow plow in the menu:** Right-click an empty spot on the dock and "Call the snow plow" now sits right under "Quit CarlUI". While it snows, the plow drives by and clears the snow at the bottom of the screen.
+- **Keyboard battery:** Wireless keyboards (Logitech, Bluetooth and others) show up in the battery tab with their own keyboard icon.
+- **New battery look:** Each device shows its icon on top, its percentage below and a fill bar. While charging, a breathing bolt appears next to the percentage and the bar turns green. When the battery runs low the bar turns red.
+- **Newer ATK mice:** Mice with the newer "NK Nano" receiver, such as the ATK A9 gen2, now report their battery.
+- **Charging guess:** Devices that don't report charging (HyperX headsets, Bluetooth devices) count as charging when their percentage goes up.
 
 **Fixes**
-- On desktop PCs, Windows' energy saver froze the live dock: snow hung over the dock edges, the snow at the bottom got stuck and the snow plow could not be called. On PCs without a battery, energy saver no longer pauses the live dock.
-- With reduce motion on, or while the live dock is paused, snow now fits the dock when it grows or shrinks.
-- With reduce motion on, the dock glass and icons could turn invisible; fixed.
+- A freshly made snowball could get stuck where it was made and couldn't be dragged. It now always follows the cursor and flies off when you let go.
