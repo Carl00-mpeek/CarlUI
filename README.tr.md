@@ -106,6 +106,9 @@
   - Tarayıcı eklentisiyle giriş sayfalarını doldurur (Ctrl+Shift+L), yeni
     girişte ya da parola değişince kaydetmeyi sorar, kayıt formunda güçlü
     parola önerir. Passkey de saklar.
+  - Masaüstü uygulamalarında (Steam, Discord…) giriş ekranında "Vault"
+    düğmesi çıkar; kayıt seçince giriş bilgisi yazılıp giriş yapılır. Kayıt
+    bir dahaki sefer için o uygulamaya bağlanır. Oyunlarda görünmez.
   - İçe aktarma: Bitwarden, Chrome, Edge, Brave, Firefox, 1Password, LastPass,
     KeePass, Proton Pass, Dashlane, NordPass; 2FA için Aegis, 2FAS, andOTP,
     otpauth listeleri ve Google Authenticator aktarım QR'ı.

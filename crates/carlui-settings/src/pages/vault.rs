@@ -50,6 +50,13 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         c.browser_fill,
         |c| c.vault.browser_fill ^= true,
     );
+    f.toggle(
+        p,
+        t!("Uygulamalarda doldurma", "Fill in apps"),
+        t!("Steam, Discord gibi uygulamaların giriş ekranında \"Vault\" düğmesi çıkar; kayıt seçince giriş bilgisi yazılır. Oyunlarda görünmez.", "A \"Vault\" button appears on the sign-in screen of apps like Steam or Discord; picking an item types the login. Never shown over games."),
+        c.app_fill,
+        |c| c.vault.app_fill ^= true,
+    );
     f.slider(
         p,
         t!("Kopyalananı panodan sil", "Clear copied value"),

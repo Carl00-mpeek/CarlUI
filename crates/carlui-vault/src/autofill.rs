@@ -48,6 +48,18 @@ pub fn url_matches(entry: &str, page: &str) -> bool {
     ph == eh || ph.ends_with(&format!(".{eh}"))
 }
 
+/// Kaydın web adresi bu uygulamaya ait gibi mi: alan adının bir parçası
+/// uygulama anahtarıyla başlıyor ("store.steampowered.com", "steamcommunity.com"
+/// → `steam`). Anahtar en az 4 harf olmalı (kısa anahtar her yere uyar).
+pub fn body_site_matches(body: &Body, key: &str) -> bool {
+    key.len() >= 4
+        && body.fields.iter().filter(|f| f.kind == FieldKind::Url).filter_map(|f| parts(&f.value, true)).any(|(_, host, _)| {
+            let labels: Vec<&str> = host.split('.').collect();
+            // Uzantı (com, net…) hariç parçalar.
+            labels[..labels.len().saturating_sub(1)].iter().any(|l| l.starts_with(key))
+        })
+}
+
 /// Kayıt bu sayfaya uyuyor mu (adres alanlarından herhangi biri).
 pub fn body_matches(body: &Body, page: &str) -> bool {
     body.fields.iter().any(|f| f.kind == FieldKind::Url && url_matches(&f.value, page))
@@ -182,10 +194,69 @@ pub fn new_login(url: &str, user: &str, password: &str) -> (crate::entry::Meta, 
     (i.meta, i.body)
 }
 
+/// Masaüstü uygulaması bağının şeması (`app://steam`).
+pub const APP_SCHEME: &str = "app://";
+
+/// `app://<anahtar>` değerinin anahtarı (küçük harf); başka değerse None.
+pub fn app_of(value: &str) -> Option<String> {
+    let v = value.trim();
+    let rest = v.get(..APP_SCHEME.len()).filter(|s| s.eq_ignore_ascii_case(APP_SCHEME)).map(|_| &v[APP_SCHEME.len()..])?;
+    let key = rest.trim_end_matches('/').to_ascii_lowercase();
+    (!key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))).then_some(key)
+}
+
+/// Kaydın bağlı olduğu uygulamalar.
+pub fn body_apps(body: &Body) -> impl Iterator<Item = String> + '_ {
+    body.fields.iter().filter(|f| f.kind == FieldKind::Url).filter_map(|f| app_of(&f.value))
+}
+
+/// Kayıt bu uygulamaya bağlı mı.
+pub fn body_app_matches(body: &Body, key: &str) -> bool {
+    body_apps(body).any(|k| k == key)
+}
+
+/// Kayda `app://<anahtar>` bağını ekler (zaten varsa dokunmaz).
+pub fn link_app(body: &mut Body, key: &str) -> bool {
+    if body_app_matches(body, key) {
+        return false;
+    }
+    body.fields.push(crate::entry::Field {
+        label: carlui_core::t!("Uygulama", "App").into(),
+        value: format!("{APP_SCHEME}{key}"),
+        kind: FieldKind::Url,
+        fmt: Default::default(),
+    });
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::entry::Field;
+
+    #[test]
+    fn app_links() {
+        assert_eq!(app_of("app://steam").as_deref(), Some("steam"));
+        assert_eq!(app_of(" APP://Discord/ ").as_deref(), Some("discord"));
+        assert_eq!(app_of("app://"), None);
+        assert_eq!(app_of("app://a b"), None);
+        assert_eq!(app_of("https://steam.com"), None);
+        assert!(!url_matches("app://steam", "https://steam/"), "uygulama bağı web sayfasına uymaz");
+        let mut b = Body::default();
+        b.fields = vec![Field { label: "Kullanıcı adı".into(), value: "carl".into(), kind: FieldKind::Text, fmt: Default::default() }];
+        assert!(!body_app_matches(&b, "steam"));
+        assert!(link_app(&mut b, "steam"));
+        assert!(!link_app(&mut b, "steam"), "ikinci kez eklenmez");
+        let mut s = Body::default();
+        s.fields = vec![Field { label: "Adres".into(), value: "https://store.steampowered.com/login".into(), kind: FieldKind::Url, fmt: Default::default() }];
+        assert!(body_site_matches(&s, "steam"));
+        assert!(!body_site_matches(&s, "discord"));
+        assert!(!body_site_matches(&s, "com"), "kısa anahtar");
+        assert!(body_app_matches(&b, "steam"));
+        assert!(!body_app_matches(&b, "discord"));
+        assert_eq!(credentials(&b).0, "carl", "bağ alanı kullanıcı adı sanılmaz");
+        assert!(!body_matches(&b, "https://steam/"));
+    }
 
     #[test]
     fn strict_matching() {

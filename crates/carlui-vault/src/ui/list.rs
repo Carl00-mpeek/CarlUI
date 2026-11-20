@@ -97,12 +97,21 @@ pub fn column(w: f32) -> (f32, f32) {
 
 pub fn paint(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
     let (x, cw) = column(w);
-    let title = app.filter.map(|c| c.title()).unwrap_or(t!("Tüm kayıtlar", "All items"));
-    p.text(title, R::new(x, 18.0, cw - 340.0, 38.0), 22.0, true, TEXT, 0.95, Align::Left);
+    // Adadaki uygulama düğmesinden gelindiyse: kayıt seçimi (satırda "Giriş yap").
+    let picking = app.app.as_ref().map(|a| a.name());
+    let title = match &picking {
+        Some(n) => t!(format!("{n} için giriş seç"), format!("Pick a login for {n}")),
+        None => app.filter.map(|c| c.title()).unwrap_or(t!("Tüm kayıtlar", "All items")).to_string(),
+    };
+    p.text(&title,R::new(x, 18.0, cw - 340.0, 38.0), 22.0, true, TEXT, 0.95, Align::Left);
     let sr = R::new(x + cw - 330.0, 20.0, 200.0, 34.0);
     input(p, app, sr, Focus::Search, false, t!("Ada göre ara", "Search by name"));
     p.glyph('\u{E721}', R::new(sr.right() - 30.0, sr.y, 24.0, sr.h), 12.0, TEXT, 0.4);
-    super::primary(p, R::new(x + cw - 120.0, 20.0, 120.0, 34.0), t!("+ Yeni kayıt", "+ New item"), Act::New, true);
+    if picking.is_some() {
+        p.button(R::new(x + cw - 120.0, 20.0, 120.0, 34.0), None, t!("Vazgeç  (Esc)", "Cancel  (Esc)"), Act::AppCancel, true, false);
+    } else {
+        super::primary(p, R::new(x + cw - 120.0, 20.0, 120.0, 34.0), t!("+ Yeni kayıt", "+ New item"), Act::New, true);
+    }
 
     let list = visible(app);
     let clip = R::new(SIDEBAR, 70.0, w - SIDEBAR, h - 70.0);
@@ -136,9 +145,24 @@ pub fn paint(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
             if let Some(t) = code {
                 code_chip(p, t, R::new(r.right() - 116.0 - 8.0 - CODE_W, r.y + 12.0, CODE_W, 34.0), Act::CopyCode(it.id.clone()));
             }
-            p.button(R::new(r.right() - 116.0, r.y + 12.0, 104.0, 34.0), Some('\u{E70F}'), t!("Düzenle", "Edit"), Act::Edit(it.id.clone()), true, false);
+            if picking.is_some() {
+                super::primary(p, R::new(r.right() - 116.0, r.y + 12.0, 104.0, 34.0), t!("Giriş yap", "Sign in"), Act::AppPick(it.id.clone()), true);
+            } else {
+                p.button(R::new(r.right() - 116.0, r.y + 12.0, 104.0, 34.0), Some('\u{E70F}'), t!("Düzenle", "Edit"), Act::Edit(it.id.clone()), true, false);
+            }
             y += 64.0;
         }
     });
     (y + app.scroll - clip.y + 20.0 - clip.h).max(0.0)
+}
+
+/// Kilit ekranında: "<Uygulama> girişi · kilidi açınca kayıt seçeceksin".
+pub fn app_strip(p: &mut P, name: &str, w: f32) {
+    let r = R::new(16.0, 14.0, w - 32.0, 44.0);
+    p.round(r, 10.0, p.accent, 0.16);
+    p.outline(r, 10.0, p.accent, 0.45);
+    p.glyph('\u{E72E}', R::new(r.x + 12.0, r.y, 22.0, r.h), 14.0, p.accent, 1.0);
+    let s = t!(format!("{name} girişi · kilidi açınca kayıt seçip giriş yapacaksın"), format!("{name} sign-in · unlock, then pick an item to sign in"));
+    p.text(&s, R::new(r.x + 42.0, r.y, r.w - 200.0, r.h), 13.0, false, TEXT, 0.92, Align::Left);
+    p.button(R::new(r.right() - 150.0, r.y + 7.0, 140.0, 30.0), None, t!("Vazgeç", "Cancel"), Act::AppCancel, true, false);
 }

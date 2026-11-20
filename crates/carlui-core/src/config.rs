@@ -118,6 +118,9 @@ pub struct VaultConfig {
     /// Tarayıcı eklentisi giriş sayfalarını kasadan doldurabilsin (kullanıcı
     /// eklentide kaydı seçince; yalnızca adresi uyan kayıtlar).
     pub browser_fill: bool,
+    /// Masaüstü uygulamalarının (Steam, Discord…) giriş ekranında "Vault"
+    /// düğmesi görünsün; tıklanınca kasa bağlı kaydı uygulamaya yazar.
+    pub app_fill: bool,
     /// Pano belirtecinin geçerlilik süresi (saniye, 15-300).
     pub token_seconds: u32,
 }
@@ -131,7 +134,7 @@ impl VaultConfig {
 
 impl Default for VaultConfig {
     fn default() -> Self {
-        Self { auto_lock_minutes: 5, lock_on_sleep: true, clear_clipboard_seconds: 30, hide_from_capture: true, token_paste: true, browser_fill: true, token_seconds: 60 }
+        Self { auto_lock_minutes: 5, lock_on_sleep: true, clear_clipboard_seconds: 30, hide_from_capture: true, token_paste: true, browser_fill: true, app_fill: true, token_seconds: 60 }
     }
 }
 

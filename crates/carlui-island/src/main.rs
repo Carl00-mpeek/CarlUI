@@ -16,6 +16,7 @@
 #[macro_use]
 extern crate carlui_core;
 
+mod appfill;
 mod activate;
 mod alerts;
 mod audio;
@@ -603,6 +604,7 @@ impl App {
         clipping::apply_cfg(&self.cfg.clipboard);
         bridge::ENABLED.store(self.cfg.launcher.download_manager, Ordering::Relaxed);
         bridge::VAULT_FILL.store(self.cfg.vault.browser_fill, Ordering::Relaxed);
+        appfill::ENABLED.store(self.cfg.vault.app_fill, Ordering::Relaxed);
         self.shots.set_combo(&self.cfg);
         self.set_hotkey();
         self.check_foreground();
@@ -1367,9 +1369,11 @@ fn main() -> Result<()> {
             })
         });
         bridge::start(hwnd.0 as isize);
+        appfill::start();
         with_app(|a| {
             bridge::ENABLED.store(a.cfg.launcher.download_manager, Ordering::Relaxed);
             bridge::VAULT_FILL.store(a.cfg.vault.browser_fill, Ordering::Relaxed);
+            appfill::ENABLED.store(a.cfg.vault.app_fill, Ordering::Relaxed);
             a.shots.set_combo(&a.cfg);
             a.set_hotkey();
             a.place_window();

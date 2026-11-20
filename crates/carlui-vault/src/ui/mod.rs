@@ -168,6 +168,12 @@ pub fn paint(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
     };
     // Tarayıcıdan gelen passkey isteği her görünümün üstünde.
     passkey::paint(app, p, w, h);
+    // Uygulama düğmesinden gelindi ve kasa kilitli: kilit kartının üstünde şerit.
+    if app.passkey.is_none() && !app.is_open() {
+        if let Some(a) = &app.app {
+            list::app_strip(p, &a.name(), w);
+        }
+    }
     over
 }
 

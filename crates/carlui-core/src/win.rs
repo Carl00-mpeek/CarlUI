@@ -219,6 +219,49 @@ pub fn is_browser(exe: &str) -> bool {
     BROWSERS.contains(&name.as_str())
 }
 
+/// Exe yolundan uygulama anahtarı (Carl Vault'un `app://<anahtar>` bağı):
+/// dosya adı küçük harf, uzantısız; sondaki "webhelper"/"helper" atılır
+/// (`steamwebhelper.exe` → `steam`). Yalnızca harf, rakam, `-`, `_`, `.`.
+pub fn app_key_of(exe: &str) -> String {
+    let name = exe.rsplit(['\\', '/']).next().unwrap_or_default().to_ascii_lowercase();
+    let stem = name.strip_suffix(".exe").unwrap_or(&name);
+    let stem = stem.strip_suffix("webhelper").or_else(|| stem.strip_suffix("helper")).filter(|s| !s.is_empty()).unwrap_or(stem);
+    stem.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')).collect()
+}
+
+/// Pencerenin uygulama anahtarı (`app_key_of`); erişilemezse boş.
+pub fn app_key(hwnd: HWND) -> String {
+    let exe = window_exe(hwnd);
+    if exe.is_empty() { String::new() } else { app_key_of(&exe) }
+}
+
+/// Pencere Chromium/CEF/Electron içeriği mi (Steam, Discord, Epic…). Bunların
+/// giriş kutuları erişilebilirlik ağacında görünmez; kasa "kör" yazar.
+pub fn is_chromium_window(hwnd: HWND) -> bool {
+    if class_name(hwnd).starts_with("Chrome_WidgetWin") {
+        return true;
+    }
+    unsafe extern "system" fn each(child: HWND, found: LPARAM) -> BOOL {
+        let c = class_name(child);
+        if c == "Chrome_RenderWidgetHostHWND" || c == "CefBrowserWindow" || c.starts_with("Chrome_WidgetWin") {
+            *(found.0 as *mut bool) = true;
+            return false.into();
+        }
+        true.into()
+    }
+    let mut found = false;
+    unsafe {
+        let _ = EnumChildWindows(hwnd, Some(each), LPARAM(&mut found as *mut bool as isize));
+    }
+    found
+}
+
+/// Uygulama anahtarının görünen adı (`steam` → `Steam`).
+pub fn app_display(key: &str) -> String {
+    let mut c = key.chars();
+    c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default()
+}
+
 /// Bu makinedeki bir IPv4 TCP bağlantısının istemci tarafındaki süreç.
 /// Sunucu (`server_port`) kabul ettiği bağlantının karşı ucunu (`peer`) verir;
 /// Windows'un bağlantı tablosunda yerel ucu `peer`, uzak ucu sunucu olan satırın
@@ -355,6 +398,16 @@ mod tests {
         assert!(is_browser("MSEDGE.EXE"));
         assert!(!is_browser("powershell.exe"));
         assert!(!is_browser(r"c:\temp\chrome.exe.evil"));
+    }
+
+    #[test]
+    fn app_keys() {
+        assert_eq!(app_key_of(r"c:\program files (x86)\steam\bin\cef\cef.win7x64\steamwebhelper.exe"), "steam");
+        assert_eq!(app_key_of(r"c:\users\x\appdata\local\discord\app-1.0.9\Discord.exe"), "discord");
+        assert_eq!(app_key_of("helper.exe"), "helper");
+        assert_eq!(app_key_of("Epic Games Launcher.exe"), "epicgameslauncher");
+        assert_eq!(app_display("steam"), "Steam");
+        assert_eq!(app_display(""), "");
     }
 
     #[test]

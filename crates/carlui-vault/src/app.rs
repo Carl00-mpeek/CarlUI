@@ -33,6 +33,7 @@ use windows::Win32::{
 };
 use zeroize::Zeroizing;
 
+pub mod appfill;
 mod capture;
 mod exporting;
 pub mod importing;
@@ -95,6 +96,10 @@ pub enum Act {
     PasskeyApprove(usize),
     /// Passkey isteğini tarayıcının kendi akışına bırak.
     PasskeyDecline,
+    /// Uygulama girişi: bu kaydı bağla ve uygulamaya yaz.
+    AppPick(String),
+    /// Uygulama girişi seçimini bırak.
+    AppCancel,
     /// Düzenleyicide kayda bağlı passkey'i kaldır.
     RemovePasskey(usize),
     /// Başka bir uygulamanın dışa aktarım dosyasını seç ve önizle.
@@ -287,6 +292,8 @@ pub struct App {
     pub passkey: Option<passkeys::PasskeyAsk>,
     /// Sonuçlanan passkey isteği: köprü `PasskeyWait` ile alır.
     passkey_done: Option<(String, Reply)>,
+    /// Adadaki uygulama düğmesinden gelen, kayıt seçimi bekleyen istek.
+    pub app: Option<appfill::AppAsk>,
 }
 
 /// Bekleyen 2FA aktarımı bu kadar sonra unutulur.
@@ -354,6 +361,7 @@ impl App {
             with_passkey: Default::default(),
             passkey: None,
             passkey_done: None,
+            app: None,
             back: None,
         }
     }
@@ -423,6 +431,7 @@ impl App {
         self.passkey_drop();
         self.import = None;
         self.restore = None;
+        self.app = None;
         self.back = None;
         self.clear_clipboard();
         self.go(View::Locked);
@@ -520,6 +529,9 @@ impl App {
         if let Request::ImportTotp { uri } = req {
             return self.import_totp(Zeroizing::new(uri));
         }
+        if let Request::AppFill { hwnd } = req {
+            return self.app_request(hwnd, client_pid);
+        }
         let passkey = matches!(req, Request::PasskeyCreate { .. } | Request::PasskeyGet { .. } | Request::PasskeyWait { .. });
         if (passkey || matches!(req, Request::Find { .. } | Request::Fill { .. } | Request::Open { .. } | Request::Save { .. })) && !self.cfg.vault.browser_fill {
             return Reply::fallback(t!("Tarayıcıda doldurma Ayarlar'da kapalı.", "Browser filling is turned off in Settings."));
@@ -542,7 +554,7 @@ impl App {
             Request::Find { url } => self.find_logins(&url),
             Request::Fill { url, id } => self.fill_login(&url, &id),
             Request::Save { url, user, password, commit, name } => self.save_login(&url, Zeroizing::new(user), Zeroizing::new(password), commit, &name),
-            Request::ImportTotp { .. } | Request::Open { .. } | Request::PasskeyCreate { .. } | Request::PasskeyGet { .. } | Request::PasskeyWait { .. } => unreachable!(),
+            Request::ImportTotp { .. } | Request::AppFill { .. } | Request::Open { .. } | Request::PasskeyCreate { .. } | Request::PasskeyGet { .. } | Request::PasskeyWait { .. } => unreachable!(),
         }
     }
 
@@ -711,8 +723,10 @@ impl App {
         self.codes.clear();
         self.with_passkey.clear();
         let Some(v) = self.vault.as_ref() else { return };
+        let mut apps = Vec::new();
         for it in v.items() {
             let Ok(body) = v.decrypt(&it.id) else { continue };
+            apps.extend(carlui_vault::autofill::body_apps(&body));
             if !body.passkeys.is_empty() {
                 self.with_passkey.insert(it.id.clone());
             }
@@ -721,6 +735,7 @@ impl App {
                 self.codes.insert(it.id.clone(), c);
             }
         }
+        appfill::store_apps(apps);
     }
 
     /// Listedeki kaydın o anki kodu (düzenleyicideki kopyala ile aynı yol:
@@ -784,6 +799,7 @@ impl App {
                         self.move_mail_logins();
                         info!("kasa açıldı ({} kayıt)", self.vault.as_ref().map(|v| v.items().len()).unwrap_or(0));
                         self.return_to_browser();
+                        self.app_unlocked();
                     }
                     Err(e) => {
                         self.form[0].clear();
@@ -879,6 +895,8 @@ impl App {
                 self.go(View::Edit(Box::new(Editor::new(c))));
             }
             Act::Lock => self.lock(t!("elle", "manual")),
+            Act::AppPick(id) => self.app_pick(&id),
+            Act::AppCancel => self.app_cancel(),
             Act::Security => {
                 self.clear_forms();
                 self.go(View::Security);
@@ -1167,6 +1185,9 @@ impl App {
             if c == 0x1B && matches!(self.view, View::Edit(_)) {
                 self.act(Act::Cancel);
             }
+            if c == 0x1B && self.app.is_some() && matches!(self.view, View::List) {
+                self.act(Act::AppCancel);
+            }
             return c == 0x1B;
         };
         let hwnd = self.hwnd;
@@ -1224,6 +1245,7 @@ impl App {
     /// Boşta kalma denetimi (zamanlayıcıdan).
     pub fn check_idle(&mut self) {
         self.passkey_expired();
+        self.app_expired();
         if !self.is_open() {
             return;
         }

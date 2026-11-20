@@ -110,6 +110,11 @@ pub enum Request {
     },
     /// Bekleyen passkey onayının sonucu (`ticket`: `Reply::pending`).
     PasskeyWait { ticket: String },
+    /// Adanın uygulama düğmesi: `hwnd` (Steam, Discord… giriş penceresi) için
+    /// kasa öne gelir, kilitliyse açılır, kayıt seçilir (ilk kullanımda
+    /// kayda `app://<anahtar>` bağı eklenir) ve giriş bilgileri pencereye
+    /// yazılır. Uygulama anahtarını kasa pencereden kendisi çıkarır.
+    AppFill { hwnd: isize },
 }
 
 /// Bir sayfaya uyan kayıt (yalnızca ad ve kullanıcı adı; parola yok).
@@ -180,6 +185,22 @@ impl Reply {
     pub fn fallback(message: impl Into<String>) -> Self {
         Self { fallback: true, ..Self::no(message) }
     }
+}
+
+/// Kasa klasöründeki bağlı uygulama listesi (yalnızca anahtarlar, ör.
+/// `["steam","discord"]`; sır içermez). Kasa açılınca yazar, ada kasa
+/// kilitliyken de düğmeyi göstermek için okur.
+pub fn apps_file() -> PathBuf {
+    let dir = std::env::var_os("CARLUI_VAULT_DIR")
+        .filter(|d| !d.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir).join("CarlUI").join("vault"));
+    dir.join("apps.json")
+}
+
+/// `apps_file` içeriği (yoksa ya da bozuksa boş).
+pub fn linked_apps() -> Vec<String> {
+    std::fs::read(apps_file()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
 
 /// Oturuma özel boru adı (aynı makinedeki başka oturumlar karışmasın).
@@ -315,6 +336,10 @@ mod tests {
         assert!(!serde_json::to_string(&Reply::fallback("x")).unwrap().contains("pending"));
         let r = Request::Open { back: 42 };
         assert!(serde_json::to_string(&r).unwrap().contains("\"op\":\"open\""));
+        let r = Request::AppFill { hwnd: 7 };
+        let j = serde_json::to_string(&r).unwrap();
+        assert!(j.contains("\"op\":\"app-fill\""), "{j}");
+        assert_eq!(serde_json::from_str::<Request>(&j).unwrap(), r);
         let reply = Reply::no("x");
         assert!(!serde_json::to_string(&reply).unwrap().contains("fill"), "boş alanlar yazılmaz");
     }

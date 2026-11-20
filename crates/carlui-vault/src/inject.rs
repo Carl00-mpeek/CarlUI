@@ -99,3 +99,34 @@ pub fn type_text(text: &str) -> bool {
     }
     all
 }
+
+/// Kısayol ya da tek tuş: `mods` basılıyken `vk` (ör. Ctrl+A). Gönderildiyse true.
+pub fn chord(mods: &[VIRTUAL_KEY], vk: VIRTUAL_KEY) -> bool {
+    wait_modifiers();
+    let mut inputs = Vec::with_capacity(mods.len() * 2 + 2);
+    inputs.extend(mods.iter().map(|m| key(*m, 0, KEYBD_EVENT_FLAGS(0))));
+    inputs.push(key(vk, 0, KEYBD_EVENT_FLAGS(0)));
+    inputs.push(key(vk, 0, KEYEVENTF_KEYUP));
+    inputs.extend(mods.iter().rev().map(|m| key(*m, 0, KEYEVENTF_KEYUP)));
+    (unsafe { SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) }) as usize == inputs.len()
+}
+
+/// Odaktaki kutunun metnini seçer (Ctrl+A): yazılan değer eskisinin yerine geçer.
+pub fn select_all() -> bool {
+    chord(&[VK_CONTROL], VK_A)
+}
+
+/// Pencere (ya da alt penceresi) önde mi; `wait` kadar bekler.
+pub fn wait_front(hwnd: HWND, wait: Duration) -> bool {
+    let start = Instant::now();
+    loop {
+        let fg = unsafe { GetForegroundWindow() };
+        if !fg.is_invalid() && (fg == hwnd || unsafe { GetAncestor(fg, GA_ROOTOWNER) } == hwnd || unsafe { GetAncestor(fg, GA_ROOT) } == hwnd) {
+            return true;
+        }
+        if start.elapsed() > wait {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(30));
+    }
+}

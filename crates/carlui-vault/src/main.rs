@@ -9,6 +9,7 @@
 
 mod app;
 mod dialog;
+mod apptype;
 mod inject;
 mod ui;
 

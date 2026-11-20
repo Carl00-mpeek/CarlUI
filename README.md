@@ -107,6 +107,9 @@
   - With the browser extension it fills login pages (Ctrl+Shift+L), offers to
     save new logins and changed passwords, and suggests a strong password on
     sign-up forms. It stores passkeys too.
+  - In desktop apps (Steam, Discord…) a "Vault" button appears on the sign-in
+    screen; pick an item and the login is typed and submitted. The item is
+    linked to that app for next time. Never shown over games.
   - Import from Bitwarden, Chrome, Edge, Brave, Firefox, 1Password, LastPass,
     KeePass, Proton Pass, Dashlane, NordPass; for 2FA from Aegis, 2FAS,
     andOTP, otpauth lists and the Google Authenticator export QR.
