@@ -4,6 +4,13 @@
 //! bir iş parçacığında `DwmFlush` ile her ekran karesini bekler ve dock
 //! penceresine `WM_APP_FRAME` gönderir. Kuyrukta bekleyen kare varken yenisi
 //! gönderilmez (UI iş parçacığı gecikirse mesajlar birikmez).
+//!
+//! Gönderilen kare işlenmeden kaybolabilir: dock menüsü açıkken (modal döngü)
+//! uygulama meşguldür, `WM_APP_FRAME` canlı katmana ulaşmaz ve `consumed`
+//! çağrılmaz. Eskiden bu durumda saat sonsuza dek "kuyrukta kare var" sanıp
+//! durur, kar efektlerinin hepsi (yağış, birikinti, toplar, küreme aracı)
+//! donup kalırdı. Şimdi bekleyen kare `STALE` süresince işlenmezse kayıp
+//! sayılır ve yeniden gönderilir.
 
 use std::{
     sync::{
@@ -11,7 +18,7 @@ use std::{
         Arc,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use windows::Win32::{
     Foundation::*,
@@ -21,6 +28,15 @@ use windows::Win32::{
 
 /// Ekran karesi geldi (dock penceresine).
 pub const WM_APP_FRAME: u32 = WM_APP + 57;
+
+/// Bu süre içinde işlenmeyen kare mesajı kayıp sayılır.
+const STALE: Duration = Duration::from_millis(250);
+
+/// Yeni kare gönderilmeli mi? Kuyruk boşsa evet; doluysa yalnızca son
+/// gönderim `STALE`den eskiyse (mesaj işlenmeden kaybolmuş).
+fn should_post(queued: bool, posted: Option<Instant>, now: Instant) -> bool {
+    !queued || posted.is_none_or(|t| now.saturating_duration_since(t) >= STALE)
+}
 
 struct Shared {
     run: AtomicBool,
@@ -42,6 +58,7 @@ impl Pacer {
             .name("carlui-live-pacer".into())
             .spawn(move || {
                 let hwnd = HWND(raw as _);
+                let mut posted: Option<Instant> = None;
                 loop {
                     if sh.quit.load(Ordering::Acquire) {
                         return;
@@ -54,7 +71,10 @@ impl Pacer {
                     if unsafe { DwmFlush() }.is_err() {
                         thread::sleep(Duration::from_millis(16));
                     }
-                    if sh.run.load(Ordering::Acquire) && !sh.queued.swap(true, Ordering::AcqRel) {
+                    let now = Instant::now();
+                    if sh.run.load(Ordering::Acquire) && should_post(sh.queued.load(Ordering::Acquire), posted, now) {
+                        sh.queued.store(true, Ordering::Release);
+                        posted = Some(now);
                         unsafe {
                             if PostMessageW(hwnd, WM_APP_FRAME, WPARAM(0), LPARAM(0)).is_err() {
                                 sh.queued.store(false, Ordering::Release);
@@ -89,5 +109,34 @@ impl Drop for Pacer {
         self.shared.run.store(false, Ordering::Release);
         self.shared.quit.store(true, Ordering::Release);
         self.thread.unpark();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bos_kuyrukta_kare_gonderilir() {
+        let now = Instant::now();
+        assert!(should_post(false, None, now));
+        assert!(should_post(false, Some(now), now));
+    }
+
+    #[test]
+    fn islenmeyi_bekleyen_kare_varken_yenisi_gonderilmez() {
+        let now = Instant::now();
+        assert!(!should_post(true, Some(now), now));
+        assert!(!should_post(true, Some(now), now + STALE / 2));
+    }
+
+    #[test]
+    fn menu_acikken_kaybolan_kare_saati_durdurmaz() {
+        // Küreme aracı yoldayken dock menüsü açıldı: kare mesajı işlenmeden
+        // kayboldu, `consumed` hiç gelmedi. Saat sonsuza dek beklememeli.
+        let sent = Instant::now();
+        assert!(should_post(true, Some(sent), sent + STALE));
+        assert!(should_post(true, Some(sent), sent + Duration::from_secs(5)));
+        assert!(should_post(true, None, sent));
     }
 }

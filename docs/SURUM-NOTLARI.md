@@ -1,5 +1,16 @@
 # Sürüm notları
 
+## v1.2.7 — Küreme aracı varken menü kar efektlerini donduruyordu (2026-11-20)
+
+**CarlUI 1.2.7: Küreme aracı varken menü kar efektlerini donduruyordu.**
+
+**Düzeltmeler.** Kar küreme aracı yoldayken (ya da kartopu oyunu sürerken) dock menüsü
+açılınca bütün kar efektleri donuyordu: yağış, birikinti ve toplar duruyor, araç karı
+temizlemeden geçip gidiyordu. Sürekli harekette kareleri ekran yenilemesine bağlı kare
+saati verir ve bir öncekinin işlenmesini bekler; menünün modal döngüsünde kare mesajı
+canlı katmana ulaşmadan kayboluyor, saat sonsuza dek bekliyordu. Kare 250 ms içinde
+işlenmezse artık kayıp sayılıp yeniden gönderilir.
+
 ## v1.2.6 — Wraith W1 ve HyperX Cloud Alpha pili, çökme raporları (2026-11-20)
 
 **CarlUI 1.2.6: Wraith W1 ve HyperX Cloud Alpha pili, çökme raporları.**
