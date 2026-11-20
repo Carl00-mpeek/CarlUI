@@ -137,13 +137,19 @@ pub fn locked(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
         para(p, &carlui_vault::vault::default_dir().join("vault.json").display().to_string(), x, y, cw, 12.0, TEXT, 0.55);
         return 0.0;
     };
-    let (x, mut y, cw) = card(p, w, h, 330.0, '\u{E72E}', t!("Carl Vault kilitli", "Carl Vault is locked"));
+    let hello = app.hello_ready();
+    let (x, mut y, cw) = card(p, w, h, if hello { 380.0 } else { 330.0 }, '\u{E72E}', t!("Carl Vault kilitli", "Carl Vault is locked"));
     y += para(p, t!("Açmak için ana parolanı yaz.", "Enter your master password to open it."), x, y, cw, 13.0, TEXT, 0.7) + 12.0;
     input(p, app, R::new(x, y, cw, 38.0), Focus::Form(0), true, t!("Ana parola", "Master password"));
     y += 50.0;
     y += error_line(app, p, x, y, cw);
     primary(p, R::new(x, y, cw, 40.0), t!("Kilidi aç", "Unlock"), Act::Unlock, app.wait_left().is_none());
     y += 52.0;
+    if hello {
+        let label = if app.hello_busy { t!("Windows Hello bekleniyor…", "Waiting for Windows Hello…") } else { t!("Windows Hello ile aç", "Unlock with Windows Hello") };
+        p.button(R::new(x, y - 4.0, cw, 38.0), Some('\u{E8D7}'), label, Act::HelloUnlock, !app.hello_busy, true);
+        y += 46.0;
+    }
     if v.has_recovery() {
         link(p, R::new(x, y, cw, 24.0), t!("Parolamı unuttum: kurtarma anahtarıyla aç", "Forgot password: use the recovery key"), Act::GoRecover);
     }

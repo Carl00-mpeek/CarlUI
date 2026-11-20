@@ -15,6 +15,8 @@ pub struct Row {
     pub cpu: f32,
     pub mem: u64,
     pub io: f64,
+    /// Ağ hızı (bayt/sn); yalnızca yönetici yetkisiyle ölçülür (bkz. `net`).
+    pub net: f64,
     pub gpu: f32,
     pub threads: u32,
     pub suspended: bool,
@@ -23,6 +25,7 @@ pub struct Row {
 
 pub struct Procs {
     prev: HashMap<u32, (i64, u64)>,
+    net_prev: HashMap<u32, u64>,
     paths: HashMap<(u32, i64), String>,
     last: Instant,
     ncpu: f32,
@@ -32,7 +35,7 @@ pub struct Procs {
 
 impl Procs {
     pub fn new() -> Self {
-        let mut p = Self { prev: HashMap::new(), paths: HashMap::new(), last: Instant::now(), ncpu: carlui_sys::cpu::logical_count().max(1) as f32, gpu: carlui_sys::gpu_procs::Meter::new(), rows: Vec::new() };
+        let mut p = Self { prev: HashMap::new(), net_prev: HashMap::new(), paths: HashMap::new(), last: Instant::now(), ncpu: carlui_sys::cpu::logical_count().max(1) as f32, gpu: carlui_sys::gpu_procs::Meter::new(), rows: Vec::new() };
         p.tick();
         p
     }
@@ -40,6 +43,7 @@ impl Procs {
     pub fn tick(&mut self) {
         let list = process::list();
         let gpu = self.gpu.read();
+        let net = crate::net::totals();
         let dt = self.last.elapsed().as_secs_f64().max(0.05);
         self.last = Instant::now();
         let mut prev = HashMap::with_capacity(list.len());
@@ -64,10 +68,22 @@ impl Procs {
             if p.pid == 0 {
                 continue;
             }
-            rows.push(Row { windows: path.is_empty() || is_windows_path(&path), pid: p.pid, name: p.name, path, cpu: cpu.clamp(0.0, 100.0), mem: p.working_set, io: iops, gpu: gpu.get(&p.pid).copied().unwrap_or(0.0), threads: p.threads, suspended: p.suspended });
+            rows.push(Row { windows: path.is_empty() || is_windows_path(&path), pid: p.pid, name: p.name, path, cpu: cpu.clamp(0.0, 100.0), mem: p.working_set, io: iops, net: net_rate(&self.net_prev, &net, p.pid, self.prev.contains_key(&p.pid), dt), gpu: gpu.get(&p.pid).copied().unwrap_or(0.0), threads: p.threads, suspended: p.suspended });
         }
         self.paths = live;
         self.prev = prev;
+        crate::net::retain(|pid| self.prev.contains_key(&pid));
+        self.net_prev = net;
         self.rows = rows;
+    }
+}
+
+/// İki ölçüm arasındaki ağ hızı. Önceki ölçümde sayacı olmayan ama yaşayan
+/// (`seen`) süreç için önceki değer 0 sayılır; yeni süreçte 0.
+fn net_rate(prev: &HashMap<u32, u64>, now: &HashMap<u32, u64>, pid: u32, seen: bool, dt: f64) -> f64 {
+    match (prev.get(&pid), now.get(&pid)) {
+        (Some(a), Some(b)) => b.saturating_sub(*a) as f64 / dt,
+        (None, Some(b)) if seen => *b as f64 / dt,
+        _ => 0.0,
     }
 }

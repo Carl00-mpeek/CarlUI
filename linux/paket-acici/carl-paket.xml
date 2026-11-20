@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Arch paketleri için dosya türü (shared-mime-info bunu tanımlamıyor). -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-alpm-package">
+    <comment>Arch Linux package</comment>
+    <comment xml:lang="tr">Arch Linux paketi</comment>
+    <generic-icon name="package-x-generic"/>
+    <glob pattern="*.pkg.tar.zst" weight="80"/>
+    <glob pattern="*.pkg.tar.xz" weight="80"/>
+    <glob pattern="*.pkg.tar.gz" weight="80"/>
+  </mime-type>
+</mime-info>

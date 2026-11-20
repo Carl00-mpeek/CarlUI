@@ -6,6 +6,43 @@ use crate::{
     ui::{Flow, P},
     App,
 };
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use windows::{
+    Security::Credentials::KeyCredentialManager,
+    Win32::{
+        Foundation::HWND,
+        Graphics::Gdi::InvalidateRect,
+        System::Com::{CoInitializeEx, COINIT_MULTITHREADED},
+    },
+};
+
+/// 0 bilinmiyor, 1 var, 2 yok.
+static HELLO: AtomicU8 = AtomicU8::new(0);
+static PROBING: AtomicBool = AtomicBool::new(false);
+
+/// Bu bilgisayarda Windows Hello kurulu mu. İlk çağrıda arka planda yoklanır
+/// (birkaç yüz ms); bitince sayfa yeniden çizilir. Yokken ayar gösterilmez.
+fn hello_available(app: &App) -> bool {
+    match HELLO.load(Ordering::Relaxed) {
+        1 => return true,
+        2 => return false,
+        _ => {}
+    }
+    if !PROBING.swap(true, Ordering::Relaxed) {
+        let h = app.hwnd.0 as isize;
+        std::thread::spawn(move || {
+            unsafe {
+                let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            }
+            let ok = KeyCredentialManager::IsSupportedAsync().and_then(|op| op.get()).unwrap_or(false);
+            HELLO.store(if ok { 1 } else { 2 }, Ordering::Relaxed);
+            unsafe {
+                let _ = InvalidateRect(HWND(h as _), None, false);
+            }
+        });
+    }
+    false
+}
 
 pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     let c = &app.cfg.vault;
@@ -69,6 +106,15 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         |c, v| c.vault.clear_clipboard_seconds = v as u64,
     );
     f.toggle(p, t!("Ekran görüntüsünde gizle", "Hide from screenshots"), t!("Kasa penceresi ekran görüntülerinde ve ekran paylaşımında görünmez.", "The vault window doesn't appear in screenshots or screen sharing."), c.hide_from_capture, |c| c.vault.hide_from_capture ^= true);
+    if hello_available(app) {
+        f.toggle(
+            p,
+            t!("Windows Hello ile açma", "Unlock with Windows Hello"),
+            t!("Kasanın Güvenlik sayfasında etkinleştirilince kasa yüz, parmak izi ya da PIN ile açılır. Kapatılırsa düğme gizlenir; ana parola her zaman çalışır.", "Once turned on in the vault's Security page, the vault opens with your face, fingerprint or PIN. Turned off, the button is hidden; the master password always works."),
+            c.windows_hello,
+            |c| c.vault.windows_hello ^= true,
+        );
+    }
     f.flush(p);
     f.y += 6.0;
     f.note(p, t!("Kasa yalnızca bu bilgisayarda, şifreli durur. Ana parola ve kurtarma anahtarı kasanın Güvenlik sayfasından değişir.", "The vault is stored encrypted only on this computer. Change the master password and recovery key on the vault's Security page."));

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Carl Paket Açıcı
+Name[en]=Carl Package Opener
+Comment=.deb, .rpm, Arch, AppImage ve Flatpak paketlerini kurar
+Comment[en]=Installs .deb, .rpm, Arch, AppImage and Flatpak packages
+Exec=carl-paket-ac %f
+Icon=system-software-install
+Terminal=false
+Categories=System;PackageManager;
+NoDisplay=false
+MimeType=application/vnd.debian.binary-package;application/x-deb;application/x-debian-package;application/x-rpm;application/x-redhat-package-manager;application/x-alpm-package;application/vnd.appimage;application/x-iso9660-appimage;application/x-appimage;application/vnd.flatpak.ref;application/vnd.flatpak.repo;application/vnd.flatpak;

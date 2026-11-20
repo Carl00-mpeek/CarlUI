@@ -38,8 +38,12 @@ mod capture;
 mod exporting;
 pub mod importing;
 pub mod passkeys;
+pub mod leaks;
+mod hello;
 
 pub const TIMER_CLIP: usize = 3;
+/// Windows Hello imzası ya da sızıntı denetimi bitti (arka plan iş parçacığından).
+pub const WM_APP_WORK: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 3;
 /// En az parola uzunluğu.
 const MIN_PASSWORD: usize = 8;
 
@@ -117,6 +121,12 @@ pub enum Act {
     CopyBackupPassword,
     /// Üretilen parola saklandı: Güvenlik'e dön.
     BackupPasswordDone,
+    /// Kilit ekranında Windows Hello ile aç.
+    HelloUnlock,
+    /// Güvenlik sayfasında Windows Hello ile açmayı aç/kapat.
+    HelloToggle,
+    /// Güvenlik sayfasında parolaları sızıntı listesinde ara (HIBP).
+    LeakCheck,
     /// Kaydırılabilir alan (tekerlek hedefi, tıklanmaz).
     Scroll,
 }
@@ -294,6 +304,10 @@ pub struct App {
     passkey_done: Option<(String, Reply)>,
     /// Adadaki uygulama düğmesinden gelen, kayıt seçimi bekleyen istek.
     pub app: Option<appfill::AppAsk>,
+    /// Windows Hello penceresi açık (imza bekleniyor).
+    pub hello_busy: bool,
+    /// Sızıntı denetimi: çalışıyor mu ve son sonuç.
+    pub leak: crate::app::leaks::LeakState,
 }
 
 /// Bekleyen 2FA aktarımı bu kadar sonra unutulur.
@@ -363,6 +377,8 @@ impl App {
             passkey_done: None,
             app: None,
             back: None,
+            hello_busy: false,
+            leak: Default::default(),
         }
     }
 
@@ -425,6 +441,7 @@ impl App {
         }
         self.clear_forms();
         self.search.clear();
+        self.leak.report = None;
         self.codes.clear();
         self.tokens.clear();
         self.with_passkey.clear();
@@ -792,21 +809,16 @@ impl App {
                 }
                 let Some(v) = self.vault.as_mut() else { return };
                 match v.unlock(self.form[0].as_str()) {
-                    Ok(()) => {
-                        self.throttle.reset(&self.dir);
-                        self.clear_forms();
-                        self.go(View::List);
-                        self.move_mail_logins();
-                        info!("kasa açıldı ({} kayıt)", self.vault.as_ref().map(|v| v.items().len()).unwrap_or(0));
-                        self.return_to_browser();
-                        self.app_unlocked();
-                    }
+                    Ok(()) => self.unlocked(),
                     Err(e) => {
                         self.form[0].clear();
                         self.fail(e);
                     }
                 }
             }
+            Act::HelloUnlock => self.hello_start(false),
+            Act::HelloToggle => self.hello_toggle(),
+            Act::LeakCheck => self.leak_start(),
             Act::GoRecover => {
                 self.clear_forms();
                 self.go(View::Recover);

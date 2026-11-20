@@ -30,11 +30,33 @@ fn io_cell(v: f64) -> Cell {
     if v < 1024.0 { dim("0") } else { cell(speed(v)) }
 }
 
+/// Ağ hızı; ölçüm yoksa (yönetici değil) "—".
+fn net_cell(on: bool, v: f64) -> Cell {
+    if !on {
+        dim("—")
+    } else if v < 1.0 {
+        dim("0")
+    } else {
+        cell(speed(v))
+    }
+}
+
 pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
     let gs = groups::build(app);
     let lines = groups::lines(app, &gs);
     let total = app.procs.rows.len();
+    let net = crate::net::active();
     title(p, area, t!("İşlemler", "Processes"), &t!(format!("{} uygulama · {} süreç", gs.len(), total), format!("{} apps · {} processes", gs.len(), total)));
+    if !app.admin {
+        // Ağ sütunu çekirdek ETW oturumu ister; o da yönetici yetkisi.
+        let s = t!("Ağ sütunu için yönetici olarak açın", "Run as administrator for the Network column");
+        let w = p.fonts.width(s, 12.0, false) + 30.0;
+        let hr = R::new(area.right() - w, area.y + 4.0, w, 26.0);
+        let a = if p.hover(hr) { 0.95 } else { 0.7 };
+        p.glyph('\u{E7EF}', R::new(hr.x, hr.y, 22.0, hr.h), 12.0, ORANGE, a);
+        p.text(s, R::new(hr.x + 24.0, hr.y, w - 24.0, hr.h), 12.0, false, ORANGE, a, Align::Left);
+        p.hit(hr, Act::RunAsAdmin);
+    }
 
     // Anahtarlar + filtre.
     let y = area.y + 46.0;
@@ -81,6 +103,7 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
         col("GPU", 70.0, Align::Right, Some(Act::Sort(SortCol::Gpu))),
         col(t!("Bellek", "Memory"), 100.0, Align::Right, Some(Act::Sort(SortCol::Mem))),
         col(t!("G/Ç", "I/O"), 100.0, Align::Right, Some(Act::Sort(SortCol::Io))),
+        col(t!("Ağ", "Network"), 90.0, Align::Right, if net { Some(Act::Sort(SortCol::Net)) } else { None }),
         col(t!("İmza", "Signature"), 90.0, Align::Left, Some(Act::Sort(SortCol::Sign))),
     ];
     let sorted = Some((
@@ -91,7 +114,8 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
             SortCol::Gpu => 4,
             SortCol::Mem => 5,
             SortCol::Io => 6,
-            SortCol::Sign => 7,
+            SortCol::Net => 7,
+            SortCol::Sign => 8,
         },
         app.sort.1,
     ));
@@ -147,6 +171,7 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
                     4 => cpu_cell(g.gpu.min(100.0)),
                     5 => cell(bytes(g.mem as f64)),
                     6 => io_cell(g.io),
+                    7 => net_cell(net, g.net),
                     _ => sign_cell(&g.path),
                 }
             }
@@ -166,6 +191,7 @@ pub fn paint(app: &App, p: &mut Painter, area: R) -> f32 {
                     4 => cpu_cell(r.gpu),
                     5 => cell(bytes(r.mem as f64)),
                     6 => io_cell(r.io),
+                    7 => net_cell(net, r.net),
                     _ => dim(""),
                 }
             }

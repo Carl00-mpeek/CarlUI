@@ -7,6 +7,12 @@
 //! Bu yüzden pencerenin canlı DWM görüntüsü saydam, tıklanamayan bir katmanda
 //! pencere ile dock simgesi arasında uçurulur. Her uçuş kendi iş parçacığında
 //! çalışır; dock'un çizimini bekletmez.
+//!
+//! Windows 10'da da durum aynı ve üstelik Windows'un kendi animasyonu
+//! görev çubuğu gizli olsa bile düğmenin olacağı yere doğru oynuyor. Uçuşla
+//! birlikte ekranda iki animasyon çıkıyordu. Bu yüzden dock görünürken
+//! izlediği pencerelerde DWM geçişleri kapatılır (`sync_native`): küçülme ve
+//! açılmayı yalnızca uçuş gösterir. Dock gizliyken geçişler geri açılır.
 
 use std::{
     collections::HashMap,
@@ -58,7 +64,7 @@ pub fn start(src: HWND, icon: RECT, minimizing: bool) {
         let Ok(mut m) = LIVE.lock() else { return };
         let map = m.get_or_insert_with(HashMap::new);
         // Hepsini küçült (Win+M) onlarca pencereyi aynı anda indirir: birkaçı
-        // uçsun, gerisi Windows'un kendi animasyonuyla kalsın.
+        // uçsun, gerisi animasyonsuz insin.
         if map.len() >= MAX_FLIGHTS && !map.contains_key(&(src.0 as isize)) {
             return;
         }
@@ -78,6 +84,58 @@ pub fn start(src: HWND, icon: RECT, minimizing: bool) {
             }
         }
     });
+}
+
+/// Windows'un kendi geçişi kapatılan pencereler ve o an bulundukları ekran.
+static NATIVE_OFF: Mutex<Option<HashMap<isize, isize>>> = Mutex::new(None);
+
+unsafe fn set_transitions_off(hwnd: HWND, off: bool) -> bool {
+    let v = BOOL(off as i32);
+    DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, &v as *const _ as *const _, 4).is_ok()
+}
+
+/// `windows` listesindeki pencerelerde Windows'un küçülme/açılma geçişini
+/// kapatır, listeden çıkanlarda geri açar. Liste boşsa (dock gizli) hepsi
+/// geri açılır. Yalnızca değişen pencerelere dokunur.
+///
+/// Her ekranın kendi dock süreci var: başka ekrana taşınan pencere bu
+/// listeden çıkar ama oradaki dock onu almıştır, ona dokunulmaz.
+pub fn sync_native(windows: &[HWND]) {
+    let Ok(mut m) = NATIVE_OFF.lock() else { return };
+    let map = m.get_or_insert_with(HashMap::new);
+    let keep: std::collections::HashSet<isize> = windows.iter().map(|w| w.0 as isize).collect();
+    unsafe {
+        map.retain(|&raw, &mut mon| {
+            if keep.contains(&raw) {
+                return true;
+            }
+            let w = HWND(raw as _);
+            if IsWindow(w).as_bool() && MonitorFromWindow(w, MONITOR_DEFAULTTONULL).0 as isize == mon {
+                set_transitions_off(w, false);
+            }
+            false
+        });
+        for &w in windows {
+            let raw = w.0 as isize;
+            if !map.contains_key(&raw) && set_transitions_off(w, true) {
+                map.insert(raw, MonitorFromWindow(w, MONITOR_DEFAULTTONEAREST).0 as isize);
+            }
+        }
+    }
+}
+
+/// Dock kapanırken: kapatılan bütün geçişleri geri aç.
+pub fn restore_native() {
+    if let Ok(mut m) = NATIVE_OFF.lock() {
+        for (raw, _) in m.take().unwrap_or_default() {
+            let w = HWND(raw as _);
+            unsafe {
+                if IsWindow(w).as_bool() {
+                    set_transitions_off(w, false);
+                }
+            }
+        }
+    }
 }
 
 fn current(src: HWND, seq: u64) -> bool {

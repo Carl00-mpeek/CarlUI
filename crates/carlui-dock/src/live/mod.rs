@@ -43,6 +43,7 @@ mod sky_weather;
 mod snake;
 mod shimmer;
 mod snowball;
+mod rainfall;
 mod snowfall;
 mod snowplay;
 mod weather_link;
@@ -323,7 +324,7 @@ impl Live {
             if mode.is_none() {
                 return;
             }
-            match ledge_view::LedgeView::new(gfx, &dock.live_view(), self.cfg.intensity) {
+            match ledge_view::LedgeView::new(gfx, &dock.live_view(), self.cfg.intensity, self.cfg.rain) {
                 Ok(l) => self.ledge = Some(l),
                 Err(e) => {
                     warn!("canlı dock: kar katmanı kurulamadı: {e}");

@@ -35,3 +35,13 @@ pub fn sibling_exe(name: &str) -> PathBuf {
         .and_then(|p| p.parent().map(|d| d.join(name)))
         .unwrap_or_else(|| PathBuf::from(name))
 }
+
+/// Kullanıcının arama eklentileri (`%APPDATA%\CarlUI\plugins\*.toml`).
+pub fn plugins_dir() -> PathBuf {
+    env_dir("APPDATA").join("plugins")
+}
+
+/// Hızlı notlar (`%APPDATA%\CarlUI\notes.md`); dolaşan profilde, başka bilgisayara da gelir.
+pub fn notes_file() -> PathBuf {
+    env_dir("APPDATA").join("notes.md")
+}

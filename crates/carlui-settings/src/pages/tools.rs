@@ -5,10 +5,11 @@
 
 use crate::{
     input::Form,
-    ui::{edit, Flow, P},
+    ui::{edit, Flow, LeadRow, P},
     Act, App,
 };
 use carlui_core::config::{ColorFormat, ExpandTrigger, ShotAction, ShotFormat};
+use carlui_core::{tools::ToolsConfig, zones::ZoneLayout};
 use carlui_ui::paint::{Align, R, TEXT};
 
 pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
@@ -71,6 +72,32 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         c.window_memory,
         |c| c.tools.window_memory ^= true,
     );
+    f.toggle(
+        p,
+        t!("Pencere yakalama bölgeleri", "Window snap zones"),
+        t!(
+            "Pencereyi başlığından sürüklerken Shift'e basılı tutun: bölgeler belirir, bırakınca pencere imlecin altındaki bölgeye oturur. Ctrl+Shift ile Ctrl'e bastığınız bölgeden imlecin bölgesine kadar birleşir.",
+            "Hold Shift while dragging a window by its title bar: zones appear and the window fills the one under the cursor when you let go. With Ctrl+Shift, zones merge from where you pressed Ctrl to where the cursor is."
+        ),
+        c.snap_zones,
+        |c| c.tools.snap_zones ^= true,
+    );
+    if c.snap_zones {
+        zone_layouts(p, f, c);
+        let sel = match c.zone_gap {
+            0 => 0,
+            1..=11 => 1,
+            _ => 2,
+        };
+        f.choice(
+            p,
+            t!("Bölge boşluğu", "Zone spacing"),
+            t!("Pencereler arasında ve ekran kenarında bırakılan boşluk.", "Space left between windows and along the screen edge."),
+            &[(t!("Yok", "None"), edit(|c| c.tools.zone_gap = 0)), (t!("Dar", "Narrow"), edit(|c| c.tools.zone_gap = 8)), (t!("Geniş", "Wide"), edit(|c| c.tools.zone_gap = 16))],
+            sel,
+            84.0,
+        );
+    }
     let r = f.row_sub(p, t!("Pencere düzenleri", "Window layouts"), "", &key_hint(&sc.layouts), None, 120.0);
     p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E737}'), t!("Aç", "Open"), Act::Tool("--layouts"), true, false);
 
@@ -179,4 +206,54 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
     let r = f.row(p, t!("Kısaltma ekle", "Add abbreviation"), t!("Aynı kısaltma yeniden eklenirse metni güncellenir.", "Adding the same abbreviation again updates its text."), 120.0);
     p.button(R::new(r.right() - 16.0 - 104.0, r.y + (r.h - 32.0) / 2.0, 104.0, 32.0), Some('\u{E710}'), t!("Ekle", "Add"), Act::Input(5), app.input.is_none(), false);
     super::form::draw(app, p, f, Form::Snippet, &[(t!("Kısaltma", "Abbreviation"), t!("ör. ;adres", "e.g. ;addr")), (t!("Metin", "Text"), t!("ör. Atatürk Cad. No 1, İstanbul — Ctrl+V çok satırlı metni de yapıştırır", "e.g. 1 Main St, Springfield — Ctrl+V also pastes multi-line text"))]);
+}
+
+/// Bölge düzeni seçimi: her düğmede düzenin küçük bir önizlemesi, dörder dörder iki satır.
+fn zone_layouts(p: &mut P, f: &mut Flow, c: &ToolsConfig) {
+    const PER_ROW: usize = 4;
+    const LEAD: f32 = 22.0;
+    let name = |l: ZoneLayout| match l {
+        ZoneLayout::Auto => t!("Otomatik", "Auto"),
+        ZoneLayout::Halves => t!("Yarım", "Halves"),
+        ZoneLayout::Thirds => t!("Üçte bir", "Thirds"),
+        ZoneLayout::Focus => t!("Odak", "Focus"),
+        ZoneLayout::MainSide => t!("Ana + yan", "Main + side"),
+        ZoneLayout::Grid => t!("Izgara", "Grid"),
+        ZoneLayout::Grid6 => t!("Altılı", "Six"),
+        ZoneLayout::Custom => t!("Özel", "Custom"),
+    };
+    let items: Vec<(&str, Act)> = ZoneLayout::ALL
+        .iter()
+        .map(|l| {
+            let l = *l;
+            (name(l), edit(move |c| c.tools.zone_layout = l))
+        })
+        .collect();
+    let selected = ZoneLayout::ALL.iter().position(|l| *l == c.zone_layout).unwrap_or(0);
+    let leads = [LEAD; PER_ROW];
+    let each = items.iter().map(|(n, _)| p.fonts.width(n, 13.0, true) + LEAD + 6.0 + 20.0).fold(96.0_f32, f32::max).ceil();
+    let rows: Vec<LeadRow> = items
+        .chunks(PER_ROW)
+        .enumerate()
+        .map(|(i, it)| LeadRow { items: it, selected: selected.checked_sub(i * PER_ROW).filter(|s| *s < it.len()).unwrap_or(usize::MAX), each, lead_w: &leads[..it.len()] })
+        .collect();
+    let custom = c.zones_custom.clone();
+    f.choice_lead_rows(
+        p,
+        t!("Bölge düzeni", "Zone layout"),
+        t!(
+            "Otomatik: geniş ekranda odak, dikey ekranda iki satır, diğerlerinde 2×2 ızgara. Özel düzen config.toml'daki zones_custom listesinden gelir (yüzde olarak x, y, genişlik, yükseklik).",
+            "Auto: focus on ultrawide, two rows on portrait, a 2×2 grid otherwise. Custom comes from zones_custom in config.toml (percent x, y, width, height)."
+        ),
+        &rows,
+        &|p, row, i, r| {
+            let Some(l) = ZoneLayout::ALL.get(row * PER_ROW + i) else { return };
+            let (w, h) = (LEAD, 14.0);
+            let b = R::new(r.x, (r.y + (r.h - h) / 2.0).round(), w, h);
+            for z in carlui_core::zones::fractions(*l, &custom, 16.0 / 9.0) {
+                let zr = R::new(b.x + z[0] * w, b.y + z[1] * h, z[2] * w, z[3] * h).inset(0.75);
+                p.round(zr, 1.5, TEXT, 0.55);
+            }
+        },
+    );
 }

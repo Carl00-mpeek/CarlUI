@@ -12,12 +12,13 @@
 use super::{
     ledge::{max_height, visible, Edge, Ledge, Ledges, Shed, R4, ROUGH},
     rng::Rng,
+    rainfall::{Rainfall, Storm},
     snowfall::{Plow, Snowfall, Spill},
     snowplay::SnowPlay,
     window::{overlay_window, BackdropWindow},
 };
 use crate::dock::LiveView;
-use carlui_core::live::LiveIntensity;
+use carlui_core::live::{LiveIntensity, RainStrength};
 use carlui_ui::{
     gfx::Gfx,
     glass::{v2, v3},
@@ -158,6 +159,10 @@ pub struct LedgeView {
     backdrop: Option<BackdropWindow>,
     backdrop_z: Instant,
     snowfall: Option<Snowfall>,
+    /// Ekrana yağan yağmur ve yıldırımlar (yalnızca yağmur modunda).
+    rain_strength: RainStrength,
+    rainfall: Option<Rainfall>,
+    storm: Option<Storm>,
     plow: Option<Plow>,
     next_plow: Instant,
     /// Dock menüsünden çağrıldı: bir sonraki karede gelir.
@@ -173,7 +178,7 @@ pub struct LedgeView {
 }
 
 impl LedgeView {
-    pub fn new(gfx: &Gfx, view: &LiveView, intensity: LiveIntensity) -> Result<Self> {
+    pub fn new(gfx: &Gfx, view: &LiveView, intensity: LiveIntensity, rain: RainStrength) -> Result<Self> {
         static CLASS: Once = Once::new();
         let class = if crate::sandbox::on() { w!("CarlUI.DockSandboxLedge") } else { w!("CarlUI.DockLedge") };
         let hwnd = unsafe { overlay_window(class, &CLASS)? };
@@ -225,6 +230,9 @@ impl LedgeView {
             backdrop: None,
             backdrop_z: now,
             snowfall: None,
+            rain_strength: rain,
+            rainfall: None,
+            storm: None,
             plow: None,
             next_plow: now + Duration::from_secs(75),
             plow_asked: false,
@@ -528,6 +536,11 @@ impl LedgeView {
         };
         let rain = matches!(self.mode, Some((Mode::Rain, _)));
         self.model.grow(dt, snow, rain);
+        let rain_level = match self.mode {
+            Some((Mode::Rain, l)) => Some(l),
+            _ => None,
+        };
+        self.rain(gfx, now, rain_level)?;
         self.weather(gfx, now, dt, snow)?;
         let back = self.backdrop.as_ref().map(|b| b.root.clone());
         self.play.step(gfx, dt, snow.is_some(), pill, &mut self.model, &self.root, back.as_ref())?;
@@ -542,14 +555,49 @@ impl LedgeView {
         Ok(())
     }
 
+    /// Ekrana yağan yağmur ve yıldırımlar (yalnızca yağmur yağarken).
+    fn rain(&mut self, gfx: &Gfx, now: Instant, level: Option<f32>) -> Result<()> {
+        let Some(level) = level else {
+            self.rainfall = None;
+            self.storm = None;
+            return Ok(());
+        };
+        let (w, h) = ((self.mon.right - self.mon.left) as f32, (self.mon.bottom - self.mon.top) as f32);
+        if self.rainfall.as_ref().is_none_or(|f| (f.level - level).abs() > 0.2) {
+            self.rainfall = None;
+            if self.backdrop.is_none() {
+                let mut b = BackdropWindow::new(gfx, self.mon)?;
+                b.show(self.shown);
+                self.backdrop = Some(b);
+                self.backdrop_z = now;
+            }
+            let parent = self.backdrop.as_ref().map(|b| b.root.clone()).unwrap_or_else(|| self.root.clone());
+            self.rainfall = Some(Rainfall::new(gfx, &parent, w, h, self.s, level, self.rain_strength, &mut self.rng)?);
+        }
+        if self.storm.is_none() {
+            self.storm = Storm::new(self.rain_strength, now, &mut self.rng);
+        }
+        if let (Some(storm), Some(back)) = (self.storm.as_mut(), self.backdrop.as_ref()) {
+            storm.step(gfx, now, &back.root, &self.root, w, h, self.s, &mut self.rng)?;
+        }
+        // Masaüstü öne gelirse yağmur yeniden onun üstüne.
+        if now - self.backdrop_z >= Duration::from_secs(2) {
+            self.backdrop_z = now;
+            if let Some(b) = self.backdrop.as_mut() {
+                b.keep_z();
+            }
+        }
+        Ok(())
+    }
+
     /// Yağan kar ve kar küreme aracı (yalnızca kar yağarken).
     fn weather(&mut self, gfx: &Gfx, now: Instant, dt: f32, snow: Option<f32>) -> Result<()> {
         let Some(level) = snow else {
             self.snowfall = None;
             self.plow = None;
             self.plow_asked = false;
-            // Toplar/adamlar erirken arka katman kalır.
-            if self.play.is_empty() {
+            // Toplar/adamlar erirken ya da yağmur yağarken arka katman kalır.
+            if self.play.is_empty() && self.rainfall.is_none() {
                 self.backdrop = None;
             }
             return Ok(());
@@ -611,6 +659,8 @@ impl LedgeView {
         self.model.sync(edges);
         self.sync_slots(gfx)?;
         self.snowfall = None;
+        self.rainfall = None;
+        self.storm = None;
         self.spill = None;
         self.moving = None;
         self.play.reset(&self.root, self.backdrop.as_ref().map(|b| &b.root));

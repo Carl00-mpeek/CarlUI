@@ -10,7 +10,7 @@ use crate::{
 };
 use carlui_core::{
     config::DockPosition,
-    live::{self, LiveIntensity, LiveScene},
+    live::{self, LiveIntensity, LiveScene, RainStrength},
 };
 use std::{cell::RefCell, time::Instant};
 
@@ -208,6 +208,29 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         intensity,
         90.0,
     );
+    // Yağmur ayarı: sahne yağmur ya da gerçek hava yağmur getirebilir.
+    if c.scene == LiveScene::Rain || c.weather.active() {
+        let rain = match c.rain {
+            RainStrength::Light => 0,
+            RainStrength::Normal => 1,
+            RainStrength::Heavy => 2,
+        };
+        f.choice(
+            p,
+            t!("Yağmur", "Rain"),
+            t!(
+                "Yağmur yalnızca dock'ta değil, masaüstünün tamamına yağar (pencerelerin arkasında kalır).\nHafif: seyrek damla, yıldırım yok.\nNormal: orta yoğunluk, arada bir yıldırım.\nYoğun: sık damla ve daha sık yıldırım.",
+                "Rain falls not only in the dock but across the whole desktop (it stays behind windows).\nLight: sparse drops, no lightning.\nNormal: medium rain with occasional lightning.\nHeavy: dense rain and more frequent lightning."
+            ),
+            &[
+                (t!("Hafif", "Light"), edit(|c| c.dock.live.rain = RainStrength::Light)),
+                (t!("Normal", "Normal"), edit(|c| c.dock.live.rain = RainStrength::Normal)),
+                (t!("Yoğun", "Heavy"), edit(|c| c.dock.live.rain = RainStrength::Heavy)),
+            ],
+            rain,
+            90.0,
+        );
+    }
     // Kar ayarları: sahne kar ya da gerçek hava kar getirebilir.
     if c.scene == LiveScene::Snow || c.weather.active() {
         f.toggle(

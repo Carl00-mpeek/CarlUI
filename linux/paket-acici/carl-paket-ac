@@ -1,0 +1,378 @@
+#!/usr/bin/env bash
+# Carl Paket Açıcı - CachyOS / Arch için çift tıkla paket kurucu.
+# .deb .rpm .pkg.tar.zst .AppImage .flatpakref .flatpakrepo .flatpak
+set -u
+
+BASLIK="Carl Paket Açıcı"
+ONBELLEK="${XDG_CACHE_HOME:-$HOME/.cache}/carl-paket"
+mkdir -p "$ONBELLEK"
+
+# ---------- yardımcılar ----------
+
+var_mi() { command -v "$1" >/dev/null 2>&1; }
+
+# Metinlerdeki "\n" gerçek satır sonuna çevrilir.
+bilgi()  { kdialog --title "$BASLIK" --msgbox "$(printf '%b' "$1")" 2>/dev/null || printf '%b\n' "$1"; }
+hata()   { kdialog --title "$BASLIK" --error "$(printf '%b' "$1")" 2>/dev/null || printf 'HATA: %b\n' "$1" >&2; }
+soru()   { kdialog --title "$BASLIK" --yesno "$(printf '%b' "$1")" 2>/dev/null; }
+
+# Seçenek listesi: menu "metin" etiket1 açıklama1 etiket2 açıklama2 ...
+menu() {
+    local metin="$1"; shift
+    kdialog --title "$BASLIK" --menu "$metin" "$@" 2>/dev/null
+}
+
+aur_yardimcisi() {
+    if var_mi paru; then echo paru
+    elif var_mi yay; then echo yay
+    fi
+}
+
+# Komutları görünür bir terminalde çalıştırır (sudo şifresi, pacman soruları için).
+# Kullanım: terminalde "bash kodu" [argümanlar...]  -> kod içinde $1 $2 ... olarak gelir.
+terminalde() {
+    local kod="$1"; shift
+    local betik
+    betik="$(mktemp "$ONBELLEK/is-XXXXXX.sh")"
+    cat >"$betik" <<EOF
+#!/usr/bin/env bash
+set -o pipefail
+$kod
+durum=\$?
+echo
+if [ \$durum -eq 0 ]; then
+    echo "✔ Tamamlandı."
+else
+    echo "✘ Bir hata oluştu (çıkış kodu \$durum)."
+fi
+read -rp "Kapatmak için Enter'a basın..." _
+exit \$durum
+EOF
+    chmod +x "$betik"
+    local durum
+    if var_mi konsole; then
+        konsole --nofork -p tabtitle="$BASLIK" -e bash "$betik" "$@"
+    elif var_mi kitty; then
+        kitty bash "$betik" "$@"
+    elif var_mi alacritty; then
+        alacritty -e bash "$betik" "$@"
+    else
+        hata "Terminal bulunamadı. Lütfen konsole kurun:\nsudo pacman -S konsole"
+        rm -f "$betik"; return 1
+    fi
+    durum=$?
+    rm -f "$betik"
+    return $durum
+}
+
+# Resmi depoda var mı?
+depoda_var_mi() { pacman -Si -- "$1" >/dev/null 2>&1; }
+
+# AUR'da var mı? (yalnız paket adı gönderilir)
+aurda_var_mi() {
+    local ad="$1"
+    var_mi curl || return 1
+    curl -fsS --max-time 8 "https://aur.archlinux.org/rpc/v5/info/$ad" 2>/dev/null \
+        | grep -q '"resultcount":[1-9]'
+}
+
+kurulu_mu() { pacman -Q -- "$1" >/dev/null 2>&1; }
+
+# Bir ad için aday listesi: ad, ad-bin, küçük harfli hali
+adaylar() {
+    local ad="$1" k
+    k="$(echo "$ad" | tr '[:upper:]' '[:lower:]')"
+    printf '%s\n' "$k" "$k-bin"
+    [ "$k" != "$ad" ] && printf '%s\n' "$ad"
+}
+
+# .deb / .rpm için ortak akış: depo -> AUR -> dönüştür/çıkar
+yerel_karsiligi_ara() {
+    local dosya="$1" ad="$2" surum="$3" aciklama="$4" tur="$5"
+    local depo_adi="" aur_adi="" a
+
+    for a in $(adaylar "$ad"); do
+        if [ -z "$depo_adi" ] && depoda_var_mi "$a"; then depo_adi="$a"; fi
+    done
+    for a in $(adaylar "$ad"); do
+        if [ -z "$aur_adi" ] && aurda_var_mi "$a"; then aur_adi="$a"; fi
+    done
+
+    local metin="<b>$ad</b> $surum<br>${aciklama:+<i>$aciklama</i><br>}<br>"
+    metin+="Bu bir $tur paketi. CachyOS Arch tabanlıdır; en sağlıklısı aynı programın Arch sürümünü kurmaktır.<br><br>"
+    if kurulu_mu "$ad"; then
+        metin+="ℹ <b>$ad</b> zaten kurulu: $(pacman -Q -- "$ad" | cut -d' ' -f2)<br><br>"
+    fi
+
+    local secenekler=()
+    if [ -n "$depo_adi" ]; then
+        metin+="✔ Resmi depoda bulundu: <b>$depo_adi</b><br>"
+        secenekler+=(depo "Resmi depodan kur: $depo_adi (önerilen)")
+    fi
+    local yardimci; yardimci="$(aur_yardimcisi)"
+    if [ -n "$aur_adi" ]; then
+        metin+="✔ AUR'da bulundu: <b>$aur_adi</b><br>"
+        if [ -n "$yardimci" ]; then
+            secenekler+=(aur "AUR'dan kur: $aur_adi ($yardimci ile)")
+        else
+            metin+="  (AUR için paru gerekli: sudo pacman -S paru)<br>"
+        fi
+    fi
+    if [ -z "$depo_adi" ] && [ -z "$aur_adi" ]; then
+        metin+="✘ Depoda ve AUR'da aynı adla bulunamadı.<br>"
+    fi
+    if [ "$tur" = ".deb" ]; then
+        secenekler+=(debtap "debtap ile Arch paketine dönüştürüp kur (son çare)")
+    fi
+    secenekler+=(cikar "Sadece içindekileri bir klasöre çıkar")
+    secenekler+=(ara "Discover / paket aramasında bu adı ara")
+
+    local secim
+    secim="$(menu "$metin<br>Ne yapılsın?" "${secenekler[@]}")" || exit 0
+
+    case "$secim" in
+        depo)
+            terminalde 'sudo pacman -S --needed -- "$1"' "$depo_adi" ;;
+        aur)
+            terminalde '"$1" -S --needed -- "$2"' "$yardimci" "$aur_adi" ;;
+        debtap)
+            debtap_ile_kur "$dosya" ;;
+        cikar)
+            icini_cikar "$dosya" ;;
+        ara)
+            if var_mi plasma-discover; then
+                plasma-discover --search "$ad" >/dev/null 2>&1 &
+            else
+                terminalde 'pacman -Ss -- "$1"; echo; h=$(command -v paru || command -v yay); [ -n "$h" ] && "$h" -Ssa -- "$1"' "$ad"
+            fi ;;
+    esac
+}
+
+debtap_ile_kur() {
+    local dosya="$1"
+    if ! var_mi debtap; then
+        local yardimci; yardimci="$(aur_yardimcisi)"
+        if [ -n "$yardimci" ] && soru "debtap kurulu değil. AUR'dan şimdi kurulsun mu?\n($yardimci -S debtap)"; then
+            terminalde '"$1" -S --needed debtap' "$yardimci" || return
+        else
+            hata "debtap gerekli. Kurmak için:\nparu -S debtap"
+            return 1
+        fi
+    fi
+    soru "Uyarı: .deb dönüştürme her zaman sorunsuz çalışmaz; bağımlılık adları Debian ile Arch arasında farklı olabilir.\n\nYine de dönüştürüp kurulsun mu?" || return 0
+
+    local is
+    is="$(mktemp -d "$ONBELLEK/debtap-XXXXXX")"
+    cp -- "$dosya" "$is/"
+    local damga="$ONBELLEK/debtap-guncellendi"
+    terminalde '
+is="$1"; deb="$2"; damga="$3"
+if [ ! -f "$damga" ] || [ -n "$(find "$damga" -mtime +14 2>/dev/null)" ]; then
+    echo "debtap veritabanı güncelleniyor (ilk seferde birkaç dakika sürebilir)..."
+    sudo debtap -u && touch "$damga" || exit 1
+fi
+cd "$is" || exit 1
+echo; echo "Dönüştürülüyor: $deb"
+debtap -q "$deb" || exit 1
+paket=$(ls -1t "$is"/*.pkg.tar.* 2>/dev/null | head -n1)
+[ -n "$paket" ] || { echo "Dönüştürülmüş paket bulunamadı."; exit 1; }
+echo; echo "Kuruluyor: $paket"
+sudo pacman -U -- "$paket"
+' "$is" "$is/$(basename -- "$dosya")" "$damga"
+    rm -rf -- "$is"
+}
+
+icini_cikar() {
+    local dosya="$1" hedef
+    hedef="$(dirname -- "$dosya")/$(basename -- "$dosya")-icerik"
+    mkdir -p -- "$hedef"
+    case "$dosya" in
+        *.deb)
+            # .deb = ar arşivi; içindeki data.tar.* asıl dosyalardır
+            local gecici; gecici="$(mktemp -d)"
+            ( cd "$gecici" && bsdtar -xf "$dosya" ) &&
+            bsdtar -xf "$gecici"/data.tar.* -C "$hedef"
+            rm -rf -- "$gecici" ;;
+        *)
+            bsdtar -xf "$dosya" -C "$hedef" ;;
+    esac
+    if [ $? -eq 0 ]; then
+        bilgi "İçerik şuraya çıkarıldı:\n$hedef"
+        xdg-open "$hedef" >/dev/null 2>&1 &
+    else
+        hata "Çıkarma başarısız oldu."
+    fi
+}
+
+# ---------- biçimler ----------
+
+deb_ac() {
+    local dosya="$1" kontrol gecici
+    gecici="$(mktemp -d)"
+    ( cd "$gecici" && bsdtar -xf "$dosya" 'control.tar.*' ) 2>/dev/null
+    kontrol="$(bsdtar -xOf "$gecici"/control.tar.* ./control 2>/dev/null || bsdtar -xOf "$gecici"/control.tar.* control 2>/dev/null)"
+    rm -rf -- "$gecici"
+    if [ -z "$kontrol" ]; then
+        hata "Bu .deb dosyası okunamadı (bozuk olabilir)."
+        exit 1
+    fi
+    local ad surum aciklama
+    ad="$(sed -n 's/^Package: *//p' <<<"$kontrol" | head -n1)"
+    surum="$(sed -n 's/^Version: *//p' <<<"$kontrol" | head -n1)"
+    aciklama="$(sed -n 's/^Description: *//p' <<<"$kontrol" | head -n1)"
+    yerel_karsiligi_ara "$dosya" "$ad" "$surum" "$aciklama" ".deb"
+}
+
+rpm_ac() {
+    local dosya="$1" ad surum="" aciklama=""
+    if var_mi rpm; then
+        ad="$(rpm -qp --qf '%{NAME}' "$dosya" 2>/dev/null)"
+        surum="$(rpm -qp --qf '%{VERSION}-%{RELEASE}' "$dosya" 2>/dev/null)"
+        aciklama="$(rpm -qp --qf '%{SUMMARY}' "$dosya" 2>/dev/null)"
+    fi
+    if [ -z "${ad:-}" ]; then
+        # ad-sürüm-sürümno.mimari.rpm -> ad
+        local b; b="$(basename -- "$dosya" .rpm)"
+        b="${b%.*}"            # mimariyi at
+        ad="${b%-*}"; ad="${ad%-*}"
+        surum="${b#"$ad"-}"
+    fi
+    yerel_karsiligi_ara "$dosya" "$ad" "$surum" "$aciklama" ".rpm"
+}
+
+arch_paketi_ac() {
+    local dosya="$1" bilgi_metni
+    bilgi_metni="$(pacman -Qip -- "$dosya" 2>/dev/null | grep -E '^(Name|Version|Description|Packager) ' | sed 's/  */ /')"
+    if [ -z "$bilgi_metni" ]; then
+        hata "Bu paket okunamadı (bozuk olabilir)."
+        exit 1
+    fi
+    soru "$bilgi_metni\n\nBu paket kurulsun mu?" || exit 0
+    terminalde 'sudo pacman -U -- "$1"' "$dosya"
+}
+
+appimage_ac() {
+    local dosya="$1" ad
+    ad="$(basename -- "$dosya")"
+    local secim
+    secim="$(menu "<b>$ad</b><br><br>AppImage'lar kurulum gerektirmez. Ne yapılsın?" \
+        calistir "Bir kez çalıştır" \
+        kur "Uygulamalara ekle (~/Applications + başlat menüsü)")" || exit 0
+    chmod +x -- "$dosya"
+    case "$secim" in
+        calistir) exec "$dosya" ;;
+        kur) appimage_kur "$dosya" ;;
+    esac
+}
+
+appimage_kur() {
+    local dosya="$1" klasor="$HOME/Applications" ad hedef
+    mkdir -p "$klasor"
+    ad="$(basename -- "$dosya")"
+    hedef="$klasor/$ad"
+    if [ "$(realpath -- "$dosya")" != "$(realpath -m -- "$hedef")" ]; then
+        if [ -e "$hedef" ] && ! soru "$hedef zaten var. Üzerine yazılsın mı?"; then exit 0; fi
+        cp -f -- "$dosya" "$hedef"
+    fi
+    chmod +x -- "$hedef"
+
+    # AppImage içinden .desktop ve simgeyi almaya çalış
+    local gecici kok uyg_adi simge="application-x-executable" kimlik
+    gecici="$(mktemp -d)"
+    ( cd "$gecici" && timeout 20 "$hedef" --appimage-extract '*.desktop' >/dev/null 2>&1
+      timeout 20 "$hedef" --appimage-extract '.DirIcon' >/dev/null 2>&1
+      timeout 20 "$hedef" --appimage-extract '*.png' >/dev/null 2>&1
+      timeout 20 "$hedef" --appimage-extract '*.svg' >/dev/null 2>&1 )
+    kok="$gecici/squashfs-root"
+    local masaustu; masaustu="$(ls -1 "$kok"/*.desktop 2>/dev/null | head -n1)"
+    uyg_adi="${ad%.*}"
+    [ -n "$masaustu" ] && uyg_adi="$(sed -n 's/^Name=//p' "$masaustu" | head -n1)"
+    kimlik="appimage-$(echo "${ad%.*}" | tr -c 'A-Za-z0-9\n' '-' | tr '[:upper:]' '[:lower:]')"
+
+    local simge_klasoru="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
+    mkdir -p "$simge_klasoru"
+    local kaynak=""
+    if [ -e "$kok/.DirIcon" ]; then kaynak="$(realpath -- "$kok/.DirIcon")"; fi
+    [ -z "$kaynak" ] && kaynak="$(ls -1 "$kok"/*.png "$kok"/*.svg 2>/dev/null | head -n1)"
+    if [ -n "$kaynak" ] && [ -f "$kaynak" ]; then
+        local uzanti="png"; [[ "$kaynak" == *.svg ]] && uzanti="svg"
+        cp -f -- "$kaynak" "$simge_klasoru/$kimlik.$uzanti"
+        simge="$simge_klasoru/$kimlik.$uzanti"
+    fi
+    rm -rf -- "$gecici"
+
+    local uyg_klasoru="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+    mkdir -p "$uyg_klasoru"
+    cat >"$uyg_klasoru/$kimlik.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=$uyg_adi
+Exec="$hedef" %U
+Icon=$simge
+Terminal=false
+Categories=Utility;
+Comment=AppImage ($ad)
+EOF
+    update-desktop-database "$uyg_klasoru" >/dev/null 2>&1
+    var_mi kbuildsycoca6 && kbuildsycoca6 >/dev/null 2>&1
+    bilgi "<b>$uyg_adi</b> uygulamalara eklendi.<br><br>Dosya: $hedef<br>Başlat menüsünde bulabilirsiniz.<br><br>Kaldırmak için: $hedef dosyasını ve $uyg_klasoru/$kimlik.desktop dosyasını silin."
+}
+
+flatpak_ac() {
+    local dosya="$1"
+    if ! var_mi flatpak; then
+        if soru "Flatpak kurulu değil. Şimdi kurulsun mu?\n(sudo pacman -S flatpak)"; then
+            terminalde 'sudo pacman -S --needed flatpak' || exit 1
+        else
+            exit 0
+        fi
+    fi
+    case "$dosya" in
+        *.flatpakrepo)
+            local ad; ad="$(basename -- "$dosya" .flatpakrepo)"
+            soru "'$ad' Flatpak deposu eklensin mi?" || exit 0
+            terminalde 'flatpak remote-add --user --if-not-exists "$1" "$2"' "$ad" "$dosya" ;;
+        *.flatpakref)
+            local ad; ad="$(sed -n 's/^Name=//p' "$dosya" | head -n1)"
+            soru "Flatpak uygulaması kurulsun mu?\n\n${ad:-$(basename -- "$dosya")}" || exit 0
+            terminalde 'flatpak install --user --from "$1"' "$dosya" ;;
+        *)
+            soru "Flatpak paketi kurulsun mu?\n\n$(basename -- "$dosya")" || exit 0
+            terminalde 'flatpak install --user --bundle "$1"' "$dosya" ;;
+    esac
+}
+
+# ---------- giriş ----------
+
+if [ $# -lt 1 ]; then
+    dosya="$(kdialog --title "$BASLIK" --getopenfilename "$HOME" \
+        "*.deb *.rpm *.pkg.tar.zst *.pkg.tar.xz *.AppImage *.appimage *.flatpakref *.flatpakrepo *.flatpak|Paketler" 2>/dev/null)" || exit 0
+else
+    dosya="$1"
+fi
+# file:// URL gelirse yola çevir
+case "$dosya" in
+    file://*) dosya="${dosya#file://}"; bs='\x'; dosya="$(printf '%b' "${dosya//%/$bs}")" ;;
+esac
+
+if [ ! -f "$dosya" ]; then
+    hata "Dosya bulunamadı:\n$dosya"
+    exit 1
+fi
+dosya="$(realpath -- "$dosya")"
+
+if ! var_mi kdialog; then
+    echo "kdialog gerekli: sudo pacman -S kdialog" >&2
+    exit 1
+fi
+
+kucuk="$(echo "$dosya" | tr '[:upper:]' '[:lower:]')"
+case "$kucuk" in
+    *.deb)                         deb_ac "$dosya" ;;
+    *.rpm)                         rpm_ac "$dosya" ;;
+    *.pkg.tar.zst|*.pkg.tar.xz|*.pkg.tar.gz|*.pkg.tar) arch_paketi_ac "$dosya" ;;
+    *.appimage)                    appimage_ac "$dosya" ;;
+    *.flatpakref|*.flatpakrepo|*.flatpak) flatpak_ac "$dosya" ;;
+    *)
+        hata "Bu dosya türü desteklenmiyor:\n$(basename -- "$dosya")" ;;
+esac

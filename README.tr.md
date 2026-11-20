@@ -118,6 +118,13 @@
     şifresiz olduğu belirtilir. `.carlvault` yedeği İçe aktar'dan geri yüklenir.
   - Bir süre kullanılmayınca, uykuda ve Windows kilitlenince kendiliğinden
     kilitlenir.
+  - **Windows Hello:** Yüz, parmak izi ya da PIN ile açılır. Kasanın Güvenlik
+    sayfasından etkinleştirilir; anahtar bu bilgisayarın güvenlik yongasında
+    kalır, ana parola her zaman çalışır. Hello kurulu değilse görünmez.
+  - **Sızıntı denetimi (Güvenlik sayfası):** Parolaların Have I Been Pwned
+    sızıntılarında geçip geçmediğine bakar. Yalnızca her parolanın SHA-1
+    özetinin ilk 5 karakteri, yalnızca düğmeye basınca gönderilir; sızmış
+    kayıtlar kaç kez görüldükleriyle listelenir.
 - **Alan kaydı:** Ekran görüntüsü aracında alan seçip kayıt düğmesine bas
   (Ctrl+R). Alan, Durdur'a ya da **Ctrl+Alt+R**'ye basana dek sesiyle MP4
   olarak kaydedilir; sonuç GIF'e de çevrilebilir.
@@ -127,6 +134,14 @@
 - **Pencere düzenleri (Ctrl+Alt+L):** Ekran çıkarılıp takılınca ya da uykudan
   sonra pencereleri eski yerlerine koyar. Dizilimleri "iş" ya da "oyun" diye
   kaydedip tek tıkla uygularsın; kapalı uygulamalar açılmaz.
+- **Pencere yakalama bölgeleri (Shift + sürükle):** Pencereyi sürüklerken
+  Shift'e basılı tutunca o ekranda bölgeler belirir; bırakınca pencere
+  vurgulanan bölgeye oturur. Ctrl+Shift bölgeleri birleştirir. Düzenler:
+  otomatik, yarım, üçte bir, odak, ızgara ya da `config.toml`'da kendi listen.
+- **Görev Yöneticisi:** Süreçler uygulamaya göre gruplu; CPU, GPU, bellek,
+  G/Ç ve yönetici olarak açılınca uygulama başına ağ hızı (Windows
+  çekirdeğinin ağ olaylarından; hiçbir veri dışarı çıkmaz). İmzasız
+  programlar önce.
 - **Ekran görüntüsü (Alt+X):** Tüm monitörler donar; alan seç, çiz, yaz, sil,
   geri al, kopyala ya da kaydet. **Ctrl+T** seçimdeki yazıyı okuyup panoya
   koyar (OCR); seçimdeki QR kodu okunur, 2FA QR'ı tek düğmeyle Carl Vault'a
@@ -191,6 +206,13 @@ Her kısayol bir fare tuşu da olabilir (orta, geri, ileri).
   dosyaları listeler.
 - `wifi kapat`, `bluetooth aç`, `ses 30`, `sessiz`, `parlaklık 70`,
   `karanlık mod`: hızlı ayarlar.
+- `not süt al` satırı `%APPDATA%\CarlUI\notes.md` dosyasına ekler; `notlar`
+  son notları, `notlar süt` içinde "süt" geçenleri listeler (Enter kopyalar).
+- **Eklentiler:** `%APPDATA%\CarlUI\plugins` içindeki her `.toml` dosyası bir
+  arama kelimesi ekler. Adres şablonu açar
+  (`url = "https://github.com/search?q={q}"`), program çalıştırır (`run` +
+  `args`) ya da bir betiğin çıktı satırlarını listeler
+  (`başlık|alt yazı|hedef`). Değişiklik yeniden başlatmadan geçerli olur.
 
 ### Yapay zekâ
 
@@ -344,7 +366,8 @@ imzalanması için başvuru yapıldı.
 ### Gizlilik
 
 CarlUI veri toplamaz, telemetri içermez. Yalnızca senin istediğin işlerde
-(döviz kuru, çeviri, web araması, indirmeler, model indirme) ve günlük
+(döviz kuru, çeviri, web araması, kasa sızıntı denetimi, indirmeler, model
+indirme) ve günlük
 güncelleme denetiminde (GitHub API) internete bağlanır; denetim **Ayarlar →
 Genel → Sistem** bölümünden kapatılabilir. Yapay zekâ özellikleri
 tamamen bilgisayarında çalışır; ses, metin ve görüntülerin hiçbir yere

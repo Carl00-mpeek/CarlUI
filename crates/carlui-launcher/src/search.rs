@@ -58,6 +58,10 @@ pub enum Act {
     /// Adanın indirme yöneticisiyle İndirilenler'e indir / süreni iptal et.
     Download(String),
     DownloadCancel,
+    /// Eklentinin komutu: programı argümanlarıyla başlat.
+    Run { exe: String, args: String },
+    /// Hızlı not: metni notes.md dosyasına ekle.
+    Note(String),
     /// Döviz kuru gibi henüz hazır olmayan sonuç.
     Pending,
     None,
@@ -122,6 +126,8 @@ pub fn tag_label(tag: &'static str) -> &'static str {
         "Son" => "Recent",
         "Pano" => "Clipboard",
         "Zaman" => "Timer",
+        "Eklenti" => "Plugin",
+        "Not" => "Note",
         t => t,
     }
 }
@@ -501,10 +507,24 @@ pub fn build(raw: &str, cx: &Ctx) -> Vec<Item> {
         return top;
     }
 
+    // "notlar" / "notlar süt": kaydedilen hızlı notlar
+    if let Some(list) = crate::notes::listing(&q) {
+        top.extend(list);
+        return top;
+    }
+
+    // Kullanıcı eklentileri (%APPDATA%\CarlUI\plugins\*.toml)
+    let plugged = crate::plugins::matches(&crate::plugins::all(), raw, cx.wake.clone());
+
     // Kısayol kelimeleri (yt, chatgpt, wp …); "@" ile başlıyorsa yalnızca onlar.
     let kws = keyword_items(raw, cx);
     if q.starts_with('@') {
         top.extend(kws);
+        top.extend(plugged.unwrap_or_default());
+        return top;
+    }
+    if let Some(list) = plugged {
+        top.extend(list);
         return top;
     }
     top.extend(kws);
@@ -595,6 +615,11 @@ pub fn build(raw: &str, cx: &Ctx) -> Vec<Item> {
         if out.len() >= 9 {
             break;
         }
+    }
+
+    // "not <metin>": uygulamaların altında, "Not Defteri" araması bozulmasın.
+    if let Some(text) = crate::notes::note_text(raw) {
+        out.push(crate::notes::take_item(text));
     }
 
     // Dosyalar

@@ -86,6 +86,14 @@ pub struct ToolsConfig {
     pub unlock_enabled: bool,
     /// Ekran değişince ve uykudan sonra pencereleri eski yerlerine koy.
     pub window_memory: bool,
+    /// Pencereyi Shift basılıyken sürükleyince bölgeler görünür, bırakınca
+    /// pencere bölgeye oturur (Ctrl+Shift ile bölgeler birleşir).
+    pub snap_zones: bool,
+    pub zone_layout: crate::zones::ZoneLayout,
+    /// `zone_layout = "custom"` için bölgeler: yüzde olarak [x, y, genişlik, yükseklik].
+    pub zones_custom: Vec<[f32; 4]>,
+    /// Bölgeler arası ve kenardaki boşluk (96 DPI pikseli; ekran ölçeğiyle büyür).
+    pub zone_gap: u32,
     /// Metin genişletici modülü açık.
     pub expander: bool,
     pub snippets: Vec<Snippet>,
@@ -104,6 +112,10 @@ impl Default for ToolsConfig {
             disk_enabled: true,
             unlock_enabled: true,
             window_memory: true,
+            snap_zones: true,
+            zone_layout: crate::zones::ZoneLayout::Auto,
+            zones_custom: vec![[0.0, 0.0, 70.0, 100.0], [70.0, 0.0, 30.0, 50.0], [70.0, 50.0, 30.0, 50.0]],
+            zone_gap: 8,
             expander: true,
             snippets: vec![
                 Snippet { key: ";tarih".into(), text: "{tarih}".into() },

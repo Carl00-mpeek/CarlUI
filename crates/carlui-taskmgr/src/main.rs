@@ -16,6 +16,7 @@ extern crate carlui_core;
 mod admin;
 mod draw;
 mod groups;
+mod net;
 mod pages;
 mod power;
 mod procs;
@@ -79,6 +80,7 @@ pub enum SortCol {
     Gpu,
     Mem,
     Io,
+    Net,
     Sign,
 }
 
@@ -718,6 +720,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             LRESULT(0)
         }
         WM_DESTROY => {
+            net::stop();
             PostQuitMessage(0);
             LRESULT(0)
         }
@@ -752,6 +755,10 @@ fn main() -> Result<()> {
                 let _ = SetForegroundWindow(h);
             }
             return Ok(());
+        }
+        if admin {
+            // Uygulama başına ağ (İşlemler sayfası); yalnızca yöneticiyle mümkün.
+            crate::net::start();
         }
         let inst: HINSTANCE = GetModuleHandleW(None)?.into();
         let wc = WNDCLASSEXW {

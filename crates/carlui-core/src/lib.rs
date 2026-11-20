@@ -34,6 +34,7 @@ pub mod vcard;
 pub mod weather;
 pub mod win;
 pub mod wired;
+pub mod zones;
 
 /// Modül bu kodla çıkarsa gözetmen onu çöküş saymadan hemen yeniden açar
 /// (ör. açık/koyu tema değişince cam yüzeyler baştan kurulsun diye).

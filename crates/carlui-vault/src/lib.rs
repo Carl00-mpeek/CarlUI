@@ -54,11 +54,13 @@
 pub mod autofill;
 pub mod card;
 pub mod gen;
+pub mod hello;
 pub mod crypto;
 pub mod entry;
 pub mod export;
 pub(crate) mod hex;
 pub mod import;
+pub mod leak;
 pub mod passkey;
 pub mod recovery;
 pub mod throttle;

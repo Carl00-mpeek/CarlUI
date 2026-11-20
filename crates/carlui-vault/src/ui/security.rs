@@ -62,6 +62,11 @@ pub fn paint(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
         }
         y += 50.0;
 
+        if app.hello_supported() {
+            y = hello(app, p, x, y, cw);
+        }
+        y = leaks(app, p, x, y, cw);
+
         section(p, t!("İçe aktar", "Import"), x, &mut y, cw);
         y += para(
             p,
@@ -120,6 +125,100 @@ pub fn paint(app: &App, p: &mut P, w: f32, h: f32) -> f32 {
         y += 60.0;
     });
     (y + app.scroll - clip.y + 20.0 - clip.h).max(0.0)
+}
+
+/// "Windows Hello" bölümü: yüz, parmak izi ya da PIN ile açmayı aç/kapat.
+fn hello(app: &App, p: &mut P, x: f32, mut y: f32, cw: f32) -> f32 {
+    section(p, "Windows Hello", x, &mut y, cw);
+    let on = app.vault.as_ref().is_some_and(|v| v.has_hello());
+    let (msg, col) = if on { (t!("Windows Hello ile açma etkin.", "Windows Hello unlock is on."), GREEN) } else { (t!("Windows Hello ile açma kapalı.", "Windows Hello unlock is off."), TEXT) };
+    p.text(msg, R::new(x + 2.0, y, cw, 22.0), 13.0, true, col, 0.95, Align::Left);
+    y += 28.0;
+    y += para(
+        p,
+        t!(
+            "Kasa ana parola yerine yüz, parmak izi ya da Windows PIN'iyle açılır. Anahtar bu bilgisayarın güvenlik yongasında ve bu Windows kullanıcısında kalır; başka bilgisayara taşınmaz. Ana parola her zaman çalışır.",
+            "Open the vault with your face, fingerprint or Windows PIN instead of the master password. The key stays in this computer's security chip and this Windows user; it doesn't move to another computer. The master password always works."
+        ),
+        x,
+        y,
+        cw,
+        12.5,
+        TEXT,
+        0.6,
+    ) + 10.0;
+    let label = if app.hello_busy {
+        t!("Windows Hello bekleniyor…", "Waiting for Windows Hello…")
+    } else if on {
+        t!("Kapat", "Turn off")
+    } else {
+        t!("Etkinleştir", "Turn on")
+    };
+    p.button(R::new(x, y, 210.0, 34.0), Some('\u{E8D7}'), label, Act::HelloToggle, !app.hello_busy, on);
+    y + 50.0
+}
+
+/// "Sızıntı denetimi" bölümü: parolalar bilinen veri sızıntılarında var mı.
+fn leaks(app: &App, p: &mut P, mut x: f32, mut y: f32, cw: f32) -> f32 {
+    section(p, t!("Sızıntı denetimi", "Breach check"), x, &mut y, cw);
+    y += para(
+        p,
+        t!(
+            "Parolalarının bilinen veri sızıntılarında yayınlanıp yayınlanmadığını Have I Been Pwned ile denetler. Parolan gönderilmez: yalnızca SHA-1 özetinin ilk 5 karakteri gider, eşleşme bu bilgisayarda aranır. İstek yalnızca düğmeye basınca yapılır.",
+            "Checks whether your passwords appear in known data breaches using Have I Been Pwned. Your password is never sent: only the first 5 characters of its SHA-1 hash go out, and the match is done on this computer. The request is made only when you press the button."
+        ),
+        x,
+        y,
+        cw,
+        12.5,
+        TEXT,
+        0.6,
+    ) + 10.0;
+    let busy = app.leak.busy;
+    let label = if busy { t!("Denetleniyor…", "Checking…") } else { t!("Parolaları denetle", "Check passwords") };
+    p.button(R::new(x, y, 210.0, 34.0), Some('\u{E721}'), label, Act::LeakCheck, !busy, false);
+    y += 46.0;
+    let Some((r, _)) = &app.leak.report else { return y + 4.0 };
+    if r.found.is_empty() && r.failed == 0 {
+        p.text(&t!(format!("{} parola denetlendi, hiçbiri sızıntılarda yok.", r.checked), format!("{} passwords checked, none found in breaches.", r.checked)), R::new(x + 2.0, y, cw, 22.0), 13.0, true, GREEN, 0.95, Align::Left);
+        return y + 36.0;
+    }
+    if !r.found.is_empty() {
+        y += para(
+            p,
+            &t!(
+                format!("{} parola sızıntılarda görülmüş. Bunları hemen değiştir:", r.found.len()),
+                format!("{} passwords appear in breaches. Change them now:", r.found.len())
+            ),
+            x,
+            y,
+            cw,
+            13.0,
+            ORANGE,
+            0.95,
+        ) + 6.0;
+        x += 8.0;
+        for f in &r.found {
+            let label = t!(format!("{}  ({} kez)", f.name, f.count), format!("{}  ({} times)", f.name, f.count));
+            super::link(p, R::new(x, y, cw - 8.0, 24.0), &label, Act::Edit(f.id.clone()));
+            y += 26.0;
+        }
+        x -= 8.0;
+        y += 4.0;
+    }
+    if r.failed > 0 {
+        y += para(
+            p,
+            &t!(format!("{} parola denetlenemedi (bağlantı yok mu?).", r.failed), format!("{} passwords couldn't be checked (no connection?).", r.failed)),
+            x,
+            y,
+            cw,
+            12.5,
+            ORANGE,
+            0.9,
+        ) + 4.0;
+    }
+    y + 14.0
 }
 
 /// "Dışa aktar" bölümü: biçim, parola seçimi, ana parola ve düğme.

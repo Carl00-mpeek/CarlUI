@@ -122,7 +122,10 @@ impl View for Pill {
         let path = self.shared.path.clone();
         match a {
             A::Nothing => {}
-            A::Stop => self.shared.stop(),
+            A::Stop => {
+                info!("alan kaydı: hapta Durdur'a basıldı");
+                self.shared.stop();
+            }
             A::Open => unsafe {
                 let file = HSTRING::from(path.as_os_str());
                 ShellExecuteW(None, w!("open"), &file, None, None, SW_SHOWNORMAL);

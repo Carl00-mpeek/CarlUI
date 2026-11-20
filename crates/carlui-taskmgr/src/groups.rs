@@ -19,6 +19,7 @@ pub struct Group<'a> {
     pub gpu: f32,
     pub mem: u64,
     pub io: f64,
+    pub net: f64,
     pub suspended: bool,
 }
 
@@ -45,7 +46,7 @@ pub fn build(app: &App) -> Vec<Group<'_>> {
     for r in app.procs.rows.iter().filter(|r| !(app.hide_windows && r.windows)) {
         let k = key_of(r);
         let i = *index.entry(k.clone()).or_insert_with(|| {
-            groups.push(Group { key: k.clone(), name: r.name.clone(), path: r.path.clone(), rows: Vec::new(), cpu: 0.0, gpu: 0.0, mem: 0, io: 0.0, suspended: true });
+            groups.push(Group { key: k.clone(), name: r.name.clone(), path: r.path.clone(), rows: Vec::new(), cpu: 0.0, gpu: 0.0, mem: 0, io: 0.0, net: 0.0, suspended: true });
             groups.len() - 1
         });
         let g = &mut groups[i];
@@ -57,6 +58,7 @@ pub fn build(app: &App) -> Vec<Group<'_>> {
         g.gpu += r.gpu;
         g.mem += r.mem;
         g.io += r.io;
+        g.net += r.net;
         g.suspended &= r.suspended;
     }
     groups.retain(|g| f.is_empty() || g.name.to_lowercase().contains(&f) || g.rows.iter().any(|r| r.pid.to_string() == f));
@@ -71,6 +73,7 @@ pub fn build(app: &App) -> Vec<Group<'_>> {
                 SortCol::Gpu => a.gpu.total_cmp(&b.gpu),
                 SortCol::Mem => a.mem.cmp(&b.mem),
                 SortCol::Io => a.io.total_cmp(&b.io),
+                SortCol::Net => a.net.total_cmp(&b.net),
             })
         });
     }
@@ -83,6 +86,7 @@ pub fn build(app: &App) -> Vec<Group<'_>> {
             SortCol::Gpu => a.gpu.total_cmp(&b.gpu),
             SortCol::Mem => a.mem.cmp(&b.mem),
             SortCol::Io => a.io.total_cmp(&b.io),
+            SortCol::Net => a.net.total_cmp(&b.net),
             SortCol::Sign => signs.get(&a.path).rank().cmp(&signs.get(&b.path).rank()),
         }))
     });

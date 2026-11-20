@@ -120,6 +120,13 @@
     from Import.
   - Locks itself after a period of inactivity, on sleep and when Windows
     locks.
+  - **Windows Hello:** Unlock with your face, fingerprint or PIN. Turn it on
+    in the vault's Security page; the key stays in this PC's security chip
+    and the master password always works. Hidden when Hello isn't set up.
+  - **Breach check (Security page):** Checks your passwords against Have I
+    Been Pwned. Only the first 5 characters of each password's SHA-1 hash are
+    sent, and only when you press the button; leaked items are listed with
+    how often they were seen.
 - **Area recording:** Select an area in the screenshot tool and press the
   record button (Ctrl+R). The area is recorded to an MP4 with sound until you
   press Stop or **Ctrl+Alt+R**, and the result can be turned into a GIF.
@@ -129,6 +136,13 @@
 - **Window layouts (Ctrl+Alt+L):** Puts windows back after a screen is
   unplugged and returned or after sleep. Save arrangements as "work" or
   "game" and apply them in one click; apps that are closed aren't launched.
+- **Snap zones (Shift + drag):** Hold Shift while dragging a window and
+  zones appear on that screen; let go and the window fills the highlighted
+  one. Ctrl+Shift merges zones. Layouts: auto, halves, thirds, focus, grid
+  or your own list in `config.toml`.
+- **Task Manager:** Processes grouped by app with CPU, GPU, memory, I/O and,
+  when opened as administrator, per-app network speed (from the Windows
+  kernel's network events; nothing leaves the PC). Unsigned programs first.
 - **Screenshot (Alt+X):** All monitors freeze; select an area, draw, type,
   erase, undo, copy or save. **Ctrl+T** reads the text in the selection and
   copies it (OCR); QR codes in the selection are read, and a 2FA QR goes to
@@ -193,6 +207,12 @@ in Settings. Any shortcut can also be a mouse button (middle, back, forward).
   recently opened files.
 - `wifi off`, `bluetooth on`, `volume 30`, `mute`, `brightness 70`,
   `dark mode`: quick settings.
+- `note buy milk` saves a line to `%APPDATA%\CarlUI\notes.md`; `notes` lists
+  recent notes and `notes milk` searches them (Enter copies one).
+- **Plugins:** every `.toml` file in `%APPDATA%\CarlUI\plugins` adds a search
+  keyword. It can open a URL template (`url = "https://github.com/search?q={q}"`),
+  run a program (`run` + `args`) or list a script's output lines
+  (`title|subtitle|target`). Changes apply without a restart.
 
 ### AI
 
@@ -347,9 +367,10 @@ Windows installers are to be signed for free through
 ### Privacy
 
 CarlUI collects no data and has no telemetry. It only connects to other
-systems when you ask it to (currency rates, translation, web search,
-downloads, model downloads) and for the daily update check against the GitHub
-API, which can be turned off in **Settings → General → System**. AI features
+systems when you ask it to (currency rates, translation, web search, the
+vault breach check, downloads, model downloads) and for the daily update
+check against the GitHub API, which can be turned off in **Settings → General
+→ System**. AI features
 run entirely on your PC; your voice, text and images are never sent anywhere.
 
 ## License

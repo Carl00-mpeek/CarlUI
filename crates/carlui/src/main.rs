@@ -24,6 +24,7 @@ mod supervisor;
 mod taskbar;
 mod wallpaper;
 mod welcome;
+mod zones;
 
 use carlui_core::{
     bus::{BusServer, Event},
@@ -359,6 +360,7 @@ fn check_fullscreen(h: &mut Host) {
             h.fullscreen_at = Some(std::time::Instant::now());
         }
         h.fullscreen = s;
+        zones::sync(&h.cfg, h.fullscreen.active);
         shake::listen(h.hwnd, h.cfg.cursor.shake && !h.fullscreen.active);
     }
     follow_foreground(h);
@@ -497,6 +499,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                         h.windows.clear();
                     }
                     wallpaper::sync(&new.theme);
+                    zones::sync(&new, h.fullscreen.active);
                     h.cfg = new;
                 });
                 LRESULT(0)
@@ -680,6 +683,7 @@ fn run() -> Result<()> {
         with_host(follow_foreground);
         with_host(|h| hotkey::register(h.hwnd, &h.cfg));
         with_host(|h| shake::listen(h.hwnd, h.cfg.cursor.shake));
+        with_host(|h| zones::sync(&h.cfg, h.fullscreen.active));
         info!("hazır");
 
         let mut msg = MSG::default();

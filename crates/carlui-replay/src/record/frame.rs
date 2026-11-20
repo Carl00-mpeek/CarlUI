@@ -66,6 +66,7 @@ pub fn run(area: Area, combo: Option<Combo>, shared: Arc<Shared>) {
         let mut msg = MSG::default();
         while !shared.stop.load(Ordering::SeqCst) && GetMessageW(&mut msg, None, 0, 0).as_bool() {
             if msg.message == WM_HOTKEY {
+                info!("alan kaydı: durdurma kısayoluna basıldı");
                 shared.stop();
                 break;
             }

@@ -9,4 +9,4 @@ authors.workspace = true
 carlui-core.workspace = true
 carlui-ui.workspace = true
 carlui-sys = { path = "../carlui-sys" }
-windows.workspace = true
+windows = { workspace = true, features = ["Win32_System_Diagnostics_Etw", "Win32_System_Time"] }

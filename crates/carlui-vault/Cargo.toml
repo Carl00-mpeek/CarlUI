@@ -28,4 +28,4 @@ p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"]
 
 [dependencies.windows]
 workspace = true
-features = ["Win32_System_RemoteDesktop"]
+features = ["Win32_System_RemoteDesktop", "Security_Credentials"]

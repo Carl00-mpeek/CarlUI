@@ -13,7 +13,7 @@ mod apptype;
 mod inject;
 mod ui;
 
-use app::{App, View};
+use app::{App, View, WM_APP_WORK};
 use carlui_core::{config, config::Config, info, log};
 use carlui_ui::{
     glassmenu,
@@ -309,6 +309,15 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                     a.app.reload(c);
                     a.invalidate();
                 }
+            });
+            LRESULT(0)
+        }
+        WM_APP_WORK => {
+            // Arka plan işi bitti: Windows Hello imzası/yoklaması ya da sızıntı denetimi.
+            with(|a| {
+                a.app.hello_done();
+                a.app.leak_done();
+                a.invalidate();
             });
             LRESULT(0)
         }

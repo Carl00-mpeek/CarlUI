@@ -35,8 +35,7 @@ impl Rng {
         a + (b - a) * self.f()
     }
 
-    /// [a, b] aralığında tam sayı (şimdilik yalnızca testlerde).
-    #[cfg(test)]
+    /// [a, b] aralığında tam sayı.
     pub fn int(&mut self, a: u32, b: u32) -> u32 {
         if b <= a {
             return a;

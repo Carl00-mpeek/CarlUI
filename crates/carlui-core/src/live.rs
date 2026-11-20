@@ -33,6 +33,19 @@ pub enum LiveIntensity {
     Normal,
 }
 
+/// Ekrana yağan yağmurun şiddeti ve yıldırım sıklığı.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RainStrength {
+    /// Seyrek damla, yıldırım yok.
+    Light,
+    /// Orta yoğunluk, arada bir yıldırım.
+    #[default]
+    Normal,
+    /// Sık damla, daha sık yıldırım.
+    Heavy,
+}
+
 /// Eski sürümlerdeki `coat` (kedi rengi) anahtarı artık yok sayılır; serde
 /// bilinmeyen alanı sessizce atlar.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -57,11 +70,13 @@ pub struct LiveConfig {
     pub snow_icons: bool,
     /// Kar yağarken fare bir süre kıpırdamazsa imleç buzla kaplanır (boyutu değişmez).
     pub frost: bool,
+    /// Yağmurda ekrana yağan yağmurun yoğunluğu (yıldırım sıklığı dahil).
+    pub rain: RainStrength,
 }
 
 impl Default for LiveConfig {
     fn default() -> Self {
-        Self { pet: String::new(), scene: LiveScene::None, intensity: LiveIntensity::Subtle, pause_on_battery: true, weather: Default::default(), reactions: true, snow_simple: false, snow_icons: false, frost: false }
+        Self { pet: String::new(), scene: LiveScene::None, intensity: LiveIntensity::Subtle, pause_on_battery: true, weather: Default::default(), reactions: true, snow_simple: false, snow_icons: false, frost: false, rain: RainStrength::Normal }
     }
 }
 
@@ -209,12 +224,15 @@ mod tests {
         assert_eq!(c.dock.live.scene, LiveScene::Rain);
         assert!(!c.dock.live.has_pet());
         assert_eq!(c.dock.live.intensity, LiveIntensity::Subtle);
+        assert_eq!(c.dock.live.rain, RainStrength::Normal);
+        let c: Config = toml::from_str("[dock.live]\nscene = \"rain\"\nrain = \"heavy\"\n").unwrap();
+        assert_eq!(c.dock.live.rain, RainStrength::Heavy);
     }
 
     #[test]
     fn gidip_gelir() {
         let mut c = Config::default();
-        c.dock.live = LiveConfig { pet: "dolphin".into(), scene: LiveScene::Aquarium, intensity: LiveIntensity::Normal, pause_on_battery: false, weather: crate::live_weather::LiveWeather { enabled: true, place: "Ankara".into(), lat: 39.93, lon: 32.86, day_night: true }, reactions: false, snow_simple: true, snow_icons: true, frost: true };
+        c.dock.live = LiveConfig { pet: "dolphin".into(), scene: LiveScene::Aquarium, intensity: LiveIntensity::Normal, pause_on_battery: false, weather: crate::live_weather::LiveWeather { enabled: true, place: "Ankara".into(), lat: 39.93, lon: 32.86, day_night: true }, reactions: false, snow_simple: true, snow_icons: true, frost: true, rain: RainStrength::Heavy };
         let s = toml::to_string(&c).unwrap();
         let back: Config = toml::from_str(&s).unwrap();
         assert_eq!(back.dock.live, c.dock.live);

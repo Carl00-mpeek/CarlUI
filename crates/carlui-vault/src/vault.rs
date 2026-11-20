@@ -30,6 +30,7 @@ use zeroize::Zeroizing;
 const FORMAT: u32 = 1;
 const AAD_MK_PW: &[u8] = b"carlui-vault/1/mk/password";
 const AAD_MK_REC: &[u8] = b"carlui-vault/1/mk/recovery";
+const AAD_MK_HELLO: &[u8] = b"carlui-vault/1/mk/hello";
 /// Ek dosya üst sınırı.
 pub const MAX_FILE: u64 = 25 * 1024 * 1024;
 
@@ -48,6 +49,8 @@ struct VaultFile {
     mk_password: Sealed,
     #[serde(default)]
     mk_recovery: Option<Sealed>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mk_hello: Option<HelloWrap>,
     entries: Vec<EntryRec>,
 }
 
@@ -70,6 +73,34 @@ pub struct Vault {
 
 fn aad(kind: &str, id: &str) -> Vec<u8> {
     format!("carlui-vault/1/{kind}/{id}").into_bytes()
+}
+
+/// Windows Hello sarmalı: tuz (imzalatılan metin için) ve DPAPI'li sarmal.
+#[derive(Serialize, Deserialize, Clone)]
+struct HelloWrap {
+    #[serde(with = "crate::hex")]
+    salt: Vec<u8>,
+    #[serde(with = "crate::hex")]
+    blob: Vec<u8>,
+}
+
+/// Hello'ya imzalatılan sabit metin: biçim etiketi + kasaya özgü tuz.
+pub fn hello_challenge(salt: &[u8]) -> Vec<u8> {
+    let mut v = b"carlui-vault/1/hello/challenge/".to_vec();
+    v.extend_from_slice(salt);
+    v
+}
+
+/// İmzadan sarma anahtarı: SHA-256(etiket || imza).
+fn hello_key(signature: &[u8]) -> Result<Key> {
+    use sha2::{Digest, Sha256};
+    if signature.len() < 64 {
+        return Err(Error::WrongKey);
+    }
+    let mut h = Sha256::new();
+    h.update(b"carlui-vault/1/hello/key");
+    h.update(signature);
+    Key::from_bytes(&h.finalize()).ok_or(Error::Corrupt)
 }
 
 fn to_json<T: Serialize>(v: &T) -> Result<Zeroizing<Vec<u8>>> {
@@ -136,7 +167,7 @@ impl Vault {
         std::fs::create_dir_all(dir).map_err(io)?;
         let mk = Key::random()?;
         let pk = kdf.derive(password.as_bytes())?;
-        let file = VaultFile { format: FORMAT, mk_password: crypto::wrap_key(&pk, AAD_MK_PW, &mk)?, kdf, mk_recovery: None, entries: Vec::new() };
+        let file = VaultFile { format: FORMAT, mk_password: crypto::wrap_key(&pk, AAD_MK_PW, &mk)?, kdf, mk_recovery: None, mk_hello: None, entries: Vec::new() };
         let v = Vault { dir: dir.to_path_buf(), file, open: Some(Open { mk, items: Vec::new() }) };
         v.save()?;
         Ok(v)
@@ -220,6 +251,45 @@ impl Vault {
         self.opened()?;
         self.file.mk_recovery = None;
         self.save()
+    }
+
+    /// Windows Hello ile açma etkin mi.
+    pub fn has_hello(&self) -> bool {
+        self.file.mk_hello.is_some()
+    }
+
+    /// Hello'ya imzalatılacak metin (tuz kasaya özgü, bkz. `hello`).
+    pub fn hello_challenge(&self) -> Option<Vec<u8>> {
+        self.file.mk_hello.as_ref().map(|h| hello_challenge(&h.salt))
+    }
+
+    /// Ana anahtarı Hello imzasından türeyen anahtarla sarar; sarmal DPAPI ile
+    /// bu Windows kullanıcısına kilitlenir. `salt` imzalatılan metnin tuzudur.
+    pub fn enable_hello(&mut self, salt: &[u8], signature: &[u8]) -> Result<()> {
+        let kek = hello_key(signature)?;
+        let sealed = crypto::wrap_key(&kek, AAD_MK_HELLO, &self.opened()?.mk)?;
+        let blob = crate::hello::protect(&to_json(&sealed)?).ok_or_else(|| Error::Format("dpapi".into()))?;
+        let old = self.file.mk_hello.replace(HelloWrap { salt: salt.to_vec(), blob });
+        if let Err(e) = self.save() {
+            self.file.mk_hello = old;
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    pub fn unlock_hello(&mut self, signature: &[u8]) -> Result<()> {
+        let w = self.file.mk_hello.as_ref().ok_or(Error::WrongKey)?;
+        let json = crate::hello::unprotect(&w.blob).ok_or(Error::WrongKey)?;
+        let sealed: Sealed = from_json(&json)?;
+        let mk = crypto::unwrap_key(&hello_key(signature)?, AAD_MK_HELLO, &sealed)?;
+        self.open_with(mk)
+    }
+
+    pub fn disable_hello(&mut self) -> Result<()> {
+        if self.file.mk_hello.take().is_some() {
+            self.save()?;
+        }
+        Ok(())
     }
 
     pub fn items(&self) -> &[Item] {
@@ -632,6 +702,32 @@ mod tests {
         let other = v.add(m2, &b2).unwrap();
         std::fs::copy(v.blob(&id), v.blob(&other)).unwrap();
         assert!(v.read_file(&other).is_err(), "başka kaydın dosyası açılmamalı");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn hello_imzasiyla_acilir() {
+        let d = tmp();
+        let mut v = Vault::create(&d, "doğru-parola", KdfParams::fast()).unwrap();
+        let (m, b) = sample("GitHub", "x");
+        v.add(m, &b).unwrap();
+        assert!(!v.has_hello());
+        let sig = [7u8; 256];
+        v.enable_hello(b"tuz-tuz-tuz-tuz!", &sig).unwrap();
+        assert_eq!(v.hello_challenge().unwrap(), hello_challenge(b"tuz-tuz-tuz-tuz!"));
+
+        let mut v2 = Vault::load(&d).unwrap();
+        assert!(v2.has_hello());
+        assert_eq!(v2.unlock_hello(&[8u8; 256]), Err(Error::WrongKey));
+        assert_eq!(v2.unlock_hello(&[7u8; 16]), Err(Error::WrongKey), "kısa imza reddedilir");
+        v2.unlock_hello(&sig).unwrap();
+        assert_eq!(v2.items().len(), 1);
+        // Parola değişse de Hello sarmalı geçerli kalır (ana anahtar aynı).
+        v2.change_password("yeni-parola-123").unwrap();
+        let mut v3 = Vault::load(&d).unwrap();
+        v3.unlock_hello(&sig).unwrap();
+        v3.disable_hello().unwrap();
+        assert!(!Vault::load(&d).unwrap().has_hello());
         let _ = std::fs::remove_dir_all(&d);
     }
 }

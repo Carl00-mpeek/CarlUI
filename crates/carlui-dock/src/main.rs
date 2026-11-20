@@ -102,6 +102,8 @@ struct App {
     live: Option<live::Live>,
     /// Pil sekmesi (ayar açıksa; yalnızca ana dock'ta).
     battery: Option<battery::BatteryTab>,
+    /// Windows'un kendi küçülme geçişi kapatılan pencereler (son eşitleme).
+    native_off: Vec<isize>,
 }
 
 thread_local! {
@@ -298,6 +300,27 @@ impl App {
         if let Some(icon) = self.min_rect(w) {
             fly::start(w, icon, minimizing);
         }
+    }
+
+    /// Dock görünürken küçülme/açılma animasyonunu yalnızca uçuş göstersin:
+    /// izlenen pencerelerde Windows'un kendi geçişi kapatılır. Yoksa Windows
+    /// da görev çubuğunun yerine doğru ayrı bir animasyon oynatıyor (Windows
+    /// 10'da görev çubuğu gizliyken bile). Dock gizliyken uçuş olmadığından
+    /// Windows'unki geri açılır. Değişiklik yoksa hiçbir şey yapmaz.
+    fn sync_native(&mut self) {
+        let on = !self.dock.slid_away && !self.dock.suppressed();
+        let wins = &self.tracker.windows;
+        let same = if on {
+            wins.len() == self.native_off.len() && wins.iter().zip(&self.native_off).all(|(w, &r)| w.hwnd.0 as isize == r)
+        } else {
+            self.native_off.is_empty()
+        };
+        if same {
+            return;
+        }
+        self.native_off = if on { wins.iter().map(|w| w.hwnd.0 as isize).collect() } else { Vec::new() };
+        let list: Vec<HWND> = self.native_off.iter().map(|&r| HWND(r as _)).collect();
+        fly::sync_native(&list);
     }
 
     /// Dock şu an kullanılıyor mu: imleç üstünde, menüsü/önizlemesi açık, tıklama sürüyor.
@@ -837,6 +860,9 @@ extern "system" fn dock_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LR
         if let Some(l) = a.live.as_mut() {
             l.on_message(&a.gfx, &a.dock, a.fullscreen, a.tracker.windows.len(), msg, wp, lp);
         }
+        // Pencere listesi ya da dock'un görünürlüğü değiştiyse Windows'un kendi
+        // küçülme geçişini buna göre aç/kapat.
+        a.sync_native();
         // Kar topu bırakıldı: tutarken ertelenen gizleme yeniden denensin.
         if msg == input::WM_APP_SNOW && wp.0 == 1 {
             a.arm_autohide(700);
@@ -1394,6 +1420,7 @@ fn main() -> Result<()> {
                 display_dirty: false,
                 live: None,
                 battery: None,
+                native_off: Vec::new(),
             })
         });
         with_app(|a| {
@@ -1414,6 +1441,7 @@ fn main() -> Result<()> {
             DispatchMessageW(&msg);
         }
         APP.with(|a| a.borrow_mut().take());
+        fly::restore_native();
         info!("dock kapandı");
     }
     Ok(())

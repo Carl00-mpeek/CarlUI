@@ -12,4 +12,5 @@ path = "src/lib.rs"
 carlui-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 windows.workspace = true

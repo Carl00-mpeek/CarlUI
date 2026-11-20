@@ -194,6 +194,16 @@ pub fn run(act: &Act) -> bool {
             }
             true
         }
+        Act::Run { exe, args } => {
+            shell(w!("open"), exe, args);
+            true
+        }
+        Act::Note(text) => {
+            if crate::notes::save(text) {
+                info!("hızlı not kaydedildi");
+            }
+            true
+        }
         Act::Quick(q) => {
             crate::quickset::run(*q);
             true

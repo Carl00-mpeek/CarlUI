@@ -123,6 +123,8 @@ pub struct VaultConfig {
     pub app_fill: bool,
     /// Pano belirtecinin geçerlilik süresi (saniye, 15-300).
     pub token_seconds: u32,
+    /// Kasa Windows Hello (yüz, parmak izi, PIN) ile açılabilsin; Hello yoksa gizlenir.
+    pub windows_hello: bool,
 }
 
 impl VaultConfig {
@@ -134,7 +136,7 @@ impl VaultConfig {
 
 impl Default for VaultConfig {
     fn default() -> Self {
-        Self { auto_lock_minutes: 5, lock_on_sleep: true, clear_clipboard_seconds: 30, hide_from_capture: true, token_paste: true, browser_fill: true, app_fill: true, token_seconds: 60 }
+        Self { auto_lock_minutes: 5, lock_on_sleep: true, clear_clipboard_seconds: 30, hide_from_capture: true, token_paste: true, browser_fill: true, app_fill: true, token_seconds: 60, windows_hello: true }
     }
 }
 

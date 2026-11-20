@@ -159,6 +159,9 @@ pub fn run(spec: &str) -> Result<()> {
         let ring = std::thread::Builder::new().name("record-frame".into()).spawn(move || frame::run(area, combo, s)).map_err(|_| Error::from(E_FAIL))?;
 
         let r = pill::run(area, cfg.shortcuts.record_stop.clone(), shared.clone());
+        if let Err(e) = &r {
+            warn!("kayıt hapı açılamadı: {e}");
+        }
         // Hap beklenmedik kapansa da dosya düzgün kapansın.
         shared.stop();
         let _ = worker.join();

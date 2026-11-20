@@ -104,6 +104,9 @@ struct Host<V: View> {
     popup: bool,
     noactivate: bool,
     dragging: bool,
+    /// Sol tuşa bu pencerede basıldı; başka pencerede basılıp burada
+    /// bırakılan tuş (ör. yerine bu pencere açılan düğme) tıklama sayılmaz.
+    pressed: bool,
 }
 
 thread_local! {
@@ -214,6 +217,7 @@ unsafe extern "system" fn wnd_proc<V: View>(hwnd: HWND, msg: u32, wp: WPARAM, lp
         }
         WM_LBUTTONDOWN => {
             let drag = with::<V, _>(|h| {
+                h.pressed = true;
                 let pt = h.pt(lp);
                 let a = h.hit_at(pt)?;
                 h.dragging = h.view.press(&a, pt, &mut ctx);
@@ -230,6 +234,7 @@ unsafe extern "system" fn wnd_proc<V: View>(hwnd: HWND, msg: u32, wp: WPARAM, lp
         WM_LBUTTONUP if with::<V, _>(|h| h.dragging).unwrap_or(false) => {
             with::<V, _>(|h| {
                 h.dragging = false;
+                h.pressed = false;
                 let pt = h.pt(lp);
                 h.view.release(pt, &mut ctx);
             });
@@ -268,9 +273,13 @@ unsafe extern "system" fn wnd_proc<V: View>(hwnd: HWND, msg: u32, wp: WPARAM, lp
         }
         WM_LBUTTONUP | WM_RBUTTONUP => {
             with::<V, _>(|h| {
+                let pressed = msg == WM_LBUTTONUP && std::mem::take(&mut h.pressed);
                 let pt = h.pt(lp);
                 if let Some(a) = h.hit_at(pt) {
                     if msg == WM_LBUTTONUP {
+                        if !pressed {
+                            return;
+                        }
                         h.view.click(a, &mut ctx);
                     } else {
                         h.view.right_click(a, &mut ctx);
@@ -387,6 +396,7 @@ pub fn run<V: View>(view: V, o: Opts) -> Result<V> {
             popup: o.popup || o.noactivate,
             noactivate: o.noactivate,
             dragging: false,
+            pressed: false,
         };
         HOST.with(|h| *h.borrow_mut() = Some(Box::new(host)));
         let hwnd = CreateWindowExW(ex, class, &HSTRING::from(o.title.as_str()), style, x, y, ww, wh, None, None, inst, None)?;
