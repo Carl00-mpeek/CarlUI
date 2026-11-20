@@ -1,27 +1,29 @@
 ## Türkçe
 
-**CarlUI 1.2.3: Klavye pili, yeni pil görünümü ve kartopu düzeltmesi.**
+**CarlUI 1.2.5: Carl Vault ile uygulamalarda giriş, oyundan çıkınca Win menüsü.**
 
 **Yenilikler**
-- **Klavye pili:** Kablosuz klavyeler (Logitech, Bluetooth ve diğerleri) pil sekmesinde kendi klavye simgesiyle görünür.
-- **Yeni pil görünümü:** Her cihazın üstünde simgesi, altında yüzdesi ve bir dolum çubuğu var. Şarj olurken yüzdenin yanında nefes alan bir şimşek çıkar ve çubuk yeşil olur. Pil azalınca çubuk kırmızıya döner.
-- **Yeni ATK fareler:** ATK A9 gen2 gibi yeni "NK Nano" alıcılı farelerin pili de okunur.
-- **Şarj tahmini:** Şarj olduğunu bildirmeyen cihazlarda (HyperX kulaklıklar, Bluetooth cihazlar) yüzde yükselince cihaz şarjda sayılır.
+- **Uygulamalarda giriş:** Steam, Discord gibi bir uygulamanın giriş ekranı açıkken üstünde ya da parola kutusunun yanında "Vault" düğmesi çıkar. Tıklayınca kasa açılır (kilitliyse önce ana parola sorulur), kaydı seçersin; kullanıcı adı ve parola yazılıp giriş yapılır.
+- **Uygulamayı hatırlar:** Seçilen kayıt o uygulamaya bağlanır; bir dahaki sefere kasa açıksa düğmeye basmak yeter.
+- **Ayar:** Ayarlar → Carl Vault → "Uygulamalarda doldurma" ile kapatılabilir. Oyunlarda ve tam ekranda düğme hiç görünmez.
 
 **Düzeltmeler**
-- Kardan top yapınca top bazen olduğu yerde kalıyor, tutup sürüklenemiyordu. Artık top her zaman imleci izler, bırakınca fırlar.
+- **Alt+Tab sonrası Win tuşu:** Özel tam ekran bir oyundan (ör. RDR2) Alt+Tab ile çıkıp hemen Win tuşuna basınca Windows'un kendi Başlat menüsü açılıyordu. Artık Alt+Tab ya da Win+Tab ile çıkınca Win tuşu hemen CarlUI'nin Win menüsünü açar; oyunun içindeyken Win tuşu yine oyuna dokunmaz.
+- **Kablolu ATK fare:** Şarj kablosu takılınca fare uykuda görünüyordu; artık kablodan da okunur ve şarjda sayılır.
+- **Kapalıyken dolan kulaklık:** Kapalıyken şarj olup %99 ile açılan kulaklık (HyperX) artık şarjda ve dolu görünür.
 
 ---
 
 ## English
 
-**CarlUI 1.2.3: Keyboard battery, a new battery look and a snowball fix.**
+**CarlUI 1.2.5: Sign in to apps with Carl Vault, Win menu after leaving a game.**
 
 **New**
-- **Keyboard battery:** Wireless keyboards (Logitech, Bluetooth and others) show up in the battery tab with their own keyboard icon.
-- **New battery look:** Each device shows its icon on top, its percentage below and a fill bar. While charging, a breathing bolt appears next to the percentage and the bar turns green. When the battery runs low the bar turns red.
-- **Newer ATK mice:** Mice with the newer "NK Nano" receiver, such as the ATK A9 gen2, now report their battery.
-- **Charging guess:** Devices that don't report charging (HyperX headsets, Bluetooth devices) count as charging when their percentage goes up.
+- **Sign in to apps:** When an app such as Steam or Discord shows its sign-in screen, a "Vault" button appears at the top of the window or next to the password box. Click it, unlock the vault if needed, pick an item, and the username and password are typed and submitted.
+- **Remembers the app:** The item you pick is linked to that app; next time, if the vault is open, one click is enough.
+- **Setting:** Turn it off in Settings → Carl Vault → "Fill in apps". The button never shows over games or fullscreen windows.
 
 **Fixes**
-- A freshly made snowball could get stuck where it was made and couldn't be dragged. It now always follows the cursor and flies off when you let go.
+- **Win key after Alt+Tab:** Alt+Tabbing out of an exclusive-fullscreen game (e.g. RDR2) and pressing Win right away opened the Windows Start menu. Now, after Alt+Tab or Win+Tab, the Win key opens CarlUI's Win menu immediately; inside the game the Win key still leaves the game alone.
+- **Wired ATK mouse:** With the charging cable plugged in, the mouse showed as asleep; it is now read over the cable and shown as charging.
+- **Headset charged while off:** A headset (HyperX) that charged while off and turns on at 99% now shows as charging and full.
