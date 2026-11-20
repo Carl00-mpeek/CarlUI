@@ -1,5 +1,33 @@
 # Sürüm notları
 
+## v1.2.5 — Oyundan Alt+Tab ile çıkınca Win menüsü (2026-11-20)
+
+**CarlUI 1.2.5: Oyundan Alt+Tab ile çıkınca Win menüsü.**
+
+**Düzeltmeler.** Özel tam ekran bir oyundan (ör. RDR2) Alt+Tab ile çıkıp hemen Win tuşuna
+basınca Windows'un Başlat menüsü açılıyordu: oyunu anlık odak kayıplarına karşı koruyan
+2 saniyelik bekleme bilerek yapılan Alt+Tab'da da işliyordu. Dock'un klavye kancası artık
+Alt+Tab / Win+Tab'ı not eder; özel tam ekran ondan sonraki 10 saniye içinde biterse
+bekleme atlanır ve Win hemen CarlUI'nin Win menüsünü açar. Oyunun içinde Win tuşu yine
+oyuna dokunmaz.
+
+Pil: şarj kablosu takılınca alıcıdan kopan ATK fare uykuda görünüyordu; artık kablodan da
+okunur ve şarjda sayılır. Kapalıyken şarj olup uzun aradan sonra %99 ile açılan kulaklık
+(HyperX) şarjda/dolu görünmüyordu; düzeldi. 1.2.4 yayınlanmadı; Carl Vault uygulama girişi
+bu sürümle çıkar.
+
+## v1.2.4 — Carl Vault ile uygulamalarda giriş (2026-11-20)
+
+**CarlUI 1.2.4: Carl Vault ile uygulamalarda giriş.**
+
+**Yenilikler.** Steam, Discord gibi masaüstü uygulamalarının giriş ekranında "Vault" düğmesi
+çıkar. Tıklayınca kasa açılır (kilitliyse önce ana parola), kayıt seçilir ve kullanıcı adı
+ile parola yazılıp giriş yapılır. Seçilen kayda `app://<uygulama>` bağı eklenir; sonraki
+seferde kasa açıksa tek tık yeter. Yerel pencerelerde parola kutusu UI Automation ile
+bulunur; Chromium tabanlı uygulamalarda (Steam, Discord) önce kullanıcı adı kutusuna
+tıklanır. Ayarlar → Carl Vault → "Uygulamalarda doldurma" ile kapatılır; oyunlarda düğme
+görünmez.
+
 ## v1.2.3 — Klavye pili, yeni pil görünümü ve kartopu düzeltmesi (2026-11-20)
 
 **CarlUI 1.2.3: Klavye pili, yeni pil görünümü ve kartopu düzeltmesi.**

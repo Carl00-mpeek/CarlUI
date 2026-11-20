@@ -82,10 +82,35 @@ static EXCLUSIVE_OFF_AT: AtomicU32 = AtomicU32::new(0);
 /// oyun bir anlığına odağı kaybedip (geçiş yüzeyi, başka monitördeki pencere)
 /// tam ekran algısı kısa süre "yok" deyince menümüz oyunun üstünde açılıp onu düşürmesin.
 const EXCLUSIVE_GRACE_MS: u32 = 2000;
+/// Kullanıcının son pencere değiştirme kısayolu (Alt+Tab, Win+Tab) anı (GetTickCount; 0 = hiç).
+static SWITCH_AT: AtomicU32 = AtomicU32::new(0);
+/// Özel tam ekran bu kadar ms içinde bir Alt+Tab'ın ardından bittiyse oyundan
+/// bilerek çıkılmıştır (geçiş ekranında Alt uzun basılı tutulabilir).
+const SWITCH_MS: u32 = 10_000;
+
+/// Özel tam ekran, az önceki bir Alt+Tab/Win+Tab yüzünden mi bitti?
+fn deliberate_switch(now: u32, switch_at: u32) -> bool {
+    switch_at != 0 && now.wrapping_sub(switch_at) < SWITCH_MS
+}
+
+/// Özel tam ekranın bitişinde bekleme süresinin başlangıcı: kullanıcı Alt+Tab ile
+/// çıktıysa süre baştan dolmuş sayılır, Win hemen menümüzü açar.
+fn grace_start(now: u32, switch_at: u32) -> u32 {
+    if deliberate_switch(now, switch_at) {
+        now.wrapping_sub(EXCLUSIVE_GRACE_MS)
+    } else {
+        now
+    }
+}
 
 pub fn set_exclusive(on: bool) {
     if EXCLUSIVE.swap(on, Ordering::Relaxed) && !on {
-        EXCLUSIVE_OFF_AT.store(unsafe { GetTickCount() }, Ordering::Relaxed);
+        let now = unsafe { GetTickCount() };
+        let switch_at = SWITCH_AT.load(Ordering::Relaxed);
+        if deliberate_switch(now, switch_at) {
+            info!("özel tam ekrandan Alt+Tab ile çıkıldı: Win tuşu hemen Win menüsüne");
+        }
+        EXCLUSIVE_OFF_AT.store(grace_start(now, switch_at), Ordering::Relaxed);
     }
 }
 
@@ -279,6 +304,10 @@ unsafe extern "system" fn keyboard_proc(code: i32, wp: WPARAM, lp: LPARAM) -> LR
             let win_held = || [VK_LWIN, VK_RWIN].iter().any(|k| GetAsyncKeyState(k.0 as i32) as u16 & 0x8000 != 0);
             if WIN_DOWN.load(Ordering::Relaxed) && down && !win_held() {
                 WIN_DOWN.store(false, Ordering::Relaxed);
+            }
+            // Alt+Tab / Win+Tab: kullanıcı oyundan bilerek çıkıyor (bkz. `set_exclusive`).
+            if down && vk == VK_TAB.0 as u32 && (WIN_DOWN.load(Ordering::Relaxed) || GetAsyncKeyState(VK_MENU.0 as i32) as u16 & 0x8000 != 0) {
+                SWITCH_AT.store(GetTickCount().max(1), Ordering::Relaxed);
             }
             if is_win {
                 if down && !WIN_DOWN.load(Ordering::Relaxed) {
@@ -502,4 +531,21 @@ impl Drop for Input {
 pub fn start_redirect_ok(ms: u32) -> bool {
     let quiet = unsafe { GetTickCount() }.wrapping_sub(LAST_KEY.load(Ordering::Relaxed)) > ms;
     WANT_START.load(Ordering::Relaxed) == 2 && WANT_KEYS.load(Ordering::Relaxed) && !FULLSCREEN.load(Ordering::Relaxed) && !exclusive_recent() && quiet
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alt_tab_skips_grace() {
+        let now: u32 = 50_000;
+        // Alt+Tab 1 sn önce: bekleme baştan dolmuş.
+        assert_eq!(now.wrapping_sub(grace_start(now, now - 1_000)), EXCLUSIVE_GRACE_MS);
+        // Alt+Tab yok ya da çok eski: tam bekleme.
+        assert_eq!(grace_start(now, 0), now);
+        assert_eq!(grace_start(now, now - SWITCH_MS - 1), now);
+        // GetTickCount taşması.
+        assert!(deliberate_switch(5, u32::MAX - 5));
+    }
 }
