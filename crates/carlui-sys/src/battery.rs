@@ -148,7 +148,14 @@ impl Dev {
         unsafe {
             let ev = CreateEventW(None, true, false, None).ok()?;
             let mut o = OVERLAPPED { hEvent: ev, ..Default::default() };
-            let _ = if write { WriteFile(self.0, Some(buf), None, Some(&mut o)) } else { ReadFile(self.0, Some(buf), None, Some(&mut o)) };
+            let r = if write { WriteFile(self.0, Some(buf), None, Some(&mut o)) } else { ReadFile(self.0, Some(buf), None, Some(&mut o)) };
+            // Hemen düşen istek hiç başlamamıştır: aşağıda sonsuza dek beklenmesin.
+            if let Err(e) = r {
+                if e.code() != ERROR_IO_PENDING.to_hresult() {
+                    let _ = CloseHandle(ev);
+                    return None;
+                }
+            }
             let mut got = 0;
             let ok = WaitForSingleObject(ev, ms) == WAIT_OBJECT_0 && GetOverlappedResult(self.0, &o, &mut got, false).is_ok();
             if !ok {
@@ -232,8 +239,10 @@ fn atk_parse(raw: &[u8]) -> Option<(u8, bool)> {
 const BM_MARK: u8 = 0x72;
 const BM_LEVEL: u8 = 0x07;
 const BM_CHARGE: u8 = 0x0F;
-/// Alıcının arkasındaki fare (0: kabloyla doğrudan bağlı fare).
+/// Alıcının arkasındaki fare.
 const BM_VIA_DONGLE: u8 = 0x01;
+/// Kabloyla doğrudan bağlı fare (alıcıya sorulursa alıcının kendisi).
+const BM_WIRED: u8 = 0x00;
 
 fn bm_request(cmd: u8, target: u8, out_len: usize) -> Vec<u8> {
     let mut r = vec![0u8; out_len.max(64)];
@@ -254,21 +263,31 @@ fn bm_parse(raw: &[u8], cmd: u8) -> Option<Option<u8>> {
     Some((b[2] == 0 && b[6] >= 1).then_some(b[7]))
 }
 
-/// NK Nano alıcı: `None` bu protokolü konuşan alıcı yoksa.
+/// NK Nano alıcı ya da kabloyla bağlı fare: `None` bu protokolü konuşan cihaz yoksa.
 fn bitmouse(all: &[Iface]) -> Option<Reading> {
-    let i = all.iter().find(|i| (i.page, i.usage) == (0xFF05, 1) && i.out_len >= 8 && i.in_len >= 8)?;
     let mut reading = Reading { kind: Kind::Mouse, name: "Mouse".into(), percent: None, charging: false, charge_known: true };
-    let d = Dev::open(&i.path)?;
-    d.drain(i.in_len);
-    // Dış `None`: alıcıdan hiç cevap yok; iç `None`: fare uyuyor.
-    let ask = |cmd| (0..2).find_map(|_| d.ask(&bm_request(cmd, BM_VIA_DONGLE, i.out_len), i.in_len, 600, |r| bm_parse(r, cmd)));
-    // Bu koleksiyonu eski alıcılar da taşıyabilir: hiç cevap yoksa eski protokol denenir.
-    let level = ask(BM_LEVEL)?;
-    if let Some(p) = level.filter(|p| (1..=100).contains(p)) {
-        reading.percent = Some(p);
-        reading.charging = ask(BM_CHARGE).flatten() == Some(1);
+    let mut heard = false;
+    // Şarj için kablo takılınca fare alıcıdan kopar ve ayrı bir USB cihazı olarak
+    // gelir: o zaman alıcı susar, fare kendisi (hedef 0) cevap verir.
+    for i in all.iter().filter(|i| (i.page, i.usage) == (0xFF05, 1) && i.out_len >= 8 && i.in_len >= 8) {
+        let Some(d) = Dev::open(&i.path) else { continue };
+        d.drain(i.in_len);
+        for target in [BM_VIA_DONGLE, BM_WIRED] {
+            // Dış `None`: cevap yok; iç `None`: fare uyuyor.
+            let ask = |cmd| (0..2).find_map(|_| d.ask(&bm_request(cmd, target, i.out_len), i.in_len, 600, |r| bm_parse(r, cmd)));
+            let Some(level) = ask(BM_LEVEL) else { continue };
+            heard = true;
+            // Alıcının kendisi hedef 0'a 0 der: geçerli yüzde değil.
+            if let Some(p) = level.filter(|p| (1..=100).contains(p)) {
+                reading.percent = Some(p);
+                // Kabloyla bağlı fare şarj oluyordur (dolunca bayrağı düşse de).
+                reading.charging = target == BM_WIRED || ask(BM_CHARGE).flatten() == Some(1);
+                return Some(reading);
+            }
+        }
     }
-    Some(reading)
+    // Bu koleksiyonu eski alıcılar da taşıyabilir: hiç cevap yoksa eski protokol denenir.
+    heard.then_some(reading)
 }
 
 fn atk() -> Option<Reading> {
