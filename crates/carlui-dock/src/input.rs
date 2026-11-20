@@ -60,6 +60,9 @@ static SNOW_X: AtomicI32 = AtomicI32::new(0);
 static SNOW_Y: AtomicI32 = AtomicI32::new(0);
 /// Bir hareket mesajı yolda: yenisi gönderilmez, konum güncellenir (birleştirme).
 static SNOW_MOVE: AtomicBool = AtomicBool::new(false);
+/// Son hareket mesajının gönderildiği an (ms). Mesaj kaybolursa (uygulama
+/// meşgulken düşer) bayrak bir süre sonra kendiliğinden açılır.
+static SNOW_MOVE_AT: AtomicU32 = AtomicU32::new(0);
 static SNOW_DOWN: AtomicBool = AtomicBool::new(false);
 /// Uygulama numaraları için gereken değiştiriciler (bit: 1 Win, 2 Ctrl, 4 Alt, 8 Shift); 0 = kapalı.
 static DIGIT_MODS: AtomicU8 = AtomicU8::new(0);
@@ -134,6 +137,9 @@ pub fn set_span(l: i32, r: i32, edge: i32, side: carlui_core::config::DockPositi
 
 /// Kar oyunu fareyi dinlesin mi. Kanca hep kuruludur; bu yalnızca mesajları açar.
 pub fn set_snow(on: bool) {
+    // Yolda kaybolmuş bir hareket mesajının bayrağı takılı kalmasın: yoksa
+    // sonraki hiçbir hareket gönderilmez, top elde sürüklenemez.
+    SNOW_MOVE.store(false, Ordering::SeqCst);
     if WANT_SNOW.swap(on, Ordering::SeqCst) != on && !on && SNOW_DOWN.swap(false, Ordering::SeqCst) {
         post(WM_APP_SNOW, 1);
     }
@@ -195,7 +201,10 @@ unsafe extern "system" fn mouse_proc(code: i32, wp: WPARAM, lp: LPARAM) -> LRESU
                 WM_MOUSEMOVE => {
                     SNOW_X.store(x, Ordering::Relaxed);
                     SNOW_Y.store(y, Ordering::Relaxed);
-                    if !SNOW_MOVE.swap(true, Ordering::Relaxed) {
+                    let now = GetTickCount();
+                    let stale = now.wrapping_sub(SNOW_MOVE_AT.load(Ordering::Relaxed)) > 100;
+                    if !SNOW_MOVE.swap(true, Ordering::Relaxed) || stale {
+                        SNOW_MOVE_AT.store(now, Ordering::Relaxed);
                         post(WM_APP_SNOW, 2);
                     }
                 }

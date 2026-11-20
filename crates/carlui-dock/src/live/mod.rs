@@ -688,6 +688,9 @@ impl Live {
 
     /// Kar topu oyunu: basış, bırakış, hareket.
     fn snow_mouse(&mut self, dock: &Dock, wp: WPARAM, lp: LPARAM) {
+        // Hareket konumu her durumda alınır: alınmazsa kancanın birleştirme
+        // bayrağı takılı kalır ve bir daha hiç hareket gelmez (top sürüklenemez).
+        let (x, y) = if wp.0 == 2 { crate::input::snow_take_move() } else { crate::input::snow_point(lp) };
         if self.state != State::Running {
             // Duraklamışken gelen bırakış da işlenir: yoksa top elde asılı
             // kalır, dock dönünce tutulduğu yerde donmuş görünürdü.
@@ -698,7 +701,6 @@ impl Live {
             }
             return;
         }
-        let (x, y) = if wp.0 == 2 { crate::input::snow_take_move() } else { crate::input::snow_point(lp) };
         let pill = self.bottom.then(|| dock.live_pill());
         let hwnd = self.hwnd;
         if let Some(l) = self.ledge.as_mut() {
