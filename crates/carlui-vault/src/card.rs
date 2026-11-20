@@ -86,7 +86,8 @@ pub fn display(fmt: Format, raw: &str, masked: bool) -> String {
             group_as(raw, &hidden)
         }
         Format::CardNumber => group(raw),
-        Format::Expiry if raw.len() >= 2 => format!("{}/{}", &raw[..2], &raw[2..]),
+        // İçe aktarılan değer çok baytlı karakter içerebilir; sınır dışı dilim panik atardı.
+        Format::Expiry if raw.is_char_boundary(2) && raw.len() >= 2 => format!("{}/{}", &raw[..2], &raw[2..]),
         _ if masked => "•".repeat(raw.chars().count().min(40)),
         _ => raw.to_string(),
     }

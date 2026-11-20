@@ -11,3 +11,9 @@
 
 # Eklenti paketleri (derleme çıktısı)
 /extension/*.zip
+
+# Bulanıklaştırma çıktıları
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
+/fuzz/coverage/

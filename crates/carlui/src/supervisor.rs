@@ -8,10 +8,11 @@
 //! kullanıcı uygulamaları ise job dışında kalır (sessiz ayrılma). Koruyucu süreç ise
 //! bilerek job dışında tutulur; ana süreç öldüğünde görev çubuğunu o geri getirir.
 
-use carlui_core::{error, info, paths, warn};
+use carlui_core::{crash, error, info, paths, warn};
 use std::{
     collections::VecDeque,
     os::windows::io::AsRawHandle,
+    path::PathBuf,
     process::{Child, Command},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -21,14 +22,29 @@ use std::{
 };
 use windows::Win32::{Foundation::*, System::JobObjects::*};
 
+/// Bir modül çöktü: (modül adı, rapor dosyası, yeniden başlatma durduruldu mu).
+pub type CrashFn = Arc<dyn Fn(&'static str, PathBuf, bool) + Send + Sync>;
+
+/// Aynı modül için çökme bildirimi en sık bu aralıkla gösterilir; rapor her seferinde yazılır.
+const NOTE_EVERY: Duration = Duration::from_secs(10 * 60);
+
+/// Modülün `log::init`'e verdiği ad (çoğunda modül adıyla aynı).
+fn log_name(module: &str) -> &str {
+    match module {
+        "assist" => "convert",
+        m => m,
+    }
+}
+
 pub struct Supervisor {
     job: isize,
     pub shutting_down: Arc<AtomicBool>,
     children: Arc<Mutex<Vec<(String, u32)>>>,
+    on_crash: CrashFn,
 }
 
 impl Supervisor {
-    pub fn new() -> Self {
+    pub fn new(on_crash: CrashFn) -> Self {
         let job = unsafe {
             let job = CreateJobObjectW(None, None).unwrap_or_default();
             let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
@@ -43,7 +59,7 @@ impl Supervisor {
             );
             job.0 as isize
         };
-        Self { job, shutting_down: Arc::new(AtomicBool::new(false)), children: Arc::default() }
+        Self { job, shutting_down: Arc::new(AtomicBool::new(false)), children: Arc::default(), on_crash }
     }
 
     /// `exe` adlı modülü başlatır ve çöktükçe yeniden başlatır.
@@ -57,10 +73,12 @@ impl Supervisor {
         let job = self.job;
         let shutting = self.shutting_down.clone();
         let children = self.children.clone();
+        let on_crash = self.on_crash.clone();
         std::thread::Builder::new()
             .name(format!("mod-{name}"))
             .spawn(move || {
                 let mut crashes: VecDeque<Instant> = VecDeque::new();
+                let mut noted: Option<Instant> = None;
                 while !shutting.load(Ordering::SeqCst) {
                     let mut child: Child = match Command::new(&path).args(args).spawn() {
                         Ok(c) => c,
@@ -76,7 +94,8 @@ impl Supervisor {
                     info!("{name} başlatıldı (pid {})", child.id());
 
                     let status = child.wait();
-                    children.lock().unwrap_or_else(|e| e.into_inner()).retain(|(_, pid)| *pid != child.id());
+                    let pid = child.id();
+                    children.lock().unwrap_or_else(|e| e.into_inner()).retain(|(_, p)| *p != pid);
                     if shutting.load(Ordering::SeqCst) {
                         return;
                     }
@@ -89,14 +108,34 @@ impl Supervisor {
                             info!("{name} kendi isteğiyle kapandı");
                             return;
                         }
-                        other => warn!("{name} beklenmedik şekilde kapandı ({other:?}), yeniden başlatılıyor"),
+                        ref other => warn!("{name} beklenmedik şekilde kapandı ({other:?}), yeniden başlatılıyor"),
                     }
                     let now = Instant::now();
                     crashes.push_back(now);
                     while crashes.front().is_some_and(|t| now.duration_since(*t) > Duration::from_secs(60)) {
                         crashes.pop_front();
                     }
-                    if crashes.len() >= 5 {
+                    let gave_up = crashes.len() >= 5;
+                    let code = status.as_ref().ok().and_then(|s| s.code());
+                    if crash::is_crash(code) {
+                        match crash::write(name, log_name(name), pid, code) {
+                            Some(path) => {
+                                info!("{name} çökme raporu: {}", path.display());
+                                // Durdurma bildirimi her zaman; öbürü seyrek.
+                                if gave_up || noted.is_none_or(|t| now.duration_since(t) >= NOTE_EVERY) {
+                                    noted = Some(now);
+                                    let cb = on_crash.clone();
+                                    // Çöken ada olabilir: bildirim, yeniden başladıktan sonra gitsin.
+                                    std::thread::spawn(move || {
+                                        std::thread::sleep(Duration::from_secs(4));
+                                        cb(name, path, gave_up);
+                                    });
+                                }
+                            }
+                            None => warn!("{name} çökme raporu yazılamadı"),
+                        }
+                    }
+                    if gave_up {
                         error!("{name} 60 saniyede 5 kez çöktü; yeniden başlatma durduruldu");
                         return;
                     }

@@ -141,8 +141,9 @@ pub fn restore() {
 
 /// Sallayınca büyümenin kademeleri: imleç boyutunun katları. Büyüme
 /// canlandırması her an bunların en yakınını gösterir; 3'ün üstü yalnızca
-/// sallama sürdükçe kat kat büyürken gerekir, o yüzden seyrek.
-pub const GROW: [f32; 14] = [1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0];
+/// sallama sürdükçe kat kat büyürken gerekir, o yüzden seyrek. Üst sınır
+/// kat değil `GROW_MAX_PX`: sallama sürdükçe imleç 256 piksele kadar büyür.
+pub const GROW: [f32; 20] = [1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 16.0];
 
 /// Windows'un imleç için kabul ettiği en büyük boyut.
 const GROW_MAX_PX: u32 = 256;
@@ -162,6 +163,19 @@ fn grow_sizes(base: u32) -> Vec<u32> {
     v
 }
 
+#[cfg(test)]
+mod grow_tests {
+    use super::*;
+
+    #[test]
+    fn buyume_256_piksele_kadar() {
+        assert_eq!(grow_sizes(32).last(), Some(&256));
+        assert_eq!(grow_sizes(24).last(), Some(&240));
+        assert_eq!(grow_sizes(16).last(), Some(&256));
+        assert!(grow_sizes(48).iter().all(|&s| s <= 256));
+    }
+}
+
 /// CarlUI imlecinin büyüme kareleri, önceden üretilip önbellekte: her rol
 /// için tek .cur, içinde her karenin boyutu ayrı görüntü. Eski ayarların
 /// klasörleri silinir.
@@ -170,7 +184,7 @@ pub fn prepare_grow(cfg: &CursorConfig) -> Option<PathBuf> {
     let base = size(cfg);
     let root = crate::paths::data_dir().join("cursors-grow");
     // Kademeler değişince eski önbellek kullanılmasın.
-    let name = format!("{}-g2", key(&l, base));
+    let name = format!("{}-g3", key(&l, base));
     let dir = root.join(&name);
     let roles: Vec<Role> = Role::ALL.into_iter().filter(|r| !r.animated()).collect();
     if roles.iter().all(|r| dir.join(r.file()).exists()) {

@@ -28,7 +28,7 @@ mod welcome;
 use carlui_core::{
     bus::{BusServer, Event},
     config::{self, Config},
-    info, log, warn,
+    info, log, t, warn,
 };
 use std::{
     cell::RefCell,
@@ -95,6 +95,23 @@ thread_local! {
 /// Ana iş parçacığındaki durumu kullanır. `SystemParametersInfo` gibi çağrılar
 /// pencereye eşzamanlı mesaj gönderip yeniden girişe yol açabildiği için
 /// meşgulse sessizce atlar.
+/// Çöken modül için ada bildirimi; tıklanınca rapor dosyası açılır.
+fn crash_note(module: &str, path: &std::path::Path, gave_up: bool) -> Event {
+    let title = if gave_up {
+        format!("{} {module}", t!("Bir bölüm sık çöktüğü için durduruldu:", "A part kept crashing and was stopped:"))
+    } else {
+        format!("{} {module}", t!("Bir bölüm çöktü ve yeniden başlatıldı:", "A part crashed and was restarted:"))
+    };
+    let body = t!(
+        "Rapor yalnızca bu bilgisayarda. Açmak için tıkla; hata bildirirken ekleyebilirsin.",
+        "The report stays on this PC. Click to open it; you can attach it to a bug report."
+    );
+    Event::Custom {
+        name: "island-note".into(),
+        data: serde_json::json!({ "app": "CarlUI", "title": title, "body": body, "file": path.display().to_string() }),
+    }
+}
+
 fn with_host<R>(f: impl FnOnce(&mut Host) -> R) -> Option<R> {
     HOST.with(|h| h.try_borrow_mut().ok().and_then(|mut h| h.as_mut().map(f)))
 }
@@ -596,7 +613,10 @@ fn run() -> Result<()> {
             _ => {}
         });
 
-        let sup = Supervisor::new();
+        let crash_bus = bus.clone();
+        let sup = Supervisor::new(Arc::new(move |module, path, gave_up| {
+            crash_bus.publish(&crash_note(module, &path, gave_up));
+        }));
         sup.run_guard();
         if hiding(&cfg) {
             taskbar::hide();

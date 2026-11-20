@@ -17,6 +17,7 @@
 //! - **Logitech** HID++ 2.0 cihazları (Unifying / Bolt / Lightspeed / kablolu): model
 //!   tablosu gerekmez (`logitech`).
 //! - **Razer** kablosuz cihazları: 90 baytlık özellik raporu (`razer`).
+//! - **Wraith W1 / W1 Freestyle** (PixArt, VID 093A): rapor 0x09 (`wraith`).
 //! - **Diğer HID cihazlar**: tanımlayıcısında standart "Battery Strength"
 //!   (sayfa 0x06, kullanım 0x20) alanı olan her alıcı; marka bilgisi gerekmez.
 //!
@@ -27,6 +28,7 @@
 mod headsets;
 mod logitech;
 mod razer;
+mod wraith;
 
 use std::time::{Duration, Instant};
 use windows::{
@@ -482,6 +484,7 @@ pub fn read_all() -> Vec<Reading> {
     let mut seen: Vec<String> = Vec::new();
     out.extend(headsets::read(&mut seen));
     out.extend(razer::read(&mut seen));
+    out.extend(wraith::read(&mut seen));
     let logi = logitech::read();
     if !logi.is_empty() {
         seen.push("vid_046d".into());

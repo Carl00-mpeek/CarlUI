@@ -11,6 +11,7 @@ pub mod accent;
 pub mod ai;
 pub mod bus;
 pub mod config;
+pub mod crash;
 pub mod cursor;
 pub mod game_apps;
 pub mod hotkey;

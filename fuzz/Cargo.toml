@@ -1,0 +1,50 @@
+# Carl Vault ayrıştırıcıları için kapsam güdümlü bulanıklaştırma (libFuzzer).
+# Çalışma alanının dışında: nightly ister ve normal derlemeye girmez.
+# Kullanım: fuzz/BENIOKU.md
+
+[package]
+name = "carlui-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+carlui-vault = { path = "../crates/carlui-vault" }
+
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "import"
+path = "fuzz_targets/import.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "otp"
+path = "fuzz_targets/otp.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "backup"
+path = "fuzz_targets/backup.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "site"
+path = "fuzz_targets/site.rs"
+test = false
+doc = false
+bench = false

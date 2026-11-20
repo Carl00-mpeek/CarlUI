@@ -43,5 +43,5 @@ body:
     id: log
     attributes:
       label: Log
-      description: "%LOCALAPPDATA%\\CarlUI\\logs\\ klasöründeki o günün dosyasından ilgili satırlar"
+      description: "Bir bölüm çöktüyse adadaki bildirime tıkla, açılan çökme raporunu buraya yapıştır (ya da %LOCALAPPDATA%\\CarlUI\\logs\\crash-*.txt). Çökme yoksa o klasördeki o günün log dosyasından ilgili satırlar. Paylaşmadan önce göz at: dosya ya da pencere adları geçebilir."
       render: text

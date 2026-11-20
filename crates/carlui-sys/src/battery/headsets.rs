@@ -123,6 +123,22 @@ fn alpha_level(r: &[u8]) -> Option<Option<(u8, bool)>> {
     (r.len() > 3 && r[..3] == [0x21, 0xBB, 0x0B]).then(|| Some((r[3].min(100), false)))
 }
 
+/// Cloud Alpha 2 Wireless: `50 02` sorusuna `51 02 yüzde şarj …` cevabı. Baz
+/// istasyonu araya kendi bildirimlerini (FF 01, FB xx …) katar; başlık eşleşmeyen atlanır.
+fn alpha2_level(r: &[u8]) -> Option<Option<(u8, bool)>> {
+    let r = view(r);
+    if r.len() < 4 || r[..2] != [0x51, 0x02] {
+        return None;
+    }
+    Some((r[2] <= 100).then_some((r[2], r[3] == 0x01)))
+}
+
+/// `52 01` → `53 01 bağlı`; 0 kulaklık bağlı değil.
+fn alpha2_conn(r: &[u8]) -> Option<Option<(u8, bool)>> {
+    let r = view(r);
+    (r.len() > 2 && r[..2] == [0x53, 0x01]).then(|| (r[2] != 0).then_some((0, false)))
+}
+
 static MODELS: &[Model] = &[
     Model { vid: SS, pids: &[0x12B3, 0x12B6, 0x12D7, 0x12D5], name: "SteelSeries Arctis 1", sel: Sel::Usage(0xFF43, 0x0202), steps: &[(&[0x06, 0x12], arctis1)] },
     Model { vid: SS, pids: &[0x1260, 0x12AD, 0x1252, 0x1280], name: "SteelSeries Arctis 7", sel: Sel::Usage(0xFF43, 0x0202), steps: &[(&[0x06, 0x18], arctis7)] },
@@ -156,8 +172,17 @@ static MODELS: &[Model] = &[
         vid: HP,
         pids: &[0x098D],
         name: "HyperX Cloud Alpha Wireless",
-        sel: Sel::Mi(0),
+        // MI_00 ses arayüzüdür, HID değil; komutlar MI_03'ün üreticiye özel koleksiyonunda.
+        sel: Sel::Mi(3),
         steps: &[(&[0x21, 0xBB, 0x03], alpha_conn), (&[0x21, 0xBB, 0x0C], alpha_charging), (&[0x21, 0xBB, 0x0B], alpha_level)],
+    },
+    // Rapor kimliği yok: Windows'ta istek başına 0 eklenir (65 baytlık çıkış).
+    Model {
+        vid: HP,
+        pids: &[0x08BE],
+        name: "HyperX Cloud Alpha 2 Wireless",
+        sel: Sel::Usage(0xFF13, 0xFF00),
+        steps: &[(&[0x00, 0x52, 0x01], alpha2_conn), (&[0x00, 0x50, 0x02], alpha2_level)],
     },
 ];
 
@@ -173,9 +198,15 @@ pub(super) fn read(seen: &mut Vec<String>) -> Vec<Reading> {
             for &pid in m.pids {
                 let tag = format!("pid_{pid:04x}");
                 let mine: Vec<&Iface> = all.iter().filter(|i| i.path.to_lowercase().contains(&tag)).collect();
-                let Some(i) = pick(&mine, m.sel) else { continue };
+                let cands = pick(&mine, m.sel);
+                if cands.is_empty() {
+                    continue;
+                }
                 seen.push(format!("vid_{vid:04x}&{tag}"));
-                let (percent, charging) = ask_model(i, m).map_or((None, false), |(p, c)| (Some(p), c));
+                // Doğru koleksiyon her sürücü sürümünde aynı sırada gelmez: cevap
+                // veren ilk koleksiyon kullanılır.
+                let got = cands.iter().find_map(|i| ask_model(i, m)).flatten();
+                let (percent, charging) = got.map_or((None, false), |(p, c)| (Some(p), c));
                 out.push(Reading { kind: Kind::Headset, name: m.name.into(), percent, charging, charge_known: false });
             }
         }
@@ -183,32 +214,44 @@ pub(super) fn read(seen: &mut Vec<String>) -> Vec<Reading> {
     out
 }
 
-fn pick<'a>(cands: &[&'a Iface], sel: Sel) -> Option<&'a Iface> {
+/// Denenecek koleksiyonlar, en olasıdan başlayarak.
+fn pick<'a>(cands: &[&'a Iface], sel: Sel) -> Vec<&'a Iface> {
+    let mut on: Vec<&Iface> = cands.iter().copied().filter(|i| i.out_len > 0 && i.in_len > 0).collect();
     match sel {
-        Sel::Usage(p, u) => cands.iter().find(|i| i.page == p && i.usage == u).copied(),
+        Sel::Usage(p, u) => on.retain(|i| i.page == p && i.usage == u),
         Sel::Mi(n) => {
             let tag = format!("mi_{n:02x}");
-            let on: Vec<&&Iface> = cands.iter().filter(|i| {
+            let mine = |i: &Iface| {
                 let p = i.path.to_lowercase();
                 p.contains(&tag) || (n == 0 && !p.contains("mi_"))
-            }).filter(|i| i.out_len > 0 && i.in_len > 0).collect();
-            on.iter().find(|i| i.page >= 0xFF00).or(on.first()).map(|i| **i)
+            };
+            // Önce istenen arayüz, onun içinde üreticiye özel sayfa; sonra diğerleri.
+            on.sort_by_key(|i| (!mine(i), i.page < 0xFF00));
         }
     }
+    on
 }
 
-/// Modelin adımlarını yürütür: (yüzde, şarjda) ya da `None` (kapalı / cevap yok).
-fn ask_model(i: &Iface, m: &Model) -> Option<(u8, bool)> {
+/// Modelin adımlarını yürütür. `None`: bu koleksiyon cevap vermedi (sonrakine
+/// geçilir); `Some(None)`: kulaklık kapalı; `Some(Some(..))`: (yüzde, şarjda).
+fn ask_model(i: &Iface, m: &Model) -> Option<Option<(u8, bool)>> {
     let d = Dev::open(&i.path)?;
     d.drain(i.in_len);
     let mut charging = false;
     let mut pct = 0;
-    for (req, parse) in m.steps {
-        let (p, c) = d.ask(&padded(req, i.out_len), i.in_len, 1000, parse)??; // ikinci `?`: kulaklık kapalı
-        charging |= c;
-        pct = p; // son adımın değeri yüzdedir
+    for (n, (req, parse)) in m.steps.iter().enumerate() {
+        match d.ask(&padded(req, i.out_len), i.in_len, 1000, parse) {
+            Some(Some((p, c))) => {
+                charging |= c;
+                pct = p; // son adımın değeri yüzdedir
+            }
+            Some(None) => return Some(None),
+            // İlk soruya hiç cevap yoksa koleksiyon yanlış; sonradan susan kulaklık kapalıdır.
+            None if n == 0 => return None,
+            None => return Some(None),
+        }
     }
-    Some((pct, charging))
+    Some(Some((pct, charging)))
 }
 
 #[cfg(test)]
@@ -236,5 +279,10 @@ mod tests {
         assert_eq!(cloud2_level(&[0x06, 0xFF, 0xBB, 0x02, 0, 0, 0, 64]), Some(Some((64, false))));
         assert_eq!(cloud2_level(&[0x06, 0xFF, 0xBB, 0x03, 0, 0, 0, 64]), None);
         assert_eq!(alpha_conn(&[0x21, 0xBB, 0x03, 0x01]), Some(None));
+        assert_eq!(alpha2_level(&[0x00, 0x51, 0x02, 83, 0x01]), Some(Some((83, true))));
+        assert_eq!(alpha2_level(&[0x51, 0x02, 0xFF, 0x00]), Some(None));
+        assert_eq!(alpha2_level(&[0x00, 0xFF, 0x01, 0, 0]), None);
+        assert_eq!(alpha2_conn(&[0x00, 0x53, 0x01, 0x00]), Some(None));
+        assert_eq!(alpha2_conn(&[0x00, 0x53, 0x01, 0x01]), Some(Some((0, false))));
     }
 }

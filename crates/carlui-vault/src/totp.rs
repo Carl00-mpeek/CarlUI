@@ -86,8 +86,8 @@ impl Totp {
             return Err(TotpError::Empty);
         }
         let mut t = Totp { secret: Zeroizing::new(Vec::new()), digits: 6, period: 30, algo: Algo::Sha1 };
-        let secret = if v.len() > 10 && v[..10].eq_ignore_ascii_case("otpauth://") {
-            let rest = &v[10..];
+        // `get`: 10. bayt çok baytlı bir karakterin ortasına düşerse dilim panik atmasın.
+        let secret = if let Some(rest) = v.get(..10).filter(|p| p.eq_ignore_ascii_case("otpauth://")).and_then(|_| v.get(10..)).filter(|r| !r.is_empty()) {
             if !rest.get(..5).is_some_and(|k| k.eq_ignore_ascii_case("totp/")) {
                 return Err(TotpError::BadUri);
             }
@@ -255,5 +255,12 @@ mod tests {
         assert_eq!(Totp::parse("otpauth://totp/X?secret=JBSWY3DPEHPK3PXP&digits=4").err(), Some(TotpError::BadUri));
         assert_eq!(Totp::parse("otpauth://totp/X?secret=JBSWY3DPEHPK3PXP&algorithm=MD5").err(), Some(TotpError::BadUri));
         assert_eq!(Totp::parse("otpauth://totp/X?issuer=Y").err(), Some(TotpError::BadUri));
+    }
+
+    #[test]
+    fn multibyte_at_prefix_boundary_does_not_panic() {
+        // fuzz_smoke'un bulduğu girdi: 10. bayt '\u{FFFD}'nin ortasında.
+        assert!(Totp::parse("otpaut\n:/\u{FFFD}totp/A?secret=JB").is_err());
+        assert!(Totp::parse("otpauth:/\u{e7}x").is_err());
     }
 }

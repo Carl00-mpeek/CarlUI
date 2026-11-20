@@ -1,29 +1,29 @@
 ## Türkçe
 
-**CarlUI 1.2.5: Carl Vault ile uygulamalarda giriş, oyundan çıkınca Win menüsü.**
+**CarlUI 1.2.6: Wraith W1 ve HyperX Cloud Alpha pili, çökme raporları.**
 
 **Yenilikler**
-- **Uygulamalarda giriş:** Steam, Discord gibi bir uygulamanın giriş ekranı açıkken üstünde ya da parola kutusunun yanında "Vault" düğmesi çıkar. Tıklayınca kasa açılır (kilitliyse önce ana parola sorulur), kaydı seçersin; kullanıcı adı ve parola yazılıp giriş yapılır.
-- **Uygulamayı hatırlar:** Seçilen kayıt o uygulamaya bağlanır; bir dahaki sefere kasa açıksa düğmeye basmak yeter.
-- **Ayar:** Ayarlar → Carl Vault → "Uygulamalarda doldurma" ile kapatılabilir. Oyunlarda ve tam ekranda düğme hiç görünmez.
+- **Wraith W1 faresi:** Wraith W1 ve W1 Freestyle'ın pili ve şarj durumu pil sekmesinde görünür (alıcıyla da kabloyla da).
+- **HyperX Cloud Alpha 2 Wireless:** Bu kulaklığın pili de okunur.
+- **Sallayınca büyüt:** Sallamaya devam ettikçe imleç artık 6 katta durmuyor; Windows'un izin verdiği en büyük boyuta (256 piksel) kadar büyüyor.
+- **Çökme raporları:** Bir bölüm çökerse adada bildirim çıkar; tıklayınca çökme raporu açılır. Rapor yalnızca bu bilgisayarda kalır, kullanıcı adın gizlenir; hata bildirirken ekleyebilirsin.
 
 **Düzeltmeler**
-- **Alt+Tab sonrası Win tuşu:** Özel tam ekran bir oyundan (ör. RDR2) Alt+Tab ile çıkıp hemen Win tuşuna basınca Windows'un kendi Başlat menüsü açılıyordu. Artık Alt+Tab ya da Win+Tab ile çıkınca Win tuşu hemen CarlUI'nin Win menüsünü açar; oyunun içindeyken Win tuşu yine oyuna dokunmaz.
-- **Kablolu ATK fare:** Şarj kablosu takılınca fare uykuda görünüyordu; artık kablodan da okunur ve şarjda sayılır.
-- **Kapalıyken dolan kulaklık:** Kapalıyken şarj olup %99 ile açılan kulaklık (HyperX) artık şarjda ve dolu görünür.
+- **HyperX Cloud Alpha Wireless:** Kulaklık pil sekmesinde hiç görünmüyordu (yanlış arayüze soruluyordu). Artık okunur; kulaklıklarda doğru bağlantı bulunana kadar tüm arayüzler denenir.
+- **Carl Vault:** İçe aktarılan bazı bozuk kayıtlar (son kullanma tarihi, OTP adresi) uygulamayı çökertebiliyordu; düzeldi.
 
 ---
 
 ## English
 
-**CarlUI 1.2.5: Sign in to apps with Carl Vault, Win menu after leaving a game.**
+**CarlUI 1.2.6: Wraith W1 and HyperX Cloud Alpha battery, crash reports.**
 
 **New**
-- **Sign in to apps:** When an app such as Steam or Discord shows its sign-in screen, a "Vault" button appears at the top of the window or next to the password box. Click it, unlock the vault if needed, pick an item, and the username and password are typed and submitted.
-- **Remembers the app:** The item you pick is linked to that app; next time, if the vault is open, one click is enough.
-- **Setting:** Turn it off in Settings → Carl Vault → "Fill in apps". The button never shows over games or fullscreen windows.
+- **Wraith W1 mouse:** Battery level and charging state of the Wraith W1 and W1 Freestyle show in the battery tab (over the receiver or the cable).
+- **HyperX Cloud Alpha 2 Wireless:** This headset's battery is now read too.
+- **Shake to find:** Keep shaking and the pointer no longer stops at 6×; it grows up to the largest size Windows allows (256 pixels).
+- **Crash reports:** If a part of CarlUI crashes, a note appears on the island; click it to open the crash report. The report stays on your PC and hides your user name; you can attach it to a bug report.
 
 **Fixes**
-- **Win key after Alt+Tab:** Alt+Tabbing out of an exclusive-fullscreen game (e.g. RDR2) and pressing Win right away opened the Windows Start menu. Now, after Alt+Tab or Win+Tab, the Win key opens CarlUI's Win menu immediately; inside the game the Win key still leaves the game alone.
-- **Wired ATK mouse:** With the charging cable plugged in, the mouse showed as asleep; it is now read over the cable and shown as charging.
-- **Headset charged while off:** A headset (HyperX) that charged while off and turns on at 99% now shows as charging and full.
+- **HyperX Cloud Alpha Wireless:** The headset never showed in the battery tab (it was asked on the wrong interface). It is read now, and headsets try every interface until one answers.
+- **Carl Vault:** Some malformed imported items (expiry date, OTP link) could crash the app; fixed.

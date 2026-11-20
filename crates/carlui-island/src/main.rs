@@ -721,7 +721,10 @@ impl App {
                     // Eski tip tepsi balonları (Windows'un kendi bildirimi yoksa).
                     "tray-balloon" | "island-note" => {
                         let body = if name == "island-note" { g("body") } else { g("text") };
-                        self.push_note(Note { app: g("app"), aumid: g("aumid"), title: g("title"), body, ..Default::default() });
+                        // Tıklanınca açılacak dosya: yalnızca CarlUI'nin günlük klasöründen
+                        // (çökme raporu); başka bir yol kabul edilmez.
+                        let file = Some(g("file")).filter(|f| name == "island-note" && !f.is_empty() && !f.contains("..") && std::path::Path::new(f).starts_with(carlui_core::paths::log_dir()));
+                        self.push_note(Note { app: g("app"), aumid: g("aumid"), title: g("title"), body, file, ..Default::default() });
                     }
                     "island-dump" => self.dump(),
                     "assist" => self.assist_event(&data),

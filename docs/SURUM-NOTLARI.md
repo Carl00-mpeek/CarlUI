@@ -1,5 +1,24 @@
 # Sürüm notları
 
+## v1.2.6 — Wraith W1 ve HyperX Cloud Alpha pili, çökme raporları (2026-11-20)
+
+**CarlUI 1.2.6: Wraith W1 ve HyperX Cloud Alpha pili, çökme raporları.**
+
+**Yenilikler.** Wraith W1 / W1 Freestyle faresinin (PixArt, 093A:522C alıcı, 093A:622C
+kablo) pili ve şarjı okunur; fare durumunu ancak tuş ayarları okununca gönderdiği için
+önce beş tuş sorulur. HyperX Cloud Alpha 2 Wireless (03F0:08BE) eklendi. Sallayınca büyütmenin 6 kat
+sınırı kalktı: kademeler 16 kata kadar uzadı, tek sınır Windows'un 256 piksel imleç
+boyutu (önbellek `-g3`). Bir modül
+çökerse bekçi `%LOCALAPPDATA%\CarlUI\logs\crash-*.txt` raporu yazar ve adada tıklanınca
+raporu açan bir bildirim gösterir; rapordaki kullanıcı klasörü `%USERPROFILE%` ile
+gizlenir. SECURITY.md ve güvenlik bildirimi bağlantısı eklendi.
+
+**Düzeltmeler.** HyperX Cloud Alpha Wireless (03F0:098D) MI_00'da aranıyordu ama HID
+arayüzü MI_03'te; kulaklık hiç görünmüyordu. Kulaklıklarda artık cevap veren ilk
+koleksiyon kullanılır. Carl Vault'ta çok baytlı karakter içeren içe aktarılmış son
+kullanma tarihi ve OTP adresi dilim paniğine yol açıyordu; bulanıklaştırma testleriyle
+bulundu ve düzeltildi.
+
 ## v1.2.5 — Oyundan Alt+Tab ile çıkınca Win menüsü (2026-11-20)
 
 **CarlUI 1.2.5: Oyundan Alt+Tab ile çıkınca Win menüsü.**
