@@ -1,15 +1,15 @@
 ## Türkçe
 
-**CarlUI 1.2.7: Kar efektleri donma düzeltmesi.**
+**CarlUI 1.2.8: İkinci ekranda kayan pencere düzeltmesi.**
 
 **Düzeltmeler**
-- **Kar efektleri:** Kar küreme aracı yoldayken ya da kartopu oyunu sürerken dock menüsü açılınca (örneğin aracı yeniden çağırmak için) bütün kar efektleri donuyordu: yağış, birikinti ve kartopları duruyor, araç karı temizlemeden geçiyordu. Artık menü kapanınca efektler kaldığı yerden sürer.
+- **İkinci ekran:** Tam ekran bir oyun ana ekranın çözünürlüğünü değiştirince (örneğin CS2 1568x1080 özel tam ekran) Windows sağdaki ekranı yeni genişliğe göre kaydırıyor, ikinci ekrandaki kenarlıksız tam ekran ya da büyütülmüş pencereler yana kaymış kalıyordu. Pencere hafızası açıkken bu pencereler artık ekranlarıyla birlikte taşınır ve oyundan çıkınca eski yerlerine döner. Oyunun penceresine, odağa ve pencere sırasına dokunulmaz.
 
 ---
 
 ## English
 
-**CarlUI 1.2.7: Snow effects freeze fix.**
+**CarlUI 1.2.8: Second-screen window shift fix.**
 
 **Fixes**
-- **Snow effects:** Opening the dock menu while the snow plow was driving or a snowball game was running (for example to call the plow again) froze every snow effect: snowfall, drifts and snowballs stopped and the plow passed without clearing snow. Effects now carry on as soon as the menu closes.
+- **Second screen:** When a fullscreen game changed the main screen's resolution (for example CS2 at 1568x1080 exclusive fullscreen), Windows moved the screen on the right to match the new width and borderless fullscreen or maximized windows on the second screen were left shifted sideways. With window memory on, these windows now move along with their screen and return to their old place when you leave the game. The game window, focus and window order are left untouched.
