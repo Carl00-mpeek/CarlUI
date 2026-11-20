@@ -1,15 +1,15 @@
 ## Türkçe
 
-**CarlUI 1.2.8: İkinci ekranda kayan pencere düzeltmesi.**
+**CarlUI 1.2.9: Daha akıcı imleç büyütme.**
 
-**Düzeltmeler**
-- **İkinci ekran:** Tam ekran bir oyun ana ekranın çözünürlüğünü değiştirince (örneğin CS2 1568x1080 özel tam ekran) Windows sağdaki ekranı yeni genişliğe göre kaydırıyor, ikinci ekrandaki kenarlıksız tam ekran ya da büyütülmüş pencereler yana kaymış kalıyordu. Pencere hafızası açıkken bu pencereler artık ekranlarıyla birlikte taşınır ve oyundan çıkınca eski yerlerine döner. Oyunun penceresine, odağa ve pencere sırasına dokunulmaz.
+**İyileştirmeler**
+- **Sallayınca büyüt:** İmlecin büyüme ve küçülme canlandırması artık ekranın yenileme hızında (144 Hz, 240 Hz…) akıyor. Ara boyutlar sıklaştı ve küçülmenin kareleri önceden hazırlanıyor; küçülürken hissedilen takılma giderildi.
 
 ---
 
 ## English
 
-**CarlUI 1.2.8: Second-screen window shift fix.**
+**CarlUI 1.2.9: Smoother cursor enlarge.**
 
-**Fixes**
-- **Second screen:** When a fullscreen game changed the main screen's resolution (for example CS2 at 1568x1080 exclusive fullscreen), Windows moved the screen on the right to match the new width and borderless fullscreen or maximized windows on the second screen were left shifted sideways. With window memory on, these windows now move along with their screen and return to their old place when you leave the game. The game window, focus and window order are left untouched.
+**Improvements**
+- **Shake to enlarge:** The cursor's grow and shrink animation now runs at your screen's refresh rate (144 Hz, 240 Hz…). There are more in-between sizes and the shrink frames are prepared in advance, so the shrink no longer stutters.
