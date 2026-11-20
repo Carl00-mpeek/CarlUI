@@ -22,9 +22,8 @@ use windows::Win32::{
     },
 };
 
-/// Ana pencerenin büyüme zamanlayıcısı (7 karşılamanın).
-pub const TIMER: usize = 8;
-const TICK_MS: u32 = 16;
+/// Canlandırma karesi: ana pencereye ekranın yenileme hızında gelir.
+pub const FRAME: u32 = WM_APP + 8;
 /// Örnekler arası en kısa süre (yüksek hızlı farelerde gereksiz iş olmasın).
 const SAMPLE: Duration = Duration::from_millis(8);
 /// İlk sallamada varılan kat; sonraki her sallama bu kadar ekler.
@@ -270,7 +269,7 @@ pub fn input(hwnd: HWND, cfg: &CursorConfig) {
             }
             s.target = 1.0;
             s.anim = None;
-            unsafe { SetTimer(hwnd, TIMER, TICK_MS, None) };
+            clock::start(hwnd);
         }
         let max = s.grow.as_ref().map_or(1.0, |g| g.frames.max());
         let to = next_target(s.target, max);
@@ -278,14 +277,13 @@ pub fn input(hwnd: HWND, cfg: &CursorConfig) {
     });
 }
 
-/// Zamanlayıcı: canlandırmayı ilerletir, sallama bittiyse küçültür.
-pub fn tick(hwnd: HWND, cfg: &CursorConfig) {
+/// `FRAME`: canlandırmayı ilerletir, sallama bittiyse küçültür.
+pub fn tick(cfg: &CursorConfig) {
+    clock::done();
     STATE.with_borrow_mut(|s| {
         let now = Instant::now();
         if s.grow.is_none() {
-            unsafe {
-                let _ = KillTimer(hwnd, TIMER);
-            }
+            clock::stop();
             return;
         }
         if s.target > 1.0 && s.shook.is_none_or(|t| now - t >= HOLD) {
@@ -306,18 +304,22 @@ pub fn tick(hwnd: HWND, cfg: &CursorConfig) {
         }
         if done && s.target <= 1.0 {
             s.reset();
-            unsafe {
-                let _ = KillTimer(hwnd, TIMER);
-            }
+            clock::stop();
             return;
         }
         match s.grow.as_mut() {
-            Some(g) => g.show(k),
+            Some(g) => {
+                g.show(k);
+                // Büyük beklerken küçülmenin karelerini hazırla: küçülürken
+                // dosya okunup kare kaçmasın.
+                if done {
+                    let i = g.frames.level(k);
+                    g.frames.warm(i);
+                }
+            }
             None => {
                 s.reset();
-                unsafe {
-                    let _ = KillTimer(hwnd, TIMER);
-                }
+                clock::stop();
             }
         }
     });
@@ -325,7 +327,89 @@ pub fn tick(hwnd: HWND, cfg: &CursorConfig) {
 
 /// İmleci hemen asıl boyutuna döndürür (ayar değişti, imleç yeniden uygulanacak, kapanış).
 pub fn stop() {
+    clock::stop();
     STATE.with_borrow_mut(|s| s.reset());
+}
+
+/// Canlandırma saati: imleç büyükken ekranların en yüksek yenileme hızında
+/// ana pencereye `FRAME` gönderir. `SetTimer` ~15,6 ms çözünürlüklü ve
+/// titrek (gerçekte ~64 Hz); 144/240 Hz ekranda küçülme takılır gibi görünür.
+/// Önceki kare işlenmeden yenisi gönderilmez, ana kuyruk dolmaz.
+mod clock {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering::*};
+    use std::sync::OnceLock;
+    use windows::Win32::Foundation::{LPARAM, WPARAM};
+    use windows::Win32::Graphics::Gdi::*;
+
+    static RUN: AtomicBool = AtomicBool::new(false);
+    static PENDING: AtomicBool = AtomicBool::new(false);
+    static TARGET: AtomicIsize = AtomicIsize::new(0);
+    static PERIOD_NS: AtomicU64 = AtomicU64::new(16_666_667);
+    static THREAD: OnceLock<std::thread::Thread> = OnceLock::new();
+
+    /// Yenileme hızına göre kare süresi (60-500 Hz arası; 0/1 "varsayılan" demek).
+    pub fn frame_period(hz: u32) -> Duration {
+        let hz = if hz <= 1 { 60 } else { hz.clamp(60, 500) };
+        Duration::from_nanos(1_000_000_000 / hz as u64)
+    }
+
+    /// Ekranların en yüksek yenileme hızı.
+    fn max_hz() -> u32 {
+        carlui_core::win::monitors()
+            .into_iter()
+            .filter_map(|m| unsafe {
+                let name: Vec<u16> = carlui_core::win::device_name(m.handle).encode_utf16().chain([0]).collect();
+                let mut d = DEVMODEW { dmSize: std::mem::size_of::<DEVMODEW>() as u16, ..Default::default() };
+                EnumDisplaySettingsW(windows::core::PCWSTR(name.as_ptr()), ENUM_CURRENT_SETTINGS, &mut d)
+                    .as_bool()
+                    .then_some(d.dmDisplayFrequency)
+            })
+            .max()
+            .unwrap_or(60)
+    }
+
+    pub fn start(hwnd: HWND) {
+        let hz = max_hz();
+        PERIOD_NS.store(frame_period(hz).as_nanos() as u64, Relaxed);
+        TARGET.store(hwnd.0 as isize, Relaxed);
+        PENDING.store(false, Relaxed);
+        RUN.store(true, Release);
+        THREAD.get_or_init(|| std::thread::Builder::new().name("shake-clock".into()).spawn(run).expect("saat").thread().clone()).unpark();
+    }
+
+    pub fn stop() {
+        RUN.store(false, Release);
+    }
+
+    /// Kare işlendi: sıradaki gönderilebilir.
+    pub fn done() {
+        PENDING.store(false, Release);
+    }
+
+    fn run() {
+        let mut next = Instant::now();
+        loop {
+            if !RUN.load(Acquire) {
+                std::thread::park();
+                next = Instant::now();
+                continue;
+            }
+            let period = Duration::from_nanos(PERIOD_NS.load(Relaxed));
+            next += period;
+            let now = Instant::now();
+            if next <= now {
+                next = now + period;
+            }
+            std::thread::sleep(next - now);
+            if RUN.load(Acquire) && !PENDING.swap(true, AcqRel) {
+                let h = HWND(TARGET.load(Relaxed) as _);
+                if unsafe { PostMessageW(h, FRAME, WPARAM(0), LPARAM(0)) }.is_err() {
+                    PENDING.store(false, Release);
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -387,6 +471,18 @@ mod tests {
         }
         assert_eq!(seen, [3.0, 4.0, 5.0, 6.0, 6.0]);
         assert_eq!(next_target(1.0, 2.5), 2.5);
+    }
+
+    #[test]
+    fn kare_suresi_ekranin_yenileme_hizinda() {
+        use clock::frame_period;
+        assert_eq!(frame_period(144), Duration::from_nanos(6_944_444));
+        assert_eq!(frame_period(240), Duration::from_nanos(4_166_666));
+        // Bilinmeyen (0/1) ve çok düşük hız 60 Hz, aşırı yüksek 500 Hz sayılır.
+        assert_eq!(frame_period(0), frame_period(60));
+        assert_eq!(frame_period(1), frame_period(60));
+        assert_eq!(frame_period(30), frame_period(60));
+        assert_eq!(frame_period(1000), Duration::from_millis(2));
     }
 
     #[test]

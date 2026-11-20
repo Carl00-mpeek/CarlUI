@@ -140,10 +140,16 @@ pub fn restore() {
 }
 
 /// Sallayınca büyümenin kademeleri: imleç boyutunun katları. Büyüme
-/// canlandırması her an bunların en yakınını gösterir; 3'ün üstü yalnızca
-/// sallama sürdükçe kat kat büyürken gerekir, o yüzden seyrek. Üst sınır
-/// kat değil `GROW_MAX_PX`: sallama sürdükçe imleç 256 piksele kadar büyür.
-pub const GROW: [f32; 20] = [1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 16.0];
+/// canlandırması her an bunların en yakınını gösterir. 1-3 arası 1/16 adımla
+/// sık (32 piksellik imleçte 2 piksel): canlandırma ekranın yenileme hızında
+/// akarken her karede yeni bir boyut olsun, küçülme kademe kademe atlamasın.
+/// 3'ün üstü yalnızca sallama sürdükçe kat kat büyürken gerekir, o yüzden
+/// seyrek. Üst sınır kat değil `GROW_MAX_PX`: imleç 256 piksele kadar büyür.
+pub const GROW: [f32; 44] = [
+    1.0625, 1.125, 1.1875, 1.25, 1.3125, 1.375, 1.4375, 1.5, 1.5625, 1.625, 1.6875, 1.75, 1.8125, 1.875, 1.9375, 2.0, //
+    2.0625, 2.125, 2.1875, 2.25, 2.3125, 2.375, 2.4375, 2.5, 2.5625, 2.625, 2.6875, 2.75, 2.8125, 2.875, 2.9375, 3.0, //
+    3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 16.0,
+];
 
 /// Windows'un imleç için kabul ettiği en büyük boyut.
 const GROW_MAX_PX: u32 = 256;
@@ -174,6 +180,14 @@ mod grow_tests {
         assert_eq!(grow_sizes(16).last(), Some(&256));
         assert!(grow_sizes(48).iter().all(|&s| s <= 256));
     }
+
+    #[test]
+    fn kademeler_sirali_ve_bir_ile_uc_arasi_sik() {
+        assert!(GROW.windows(2).all(|w| w[0] < w[1]));
+        let low: Vec<u32> = grow_sizes(32).into_iter().filter(|&p| p <= 96).collect();
+        assert!(low.len() >= 32);
+        assert!(low.windows(2).all(|w| w[1] - w[0] <= 2));
+    }
 }
 
 /// CarlUI imlecinin büyüme kareleri, önceden üretilip önbellekte: her rol
@@ -184,7 +198,7 @@ pub fn prepare_grow(cfg: &CursorConfig) -> Option<PathBuf> {
     let base = size(cfg);
     let root = crate::paths::data_dir().join("cursors-grow");
     // Kademeler değişince eski önbellek kullanılmasın.
-    let name = format!("{}-g3", key(&l, base));
+    let name = format!("{}-g4", key(&l, base));
     let dir = root.join(&name);
     let roles: Vec<Role> = Role::ALL.into_iter().filter(|r| !r.animated()).collect();
     if roles.iter().all(|r| dir.join(r.file()).exists()) {
@@ -302,6 +316,20 @@ impl Grower {
     /// `k` katına en yakın kademe (0'dan başlar).
     pub fn level(&self, k: f32) -> usize {
         (0..self.frames.len()).min_by(|&a, &b| (GROW[a] - k).abs().total_cmp(&(GROW[b] - k).abs())).unwrap_or(0)
+    }
+
+    /// `upto` kademesine kadar henüz hazırlanmamış en büyük kareyi hazırlar.
+    /// İmleç büyük beklerken çağrılır: küçülme sırasında dosya okunmasın.
+    /// `false`: hepsi hazır.
+    pub fn warm(&mut self, upto: usize) -> bool {
+        let upto = upto.min(self.frames.len() - 1);
+        match (0..=upto).rev().find(|&i| self.frames[i].is_none()) {
+            Some(i) => {
+                self.frame(i);
+                true
+            }
+            None => false,
+        }
     }
 
     /// Kademenin imleci; sahibi `Grower` kalır.

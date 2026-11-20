@@ -440,8 +440,8 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRES
                 with_host(|h| shake::input(hwnd, &h.cfg.cursor));
                 DefWindowProcW(hwnd, msg, wp, lp)
             }
-            WM_TIMER if wp.0 == shake::TIMER => {
-                with_host(|h| shake::tick(hwnd, &h.cfg.cursor));
+            shake::FRAME => {
+                with_host(|h| shake::tick(&h.cfg.cursor));
                 LRESULT(0)
             }
             WM_TIMER if wp.0 == TIMER_CURSOR => {
