@@ -113,7 +113,7 @@ pub(super) fn read(seen: &mut Vec<String>) -> Vec<Reading> {
                     Kind::Other => Kind::Mouse, // Razer'ın pilli cihazlarının çoğu fare
                     k => k,
                 };
-                out.push(Reading { kind, name, percent, charging });
+                out.push(Reading { kind, name, percent, charging, charge_known: true });
             }
         }
         unsafe {

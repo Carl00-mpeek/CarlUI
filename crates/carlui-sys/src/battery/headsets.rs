@@ -176,7 +176,7 @@ pub(super) fn read(seen: &mut Vec<String>) -> Vec<Reading> {
                 let Some(i) = pick(&mine, m.sel) else { continue };
                 seen.push(format!("vid_{vid:04x}&{tag}"));
                 let (percent, charging) = ask_model(i, m).map_or((None, false), |(p, c)| (Some(p), c));
-                out.push(Reading { kind: Kind::Headset, name: m.name.into(), percent, charging });
+                out.push(Reading { kind: Kind::Headset, name: m.name.into(), percent, charging, charge_known: false });
             }
         }
     }

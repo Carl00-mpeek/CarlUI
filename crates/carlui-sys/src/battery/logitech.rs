@@ -76,10 +76,11 @@ fn name_and_kind(d: &Dev, i: &Iface, dev: u8) -> (String, Kind) {
         name.extend(chunk);
     }
     let name = String::from_utf8_lossy(&name).trim().to_string();
-    // 3 fare, 4 dokunmatik yüzey, 5 iztopu, 8 kulaklık.
+    // 0 klavye, 3 fare, 4 dokunmatik yüzey, 5 iztopu, 8 kulaklık.
     let kind = match call(d, i, dev, f, 2, &[]).map(|r| r[0]) {
         Some(3..=5) => Kind::Mouse,
         Some(8) => Kind::Headset,
+        Some(0) => Kind::Keyboard,
         _ => kind_of(&name),
     };
     (if name.is_empty() { "Logitech".into() } else { name }, kind)
@@ -166,7 +167,7 @@ pub(super) fn read() -> Vec<Reading> {
         }
         for k in cache.get(&i.path).map(|c| c.1.clone()).unwrap_or_default() {
             let got = battery(&d, i, k.index);
-            out.push(Reading { kind: k.kind, name: k.name, percent: got.map(|g| g.0), charging: got.is_some_and(|g| g.1) });
+            out.push(Reading { kind: k.kind, name: k.name, percent: got.map(|g| g.0), charging: got.is_some_and(|g| g.1), charge_known: true });
         }
     }
     out

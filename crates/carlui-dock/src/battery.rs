@@ -18,7 +18,7 @@ use carlui_core::{info, t, theme::{Rgba, Theme}};
 use carlui_sys::battery::{Kind, Reading};
 use carlui_ui::{
     gfx::Gfx,
-    glass::{v2, v3, Glass},
+    glass::{color, exact, v2, v3, Glass},
     motion::{ts, Motion},
     text::Text,
 };
@@ -56,16 +56,20 @@ const POLL: Duration = Duration::from_secs(60);
 const FRESH: Duration = Duration::from_secs(8);
 /// Cevap vermeyen (uyuyan / kapalı) cihazın son değeri bu kadar süre gösterilir.
 const KEEP: Duration = Duration::from_secs(3 * 3600);
+/// Şarj tahmini için iki okuma arasındaki en uzun süre.
+const CHARGE_GAP: Duration = Duration::from_secs(15 * 60);
 /// Bu yüzde ve altı "düşük".
 const LOW: u8 = 15;
 
 const G_MOUSE: char = '\u{E962}';
 const G_HEADSET: char = '\u{E7F6}';
+const G_KEYBOARD: char = '\u{E765}';
 const G_BT: char = '\u{E702}';
 const G_BOLT: char = '\u{E945}';
 const G_CHECK: char = '\u{E73E}';
 
 const RED: Rgba = Rgba(0xFF, 0x3B, 0x30, 210);
+const GREEN: Rgba = Rgba(0x34, 0xC7, 0x59, 230);
 
 /// Çıkıntının görünen ölçüsü (ölçek 1): dinlenirken ve imleç üstündeyken.
 const NUB_REST: (f32, f32) = (46.0, 6.0);
@@ -159,6 +163,7 @@ pub struct BatteryTab {
 fn glyph_of(k: Kind) -> char {
     match k {
         Kind::Mouse => G_MOUSE,
+        Kind::Keyboard => G_KEYBOARD,
         Kind::Headset => G_HEADSET,
         Kind::Other => G_BT,
     }
@@ -183,6 +188,15 @@ fn fmt_left(d: Duration) -> String {
 }
 
 /// Yeni (taze) okuma: son değeri ve boşalma dönemini günceller.
+/// Şarj durumunu bildirmeyen cihaz (ör. HyperX, Bluetooth): yakın zamandaki
+/// okumaya göre yüzde arttıysa şarjda sayılır; düşene kadar öyle kalır.
+fn seems_charging(prev: Option<Last>, pct: u8, now: SystemTime) -> bool {
+    prev.is_some_and(|l| {
+        let recent = now.duration_since(l.at).is_ok_and(|d| d < CHARGE_GAP);
+        recent && (pct > l.pct || (l.charging && pct >= l.pct))
+    })
+}
+
 fn advance(prev: Option<Last>, pct: u8, charging: bool, now: SystemTime) -> Last {
     let run = match prev {
         _ if charging => None,
@@ -286,12 +300,13 @@ impl BatteryTab {
             let item = match r.percent {
                 Some(p) => {
                     let prev = self.last.get(&r.name).copied();
-                    let cur = advance(prev, p, r.charging, now);
-                    changed |= prev.map_or(true, |l| (l.pct, l.charging, l.run.map(|x| x.0)) != (p, r.charging, cur.run.map(|x| x.0)));
+                    let charging = r.charging || (!r.charge_known && seems_charging(prev, p, now));
+                    let cur = advance(prev, p, charging, now);
+                    changed |= prev.map_or(true, |l| (l.pct, l.charging, l.run.map(|x| x.0)) != (p, charging, cur.run.map(|x| x.0)));
                     self.last.insert(r.name.clone(), cur);
-                    let note = if r.charging && p >= 100 {
+                    let note = if charging && p >= 100 {
                         t!("dolu", "full").to_string()
-                    } else if r.charging {
+                    } else if charging {
                         t!("şarjda", "charging").to_string()
                     } else if let Some(left) = cur.run.and_then(|run| estimate(run, p, now)) {
                         fmt_left(left)
@@ -300,7 +315,7 @@ impl BatteryTab {
                     } else {
                         String::new()
                     };
-                    Item { kind: r.kind, pct: Some(p), charging: r.charging, stale: false, note }
+                    Item { kind: r.kind, pct: Some(p), charging, stale: false, note }
                 }
                 // Cevap yok: son bilinen değer soluk gösterilir.
                 None => {
@@ -354,6 +369,20 @@ impl BatteryTab {
         Ok(v)
     }
 
+    /// Yuvarlak uçlu düz renk şerit (dolum çubuğu).
+    fn bar(&self, at: (f32, f32), size: (f32, f32), c: windows::UI::Color) -> Result<SpriteVisual> {
+        let v = self.comp.CreateSpriteVisual()?;
+        v.SetSize(v2(size.0, size.1))?;
+        v.SetBrush(&self.comp.CreateColorBrushWithColor(c)?)?;
+        v.SetOffset(v3(at.0.round(), at.1.round()))?;
+        let g = self.comp.CreateRoundedRectangleGeometry()?;
+        g.SetSize(v2(size.0, size.1))?;
+        g.SetCornerRadius(v2(size.1 / 2.0, size.1 / 2.0))?;
+        v.SetClip(&self.comp.CreateGeometricClipWithGeometry(&g)?)?;
+        self.panel.content.Children()?.InsertAtTop(&v)?;
+        Ok(v)
+    }
+
     /// Şarj şimşeği: yavaş, sonsuz bir nefes alıp verme.
     fn breathe(&self, v: &SpriteVisual) -> Result<()> {
         let a = self.comp.CreateScalarKeyFrameAnimation()?;
@@ -373,31 +402,59 @@ impl BatteryTab {
         let (txt_h, icon_px, gap) = ((18.0 * s).round(), (22.0 * s).round(), (3.0 * s).round());
         let notes = self.shown.iter().any(|i| !i.note.is_empty());
         let note_h = if notes { (14.0 * s).round() } else { 0.0 };
+        let (bar_w, bar_h) = ((30.0 * s).round(), (3.0 * s).round().max(2.0));
         let w = col * n + pad * 2.0;
-        let h = pad + txt_h + gap + icon_px + note_h + pad;
+        // Yukarıdan aşağı: cihaz simgesi, yüzde (şarjdaysa şimşekle), dolum çubuğu, not.
+        let h = pad + icon_px + gap + txt_h + gap + bar_h + note_h + pad;
         for (i, it) in self.shown.iter().enumerate() {
             let x0 = pad + i as f32 * col;
+            let dim = it.stale || it.pct.is_none();
+
+            let g = self.text.glyph(gfx, glyph_of(it.kind), icon_px * 0.85, if dim { 0.45 } else { 0.95 })?;
+            self.sprite(&g.surface, (g.width, g.height), (x0 + (col - g.width) / 2.0, (pad + (icon_px - g.height) / 2.0).round()))?;
+
             let (label, alpha) = match it.pct {
                 Some(p) => (carlui_core::lang::pct(p), if it.stale { 0.5 } else { 0.95 }),
                 None => ("—".to_string(), 0.5),
             };
             let t = self.text.render(gfx, &label, 13.0 * s, true, col, alpha)?;
-            self.sprite(&t.surface, (t.width, t.height), (x0 + (col - t.width) / 2.0, pad + (txt_h - t.height) / 2.0))?;
-
-            let g = self.text.glyph(gfx, glyph_of(it.kind), icon_px * 0.85, if it.stale || it.pct.is_none() { 0.45 } else { 0.95 })?;
-            let gy = (pad + txt_h + gap + (icon_px - g.height) / 2.0).round();
-            self.sprite(&g.surface, (g.width, g.height), (x0 + (col - g.width) / 2.0, gy))?;
-            if it.charging {
-                let full = it.pct.is_some_and(|p| p >= 100);
-                let b = self.text.glyph(gfx, if full { G_CHECK } else { G_BOLT }, 10.0 * s, 0.95)?;
-                let bv = self.sprite(&b.surface, (b.width, b.height), (x0 + (col + g.width) / 2.0, gy))?;
+            let ty = pad + icon_px + gap;
+            // Şarjda: yüzdenin solunda nefes alan şimşek (doluysa onay işareti).
+            let full = it.pct.is_some_and(|p| p >= 100);
+            let bolt = if it.charging { Some(self.text.glyph(gfx, if full { G_CHECK } else { G_BOLT }, 11.0 * s, 0.95)?) } else { None };
+            let bw = bolt.as_ref().map_or(0.0, |b| b.width + 1.0 * s);
+            let tx = x0 + (col - t.width - bw) / 2.0;
+            if let Some(b) = &bolt {
+                let bv = self.sprite(&b.surface, (b.width, b.height), (tx, ty + (txt_h - b.height) / 2.0))?;
                 if !full {
                     self.breathe(&bv)?;
                 }
             }
+            self.sprite(&t.surface, (t.width, t.height), (tx + bw, ty + (txt_h - t.height) / 2.0))?;
+
+            // Dolum çubuğu: şarjda yeşil, düşükte kırmızı.
+            let by = ty + txt_h + gap;
+            let bx = x0 + (col - bar_w) / 2.0;
+            self.bar((bx, by), (bar_w, bar_h), color(Rgba(255, 255, 255, 40)))?;
+            if let Some(p) = it.pct {
+                let fade = |c: Rgba| if it.stale { Rgba(c.0, c.1, c.2, c.3 / 2) } else { c };
+                let fill = if it.charging {
+                    exact(fade(GREEN))
+                } else if it.low() {
+                    exact(fade(RED))
+                } else {
+                    color(fade(Rgba(255, 255, 255, 200)))
+                };
+                let fw = (bar_w * p as f32 / 100.0).round().max(bar_h);
+                let fv = self.bar((bx, by), (fw, bar_h), fill)?;
+                if it.charging && !full {
+                    self.breathe(&fv)?;
+                }
+            }
+
             if !it.note.is_empty() {
                 let nt = self.text.render(gfx, &it.note, 10.0 * s, false, col, if it.low() { 0.95 } else { 0.6 })?;
-                let ny = pad + txt_h + gap + icon_px + (note_h - nt.height) / 2.0;
+                let ny = by + bar_h + (note_h - nt.height) / 2.0;
                 self.sprite(&nt.surface, (nt.width, nt.height), (x0 + (col - nt.width) / 2.0, ny))?;
             }
         }
@@ -706,6 +763,18 @@ mod tests {
         let d = advance(Some(c), 86, true, at(122));
         assert_eq!(d.run, None);
         assert_eq!(advance(Some(d), 100, false, at(200)).run, Some((100, at(200))));
+    }
+
+    #[test]
+    fn sarj_tahmini() {
+        let l = |pct, charging, m| Some(Last { pct, charging, at: at(m), run: None });
+        assert!(seems_charging(l(50, false, 0), 51, at(1)));
+        assert!(!seems_charging(l(50, false, 0), 50, at(1)));
+        // Şarjda sayılan cihaz yüzde düşene kadar öyle kalır.
+        assert!(seems_charging(l(100, true, 0), 100, at(1)));
+        assert!(!seems_charging(l(100, true, 0), 99, at(1)));
+        // Eski okuma: tahmin yok.
+        assert!(!seems_charging(l(50, false, 0), 60, at(60)));
     }
 
     #[test]

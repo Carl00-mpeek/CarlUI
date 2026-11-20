@@ -5,6 +5,11 @@
 //! - **ATK alıcılı fareler** (VID 373B, ör. ATK A9 Plus): üreticinin HID
 //!   protokolü. Rapor 0x08, 16 baytlık gövde `[komut, 0, adr_hi, adr_lo, uzunluk,
 //!   veri×10, sağlama]`; 0x04 komutu `[yüzde, şarjda, mV_hi, mV_lo]` döner.
+//!   Yeni "NK Nano" alıcılar (ör. ATK A9 gen2, PID 1216 / 11DC) başka bir dil
+//!   konuşur ("BITMOUSE"): FF05:0001 koleksiyonunda 64 baytlık rapor 0x08,
+//!   `[sağlama, 72, 02, sıra, hedef, komut, yanıt_uzunluğu]`; sağlama sonraki
+//!   baytların toplamıdır. Komut 07 yüzdeyi, 0F şarj durumunu döner; yanıt
+//!   `[72, durum, sıra, hedef, komut, uzunluk, değer…]` (durum ≠ 0: fare uykuda).
 //! - **HyperX Cloud III S Wireless** alıcısı (VID 03F0): 0x0C raporuyla
 //!   `0C 02 03 01 00 06` sorusu; yanıtın 6. baytı yüzdedir (>100 = kulaklık kapalı).
 //! - **SteelSeries Arctis / Nova, HyperX Cloud II / Alpha** alıcıları: model tablosu
@@ -37,6 +42,7 @@ use windows::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Mouse,
+    Keyboard,
     Headset,
     Other,
 }
@@ -48,6 +54,9 @@ pub struct Reading {
     /// `None`: cihaz bağlı ama kapalı / cevap vermiyor.
     pub percent: Option<u8>,
     pub charging: bool,
+    /// Kaynak şarj durumunu gerçekten bildiriyor mu? Bildirmiyorsa (ör. HyperX,
+    /// Bluetooth) arayüz yüzdenin artışından şarjı tahmin eder.
+    pub charge_known: bool,
 }
 
 // ---- HID yardımcıları ------------------------------------------------------
@@ -219,10 +228,56 @@ fn atk_parse(raw: &[u8]) -> Option<(u8, bool)> {
     (pct <= 100).then_some((pct, body[6] != 0))
 }
 
+// "BITMOUSE" (NK Nano alıcılar).
+const BM_MARK: u8 = 0x72;
+const BM_LEVEL: u8 = 0x07;
+const BM_CHARGE: u8 = 0x0F;
+/// Alıcının arkasındaki fare (0: kabloyla doğrudan bağlı fare).
+const BM_VIA_DONGLE: u8 = 0x01;
+
+fn bm_request(cmd: u8, target: u8, out_len: usize) -> Vec<u8> {
+    let mut r = vec![0u8; out_len.max(64)];
+    r[0] = ATK_REPORT;
+    r[2..8].copy_from_slice(&[BM_MARK, 0x02, 0x00, target, cmd, 0x01]);
+    r[1] = r[2..].iter().fold(0u8, |a, &b| a.wrapping_add(b));
+    r.truncate(out_len.max(8));
+    r
+}
+
+/// `Some(Some(v))`: cevap; `Some(None)`: alıcı cevap verdi ama fare uyuyor;
+/// `None`: bu soruya ait değil.
+fn bm_parse(raw: &[u8], cmd: u8) -> Option<Option<u8>> {
+    let b = raw.get(..8)?;
+    if b[0] != ATK_REPORT || b[1] != BM_MARK || b[5] != cmd {
+        return None;
+    }
+    Some((b[2] == 0 && b[6] >= 1).then_some(b[7]))
+}
+
+/// NK Nano alıcı: `None` bu protokolü konuşan alıcı yoksa.
+fn bitmouse(all: &[Iface]) -> Option<Reading> {
+    let i = all.iter().find(|i| (i.page, i.usage) == (0xFF05, 1) && i.out_len >= 8 && i.in_len >= 8)?;
+    let mut reading = Reading { kind: Kind::Mouse, name: "Mouse".into(), percent: None, charging: false, charge_known: true };
+    let d = Dev::open(&i.path)?;
+    d.drain(i.in_len);
+    // Dış `None`: alıcıdan hiç cevap yok; iç `None`: fare uyuyor.
+    let ask = |cmd| (0..2).find_map(|_| d.ask(&bm_request(cmd, BM_VIA_DONGLE, i.out_len), i.in_len, 600, |r| bm_parse(r, cmd)));
+    // Bu koleksiyonu eski alıcılar da taşıyabilir: hiç cevap yoksa eski protokol denenir.
+    let level = ask(BM_LEVEL)?;
+    if let Some(p) = level.filter(|p| (1..=100).contains(p)) {
+        reading.percent = Some(p);
+        reading.charging = ask(BM_CHARGE).flatten() == Some(1);
+    }
+    Some(reading)
+}
+
 fn atk() -> Option<Reading> {
     let all = interfaces(ATK_VID);
     if all.is_empty() {
         return None;
+    }
+    if let Some(r) = bitmouse(&all) {
+        return Some(r);
     }
     // Komutlara yalnızca üreticinin kendi koleksiyonu cevap verir.
     let rank = |i: &Iface| match (i.page, i.usage) {
@@ -234,7 +289,7 @@ fn atk() -> Option<Reading> {
     };
     let mut cands: Vec<&Iface> = all.iter().filter(|i| rank(i) < 99 && i.out_len >= 17 && i.in_len >= 17).collect();
     cands.sort_by_key(|i| rank(i));
-    let mut reading = Reading { kind: Kind::Mouse, name: "Mouse".into(), percent: None, charging: false };
+    let mut reading = Reading { kind: Kind::Mouse, name: "Mouse".into(), percent: None, charging: false, charge_known: true };
     for i in cands {
         let Some(d) = Dev::open(&i.path) else { continue };
         d.drain(i.in_len);
@@ -267,7 +322,7 @@ fn hyperx_parse(raw: &[u8]) -> Option<Option<u8>> {
 fn hyperx() -> Option<Reading> {
     let all = interfaces(HYPERX_VID);
     let i = all.iter().find(|i| i.page == 0x01C0 && i.usage == 1 && HYPERX_PIDS.iter().any(|p| i.path.to_lowercase().contains(p)))?;
-    let mut reading = Reading { kind: Kind::Headset, name: "HyperX Cloud III S".into(), percent: None, charging: false };
+    let mut reading = Reading { kind: Kind::Headset, name: "HyperX Cloud III S".into(), percent: None, charging: false, charge_known: false };
     if let Some(d) = Dev::open(&i.path) {
         d.drain(i.in_len);
         let mut req = vec![0u8; i.out_len.max(HYPERX_ASK.len())];
@@ -300,8 +355,12 @@ fn generic(skip: &[&str]) -> Vec<Reading> {
         }
         if let Some((pct, name)) = found {
             if !out.iter().any(|r| r.name == name) {
-                let kind = if (i.page, i.usage) == (1, 2) { Kind::Mouse } else { kind_of(&name) };
-                out.push(Reading { kind, name, percent: Some(pct), charging: false });
+                let kind = match (i.page, i.usage) {
+                    (1, 2) => Kind::Mouse,
+                    (1, 6) => Kind::Keyboard,
+                    _ => kind_of(&name),
+                };
+                out.push(Reading { kind, name, percent: Some(pct), charging: false, charge_known: false });
             }
         }
     }
@@ -383,7 +442,10 @@ fn padded(req: &[u8], out_len: usize) -> Vec<u8> {
 
 fn kind_of(name: &str) -> Kind {
     let n = name.to_lowercase();
-    if ["mouse", "fare", "mx ", "g pro", "viper", "deathadder"].iter().any(|k| n.contains(k)) {
+    // Klavye önce: "MX Keys" fare kalıbına ("mx ") de uyar.
+    if ["keyboard", "klavye", "kbd", "mx keys", "k380", "k780", "craft", "blackwidow", "apex pro", "keychron"].iter().any(|k| n.contains(k)) {
+        Kind::Keyboard
+    } else if ["mouse", "fare", "mx ", "g pro", "viper", "deathadder"].iter().any(|k| n.contains(k)) {
         Kind::Mouse
     } else if ["head", "bud", "kulak", "airpods", "earphone", "wh-", "wf-", "cloud", "arctis"].iter().any(|k| n.contains(k)) {
         Kind::Headset
@@ -393,7 +455,7 @@ fn kind_of(name: &str) -> Kind {
 }
 
 /// Tüm bilinen cihazların pil durumu (yavaş: arka planda çağır). Önce fareler,
-/// sonra kulaklıklar, sonra diğerleri.
+/// sonra klavyeler, kulaklıklar, diğerleri.
 pub fn read_all() -> Vec<Reading> {
     let mut out: Vec<Reading> = Vec::new();
     out.extend(atk());
@@ -411,7 +473,7 @@ pub fn read_all() -> Vec<Reading> {
     skip.extend(seen.iter().map(String::as_str));
     out.extend(generic(&skip));
     for (name, pct) in crate::bt::batteries() {
-        out.push(Reading { kind: kind_of(&name), name, percent: Some(pct), charging: false });
+        out.push(Reading { kind: kind_of(&name), name, percent: Some(pct), charging: false, charge_known: false });
     }
     out.sort_by_key(|r| r.kind as u8);
     out
@@ -452,6 +514,27 @@ mod tests {
     }
 
     #[test]
+    fn bitmouse_istegi() {
+        let r = bm_request(BM_LEVEL, BM_VIA_DONGLE, 64);
+        assert_eq!(r.len(), 64);
+        assert_eq!(&r[..8], &[0x08, 0x7D, 0x72, 0x02, 0x00, 0x01, 0x07, 0x01]);
+        assert_eq!(&bm_request(BM_CHARGE, BM_VIA_DONGLE, 64)[..2], &[0x08, 0x85]);
+    }
+
+    #[test]
+    fn bitmouse_yaniti() {
+        // ATK A9 gen2 (373B:1216) üzerinde yakalanan yanıtlar.
+        let lvl = [0x08, 0x72, 0x00, 0x05, 0x00, 0x07, 0x01, 0x43, 0xDB, 0x0F];
+        assert_eq!(bm_parse(&lvl, BM_LEVEL), Some(Some(67)));
+        assert_eq!(bm_parse(&lvl, BM_CHARGE), None);
+        let chg = [0x08, 0x72, 0x00, 0x05, 0x00, 0x0F, 0x01, 0x00, 0xDB, 0x0F];
+        assert_eq!(bm_parse(&chg, BM_CHARGE), Some(Some(0)));
+        let mut asleep = lvl;
+        asleep[2] = 0x01;
+        assert_eq!(bm_parse(&asleep, BM_LEVEL), Some(None));
+    }
+
+    #[test]
     fn olcek() {
         assert_eq!(scale(50, 0, 100), 50);
         assert_eq!(scale(255, 0, 255), 100);
@@ -463,5 +546,6 @@ mod tests {
         assert_eq!(kind_of("Logitech MX Master 3"), Kind::Mouse);
         assert_eq!(kind_of("Galaxy Buds2"), Kind::Headset);
         assert_eq!(kind_of("Xbox Controller"), Kind::Other);
+        assert_eq!(kind_of("Logitech MX Keys"), Kind::Keyboard);
     }
 }
