@@ -1,18 +1,26 @@
 //! Kurulu uygulamalar: Windows'un kaldırma kayıtları ve Mağaza paketleri.
 
 use crate::{
-    names::norm,
+    leftovers, links,
+    names::{self, base, norm},
     reg::{self, Key},
     run,
+    safety::{self, Guard},
 };
-use std::path::Path;
+use std::{os::windows::fs::MetadataExt, path::Path};
 use windows::{
     core::HSTRING,
     ApplicationModel::{Package, PackageSignatureKind},
     Management::Deployment::PackageManager,
 };
 
-const ROOTS: [&str; 3] = [r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall"];
+const ROOTS: [&str; 4] = [
+    r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+    r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall",
+    // Bazı 32 bit kurucular kullanıcı kaydına da bu yoldan yazar.
+    r"HKCU\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+];
 
 #[derive(Clone, Debug, Default)]
 pub struct App {
@@ -31,6 +39,9 @@ pub struct App {
     pub package: String,
     /// Kaldırıcı dosyası diskte yok: kayıt ölü.
     pub stale: bool,
+    /// Kurulum kaydı yok (taşınabilir ya da kaydı silinmiş program); Başlat
+    /// menüsü veya masaüstü kısayolundan bulundu. Kaldırıcısı yoktur.
+    pub orphan: bool,
 }
 
 impl App {
@@ -74,7 +85,33 @@ fn install_day(k: &Key) -> String {
     k.string("InstallDate").filter(|d| d.len() == 8 && d.bytes().all(|b| b.is_ascii_digit())).or_else(|| k.written().map(day)).unwrap_or_default()
 }
 
-fn read(root: &str, sub: &str) -> Option<App> {
+/// Dosyanın klasöründen yukarı doğru, adı uygulamanınkini taşıyan ilk klasör:
+/// `C:\Program Files\Foo\bin\foo.exe` → `C:\Program Files\Foo`. Korunan bir
+/// köke (`Program Files`) varınca durur.
+fn owner(file: &str, names: &[&str], guard: &Guard) -> Option<String> {
+    let mut dir = Path::new(file).parent();
+    for _ in 0..3 {
+        let d = dir?;
+        let s = d.to_string_lossy();
+        if !guard.path_ok(&s) {
+            return None;
+        }
+        if names.iter().any(|n| names::related(&s, n)) && d.is_dir() {
+            return Some(s.trim_end_matches('\\').to_string());
+        }
+        dir = d.parent();
+    }
+    None
+}
+
+/// `InstallLocation` yazmayan kurucular için konum: simgenin ya da kaldırıcının
+/// bulunduğu, adı uygulamanınkini taşıyan klasör. Bulunamazsa boş; o zaman
+/// artıklar yalnızca adla aranır.
+fn guess_location(name: &str, files: &[&str], guard: &Guard) -> String {
+    files.iter().filter(|f| f.contains(":\\")).find_map(|f| owner(f, &[name], guard)).unwrap_or_default()
+}
+
+fn read(root: &str, sub: &str, guard: &Guard) -> Option<App> {
     let path = format!(r"{root}\{sub}");
     let k = Key::open(&path)?;
     let name = k.string("DisplayName")?;
@@ -85,29 +122,37 @@ fn read(root: &str, sub: &str) -> Option<App> {
         return None;
     }
     let msi = k.dword("WindowsInstaller") == Some(1) && sub.starts_with('{');
-    let uninstall = if msi { format!("MsiExec.exe /X{sub}") } else { run::msi_fix(&k.string("UninstallString")?) };
+    // Bazı kurucular yalnızca sessiz kaldırma komutu yazar.
+    let raw = k.string("UninstallString").or_else(|| k.string("QuietUninstallString"));
+    let uninstall = if msi { format!("MsiExec.exe /X{sub}") } else { run::msi_fix(&raw?) };
     let icon = k.string("DisplayIcon").map(|s| clean_icon(&s)).filter(|p| Path::new(p).exists()).unwrap_or_default();
+    let mut location = k.string("InstallLocation").map(|s| s.trim_matches('"').trim_end_matches('\\').to_string()).unwrap_or_default();
+    if location.is_empty() {
+        let exe = if msi { String::new() } else { run::split(&uninstall).0 };
+        location = guess_location(&name, &[icon.as_str(), exe.as_str()], guard);
+    }
     Some(App {
         publisher: k.string("Publisher").unwrap_or_default(),
         version: k.string("DisplayVersion").unwrap_or_default(),
         date: install_day(&k),
         size: k.dword("EstimatedSize").unwrap_or(0) as u64 * 1024,
-        location: k.string("InstallLocation").map(|s| s.trim_matches('"').trim_end_matches('\\').to_string()).unwrap_or_default(),
+        location,
         stale: run::missing(&uninstall),
         icon,
         uninstall,
         key: path,
         name,
         package: String::new(),
+        orphan: false,
     })
 }
 
-fn desktop() -> Vec<App> {
+fn desktop(guard: &Guard) -> Vec<App> {
     let mut out: Vec<App> = Vec::new();
     for root in ROOTS {
         let Some(k) = Key::open(root) else { continue };
         for sub in k.subkeys() {
-            let Some(a) = read(root, &sub) else { continue };
+            let Some(a) = read(root, &sub, guard) else { continue };
             // Hem 32 hem 64 bit görünümde kayıtlı olanlar tek satır.
             if !norm(&a.name).starts_with("carlui") && !out.iter().any(|o| o.name == a.name && o.version == a.version) {
                 out.push(a);
@@ -172,10 +217,60 @@ fn store() -> Vec<App> {
     }
 }
 
-/// Arka plan iş parçacığında çağrılır.
+/// Kaldırıcı ya da kurucu gibi duran dosya adları: bunların kısayolu programın
+/// kendisini göstermez.
+fn helper(stem: &str) -> bool {
+    let s = norm(stem);
+    s.starts_with("unins") || ["uninstall", "setup", "installer", "updater", "readme", "help", "license"].iter().any(|w| s.contains(w))
+}
+
+/// Kurulum kaydı olmayan programlar: Başlat menüsündeki (alt klasörleriyle) ve
+/// masaüstündeki kısayolların gösterdiği, hiçbir kayıtlı uygulamaya ait olmayan
+/// program klasörleri. Klasörün adı kısayolun ya da programın adını taşımalı;
+/// taşımıyorsa (`D:\Araçlar\x.exe`) ortak bir klasör olabilir, listelenmez.
+fn orphans(known: &[App], guard: &Guard) -> Vec<App> {
+    let places = safety::menus().into_iter().map(|m| (m, 3)).chain(safety::desktops().into_iter().map(|d| (d, 0)));
+    let mut out: Vec<App> = Vec::new();
+    for (place, depth) in places {
+        for lnk in links::under(&place, depth) {
+            let Some(target) = links::target(&lnk) else { continue };
+            let exe = Path::new(&target);
+            if !exe.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")) || !exe.is_file() {
+                continue;
+            }
+            let stem = lnk.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            let exe_stem = exe.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            if stem.is_empty() || helper(&stem) || helper(&exe_stem) || norm(&stem).starts_with("carlui") {
+                continue;
+            }
+            let Some(dir) = owner(&target, &[stem.as_str(), exe_stem.as_str()], guard) else { continue };
+            let mine = |a: &App| (!a.location.is_empty() && safety::overlaps(&a.location, &dir)) || norm(&base(&a.name)) == norm(&base(&stem));
+            if known.iter().any(mine) || out.iter().any(mine) {
+                continue;
+            }
+            let modified = std::fs::metadata(exe).map(|m| day(m.last_write_time())).unwrap_or_default();
+            out.push(App {
+                size: leftovers::size(Path::new(&dir)),
+                name: stem,
+                location: dir,
+                icon: target,
+                date: modified,
+                orphan: true,
+                ..Default::default()
+            });
+        }
+    }
+    out
+}
+
+/// Arka plan iş parçacığında çağrılır (COM açık olmalı: kısayollar çözülür).
 pub fn list() -> Vec<App> {
-    let mut v = desktop();
+    let guard = Guard::system();
+    let mut v = desktop(&guard);
     v.extend(store());
+    let extra = orphans(&v, &guard);
+    carlui_core::info!("kaldırıcı: {} uygulama, {} kayıtsız program", v.len(), extra.len());
+    v.extend(extra);
     v
 }
 
@@ -221,6 +316,14 @@ mod tests {
         // 2024 artık yıl: 29 Şubat.
         assert_eq!(day((19_782 + 134_774) * 864_000_000_000), "20240229");
         assert_eq!(day((19_783 + 134_774) * 864_000_000_000), "20240301");
+    }
+
+    #[test]
+    fn helper_files_are_not_programs() {
+        for s in ["unins000", "Uninstall Foo", "Foo Setup", "Foo Updater", "Readme"] {
+            assert!(helper(s), "{s}");
+        }
+        assert!(!helper("Foo Editor"));
     }
 
     #[test]

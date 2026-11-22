@@ -2,6 +2,10 @@
 //! sorununu çözüyor: tam kaldırıcı. Önce uygulamanın kendi kaldırıcısı çalışır,
 //! ardından artıklar taranır ve kullanıcının onayladıkları temizlenir.
 //!
+//! Tespit: kaldırma kayıtları, Mağaza paketleri ve kaydı olmayan (taşınabilir)
+//! programlar. Artıklar adla ve kurulum klasörüne işaret eden her şeyle
+//! (kısayol, başlangıç kaydı, hizmet, zamanlanmış görev, uygulama yolu) bulunur.
+//!
 //! Güvenlik kuralları: yalnızca tam ad eşleşmesi aranır, korunan klasör ve
 //! anahtarlara dokunulmaz (`safety`), dosyalar Geri Dönüşüm Kutusu'na gider,
 //! kayıt anahtarları silinmeden önce `.reg` olarak yedeklenir (`clean`).
@@ -20,10 +24,12 @@ mod clean;
 #[path = "../../carlui-tools/src/field.rs"]
 mod field;
 mod leftovers;
+mod links;
 mod names;
 mod reg;
 mod run;
 mod safety;
+mod system;
 mod ui;
 
 use carlui_core::log;

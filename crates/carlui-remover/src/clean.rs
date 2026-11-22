@@ -6,6 +6,7 @@ use crate::{
     leftovers::{Kind, Left},
     reg,
     safety::{self, Guard},
+    system,
 };
 use carlui_core::paths;
 use std::{
@@ -40,18 +41,42 @@ pub fn backup_dir() -> PathBuf {
     paths::data_dir().join("uninstall-backups")
 }
 
+/// Yönetici geçişinde dosyadan okunan öğe de buradan geçer: hizmetin dosyası
+/// korunan bir yerdeyse (`C:\Windows\…`) adı ne olursa olsun silinmez.
 fn allowed(g: &Guard, it: &Left) -> bool {
     match it.kind {
         Kind::Key => safety::key_ok(&it.path),
-        _ => g.path_ok(&it.path),
+        Kind::Value => safety::value_ok(&it.path, &it.value),
+        Kind::Service => safety::service_ok(&it.path) && system::image(&it.path).is_some_and(|exe| g.path_ok(&exe)),
+        Kind::Task => safety::task_ok(&it.path),
+        Kind::Folder | Kind::File => g.path_ok(&it.path),
     }
 }
 
 fn gone(it: &Left) -> bool {
     match it.kind {
         Kind::Key => !reg::exists(&it.path),
-        _ => !Path::new(&it.path).exists(),
+        Kind::Value => !reg::value_exists(&it.path, &it.value),
+        Kind::Service => !system::service_exists(&it.path),
+        Kind::Task => !system::task_exists(&it.path),
+        Kind::Folder | Kind::File => !Path::new(&it.path).exists(),
     }
+}
+
+/// Önce çalışan şeyler (hizmet, görev, başlangıç kaydı) durur, sonra kayıtlar,
+/// en son dosyalar: kilitli dosya kalmasın.
+fn ordered(items: &[Left]) -> Vec<Left> {
+    let rank = |k: Kind| match k {
+        Kind::Service => 0,
+        Kind::Task => 1,
+        Kind::Value => 2,
+        Kind::Key => 3,
+        Kind::File => 4,
+        Kind::Folder => 5,
+    };
+    let mut v = items.to_vec();
+    v.sort_by_key(|i| rank(i.kind));
+    v
 }
 
 /// Geri dönüşümü olmayan bir sürücüde Windows kalıcı silmeden önce uyarır.
@@ -78,7 +103,11 @@ fn backup(key: &str) -> bool {
 fn remove(it: &Left) -> bool {
     match it.kind {
         Kind::Key => backup(&it.path) && reg::delete_tree(&it.path),
-        _ => recycle(&it.path),
+        // Değerin anahtarı (ör. `Run`) bütünüyle yedeklenir.
+        Kind::Value => backup(&it.path) && reg::delete_value(&it.path, &it.value),
+        Kind::Service => system::delete_service(&it.path),
+        Kind::Task => system::delete_task(&it.path),
+        Kind::Folder | Kind::File => recycle(&it.path),
     }
 }
 
@@ -113,12 +142,15 @@ fn elevate(items: &[Left]) {
 /// Arka plan iş parçacığında çağrılır.
 pub fn clean(items: &[Left]) -> Report {
     let guard = Guard::system();
+    let items = ordered(items);
+    let mut refused = Vec::new();
     let mut retry = Vec::new();
     let mut rep = Report::default();
-    for it in items {
+    for (i, it) in items.iter().enumerate() {
         if !allowed(&guard, it) {
-            carlui_core::warn!("kaldırıcı: korunan öğe atlandı: {}", it.path);
-            rep.failed.push(it.path.clone());
+            carlui_core::warn!("kaldırıcı: korunan öğe atlandı: {}", it.label());
+            refused.push(i);
+            rep.failed.push(it.label());
         } else if !remove(it) || !gone(it) {
             retry.push(it.clone());
         }
@@ -127,18 +159,18 @@ pub fn clean(items: &[Left]) -> Report {
         carlui_core::info!("kaldırıcı: {} öğe için yönetici izni isteniyor", retry.len());
         elevate(&retry);
     }
-    for it in items {
-        if rep.failed.contains(&it.path) {
+    for (i, it) in items.iter().enumerate() {
+        if refused.contains(&i) {
             continue;
         }
         if gone(it) {
             rep.removed += 1;
             rep.freed += it.size;
-            if it.kind == Kind::Key {
+            if matches!(it.kind, Kind::Key | Kind::Value) {
                 rep.backup = Some(backup_dir().to_string_lossy().into_owned());
             }
         } else {
-            rep.failed.push(it.path.clone());
+            rep.failed.push(it.label());
         }
     }
     carlui_core::info!("kaldırıcı: {} öğe silindi, {} kaldı", rep.removed, rep.failed.len());
@@ -149,7 +181,7 @@ pub fn clean(items: &[Left]) -> Report {
 pub fn elevated(file: &str) {
     let Some(items) = std::fs::read(file).ok().and_then(|b| serde_json::from_slice::<Vec<Left>>(&b).ok()) else { return };
     let guard = Guard::system();
-    for it in items.iter().filter(|it| allowed(&guard, it)) {
+    for it in ordered(&items).iter().filter(|it| allowed(&guard, it)) {
         remove(it);
     }
 }

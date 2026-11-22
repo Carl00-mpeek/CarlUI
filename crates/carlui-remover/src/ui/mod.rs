@@ -224,6 +224,11 @@ impl Ui {
             work(COINIT_MULTITHREADED, &self.mail, move |m| m.send(Msg::Package(apps::remove_package(&app.package))));
             return;
         }
+        // Kayıtsız programın kaldırıcısı yok: klasörü ve izleri doğrudan taranır.
+        if app.uninstall.is_empty() {
+            self.scan(true);
+            return;
+        }
         self.flow = Flow::Running { exited: false, error: None };
         self.stop = Arc::new(AtomicBool::new(false));
         let stop = self.stop.clone();
@@ -266,14 +271,9 @@ impl Ui {
                     self.scan(true);
                 }
             }
-            Msg::Package(r) => {
-                let mut rep = Report::default();
-                match r {
-                    Ok(()) => rep.removed = 1,
-                    Err(e) => rep.failed.push(e),
-                }
-                self.flow = Flow::Done(rep);
-            }
+            // Paket gidince de verisi ve kısayolları kalabilir: artıklar taranır.
+            Msg::Package(Ok(())) => self.scan(true),
+            Msg::Package(Err(e)) => self.flow = Flow::Done(Report { failed: vec![e], ..Default::default() }),
             Msg::Scan(items) => self.flow = Flow::Review { items, gone: self.gone, scroll: 0 },
             Msg::Clean(rep) => self.flow = Flow::Done(rep),
         }

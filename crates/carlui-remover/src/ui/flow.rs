@@ -102,12 +102,15 @@ impl Ui {
                 Kind::Folder => '\u{E8B7}',
                 Kind::File => '\u{E8A5}',
                 Kind::Key => '\u{E74C}',
+                Kind::Value => '\u{E7E8}',
+                Kind::Service => '\u{E912}',
+                Kind::Task => '\u{E823}',
             };
             p.glyph(glyph, R::new(r.x + 34.0, r.y, 22.0, r.h), 13.0, TEXT, 0.7);
             let tw = r.w - 62.0 - 130.0;
-            let s = shorten(p, &it.path, 12.5, tw);
+            let s = shorten(p, &it.label(), 12.5, tw);
             p.text(&s, R::new(r.x + 62.0, r.y, tw, r.h), 12.5, false, TEXT, 0.9, Align::Left);
-            if it.kind != Kind::Key {
+            if it.on_disk() {
                 p.text(&human(it.size), R::new(r.right() - 124.0, r.y, 80.0, r.h), 12.0, false, TEXT, 0.65, Align::Right);
                 p.button(R::new(r.right() - 36.0, r.y + 4.0, 30.0, 28.0), Some('\u{E8DA}'), "", A::Reveal(k), true, false);
             }
@@ -122,7 +125,7 @@ impl Ui {
         let size: u64 = chosen.iter().map(|i| i.size).sum();
         let y = body.bottom() - 50.0;
         p.text(&t!(format!("Seçilen: {} öğe · {}", chosen.len(), human(size)), format!("Selected: {} items · {}", chosen.len(), human(size))), R::new(body.x, y, body.w - 340.0, 24.0), 13.0, true, TEXT, 0.9, Align::Left);
-        p.text(t!("Dosyalar Geri Dönüşüm Kutusu'na gider, kayıt anahtarları önce yedeklenir.", "Files go to the Recycle Bin; registry keys are backed up first."), R::new(body.x, y + 24.0, body.w - 340.0, 22.0), 12.0, false, TEXT, 0.6, Align::Left);
+        p.text(t!("Dosyalar Geri Dönüşüm Kutusu'na gider, kayıtlar önce yedeklenir, hizmetler durdurulup silinir.", "Files go to the Recycle Bin, registry entries are backed up first, services are stopped and removed."), R::new(body.x, y + 24.0, body.w - 340.0, 22.0), 12.0, false, TEXT, 0.6, Align::Left);
         p.button(R::new(body.right() - 320.0, y + 6.0, 190.0, 38.0), Some('\u{E74D}'), t!("Seçilenleri sil", "Remove selected"), A::Delete, !chosen.is_empty(), true);
         p.button(R::new(body.right() - 120.0, y + 6.0, 120.0, 38.0), None, t!("Bitir", "Finish"), A::Close, true, false);
     }

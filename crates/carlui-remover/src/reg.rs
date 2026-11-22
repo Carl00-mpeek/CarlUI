@@ -66,6 +66,44 @@ impl Key {
         (r == ERROR_SUCCESS).then_some((t.dwHighDateTime as u64) << 32 | t.dwLowDateTime as u64)
     }
 
+    pub fn binary(&self, name: &str) -> Option<Vec<u8>> {
+        let name = HSTRING::from(name);
+        let mut size = 0u32;
+        unsafe {
+            if RegGetValueW(self.0, None, PCWSTR(name.as_ptr()), RRF_RT_REG_BINARY, None, None, Some(&mut size)) != ERROR_SUCCESS {
+                return None;
+            }
+            let mut buf = vec![0u8; size as usize];
+            if RegGetValueW(self.0, None, PCWSTR(name.as_ptr()), RRF_RT_REG_BINARY, None, Some(buf.as_mut_ptr() as _), Some(&mut size)) != ERROR_SUCCESS {
+                return None;
+            }
+            buf.truncate(size as usize);
+            Some(buf)
+        }
+    }
+
+    /// Bu adda bir değer var mı (türü ne olursa olsun)?
+    pub fn has(&self, name: &str) -> bool {
+        let name = HSTRING::from(name);
+        unsafe { RegGetValueW(self.0, None, PCWSTR(name.as_ptr()), RRF_RT_ANY, None, None, None) == ERROR_SUCCESS }
+    }
+
+    /// Adlı değerler; varsayılan (adsız) değer hariç.
+    pub fn values(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut buf = vec![0u16; 16_384];
+        for i in 0.. {
+            let mut len = buf.len() as u32;
+            if unsafe { RegEnumValueW(self.0, i, PWSTR(buf.as_mut_ptr()), &mut len, None, None, None, None) } != ERROR_SUCCESS {
+                break;
+            }
+            if len > 0 {
+                out.push(String::from_utf16_lossy(&buf[..len as usize]));
+            }
+        }
+        out
+    }
+
     pub fn subkeys(&self) -> Vec<String> {
         let mut out = Vec::new();
         for i in 0.. {
@@ -82,6 +120,16 @@ impl Key {
 
 pub fn exists(path: &str) -> bool {
     Key::open(path).is_some()
+}
+
+pub fn value_exists(path: &str, name: &str) -> bool {
+    Key::open(path).is_some_and(|k| k.has(name))
+}
+
+/// Anahtarın içindeki tek bir değeri siler.
+pub fn delete_value(path: &str, name: &str) -> bool {
+    let Some((hive, sub)) = split(path) else { return false };
+    unsafe { RegDeleteKeyValueW(hive, &HSTRING::from(sub), &HSTRING::from(name)) == ERROR_SUCCESS }
 }
 
 /// Anahtarı alt anahtarlarıyla siler.

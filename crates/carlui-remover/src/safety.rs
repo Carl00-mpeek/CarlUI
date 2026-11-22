@@ -52,6 +52,64 @@ pub fn menus() -> Vec<PathBuf> {
     [env("APPDATA"), env("ProgramData")].into_iter().flatten().map(|d| d.join(tail)).collect()
 }
 
+/// Görev çubuğuna sabitlenenlerin de durduğu Hızlı Başlat klasörü.
+pub fn quick_launch() -> Option<PathBuf> {
+    env("APPDATA").map(|d| d.join(r"Microsoft\Internet Explorer\Quick Launch"))
+}
+
+/// Kısayolların hedefine bakılan yerler.
+pub fn link_places() -> Vec<PathBuf> {
+    menus().into_iter().chain(desktops()).chain(quick_launch()).collect()
+}
+
+/// Başlangıç kayıtları: yalnızca bu anahtarlardaki adlı değerler silinebilir.
+const RUN_KEYS: &[&str] = &[
+    r"Software\Microsoft\Windows\CurrentVersion\Run",
+    r"Software\Microsoft\Windows\CurrentVersion\RunOnce",
+    r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run",
+    r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\RunOnce",
+    r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
+    r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32",
+    r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder",
+];
+
+/// Taranacak başlangıç anahtarları. İkinci öğe: Görev Yöneticisi'nin açık/kapalı
+/// kaydı mı (bunlar başka bir kayda ya da kısayola bağlıdır).
+pub fn run_keys() -> Vec<(String, bool)> {
+    let mut out = Vec::new();
+    for hive in ["HKCU", "HKLM"] {
+        for k in RUN_KEYS {
+            // HKCU'da WOW6432Node yoktur.
+            if hive == "HKCU" && k.contains("WOW6432Node") {
+                continue;
+            }
+            out.push((format!(r"{hive}\{k}"), k.contains("StartupApproved")));
+        }
+    }
+    out
+}
+
+pub fn value_ok(key: &str, name: &str) -> bool {
+    let Some((hive, rest)) = key.split_once('\\') else { return false };
+    matches!(hive.to_ascii_uppercase().as_str(), "HKCU" | "HKLM") && RUN_KEYS.iter().any(|k| k.eq_ignore_ascii_case(rest)) && !name.trim().is_empty()
+}
+
+fn plain_name(s: &str) -> bool {
+    !s.trim().is_empty() && !s.starts_with('-') && !s.contains("..") && s.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '_' | '-' | '.' | '(' | ')' | '{' | '}' | '@' | '$' | '+'))
+}
+
+/// Hizmet adı: komut satırına güvenle verilebilecek düz bir ad.
+pub fn service_ok(name: &str) -> bool {
+    plain_name(name)
+}
+
+/// Görev yolu: `\Klasör\Ad`; Windows'un kendi görevleri (`\Microsoft\…`) sayılmaz.
+pub fn task_ok(path: &str) -> bool {
+    let Some(rest) = path.strip_prefix('\\') else { return false };
+    let parts: Vec<&str> = rest.split('\\').collect();
+    !parts[0].eq_ignore_ascii_case("microsoft") && parts.iter().all(|p| plain_name(p))
+}
+
 pub struct Guard {
     /// Kendisi ve üst klasörleri silinemez, içindekiler silinebilir.
     keep: Vec<String>,
@@ -66,9 +124,14 @@ impl Guard {
         let pf: Vec<PathBuf> = ["ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"].iter().filter_map(|n| env(n)).collect();
         let (appdata, local, data) = (env("APPDATA"), env("LOCALAPPDATA"), env("ProgramData"));
         let own = std::env::current_exe().ok().and_then(|p| p.parent().map(PathBuf::from));
-        let menus = menus();
+        let mut menus = menus();
+        let quick = quick_launch();
 
         let mut keep: Vec<PathBuf> = pf.clone();
+        if let Some(q) = &quick {
+            keep.push(q.clone());
+            keep.extend(["User Pinned", r"User Pinned\TaskBar", r"User Pinned\StartMenu", r"User Pinned\ImplicitAppShortcuts"].iter().map(|s| q.join(s)));
+        }
         keep.extend(["USERPROFILE", "PUBLIC", "SystemRoot"].iter().filter_map(|n| env(n)));
         keep.extend([appdata.clone(), local.clone(), data.clone(), own.clone()].into_iter().flatten());
         keep.extend(local.as_ref().map(|l| l.with_file_name("LocalLow")));
@@ -88,6 +151,7 @@ impl Guard {
             sealed.push(d.join("CarlUI"));
         }
         sealed.extend(own);
+        menus.extend(quick);
 
         Self { keep: lows(keep), sealed: lows(sealed), menus: lows(menus) }
     }
@@ -121,6 +185,8 @@ pub fn key_ok(key: &str) -> bool {
     match rest {
         [] => false,
         ["MICROSOFT", "WINDOWS", "CURRENTVERSION", "UNINSTALL", entry] => !entry.starts_with("CARLUI"),
+        // Uygulamanın kendi "uygulama yolu" ve "Birlikte aç" kaydı.
+        ["MICROSOFT", "WINDOWS", "CURRENTVERSION", "APP PATHS", entry] | ["CLASSES", "APPLICATIONS", entry] => !entry.starts_with("CARLUI"),
         [first, ..] => !SEALED_KEYS.contains(first),
     }
 }
@@ -180,6 +246,39 @@ mod tests {
         }
         for k in [r"HKCU\Software", r"HKLM\SOFTWARE\Microsoft", r"HKLM\SOFTWARE\Microsoft\Windows", r"HKLM\SYSTEM\CurrentControlSet", r"HKCU\Software\Classes\Foo", r"HKLM\SOFTWARE\WOW6432Node", r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Foo", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Foo\Bar", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\CarlUI", r"HKCR\Foo", r"HKCU\Software\Foo\\"] {
             assert!(!key_ok(k), "{k}");
+        }
+    }
+
+    #[test]
+    fn app_registrations() {
+        for k in [r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\foo.exe", r"HKCU\Software\Classes\Applications\foo.exe", r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\foo.exe"] {
+            assert!(key_ok(k), "{k}");
+        }
+        for k in [r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths", r"HKCU\Software\Classes\Applications", r"HKCU\Software\Classes\Applications\foo.exe\shell", r"HKCU\Software\Classes\.txt"] {
+            assert!(!key_ok(k), "{k}");
+        }
+    }
+
+    #[test]
+    fn startup_values() {
+        assert!(value_ok(r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "Foo"));
+        assert!(value_ok(r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", "Foo"));
+        assert!(value_ok(r"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder", "Foo.lnk"));
+        assert!(!value_ok(r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", ""));
+        assert!(!value_ok(r"HKCU\Software\Microsoft\Windows\CurrentVersion", "Foo"));
+        assert!(!value_ok(r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager", "PendingFileRenameOperations"));
+        assert_eq!(run_keys().len(), 12);
+    }
+
+    #[test]
+    fn services_and_tasks() {
+        assert!(service_ok("FooUpdater") && service_ok("Foo Update Service"));
+        for s in ["", "-x", "a\\b", "a\"b", "a&b"] {
+            assert!(!service_ok(s), "{s}");
+        }
+        assert!(task_ok(r"\FooUpdate") && task_ok(r"\Foo\Daily Check"));
+        for t in [r"FooUpdate", r"\Microsoft\Windows\Defrag", r"\", r"\Foo\..\Microsoft", r"\Foo\\Bar", "\\Foo\"x"] {
+            assert!(!task_ok(t), "{t}");
         }
     }
 

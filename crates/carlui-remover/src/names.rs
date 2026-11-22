@@ -65,6 +65,14 @@ pub fn leaf(path: &str) -> &str {
     path.trim_end_matches(['\\', '/']).rsplit(['\\', '/']).next().unwrap_or("")
 }
 
+/// Klasörün adı uygulamanın adını taşıyor mu? `…\Google\Chrome` ↔ `Google Chrome`
+/// evet, `D:\Oyunlar` ↔ `Foo` hayır. Genel klasör adları (`bin`, `Programs`)
+/// hiçbir uygulamanın sayılmaz.
+pub fn related(folder: &str, name: &str) -> bool {
+    let (l, b) = (norm(leaf(folder)), norm(&base(name)));
+    l.chars().count() >= MIN_SCOPED && b.chars().count() >= MIN_SCOPED && !DENY.contains(&l.as_str()) && (l.contains(&b) || b.contains(&l))
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct Names {
     /// Doğrudan `%APPDATA%` gibi köklerde aranır.
@@ -144,6 +152,15 @@ mod tests {
         let n = Names::of(&app("VLC", "VideoLAN", r"C:\Program Files\VideoLAN\VLC"));
         assert!(n.top.is_empty());
         assert!(n.scoped.contains("vlc") && n.pubs.contains("videolan"));
+    }
+
+    #[test]
+    fn folder_relation() {
+        assert!(related(r"C:\Program Files\Foo Editor", "Foo Editor 2.1"));
+        assert!(related(r"C:\Program Files\Google\Chrome", "Google Chrome"));
+        assert!(!related(r"D:\Oyunlar", "Foo"));
+        assert!(!related(r"C:\Foo\bin", "Foo bin"));
+        assert!(!related(r"C:\Users\A\AppData\Local\Programs", "Programs Plus"));
     }
 
     #[test]

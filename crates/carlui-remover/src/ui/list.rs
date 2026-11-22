@@ -165,7 +165,13 @@ impl Ui {
             p.text(l, R::new(x + 60.0, area.y + 16.0 + i as f32 * 22.0, cw - 60.0, 22.0), 16.0, true, TEXT, 0.95, Align::Left);
         }
         let mut y = area.y + 84.0;
-        let kind = if a.is_store() { t!("Mağaza uygulaması", "Store app") } else { t!("Program", "Program") };
+        let kind = if a.is_store() {
+            t!("Mağaza uygulaması", "Store app")
+        } else if a.orphan {
+            t!("Kayıtsız program", "Unregistered program")
+        } else {
+            t!("Program", "Program")
+        };
         let mut info = vec![(t!("Tür", "Type"), kind.to_string())];
         for (label, value) in [(t!("Yayıncı", "Publisher"), a.publisher.clone()), (t!("Sürüm", "Version"), a.version.clone()), (t!("Boyut", "Size"), if a.size > 0 { human(a.size) } else { String::new() }), (t!("Kurulum", "Installed"), date(&a.date))] {
             if !value.is_empty() {
@@ -185,7 +191,11 @@ impl Ui {
 
         let bottom = area.bottom() - 18.0;
         if matches!(self.flow, Flow::Confirm) {
-            let msg = if a.is_store() { t!(format!("{} kaldırılacak. Uygulamanın verileri de silinir.", a.name), format!("{} will be removed, including its data.", a.name)) } else { t!(format!("{} kaldırılacak. Önce kendi kaldırıcısı çalışır, sonra geride kalanlar taranır.", a.name), format!("{} will be removed. Its own uninstaller runs first, then leftovers are scanned.", a.name)) };
+            let msg = if a.is_store() {
+                t!(format!("{} kaldırılacak. Uygulamanın verileri de silinir, ardından geride kalanlar taranır.", a.name), format!("{} will be removed, including its data. Leftovers are scanned afterwards.", a.name))
+            } else if a.orphan {
+                t!(format!("{} için kaldırıcı yok. Klasörü ve bıraktığı izler taranır; seçtiklerin silinir.", a.name), format!("{} has no uninstaller. Its folder and traces are scanned; the ones you select are removed.", a.name))
+            } else { t!(format!("{} kaldırılacak. Önce kendi kaldırıcısı çalışır, sonra geride kalanlar taranır.", a.name), format!("{} will be removed. Its own uninstaller runs first, then leftovers are scanned.", a.name)) };
             let lines = carlui_ui::paint::wrap(&msg, cw, |s| p.fonts.width(s, 13.0, false));
             let top = bottom - 40.0 - 12.0 - lines.len() as f32 * 20.0;
             for (i, l) in lines.iter().enumerate() {
