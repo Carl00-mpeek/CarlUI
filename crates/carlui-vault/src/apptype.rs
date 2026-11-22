@@ -1,10 +1,11 @@
 //! Masaüstü uygulamasına (Steam, Discord…) giriş bilgisi yazma. Kasa önce
 //! uygulama penceresini öne getirir, sonra:
-//! - Yerel pencerelerde (Win32/WPF/UWP/Qt) UI Automation ile parola kutusu
-//!   (`IsPassword`) ve ondan önceki son düzenlenebilir kutu (kullanıcı adı)
-//!   bulunur; her kutuya odak verilip içeriği seçilir ve değer yazılır.
-//! - Chromium/CEF/Electron pencerelerinde kutular görünmez: kullanıcının
-//!   tıkladığı kutu (kullanıcı adı) seçilip yazılır, Tab ile parolaya geçilir.
+//! - UI Automation ile parola kutusu (`IsPassword`) ve ondan önceki son
+//!   düzenlenebilir kutu (kullanıcı adı) bulunur; her kutuya odak verilip
+//!   içeriği seçilir ve değer yazılır. Chromium/CEF/Electron (Discord, Steam…)
+//!   erişilebilirlik ağacını ilk istekte kurduğundan bunlara bir kez daha sorulur.
+//! - Kutular bulunamazsa ("kör"): odaktaki kutu (kullanıcı adı) seçilip yazılır,
+//!   Tab ile parolaya geçilir.
 //!
 //! Her yazmadan önce pencerenin hâlâ önde olduğuna bakılır; değilse durulur
 //! (değer başka bir pencereye gitmesin).
@@ -69,7 +70,12 @@ fn run(hwnd: HWND, user: &str, pass: &str) -> Result<&'static str, String> {
     }
     // Pencere öne geldikten sonra odağın yerine oturması için az bekle.
     std::thread::sleep(Duration::from_millis(150));
-    let fields = if carlui_core::win::is_chromium_window(hwnd) { None } else { unsafe { native_fields(hwnd) }.ok().flatten() };
+    let mut fields = unsafe { native_fields(hwnd) }.ok().flatten();
+    if fields.is_none() && carlui_core::win::is_chromium_window(hwnd) {
+        // Chromium erişilebilirlik ağacını ilk UI Automation isteğinde kurar: kısa bekleyip yeniden sor.
+        std::thread::sleep(Duration::from_millis(300));
+        fields = unsafe { native_fields(hwnd) }.ok().flatten();
+    }
     match fields {
         Some((user_el, pass_el)) => {
             if let (Some(el), false) = (user_el, user.is_empty()) {

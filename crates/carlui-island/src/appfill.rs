@@ -8,12 +8,17 @@
 //! - Yerel pencere (Win32/WPF/UWP/Qt): UI Automation ile görünür bir parola
 //!   kutusu bulunursa, kutunun sağında. Tarama yalnızca ekranın çoğunu
 //!   kaplamayan pencerelerde ve en çok 1,5 sn'de bir yapılır.
-//! - Chromium/CEF/Electron pencereleri (Steam, Discord, Epic, Riot…) kutularını
-//!   göstermez; bunlara UI Automation ile dokunulmaz (erişilebilirliği açıp
-//!   uygulamayı yavaşlatabilir). Başlık giriş ekranına benziyorsa ("Steam'e
-//!   Giriş Yap", "Sign in") ya da uygulama kasada bağlıyken başlık yalnızca
-//!   uygulama adıysa ("Discord") pencerenin üst ortasında görünür. Kullanıcı
-//!   önce kullanıcı adı kutusuna tıklar, sonra düğmeye.
+//! - Chromium/CEF/Electron pencereleri (Steam, Discord, Epic, Riot…) önce
+//!   başlıklarına göre süzülür: başlık giriş ekranına benziyorsa ("Steam'e
+//!   Giriş Yap", "Sign in") ya da yalnızca uygulama adıysa ("Discord",
+//!   Discord'un giriş ekranında " - Discord"; diğer uygulamalarda kasada
+//!   bağlıyken) ya da sayfa adı yerine adres yazıyorsa ("discord.com/app?_=…
+//!   - Discord": Discord giriş sayfasına başlık vermez). Yalnızca bu
+//!   pencerelerde UI Automation'a parola kutusu sorulur (Chromium
+//!   erişilebilirlik ağacını ilk istekte kurar; uygulamayı yavaşlatmamak için
+//!   başka Chromium pencerelerine sorulmaz). Kutu bulunursa düğme yanında;
+//!   bulunamazsa başlık giriş ekranını açıkça söylüyorsa üst ortada, adres
+//!   başlığında hiç görünmez (yükleniyor ekranı olabilir).
 
 use carlui_core::{
     vaultlink::{ask, linked_apps, Request},
@@ -64,6 +69,10 @@ struct State {
     /// Son yerel tarama: pencere, zaman, bulunan kutu (ekran koordinatı).
     scanned: (HWND, Option<Instant>, Option<RECT>),
     slow: Vec<isize>,
+    /// En az bir kez taranmış pencereler.
+    warm: Vec<isize>,
+    /// Son günlüğe yazılan Chromium adayı (pencere, başlık kesin mi, kutu var mı).
+    noted: Option<(isize, bool, bool)>,
     chromium: (HWND, bool),
     linked: (Vec<String>, Option<Instant>),
     size: (i32, i32),
@@ -103,6 +112,8 @@ pub fn start() {
                 look: Look::Idle,
                 scanned: (HWND::default(), None, None),
                 slow: Vec::new(),
+                warm: Vec::new(),
+                noted: None,
                 chromium: (HWND::default(), false),
                 linked: (Vec::new(), None),
                 size: (0, 0),
@@ -138,10 +149,25 @@ fn login_title(title: &str, key: &str, linked: &[String]) -> bool {
     if LOGIN_WORDS.iter().any(|w| t.contains(w)) {
         return true;
     }
-    // Discord'un giriş ekranının başlığı yalnızca "Discord"; içerideyken "… - Discord".
+    // Discord başlığı "<sayfa> - Discord" biçiminde yazar; giriş ekranında sayfa adı
+    // boş olduğundan başlık " - Discord" olur (eski sürümlerde yalnızca "Discord").
+    // İçerideyken "Friends - Discord" gibi. PTB/Canary: "Discord PTB" → `discordptb`.
     // Steam'in ana penceresi de "Steam" olduğundan Steam yalnızca sözcükle.
-    let bare = t == key || t == win::app_display(key).to_lowercase();
-    bare && key != "steam" && (key == "discord" || linked.iter().any(|k| k == key))
+    let b = t.trim_start_matches(|c: char| c.is_whitespace() || matches!(c, '-' | '–' | '—' | '|' | '•' | '·' | ':'));
+    let squashed: String = b.chars().filter(|c| !c.is_whitespace()).collect();
+    let bare = !b.is_empty() && (b == key || squashed == key || b == win::app_display(key).to_lowercase());
+    bare && key != "steam" && (key.starts_with("discord") || linked.iter().any(|k| k == key))
+}
+
+/// "<sayfa> - <Uygulama>" başlığında sayfa adı bir adres mi
+/// ("discord.com/app?_=1795366828405 - Discord"). Sayfa kendine başlık
+/// vermediğinde Chromium adresi yazar: Discord'un giriş ekranı böyle görünür
+/// ama yükleniyor ekranı da öyle; bu yüzden yalnızca parola kutusu bulunursa
+/// giriş ekranı sayılır.
+fn url_title(title: &str) -> bool {
+    let t = title.trim().to_lowercase();
+    let page = t.rsplit_once(" - ").map_or(t.as_str(), |(p, _)| p).trim();
+    !page.is_empty() && !page.contains(char::is_whitespace) && page.contains('.') && page.contains('/')
 }
 
 impl State {
@@ -161,6 +187,15 @@ impl State {
         if self.slow.contains(&(hwnd.0 as isize)) {
             return None;
         }
+        // Chromium erişilebilirlik ağacını ilk istekte kurar: o tarama yavaş ve boş
+        // olabilir. İlk taramada pencere atlanacaklara konmaz ve boş sonuç kısa tutulur.
+        let first = !self.warm.contains(&(hwnd.0 as isize));
+        if first {
+            if self.warm.len() > 64 {
+                self.warm.clear();
+            }
+            self.warm.push(hwnd.0 as isize);
+        }
         let started = Instant::now();
         let found = self.ua.as_ref().and_then(|ua| unsafe {
             let pass = ua.CreatePropertyCondition(UIA_IsPasswordPropertyId, &VARIANT::from(true)).ok()?;
@@ -173,14 +208,16 @@ impl State {
             let r = el.CurrentBoundingRectangle().ok()?;
             (r.right > r.left && r.bottom > r.top).then_some(r)
         });
-        if started.elapsed() > SLOW_SCAN {
+        if started.elapsed() > SLOW_SCAN && !first {
             carlui_core::info!("uygulama düğmesi: {} taraması yavaş, bu pencere atlanacak", win::class_name(hwnd));
             if self.slow.len() > 64 {
                 self.slow.clear();
             }
             self.slow.push(hwnd.0 as isize);
         }
-        self.scanned = (hwnd, Some(Instant::now()), found);
+        // İlk tarama boşsa 300 ms sonra yeniden bakılır (1,5 sn yerine).
+        let at = if first && found.is_none() { Instant::now().checked_sub(SCAN_EVERY - Duration::from_millis(300)) } else { None };
+        self.scanned = (hwnd, Some(at.unwrap_or_else(Instant::now)), found);
         found
     }
 
@@ -213,13 +250,31 @@ impl State {
         if self.chromium.0 != fg {
             self.chromium = (fg, win::is_chromium_window(fg));
         }
+        let beside = |f: RECT| {
+            let y = f.top + (f.bottom - f.top - bh) / 2;
+            let x = if f.right + 6 + bw <= wr.right { f.right + 6 } else { (f.right - bw - 4).max(f.left) };
+            (x, y)
+        };
         if self.chromium.1 {
             let t = title(fg);
             let linked = self.linked().to_vec();
-            if !login_title(&t, &key, &linked) {
+            let sure = login_title(&t, &key, &linked);
+            if !sure && !url_title(&t) {
                 return None;
             }
-            return Some((wr.left + (wr.right - wr.left - bw) / 2, wr.top + (8.0 * self.scale) as i32));
+            // Giriş ekranına benzeyen pencere: kutuyu sor. Chromium ağacı ilk istekte
+            // kurulur; ilk tarama boş dönebilir, sonraki taramada kutu bulunur.
+            let field = self.password_field(fg).filter(|f| f.left >= wr.left && f.right <= wr.right && f.top >= wr.top && f.bottom <= wr.bottom);
+            let note = (fg.0 as isize, sure, field.is_some());
+            if self.noted != Some(note) {
+                self.noted = Some(note);
+                carlui_core::info!("uygulama düğmesi: {key} giriş ekranı adayı ({t:?}): başlık kesin={sure}, parola kutusu={}", field.is_some());
+            }
+            if let Some(f) = field {
+                return Some(beside(f));
+            }
+            // Başlık adresse (yükleniyor ekranı da olabilir) kutu olmadan gösterilmez.
+            return sure.then(|| (wr.left + (wr.right - wr.left - bw) / 2, wr.top + (8.0 * self.scale) as i32));
         }
         // Yerel: ekranın çoğunu kaplayan pencereler (IDE, ofis…) taranmaz.
         let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
@@ -230,10 +285,7 @@ impl State {
         if unsafe { IsZoomed(fg) }.as_bool() || area(wr) * 10 > area(mi.rcWork) * 6 {
             return None;
         }
-        let f = self.password_field(fg)?;
-        let y = f.top + (f.bottom - f.top - bh) / 2;
-        let x = if f.right + 6 + bw <= wr.right { f.right + 6 } else { (f.right - bw - 4).max(f.left) };
-        Some((x, y))
+        self.password_field(fg).map(beside)
     }
 
     fn tick(&mut self) {
@@ -398,7 +450,57 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::login_title;
+    use super::{login_title, url_title};
+
+    /// Canlı pencerede adım adım: `CARLUI_HWND=<ondalık> cargo test -p carlui-island live_window -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn live_window() {
+        use super::*;
+        let h: isize = std::env::var("CARLUI_HWND").unwrap().parse().unwrap();
+        let hwnd = HWND(h as _);
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        let ua: Option<IUIAutomation> = unsafe { CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER) }.ok();
+        let mut s = State { btn: HWND::default(), ua, target: HWND::default(), look: Look::Idle, scanned: (HWND::default(), None, None), slow: Vec::new(), warm: Vec::new(), noted: None, chromium: (HWND::default(), false), linked: (Vec::new(), None), size: (0, 0), scale: 1.0 };
+        let t = title(hwnd);
+        let exe = win::window_exe(hwnd);
+        println!("title={t:?} exe={exe} key={} chromium={} game={} game_front={}", win::app_key_of(&exe), win::is_chromium_window(hwnd), win::window_like_game(hwnd), win::game_in_front());
+        println!("login_title={} url_title={}", login_title(&t, &win::app_key_of(&exe), &[]), url_title(&t));
+        for i in 0..4 {
+            s.scanned.1 = None;
+            let started = Instant::now();
+            println!("scan {i}: {:?} {:?}", s.password_field(hwnd).map(|r| (r.left, r.top, r.right, r.bottom)), started.elapsed());
+            std::thread::sleep(Duration::from_millis(300));
+        }
+        s.scanned.1 = None;
+        println!("place={:?}", s.place(hwnd));
+        unsafe {
+            let ua = s.ua.as_ref().unwrap();
+            let edits = ua.CreatePropertyCondition(UIA_ControlTypePropertyId, &VARIANT::from(UIA_EditControlTypeId.0)).unwrap();
+            let list = ua.ElementFromHandle(hwnd).unwrap().FindAll(TreeScope_Descendants, &edits).unwrap();
+            for i in 0..list.Length().unwrap() {
+                let e = list.GetElement(i).unwrap();
+                println!("edit {i}: {:?} pw={:?} off={:?}", e.CurrentName().map(|n| n.to_string()), e.CurrentIsPassword().map(|b| b.as_bool()), e.CurrentIsOffscreen().map(|b| b.as_bool()));
+            }
+            // Gerçek Win32 parola kutusu: koşul çalışıyor mu.
+            let host = CreateWindowExW(WINDOW_EX_STYLE(0), w!("STATIC"), w!("pwtest"), WS_OVERLAPPEDWINDOW | WS_VISIBLE, 100, 100, 300, 200, None, None, None, None).unwrap();
+            let _pw = CreateWindowExW(WINDOW_EX_STYLE(0), w!("EDIT"), w!(""), WS_CHILD | WS_VISIBLE | WINDOW_STYLE(0x20), 10, 10, 200, 24, host, None, None, None).unwrap();
+            println!("win32 password: {:?}", s.password_field(host).map(|r| (r.left, r.top, r.right, r.bottom)));
+            let _ = DestroyWindow(host);
+        }
+    }
+
+    #[test]
+    fn url_titles() {
+        assert!(url_title("discord.com/app?_=1795366828405 - Discord"), "Discord giriş ekranı");
+        assert!(url_title("https://discord.com/login - Discord"));
+        assert!(!url_title("Friends - Discord"));
+        assert!(!url_title("#genel | Sunucu - Discord"));
+        assert!(!url_title(" - Discord"));
+        assert!(!url_title("Steam"));
+    }
 
     #[test]
     fn login_titles() {
@@ -407,7 +509,12 @@ mod tests {
         assert!(login_title("Sign in to Steam", "steam", &none));
         assert!(!login_title("Steam", "steam", &["steam".into()]), "Steam ana penceresi");
         assert!(login_title("Discord", "discord", &none));
+        assert!(login_title(" - Discord", "discord", &none), "güncel Discord giriş ekranı");
+        assert!(login_title(" - Discord PTB", "discordptb", &none));
         assert!(!login_title("Friends - Discord", "discord", &none));
+        assert!(!login_title("#genel | Sunucu - Discord", "discord", &none));
+        assert!(!login_title(" - ", "discord", &none));
+        assert!(!login_title(" - Steam", "steam", &["steam".into()]));
         assert!(!login_title("Riot Client", "riotclientux", &none));
         assert!(login_title("Riotclientux", "riotclientux", &["riotclientux".into()]));
         assert!(!login_title("Untitled - Notepad", "notepad", &none));
