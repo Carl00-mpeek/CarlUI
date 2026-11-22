@@ -21,6 +21,27 @@ pub struct Rendered {
     pub height: f32,
 }
 
+/// Metnin mürekkep kutusu ve taban çizgisi, çizilen yüzeyin koordinatında.
+#[derive(Clone, Copy, Debug)]
+pub struct Ink {
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub baseline: f32,
+    /// Büyük harf yüksekliği; karışık metni (ör. indirme hapı) zıplatmadan ortalamak için.
+    pub cap: f32,
+}
+
+impl Ink {
+    pub fn mid_x(&self) -> f32 {
+        (self.left + self.right) / 2.0
+    }
+    pub fn mid_y(&self) -> f32 {
+        (self.top + self.bottom) / 2.0
+    }
+}
+
 /// Çok satırlı yazı kutusu metni: yüzey, imlecin yüzeydeki konumu, satır
 /// yüksekliği ve (tek satırda) metnin gerçek genişliği.
 pub struct FieldText {
@@ -71,6 +92,63 @@ impl Text {
                 Ok(m.widthIncludingTrailingWhitespace)
             })
             .unwrap_or(0.0)
+    }
+
+    /// `render` ile çizilen metnin mürekkep kutusu (sol, üst, sağ, alt), yüzey
+    /// koordinatında. Yazı kutusu satır aralığını da içerdiğinden, rozet gibi
+    /// küçük zeminlerde rakamı gözle ortalamak için bu kutu kullanılır.
+    /// Glifin tasarım ölçülerinden hesaplanır (satır yüksekliğinden değil).
+    pub fn ink(&self, s: &str, size: f32, bold: bool, max_w: f32) -> Option<Ink> {
+        if s.is_empty() {
+            return None;
+        }
+        let family = carlui_core::os::ui_font();
+        let (layout, _, _) = self.layout(s, family, size, bold, max_w).ok()?;
+        unsafe {
+            let mut line = [DWRITE_LINE_METRICS::default()];
+            let mut count = 0;
+            layout.GetLineMetrics(Some(&mut line), &mut count).ok()?;
+            let baseline = line[0].baseline;
+
+            let mut coll = None;
+            self.factory.GetSystemFontCollection(&mut coll, false).ok()?;
+            let coll = coll?;
+            let (mut idx, mut exists) = (0u32, windows::Win32::Foundation::BOOL(0));
+            coll.FindFamilyName(&HSTRING::from(family), &mut idx, &mut exists).ok()?;
+            if !exists.as_bool() {
+                return None;
+            }
+            let weight = if bold { DWRITE_FONT_WEIGHT_SEMI_BOLD } else { DWRITE_FONT_WEIGHT_NORMAL };
+            let face = coll.GetFontFamily(idx).ok()?.GetFirstMatchingFont(weight, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL).ok()?.CreateFontFace().ok()?;
+            let mut fm = DWRITE_FONT_METRICS::default();
+            face.GetMetrics(&mut fm);
+            let k = size / fm.designUnitsPerEm.max(1) as f32;
+
+            let cps: Vec<u32> = s.chars().map(u32::from).collect();
+            let mut glyphs = vec![0u16; cps.len()];
+            face.GetGlyphIndices(cps.as_ptr(), cps.len() as u32, glyphs.as_mut_ptr()).ok()?;
+            if glyphs.contains(&0) {
+                return None;
+            }
+            let mut gm = vec![DWRITE_GLYPH_METRICS::default(); glyphs.len()];
+            face.GetDesignGlyphMetrics(glyphs.as_ptr(), glyphs.len() as u32, gm.as_mut_ptr(), false).ok()?;
+
+            let (mut pen, mut l, mut r, mut top, mut bottom) = (0.0f32, f32::MAX, f32::MIN, f32::MAX, f32::MIN);
+            for (c, g) in s.chars().zip(&gm) {
+                let adv = g.advanceWidth as f32;
+                if !c.is_whitespace() {
+                    l = l.min(pen + g.leftSideBearing as f32 * k);
+                    r = r.max(pen + (adv - g.rightSideBearing as f32) * k);
+                    // Taban çizgisinden yukarı: yMax = vOrigin - tsb, yMin = vOrigin - advH + bsb.
+                    let y_max = (g.verticalOriginY - g.topSideBearing) as f32 * k;
+                    let y_min = (g.verticalOriginY - g.advanceHeight as i32 + g.bottomSideBearing) as f32 * k;
+                    top = top.min(baseline - y_max);
+                    bottom = bottom.max(baseline - y_min);
+                }
+                pen += adv * k;
+            }
+            (r > l && bottom > top).then_some(Ink { left: l, top, right: r, bottom, baseline, cap: fm.capHeight as f32 * k })
+        }
     }
 
     /// Metni beyaz (opaklık `alpha`) olarak kendi boyutundaki bir yüzeye çizer.
@@ -168,5 +246,22 @@ impl Text {
             Ok(())
         })?;
         Ok(Rendered { surface, width: sw, height: sh })
+    }
+}
+
+#[cfg(test)]
+mod ink_tests {
+    use super::*;
+
+    #[test]
+    fn digit_ink_sits_inside_the_box() {
+        let t = Text::new().unwrap();
+        for s in ["1", "9+", "4:10 PM"] {
+            let (_, w, h) = t.layout(s, carlui_core::os::ui_font(), 20.0, true, 200.0).unwrap();
+            let i = t.ink(s, 20.0, true, 200.0).expect("ink");
+            println!("{s}: box {w}x{h} ink {i:?}");
+            assert!(i.left >= -1.0 && i.right <= w + 1.0 && i.top >= 0.0 && i.bottom <= h);
+            assert!((i.baseline - i.cap / 2.0 - i.mid_y()).abs() < 1.5);
+        }
     }
 }

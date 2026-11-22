@@ -129,6 +129,16 @@ pub fn paint(app: &App, p: &mut P, f: &mut Flow) {
         sel,
         72.0,
     );
+    f.toggle(
+        p,
+        t!("Tam ekranda da alan seç (deneysel)", "Select an area in fullscreen too (experimental)"),
+        t!(
+            "Kapalıyken tam ekran oyunda ekranın tamamı alınır. Açıkken alan seçme ekranı açılır; çoğu oyunda çalışır ama bazılarında oyun küçülebilir ya da seçim ekranı görünmeyebilir.",
+            "When off, fullscreen games capture the whole screen. When on, the area picker opens; works in most games, but some may minimize or hide the picker."
+        ),
+        s.select_in_fullscreen,
+        |c| c.shots.select_in_fullscreen ^= true,
+    );
     let ext = if s.format == ShotFormat::Jpg { "jpg" } else { "png" };
     let sample = format!("{}.{ext}", s.file_name("2026-11-05", "14.30.00"));
     // Örnek dosya adı ve kayıt klasörü canlı değer: kartta görünür.

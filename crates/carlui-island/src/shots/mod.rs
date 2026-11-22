@@ -271,6 +271,14 @@ impl Shots {
                 let m = c.mods;
                 SHOT_VK.store(c.vk, Ordering::Relaxed);
                 SHOT_MODS.store(m.ctrl as u32 | (m.alt as u32) << 1 | (m.shift as u32) << 2 | (m.win as u32) << 3, Ordering::Relaxed);
+                // Yedek: yönetici olarak çalışan bir pencere öndeyken klavye kancası
+                // tuşları göremez (Windows daha yüksek yetkili sürecin girdisini
+                // vermez); Windows kancayı yavaş bulup sessizce de kaldırabilir.
+                // RegisterHotKey ikisinde de çalışır. Kanca çalışıyorsa tuşu önce o
+                // yutar, bu kayıt tetiklenmez; iki kez açılma olmaz.
+                if let Err(e) = carlui_core::hotkey::register(island, HOTKEY_SHOT, c) {
+                    carlui_core::warn!("ekran görüntüsü yedek kısayolu kaydedilemedi (başka bir uygulama kullanıyor olabilir): {e}");
+                }
             }
             None => SHOT_VK.store(0, Ordering::Relaxed),
         }
@@ -392,7 +400,9 @@ impl App {
         // Özel tam ekran oyunun üstüne pencere çizilemez (açılırsa oyun ya
         // simge durumuna düşer ya da düzenleyici görünmez). Oyunun ekranı
         // olduğu gibi alınır; alan, oyundan sonra bildirimdeki "Düzenle" ile kırpılır.
-        if self.exclusive {
+        // "Tam ekranda da alan seç" (deneysel) açıksa aşağıdaki normal yol
+        // kullanılır: düzenleyici odaksız açılır, oyun ön planda kalır.
+        if self.exclusive && !self.cfg.shots.select_in_fullscreen {
             let Some(frame) = capture::monitor_at(cursor()) else {
                 carlui_core::warn!("ekran yakalanamadı");
                 return;
@@ -727,6 +737,13 @@ pub(crate) fn window_message(_hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> O
         WM_APP_SHOT if PASSIVE.load(Ordering::Relaxed) => {}
         WM_APP_SHOT => {
             with_app(|a| a.shot_start());
+        }
+        // Klavye kancası tuşu kaçırdığında (yönetici penceresi öndeyken) gelen yedek.
+        WM_HOTKEY if wp.0 as i32 == HOTKEY_SHOT => {
+            if !PASSIVE.load(Ordering::Relaxed) {
+                info!("ekran görüntüsü kısayolu yedek yoldan geldi (klavye kancası görmedi)");
+                with_app(|a| a.shot_start());
+            }
         }
         WM_APP_SHOT_KEY => {
             let (vk, ctrl) = (wp.0 as u16, lp.0 != 0);

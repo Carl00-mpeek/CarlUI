@@ -883,6 +883,9 @@ extern "system" fn pop_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
                     if matches!(h, Hit::Card) {
                         return;
                     }
+                    if !matches!(h, Hit::ClipBtn(7)) && a.clip.cancel_clear() {
+                        a.clip_outcome(ClipOut::Redraw);
+                    }
                     if !matches!(h, Hit::ClipBtn(4)) && a.clip.cancel_delete() {
                         if matches!(h, Hit::ClipBtn(2) | Hit::ClipBtn(5)) {
                             a.clip_outcome(ClipOut::Redraw);
@@ -896,6 +899,7 @@ extern "system" fn pop_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRE
                         Hit::ClipBtn(1) => a.clip.run(Act::Pin),
                         Hit::ClipBtn(2) | Hit::ClipBtn(4) => a.clip.run(Act::Delete),
                         Hit::ClipBtn(6) => a.clip.undo(),
+                        Hit::ClipBtn(7) => a.clip.clear_button(),
                         Hit::ClipBtn(3) | Hit::Preview => {
                             a.open_view_card();
                             ClipOut::Nothing

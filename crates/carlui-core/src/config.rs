@@ -55,6 +55,10 @@ pub struct ShotsConfig {
     /// Dosya adı şablonu; `{tarih}`/`{date}` ve `{saat}`/`{time}` yer tutucuları. Boşsa "Ekran görüntüsü {tarih} {saat}".
     pub name: String,
     pub format: ShotFormat,
+    /// Deneysel: özel tam ekran oyunda da alan seçme düzenleyicisi açılsın
+    /// (kapalıyken ekran doğrudan alınır). Gerçek özel tam ekranda oyun
+    /// simge durumuna düşebilir ya da düzenleyici görünmeyebilir.
+    pub select_in_fullscreen: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]

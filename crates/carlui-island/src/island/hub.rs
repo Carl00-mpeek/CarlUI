@@ -402,7 +402,9 @@ impl Island {
         let by = ((h - bh) / 2.0).round();
         b.SetOffset(v3(x.round(), by))?;
         kids.InsertAtTop(&b)?;
-        Self::place(&t, x + (bw - tw) / 2.0, by + (bh - th) / 2.0)?;
+        // Yazı kutusu değil, rakamın kendisi zeminin ortasına gelsin.
+        let (cx, cy) = self.text.ink(&txt, 10.0 * s, true, 30.0 * s).map_or((tw / 2.0, th / 2.0), |i| (i.mid_x(), i.mid_y()));
+        Self::place(&t, x + bw / 2.0 - cx, by + bh / 2.0 - cy)?;
         kids.InsertAtTop(&t)?;
         Ok(bw)
     }

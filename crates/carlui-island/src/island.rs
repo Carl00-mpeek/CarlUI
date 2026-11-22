@@ -480,6 +480,22 @@ impl Island {
         Ok((v, t.width, t.height))
     }
 
+    /// `label` ile çizilen metnin büyük harf yüksekliğini (satır boşluğunu değil)
+    /// `h` yüksekliğin ortasına getiren üst konumu.
+    fn mid_top(&self, s: &str, size: f32, bold: bool, max_w: f32, th: f32, h: f32) -> f32 {
+        let mid = self.text.ink(s, size * self.s, bold, max_w).map_or(th / 2.0, |i| i.baseline - i.cap / 2.0);
+        h / 2.0 - mid
+    }
+
+    /// İki metni aynı taban çizgisine oturtmak için `b`'nin `a`'ya göre dikey kayması.
+    fn baseline_shift(&self, a: (&str, f32, bool), b: (&str, f32, bool)) -> f32 {
+        let base = |(s, size, bold): (&str, f32, bool)| self.text.ink(s, size * self.s, bold, 100_000.0).map(|i| i.baseline);
+        match (base(a), base(b)) {
+            (Some(x), Some(y)) => x - y,
+            _ => 0.0,
+        }
+    }
+
     fn place(v: &impl Interface, x: f32, y: f32) -> Result<()> {
         let v: Visual = v.cast()?;
         v.SetOffset(v3(x.round(), y.round()))
@@ -599,7 +615,7 @@ impl Island {
                 let (t, tw, th) = self.label(gfx, &time, 13.5, true, 560.0 * s, 0.95)?;
                 let extra = if m.badge > 0 { 26.0 * s } else { 0.0 };
                 let w = (tw + 40.0 * s + extra).max(84.0 * s).round();
-                Self::place(&t, (w - tw - extra) / 2.0, (compact_h - th) / 2.0)?;
+                Self::place(&t, (w - tw - extra) / 2.0, self.mid_top(&time, 13.5, true, 560.0 * s, th, compact_h))?;
                 kids.InsertAtTop(&t)?;
                 if m.badge > 0 {
                     self.badge(gfx, &kids, (w + tw - extra) / 2.0 + 8.0 * s, compact_h, m.badge)?;
@@ -607,13 +623,14 @@ impl Island {
                 (w, compact_h)
             }
             View::Date => {
-                let (d, dw, dh) = self.label(gfx, &date, 13.0, false, 260.0 * s, 0.7)?;
+                let (d, dw, _) = self.label(gfx, &date, 13.0, false, 260.0 * s, 0.7)?;
                 let (t, tw, th) = self.label(gfx, &time, 13.5, true, 200.0 * s, 0.95)?;
                 let gap = 12.0 * s;
                 let w = (dw + gap + tw + 40.0 * s).round();
                 let x = (w - dw - gap - tw) / 2.0;
-                Self::place(&d, x, (compact_h - dh) / 2.0)?;
-                Self::place(&t, x + dw + gap, (compact_h - th) / 2.0)?;
+                let ty = self.mid_top(&time, 13.5, true, 200.0 * s, th, compact_h);
+                Self::place(&d, x, ty + self.baseline_shift((&time, 13.5, true), (&date, 13.0, false)))?;
+                Self::place(&t, x + dw + gap, ty)?;
                 kids.InsertAtTop(&d)?;
                 kids.InsertAtTop(&t)?;
                 (w, compact_h)
@@ -626,7 +643,7 @@ impl Island {
                 let a = self.art_or_glyph(gfx, snap, apx, 6.0 * s)?;
                 Self::place(&a, (6.0 * s).round(), ((compact_h - apx) / 2.0).round())?;
                 kids.InsertAtTop(&a)?;
-                Self::place(&t, (w - tw) / 2.0, (compact_h - th) / 2.0)?;
+                Self::place(&t, (w - tw) / 2.0, self.mid_top(&time, 13.5, true, 200.0 * s, th, compact_h))?;
                 kids.InsertAtTop(&t)?;
                 if m.badge > 0 {
                     self.badge(gfx, &kids, (w + tw) / 2.0 + 8.0 * s, compact_h, m.badge)?;
@@ -642,7 +659,7 @@ impl Island {
                     kids.InsertAtTop(&self.sprite(&g.surface, g.width, g.height, pad, ((compact_h - g.height) / 2.0).round())?)?;
                     let text = if muted { t!("Sessiz", "Muted").to_string() } else { level.to_string() };
                     let (t, tw, th) = self.label(gfx, &text, 13.0, true, 56.0 * s, 0.95)?;
-                    Self::place(&t, w - pad - tw, (compact_h - th) / 2.0)?;
+                    Self::place(&t, w - pad - tw, self.mid_top(&text, 13.0, true, 56.0 * s, th, compact_h))?;
                     kids.InsertAtTop(&t)?;
                     let bx = pad + 26.0 * s;
                     let value = if muted { 0.0 } else { level as f32 / 100.0 };

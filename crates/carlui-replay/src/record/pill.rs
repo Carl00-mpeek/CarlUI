@@ -1,5 +1,5 @@
 //! Kaydın küçük hapı: alanın altında (yer yoksa üstünde) durur, odak almaz.
-//! Kayıtta süre, dosya boyutu ve Durdur; bitince Aç, Klasörde göster, GIF yap.
+//! Kayıtta süre, dosya boyutu ve Durdur; bitince Aç, Klasörde göster, GIF yap, Sil.
 
 use super::{Area, Phase, Shared};
 use carlui_ui::{
@@ -7,7 +7,7 @@ use carlui_ui::{
     view::{self, Ctx, Opts, View},
 };
 use std::{
-    os::windows::process::CommandExt,
+    os::windows::{ffi::OsStrExt, process::CommandExt},
     process::Command,
     sync::{atomic::Ordering, Arc},
     time::{Duration, Instant},
@@ -21,7 +21,7 @@ use windows::{
     },
 };
 
-const W: f32 = 470.0;
+const W: f32 = 550.0;
 const H: f32 = 52.0;
 /// Bitince hap bu kadar sonra kendiliğinden kapanır.
 const LINGER: Duration = Duration::from_secs(30);
@@ -34,6 +34,8 @@ enum A {
     Open,
     Show,
     Gif,
+    /// Kaydı istemedim: dosya Geri Dönüşüm Kutusu'na gider, hap kapanır.
+    Delete,
     Close,
 }
 
@@ -105,7 +107,7 @@ impl View for Pill {
                 self.line(p, x + 22.0, h, 130.0, &s, TEXT);
                 let mut r = w - 12.0 - 32.0;
                 p.button(R::new(r, y, 32.0, 32.0), Some('\u{E711}'), "", A::Close, true, false);
-                for (bw, g, label, a) in [(76.0, '\u{E8FE}', t!("GIF", "GIF"), A::Gif), (88.0, '\u{E838}', t!("Klasör", "Folder"), A::Show), (68.0, '\u{E768}', t!("Aç", "Open"), A::Open)] {
+                for (bw, g, label, a) in [(76.0, '\u{E8FE}', t!("GIF", "GIF"), A::Gif), (88.0, '\u{E838}', t!("Klasör", "Folder"), A::Show), (68.0, '\u{E768}', t!("Aç", "Open"), A::Open), (64.0, '\u{E74D}', t!("Sil", "Delete"), A::Delete)] {
                     r -= bw + 6.0;
                     p.button(R::new(r, y, bw, 32.0), Some(g), label, a, true, false);
                 }
@@ -142,6 +144,10 @@ impl View for Pill {
                 }
                 ctx.close = true;
             }
+            A::Delete => {
+                recycle(&path);
+                ctx.close = true;
+            }
             A::Close => ctx.close = true,
         }
     }
@@ -165,6 +171,18 @@ impl View for Pill {
         }
         self.shared.pill.store(hwnd.0 as isize, Ordering::SeqCst);
     }
+}
+
+/// Kaydı Geri Dönüşüm Kutusu'na atar (yanlışlıkla basılırsa oradan geri alınır).
+fn recycle(path: &std::path::Path) {
+    use windows::Win32::UI::Shell::{SHFileOperationW, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_SILENT, FO_DELETE, SHFILEOPSTRUCTW};
+    if !path.exists() {
+        return;
+    }
+    let from: Vec<u16> = path.as_os_str().encode_wide().chain([0, 0]).collect();
+    let mut op = SHFILEOPSTRUCTW { wFunc: FO_DELETE, pFrom: PCWSTR(from.as_ptr()), fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT).0 as u16, ..Default::default() };
+    let r = unsafe { SHFileOperationW(&mut op) };
+    info!("alan kaydı Geri Dönüşüm Kutusu'na: {} ({})", path.display(), if r == 0 { "tamam" } else { "başarısız" });
 }
 
 /// Hapın yeri: alanın altında ortalı; yer yoksa üstünde, o da yoksa alanın içinde.

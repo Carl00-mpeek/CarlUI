@@ -453,6 +453,34 @@ impl Clipper {
         ClipOut::Redraw
     }
 
+    /// Paneldeki "Tümünü temizle" düğmesi: ilk tık sorar, ikinci tık
+    /// sabitlenmemiş her kaydı siler (sabitlenenler kalır).
+    pub fn clear_button(&mut self) -> ClipOut {
+        if self.mode != ClipMode::List {
+            return ClipOut::Nothing;
+        }
+        if !self.confirm_clear {
+            self.confirm_clear = true;
+            self.confirm_delete = None;
+            return ClipOut::Redraw;
+        }
+        self.confirm_clear = false;
+        self.confirm_delete = None;
+        self.finish_undo();
+        if let Ok(mut s) = self.store.lock() {
+            s.clear();
+        }
+        self.sel = 0;
+        self.scroll = 0;
+        self.rebuild();
+        ClipOut::Redraw
+    }
+
+    /// Listedeyken açık "Tümünü temizle" sorusunu kapatır. Açık idiyse true.
+    pub fn cancel_clear(&mut self) -> bool {
+        self.mode == ClipMode::List && std::mem::take(&mut self.confirm_clear)
+    }
+
     /// Silme sorusunu kapat (✗). Açık bir soru varsa true.
     pub fn cancel_delete(&mut self) -> bool {
         self.confirm_delete.take().is_some()

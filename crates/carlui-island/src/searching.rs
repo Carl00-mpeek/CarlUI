@@ -291,10 +291,9 @@ pub(crate) fn window_message(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> Op
             with_app(|a| a.close_search(true));
             LRESULT(0)
         }
-        WM_HOTKEY => {
-            if wp.0 as i32 == HOTKEY_SEARCH {
-                with_app(|a| if game_in_front() { a.hotkey_in_game(lp) } else { a.toggle_search() });
-            }
+        // Yalnızca arama kısayolu; diğerleri (ör. ekran görüntüsü) kendi modülüne gitsin.
+        WM_HOTKEY if wp.0 as i32 == HOTKEY_SEARCH => {
+            with_app(|a| if game_in_front() { a.hotkey_in_game(lp) } else { a.toggle_search() });
             LRESULT(0)
         }
         WM_TIMER if wp.0 == TIMER_GAME => {

@@ -512,7 +512,28 @@ impl Island {
             kids.InsertAtTop(&kl)?;
             self.hits.push((Hit::ClipBtn(6), RECT { left: (bx - 4.0 * s) as i32, top: y as i32, right: (bx + bw + 4.0 * s) as i32, bottom: (y + hh) as i32 }));
         } else {
-            let (l, _, lh) = self.label(gfx, v.hint, 10.5, false, fw - 16.0 * s, 0.42)?;
+            // Sağda "Tümünü temizle": ilk tık kırmızı "Emin misin?" olur, ikinci tık siler.
+            let mut hint_w = fw - 16.0 * s;
+            if v.mode == ClipMode::List && v.store.items.iter().any(|c| !c.pinned) {
+                let sure = v.confirm_clear;
+                let text = if sure { t!("Emin misin? Tekrar bas", "Sure? Click again") } else { t!("Tümünü temizle", "Clear all") };
+                let (bl, blw, blh) = carlui_ui::tone::literal(|| self.label(gfx, text, 11.0, sure, 160.0 * s, if sure { 1.0 } else { 0.8 }))?;
+                let tg = carlui_ui::tone::literal(|| self.text.glyph(gfx, '\u{E74D}', (11.0 * s).round(), if sure { 1.0 } else { 0.8 }))?;
+                let bh2 = (20.0 * s).round();
+                let bw = (blw + tg.width + 22.0 * s).round();
+                let bx = pad + fw - 4.0 * s - bw;
+                let bty = y + (hh - bh2) / 2.0;
+                let fill = if sure { Rgba(232, 72, 72, 0xE0) } else { Rgba(255, 255, 255, 0x14) };
+                let (bg, _) = self.rrect(bw, bh2, bh2 / 2.0, &self.solid(fill)?)?;
+                Self::place(&bg, bx, bty)?;
+                kids.InsertAtTop(&bg)?;
+                kids.InsertAtTop(&self.sprite(&tg.surface, tg.width, tg.height, bx + 8.0 * s, bty + (bh2 - tg.height) / 2.0)?)?;
+                Self::place(&bl, bx + 12.0 * s + tg.width, bty + (bh2 - blh) / 2.0)?;
+                kids.InsertAtTop(&bl)?;
+                self.hits.push((Hit::ClipBtn(7), RECT { left: (bx - 4.0 * s) as i32, top: y as i32, right: (bx + bw + 4.0 * s) as i32, bottom: (y + hh) as i32 }));
+                hint_w = (bx - pad - 16.0 * s).max(0.0);
+            }
+            let (l, _, lh) = self.label(gfx, v.hint, 10.5, false, hint_w, 0.42)?;
             Self::place(&l, pad + 8.0 * s, y + (hh - lh) / 2.0)?;
             kids.InsertAtTop(&l)?;
         }
