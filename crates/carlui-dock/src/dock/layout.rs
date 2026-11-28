@@ -4,6 +4,33 @@
 
 use super::*;
 
+/// İmleç bu pencerenin görünür, tıklanabilir bölgesinde mi? Pencere
+/// dikdörtgeni bölgeden geniş olabilir; WM_MOUSELEAVE de bölgeye göre gelir.
+/// Bir bayrak (`mouse_inside`) eski kalmış mı diye bakmak için.
+pub fn cursor_in_window(hwnd: HWND) -> bool {
+    unsafe {
+        if !IsWindowVisible(hwnd).as_bool() {
+            return false;
+        }
+        let mut pt = POINT::default();
+        let mut r = RECT::default();
+        if GetCursorPos(&mut pt).is_err() || GetWindowRect(hwnd, &mut r).is_err() {
+            return false;
+        }
+        if pt.x < r.left || pt.x >= r.right || pt.y < r.top || pt.y >= r.bottom {
+            return false;
+        }
+        let rgn = CreateRectRgn(0, 0, 0, 0);
+        let inside = if GetWindowRgn(hwnd, rgn) == RGN_ERROR {
+            true // bölge yok: tüm pencere
+        } else {
+            PtInRegion(rgn, pt.x - r.left, pt.y - r.top).as_bool()
+        };
+        let _ = DeleteObject(rgn);
+        inside
+    }
+}
+
 impl Dock {
     /// Aktif (çıkmayan) öğelerin, verilen sırayla dizilmiş konumlarını hesaplar ve uygular.
     pub(super) fn relayout(&mut self, animate: bool) -> Result<()> {
@@ -283,6 +310,12 @@ impl Dock {
             let mut r = RECT::default();
             GetCursorPos(&mut pt).is_ok() && GetWindowRect(self.hwnd, &mut r).is_ok() && pt.x >= r.left && pt.x < r.right && pt.y >= r.top && pt.y < r.bottom
         }
+    }
+
+    /// İmleç dock'un tıklanabilir bölgesinde mi? Pencere dikdörtgeni pill'den
+    /// geniş olabilir; WM_MOUSELEAVE de bölgeye göre geldiğinden burada da bölgeye bakılır.
+    pub fn cursor_in_region(&self) -> bool {
+        !self.suppressed && cursor_in_window(self.hwnd)
     }
 
     pub fn is_suppressed(&self) -> bool {

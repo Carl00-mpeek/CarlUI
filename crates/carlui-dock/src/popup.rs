@@ -440,6 +440,11 @@ impl Popup {
             return;
         }
         self.mode = Mode::Hidden;
+        // Gizlenen pencereye WM_MOUSELEAVE gelmez (ör. önizleme kartına tıklayınca):
+        // bayrak açık kalırsa dock bir daha otomatik gizlenmiyordu.
+        self.mouse_inside = false;
+        self.hovered = None;
+        self.hovered_button = None;
         self.key.clear();
         self.windows.clear();
         for c in self.cards.drain(..) {

@@ -349,7 +349,34 @@ impl App {
         self.live.as_ref().is_some_and(|l| l.snow_held())
     }
 
+    /// `mouse_inside` WM_MOUSELEAVE ile söner; o mesaj kaybolursa (modal menü,
+    /// fare yakalama, pencere gizlenip açılması) bayrak açık kalır ve dock bir
+    /// daha gizlenmez. İmleç gerçekte dışarıdaysa bayrağı ve hover'ı söndür.
+    fn clear_stale_inside(&mut self) {
+        let trace = std::env::var_os("CARLUI_TRACE").is_some();
+        if self.dock.mouse_inside && !self.dock.is_interacting() && !self.dock.cursor_in_region() {
+            if trace {
+                info!("dock: eski kalmış mouse_inside temizlendi");
+            }
+            self.dock.mouse_leave();
+            self.update_hover();
+        }
+        if self.popup.mouse_inside && !dock::cursor_in_window(self.popup.hwnd) {
+            if trace {
+                info!("önizleme: eski kalmış mouse_inside temizlendi");
+            }
+            self.popup.mouse_leave();
+        }
+        if let Some(b) = self.battery.as_mut().filter(|b| b.mouse_inside && !dock::cursor_in_window(b.hwnd)) {
+            if trace {
+                info!("pil: eski kalmış mouse_inside temizlendi");
+            }
+            b.leave();
+        }
+    }
+
     fn intellihide_check(&mut self) {
+        self.clear_stale_inside();
         // Tray paneli açıkken dock yerinde kalır (panel dock'a bağlı açılır).
         if self.dock.behavior() != DockBehavior::Intellihide || self.dock.mouse_inside || self.dock.menu_open || self.tray_open || self.start_open || self.snow_held() {
             return;
@@ -445,6 +472,7 @@ impl App {
         unsafe {
             let _ = KillTimer(self.hwnd, dock::TIMER_AUTOHIDE);
         }
+        self.clear_stale_inside();
         if self.dock.mouse_inside || self.popup.mouse_inside || self.battery.as_ref().is_some_and(|b| b.mouse_inside) || self.dock.menu_open || self.tray_open || self.start_open || self.snow_held() {
             return;
         }
@@ -463,6 +491,25 @@ impl App {
     }
 
     fn context_menu(&mut self, idx: Option<usize>) {
+        self.context_menu_inner(idx);
+        // Menü modaldı: fare çıkışı kaybolmuş olabilir, komut öğeleri yeniden
+        // kurmuş olabilir. Hover'ı ve "imleç içeride" bayrağını gerçeğe göre kur.
+        self.after_modal();
+    }
+
+    /// Modal bir menü/işlem bitti: dock'un fare durumunu imlecin gerçek
+    /// konumuna göre yeniler ve gerekirse gizleme zamanlayıcısını kurar.
+    fn after_modal(&mut self) {
+        self.dock.resync_hover();
+        if self.dock.mouse_inside {
+            // Fare çıkışı yeniden izlensin (menü izlemeyi iptal etmiş olabilir).
+            track_leave(self.hwnd);
+        }
+        self.update_hover();
+        self.arm_autohide(900);
+    }
+
+    fn context_menu_inner(&mut self, idx: Option<usize>) {
         self.popup.hide();
         // Yerlerin kendi menüleri var (bkz. dock/places.rs).
         match idx.map(|i| (i, self.dock.entries[i].kind)) {
@@ -630,6 +677,7 @@ impl App {
             "popup_windows": self.popup.windows.len(),
             "popup_inside": self.popup.mouse_inside,
             "dock_inside": self.dock.mouse_inside,
+            "battery_inside": self.battery.as_ref().is_some_and(|b| b.mouse_inside),
             "dock_hovered": self.dock.hovered(),
             "rehooks": input::REHOOKS.load(std::sync::atomic::Ordering::SeqCst),
             "input": self.input.is_some(),
@@ -905,6 +953,21 @@ fn dock_proc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
                 });
                 LRESULT(0)
             }
+            // Basılıyken fare yakalaması elden gitti (başka pencere öne geldi,
+            // Alt+Tab, UAC): bırakma mesajı gelmeyecek, basma/sürükleme iptal.
+            // Kendi ReleaseCapture'ımızda (WM_LBUTTONUP) düğme zaten bırakılmıştır.
+            WM_CAPTURECHANGED => {
+                if HWND(lp.0 as _) != hwnd && GetAsyncKeyState(VK_LBUTTON.0 as i32) < 0 {
+                    with_app(|a| {
+                        if a.dock.is_interacting() {
+                            info!("dock: fare yakalaması kayboldu, basma iptal edildi");
+                            a.dock.cancel_press();
+                            a.after_modal();
+                        }
+                    });
+                }
+                LRESULT(0)
+            }
             WM_LBUTTONUP => {
                 let _ = ReleaseCapture();
                 let (x, y) = xy(lp);
@@ -947,6 +1010,7 @@ fn dock_proc_inner(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
                             });
                         } else if a.dock.entries[i].kind == Kind::Folder {
                             a.dock.stack_menu(i);
+                            a.after_modal();
                         } else {
                             // Birden çok pencere varken hiçbiri önde değilse hangisini
                             // istediğini tahmin etme: önizlemeden seçtir. Öndeyse sırayla dön.

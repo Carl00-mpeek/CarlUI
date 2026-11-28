@@ -27,6 +27,35 @@ impl Dock {
         Ok(())
     }
 
+    /// Menü (modal) kapandıktan ya da komut öğeleri yeniden kurduktan sonra:
+    /// hover'ı imlecin gerçek konumuna göre yeniden kurar. Menü sürerken
+    /// WM_MOUSELEAVE kaybolabiliyor, öğeler yeniden kurulunca da `hovered`
+    /// sıfırlanıp ikon büyük kalabiliyordu; bu yüzden hepsi tek tek yerine oturur.
+    pub fn resync_hover(&mut self) {
+        if self.drag.is_some() {
+            return;
+        }
+        let inside = self.cursor_in_region();
+        let over = inside
+            .then(|| unsafe {
+                let mut pt = POINT::default();
+                (GetCursorPos(&mut pt).is_ok() && ScreenToClient(self.hwnd, &mut pt).as_bool()).then_some(pt)
+            })
+            .flatten()
+            .and_then(|pt| self.hit(pt.x, pt.y));
+        self.mouse_inside = inside;
+        self.press = None;
+        for i in 0..self.entries.len() {
+            if self.entries[i].leaving.is_none() && Some(i) != over {
+                let _ = self.animate_item(i, 1.0, 0.0);
+            }
+        }
+        if let Some(i) = over {
+            let _ = self.animate_item(i, 1.14, 1.0);
+        }
+        self.hovered = over;
+    }
+
     pub fn hovered(&self) -> Option<usize> {
         self.hovered.filter(|_| self.drag.is_none())
     }
@@ -43,9 +72,14 @@ impl Dock {
             if let Some(e) = self.entries.get(d.index) {
                 let _ = self.motion.scale(&e.slot, 1.0, 0.7, 40, 0);
             }
+            // Sürüklenen ikon imlecin bıraktığı yerde kalmasın: herkes eski sırasına döner.
+            let _ = self.relayout(true);
         }
         if i < self.entries.len() {
             let _ = self.animate_item(i, 1.0, 0.0);
+        }
+        if self.hovered == Some(i) {
+            self.hovered = None;
         }
     }
 

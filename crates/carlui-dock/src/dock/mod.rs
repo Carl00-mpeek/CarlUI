@@ -25,6 +25,7 @@ mod mouse;
 mod places;
 pub mod quick;
 mod status;
+pub use layout::cursor_in_window;
 pub use places::{open as open_uri, TIMER_TRASH};
 pub use status::{Part, TIMER_STATUS};
 

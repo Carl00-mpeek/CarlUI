@@ -1,25 +1,19 @@
 ## Türkçe
 
-**CarlUI 1.3.3: Carl Vault artık Discord'un giriş ekranını tanıyor ve giriş bilgilerini kendisi dolduruyor.**
+**CarlUI 1.3.4: Dock artık sağ tık menüsünden sonra büyük ikonla kalmıyor ve tarayıcıda gezerken açık takılı kalmıyor.**
 
 **Düzeltmeler**
-- **Discord'da Vault düğmesi:** Discord giriş sayfasına başlık vermediği için pencere başlığı " - Discord" ya da sayfa adresi ("discord.com/app… - Discord") oluyordu; düğme açılış penceresinde görünüp giriş ekranı gelince kayboluyordu. Artık bu başlıklar tanınıyor ve giriş ekranı parola kutusuna bakılarak doğrulanıyor. Discord PTB ve Canary de destekleniyor.
-- **Düğme kutunun yanında:** Chromium tabanlı uygulamalarda (Discord, Steam…) parola kutusu bulunduğunda Vault düğmesi pencerenin üstü yerine doğrudan kutunun yanında çıkıyor.
-- **Tıklamadan doldurma:** Kasa bu uygulamalarda da kullanıcı adı ve parola kutularını kendisi buluyor; önce kutuya tıklamak gerekmiyor. Kutular bulunamazsa eskisi gibi odaktaki kutuya yazılıyor.
-
-**Güvenlik**
-- Erişilebilirlik sorgusu yalnızca giriş ekranına benzeyen pencerelere yapılır; diğer Chromium uygulamaları yavaşlatılmaz. Yazmadan önce pencerenin hâlâ önde ve aynı uygulama olduğuna bakılmaya devam eder.
+- **Sağ tıktan sonra büyük kalan ikon:** Dock'ta bir öğeye sağ tıklayıp menüden bir işlem seçince ikon üzerine gelme büyüklüğünde kalıyor, fare yeniden üstüne gelene kadar küçülmüyordu. Menü açıkken farenin çıktığı bildirimi kayboluyor, komut öğeleri yeniden kurunca da dock hangi ikonun büyük olduğunu unutuyordu. Menü (ve klasör yığını) kapanınca dock artık imlecin gerçek yerine bakıp ikonları yerine oturtuyor.
+- **Dock'un açık takılı kalması:** Önizlemedeki bir pencere kartına tıklayınca önizleme kapanıyor ama "imleç önizlemenin üstünde" bilgisi açık kalıyordu; dock da bu yüzden bir daha otomatik gizlenmiyordu. Önizleme kapanınca bu bilgi artık sıfırlanıyor, gizleme de dock, önizleme ve pil panelinde imlecin gerçekten üstlerinde olup olmadığını denetliyor.
+- **Yarıda kalan sürükleme:** Bir ikonu sürüklerken başka bir pencere öne gelirse ya da Alt+Tab yapılırsa ikon bırakıldığı yerde ya da basılı boyutta kalabiliyordu. Artık sürükleme iptal edilip ikonlar eski sıralarına dönüyor.
 
 ---
 
 ## English
 
-**CarlUI 1.3.3: Carl Vault now recognizes Discord's login screen and fills in your credentials by itself.**
+**CarlUI 1.3.4: The dock no longer leaves an icon enlarged after a right-click menu, and no longer gets stuck open while you browse.**
 
 **Fixes**
-- **Vault button in Discord:** Discord gives its login page no title, so the window title was " - Discord" or the page address ("discord.com/app… - Discord"); the button showed on the splash window and disappeared once the login screen appeared. These titles are now recognized and the login screen is confirmed by looking for the password field. Discord PTB and Canary are supported too.
-- **Button next to the field:** In Chromium-based apps (Discord, Steam…), when the password field is found the Vault button appears right next to it instead of at the top of the window.
-- **Filling without clicking:** The vault now finds the username and password fields in these apps as well, so there's no need to click into a field first. If the fields can't be found, it types into the focused field as before.
-
-**Safety**
-- Accessibility queries are only made to windows that look like a login screen, so other Chromium apps aren't slowed down. Before typing, it still checks that the window is in front and is the same app.
+- **Icon stuck enlarged after right-click:** After right-clicking a dock item and choosing an action, the icon stayed at its hover size until the mouse came over it again. The mouse-leave notice was lost while the menu was open, and when a command rebuilt the items the dock forgot which icon was enlarged. When the menu (or a folder stack) closes, the dock now checks where the cursor really is and settles every icon.
+- **Dock stuck open:** Clicking a window card in the preview closed the preview, but the "cursor is over the preview" flag stayed on, so the dock never auto-hid again. The flag is now cleared when the preview closes, and auto-hide checks whether the cursor is really over the dock, the preview or the battery panel.
+- **Interrupted drag:** If another window came to the front or you pressed Alt+Tab while dragging an icon, the icon could stay where it was dropped or at its pressed size. The drag is now cancelled and the icons return to their previous order.
